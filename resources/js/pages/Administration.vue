@@ -1,0 +1,175 @@
+<script setup lang="ts">
+import AppLayout from '@/layouts/AppLayout.vue';
+import { Head, Link } from '@inertiajs/vue3';
+import administration from '@/routes/administration';
+import products from '@/routes/products';
+import users from '@/routes/users';
+import groups from '@/routes/groups';
+import companySettings from '@/routes/company-settings';
+import smsSettings from '@/routes/sms-settings';
+import { Users, Shield, Building2, UserCheck, Package, Tag, MessageSquare, Zap } from 'lucide-vue-next';
+
+const props = defineProps<{
+    stats: {
+        users_count: number;
+        groups_count: number;
+        products_count: number;
+    };
+}>();
+</script>
+
+<template>
+    <Head title="Administration" />
+
+    <AppLayout :breadcrumbs="[{ title: 'Administration', href: administration.index().url }]">
+        <div class="p-4">
+            <h1 class="mb-6 text-2xl font-bold">Administration</h1>
+            
+            <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                <!-- Users Card -->
+                <div class="rounded-lg border bg-white p-6 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold">Users</h2>
+                            <p class="text-sm text-gray-600">Manage user accounts and permissions</p>
+                            <p class="mt-2 text-2xl font-bold text-blue-600">{{ props.stats.users_count }}</p>
+                        </div>
+                        <div class="rounded-full bg-blue-100 p-3">
+                            <Users class="h-6 w-6 text-blue-600" />
+                        </div>
+                    </div>
+                    <div class="mt-4 flex gap-2">
+                        <Link 
+                            v-if="$page.props.auth?.abilities?.users?.list"
+                            :href="users.index().url" 
+                            class="rounded bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700"
+                        >
+                            View Users
+                        </Link>
+                        <Link 
+                            v-if="$page.props.auth?.abilities?.users?.create"
+                            :href="users.create().url" 
+                            class="rounded border px-3 py-2 text-sm hover:bg-gray-50"
+                        >
+                            Add User
+                        </Link>
+                    </div>
+                </div>
+
+                <!-- Groups Card -->
+                <div class="rounded-lg border bg-white p-6 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold">Groups</h2>
+                            <p class="text-sm text-gray-600">Manage user groups and permissions</p>
+                            <p class="mt-2 text-2xl font-bold text-green-600">{{ props.stats.groups_count }}</p>
+                        </div>
+                        <div class="rounded-full bg-green-100 p-3">
+                            <Shield class="h-6 w-6 text-green-600" />
+                        </div>
+                    </div>
+                    <div class="mt-4 flex gap-2">
+                        <Link 
+                            v-if="$page.props.auth?.abilities?.groups?.list"
+                            :href="groups.index().url" 
+                            class="rounded bg-green-600 px-3 py-2 text-sm text-white hover:bg-green-700"
+                        >
+                            View Groups
+                        </Link>
+                        <Link 
+                            v-if="$page.props.auth?.abilities?.groups?.create"
+                            :href="groups.create().url" 
+                            class="rounded border px-3 py-2 text-sm hover:bg-gray-50"
+                        >
+                            Add Group
+                        </Link>
+                    </div>
+                </div>
+
+                <!-- Categories Card -->
+                <div class="rounded-lg border bg-white p-6 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold">Categories</h2>
+                            <p class="text-sm text-gray-600">Manage product and service categories</p>
+                        </div>
+                        <div class="rounded-full bg-purple-100 p-3">
+                            <Tag class="h-6 w-6 text-purple-600" />
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <Link
+                            :href="administration.categories.index().url"
+                            class="rounded bg-purple-600 px-3 py-2 text-sm text-white hover:bg-purple-700"
+                        >
+                            Manage Categories
+                        </Link>
+                    </div>
+                </div>
+
+                <!-- Company Settings Card -->
+                <div class="rounded-lg border bg-white p-6 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold">Companies</h2>
+                            <p class="text-sm text-gray-600">Manage company information and branding</p>
+                        </div>
+                        <div class="rounded-full bg-purple-100 p-3">
+                            <Building2 class="h-6 w-6 text-purple-600" />
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <Link 
+                            :href="companySettings.index().url" 
+                            class="rounded bg-purple-600 px-3 py-2 text-sm text-white hover:bg-purple-700"
+                        >
+                            Manage Companies
+                        </Link>
+                    </div>
+                </div>
+
+                <!-- SMS Settings Card -->
+                <div class="rounded-lg border bg-white p-6 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold">SMS Settings</h2>
+                            <p class="text-sm text-gray-600">Configure BulkSMS for customer messaging</p>
+                        </div>
+                        <div class="rounded-full bg-green-100 p-3">
+                            <MessageSquare class="h-6 w-6 text-green-600" />
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <Link 
+                            :href="smsSettings.index().url" 
+                            class="rounded bg-green-600 px-3 py-2 text-sm text-white hover:bg-green-700"
+                        >
+                            Configure SMS
+                        </Link>
+                    </div>
+                </div>
+
+                <!-- Xero Integration Card -->
+                <div class="rounded-lg border bg-white p-6 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold">Xero Integration</h2>
+                            <p class="text-sm text-gray-600">Sync customers, products, and invoices with Xero</p>
+                        </div>
+                        <div class="rounded-full bg-orange-100 p-3">
+                            <Zap class="h-6 w-6 text-orange-600" />
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <Link 
+                            href="/administration/xero-settings" 
+                            class="rounded bg-orange-600 px-3 py-2 text-sm text-white hover:bg-orange-700"
+                        >
+                            Configure Xero
+                        </Link>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </AppLayout>
+</template>

@@ -1,0 +1,431 @@
+<template>
+
+    <Head title="New Quote" />
+
+    <AppLayout :breadcrumbs="[
+        { title: 'Quotes', href: quotes.index().url },
+        { title: 'Create', href: '#' }
+    ]">
+        <!-- Company Context -->
+        <div class="bg-blue-50 border-b border-blue-200 px-4 py-3">
+            <div class="flex items-center gap-2 text-sm text-blue-700">
+                <span class="font-medium">Creating quote for:</span>
+                <span class="font-semibold">{{ props.currentCompany.name }}</span>
+            </div>
+        </div>
+
+        <div class="p-4">
+            <!-- Header -->
+            <div class="flex items-center justify-between gap-3 mb-6">
+                <h1 class="text-2xl font-bold text-gray-900">New Quote</h1>
+            </div>
+
+            <form @submit.prevent="submit" class="space-y-6">
+                <!-- Basic Information -->
+                <div class="bg-white rounded-lg border p-6">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4">Basic Information</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Customer *</label>
+                            <select v-model="form.customer_id" class="w-full rounded border px-3 py-2"
+                                :class="{ 'border-red-500': form.errors.customer_id }" required>
+                                <option value="">Select a customer</option>
+                                <option v-for="customer in props.customers" :key="customer.id" :value="customer.id">
+                                    {{ customer.name }}
+                                </option>
+                            </select>
+                            <div v-if="form.errors.customer_id" class="text-red-500 text-sm mt-1">
+                                {{ form.errors.customer_id }}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                            <input v-model="form.title" type="text" class="w-full rounded border px-3 py-2"
+                                :class="{ 'border-red-500': form.errors.title }" required />
+                            <div v-if="form.errors.title" class="text-red-500 text-sm mt-1">
+                                {{ form.errors.title }}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Status *</label>
+                            <select v-model="form.status" class="w-full rounded border px-3 py-2"
+                                :class="{ 'border-red-500': form.errors.status }" required>
+                                <option value="draft">Draft</option>
+                                <option value="sent">Sent</option>
+                                <option value="accepted">Accepted</option>
+                                <option value="rejected">Rejected</option>
+                                <option value="expired">Expired</option>
+                            </select>
+                            <div v-if="form.errors.status" class="text-red-500 text-sm mt-1">
+                                {{ form.errors.status }}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Expiry Date</label>
+                            <input v-model="form.expiry_date" type="date" class="w-full rounded border px-3 py-2"
+                                :class="{ 'border-red-500': form.errors.expiry_date }" />
+                            <div v-if="form.errors.expiry_date" class="text-red-500 text-sm mt-1">
+                                {{ form.errors.expiry_date }}
+                            </div>
+                        </div>
+
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                            <textarea v-model="form.description" rows="3" class="w-full rounded border px-3 py-2"
+                                :class="{ 'border-red-500': form.errors.description }"></textarea>
+                            <div v-if="form.errors.description" class="text-red-500 text-sm mt-1">
+                                {{ form.errors.description }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Line Items -->
+                <div class="bg-white rounded-lg border p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-lg font-semibold text-gray-900">Line Items</h2>
+                        <button type="button" @click="addLineItem"
+                            class="rounded bg-blue-600 px-3 py-1 text-white text-sm hover:bg-blue-700">
+                            Add Item
+                        </button>
+                    </div>
+
+                    <div v-if="form.errors.line_items" class="text-red-500 text-sm mb-4">
+                        {{ form.errors.line_items }}
+                    </div>
+
+                    <div class="space-y-4">
+                        <div v-for="(item, index) in form.line_items" :key="index"
+                            class="grid grid-cols-1 md:grid-cols-6 gap-4 p-4 border rounded-lg">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Product</label>
+                                <select :value="item.product_id"
+                                    @change="selectProduct(index, ($event.target as HTMLSelectElement).value ? parseInt(($event.target as HTMLSelectElement).value) : null)"
+                                    class="w-full rounded border px-3 py-2">
+                                    <option value="">Custom Item</option>
+                                    <option v-for="product in props.products" :key="product.id" :value="product.id">
+                                        {{ product.name }} ({{ product.type }})
+                                    </option>
+                                </select>
+                            </div>
+
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Description *</label>
+                                <input v-model="item.description" type="text" class="w-full rounded border px-3 py-2"
+                                    :class="{ 'border-red-500': form.errors[`line_items.${index}.description`] }"
+                                    required />
+                                <div v-if="form.errors[`line_items.${index}.description`]"
+                                    class="text-red-500 text-sm mt-1">
+                                    {{ form.errors[`line_items.${index}.description`] }}
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Quantity *</label>
+                                <input v-model.number="item.quantity" type="number" min="1"
+                                    @input="calculateLineTotal(item)" class="w-full rounded border px-3 py-2"
+                                    :class="{ 'border-red-500': form.errors[`line_items.${index}.quantity`] }"
+                                    required />
+                                <div v-if="form.errors[`line_items.${index}.quantity`]"
+                                    class="text-red-500 text-sm mt-1">
+                                    {{ form.errors[`line_items.${index}.quantity`] }}
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Unit Price *</label>
+                                <input v-model.number="item.unit_price" type="number" step="0.01" min="0"
+                                    @input="calculateLineTotal(item)" class="w-full rounded border px-3 py-2"
+                                    :class="{ 'border-red-500': form.errors[`line_items.${index}.unit_price`] }"
+                                    required />
+                                <div v-if="form.errors[`line_items.${index}.unit_price`]"
+                                    class="text-red-500 text-sm mt-1">
+                                    {{ form.errors[`line_items.${index}.unit_price`] }}
+                                </div>
+                            </div>
+
+                            <div class="flex items-end">
+                                <div class="w-full">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Total</label>
+                                    <div class="w-full rounded border px-3 py-2 bg-gray-50 text-gray-700">
+                                        R{{ formatCurrency(item.total) }}
+                                    </div>
+                                </div>
+                                <button type="button" @click="removeLineItem(index)"
+                                    class="ml-2 text-red-600 hover:text-red-800"
+                                    :disabled="form.line_items.length === 1">
+                                    Remove
+                                </button>
+                            </div>
+                        </div>
+                    </div><br />
+
+                    <div class="flex items-center justify-between mb-4">
+                        <button type="button" @click="addLineItem"
+                            class="rounded bg-blue-600 px-3 py-2 text-white hover:bg-blue-700">
+                            +
+                        </button>
+                    </div>
+
+                    <!-- Totals -->
+                    <div class="mt-6 border-t pt-4">
+                        <div class="flex justify-end">
+                            <div class="w-64 space-y-2">
+                                <div class="flex justify-between">
+                                    <span class="text-sm text-gray-600">Subtotal:</span>
+                                    <span class="text-sm font-medium">R{{ formatCurrency(subtotal) }}</span>
+                                </div>
+                                <div v-if="discountAmount > 0" class="flex justify-between">
+                                    <span class="text-sm text-gray-600">Discount:</span>
+                                    <span class="text-sm font-medium text-red-600">-R{{ formatCurrency(discountAmount)
+                                    }}</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-sm text-gray-600">Tax ({{ form.tax_rate || 0 }}%):</span>
+                                    <span class="text-sm font-medium">R{{ formatCurrency(taxAmount) }}</span>
+                                </div>
+                                <div class="flex justify-between border-t pt-2">
+                                    <span class="text-base font-semibold">Total:</span>
+                                    <span class="text-base font-semibold">R{{ formatCurrency(total) }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Additional Information -->
+                <div class="bg-white rounded-lg border p-6">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4">Additional Information</h2>
+                    <div class="space-y-4">
+                        <!-- Discount Fields -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Discount Amount (R)</label>
+                                <input type="number" step="0.01" v-model="form.discount_amount"
+                                    class="w-full rounded border px-3 py-2"
+                                    :class="{ 'border-red-500': form.errors.discount_amount }" placeholder="0.00" />
+                                <div v-if="form.errors.discount_amount" class="text-red-500 text-sm mt-1">
+                                    {{ form.errors.discount_amount }}
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Discount Percentage
+                                    (%)</label>
+                                <input type="number" step="0.01" v-model="form.discount_percentage"
+                                    class="w-full rounded border px-3 py-2"
+                                    :class="{ 'border-red-500': form.errors.discount_percentage }" placeholder="0.00" />
+                                <div v-if="form.errors.discount_percentage" class="text-red-500 text-sm mt-1">
+                                    {{ form.errors.discount_percentage }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                            <textarea v-model="form.notes" rows="3" class="w-full rounded border px-3 py-2"
+                                :class="{ 'border-red-500': form.errors.notes }"></textarea>
+                            <div v-if="form.errors.notes" class="text-red-500 text-sm mt-1">
+                                {{ form.errors.notes }}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Terms & Conditions</label>
+                            <textarea v-model="form.terms_conditions" rows="3" class="w-full rounded border px-3 py-2"
+                                :class="{ 'border-red-500': form.errors.terms_conditions }"></textarea>
+                            <div v-if="form.errors.terms_conditions" class="text-red-500 text-sm mt-1">
+                                {{ form.errors.terms_conditions }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Form Actions -->
+                <div class="flex items-center justify-end gap-3">
+                    <Link :href="quotes.index().url" class="rounded bg-gray-500 px-4 py-2 text-white hover:bg-gray-600">
+                    Cancel
+                    </Link>
+                    <button type="submit" :disabled="form.processing"
+                        class="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50">
+                        {{ form.processing ? 'Creating...' : 'Create Quote' }}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </AppLayout>
+</template>
+
+<script setup lang="ts">
+import AppLayout from '@/layouts/AppLayout.vue';
+import { Head, Link, useForm } from '@inertiajs/vue3';
+import quotes from '@/routes/quotes';
+import { computed, ref, watch } from 'vue';
+
+interface Customer {
+    id: number;
+    name: string;
+}
+
+interface Product {
+    id: number;
+    name: string;
+    price: number;
+    type: string;
+}
+
+interface Company {
+    id: number;
+    name: string;
+}
+
+interface LineItem {
+    product_id: string | null;
+    description: string;
+    quantity: number;
+    unit_price: number;
+    total: number;
+}
+
+const props = defineProps<{
+    customers: Customer[];
+    products: Product[];
+    currentCompany: Company;
+    defaultTerms?: string;
+}>();
+
+// Calculate default expiry date (30 days from today)
+const getDefaultExpiryDate = () => {
+    const date = new Date();
+    date.setDate(date.getDate() + 30);
+    return date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+};
+
+const form = useForm({
+    customer_id: '',
+    title: '',
+    description: '',
+    status: 'draft',
+    expiry_date: getDefaultExpiryDate(),
+    tax_rate: 15,
+    discount_amount: 0,
+    discount_percentage: 0,
+    notes: '',
+    terms_conditions: props.defaultTerms || '',
+    line_items: [
+        {
+            product_id: null,
+            description: '',
+            quantity: 1,
+            unit_price: 0,
+            total: 0,
+        }
+    ] as LineItem[],
+});
+
+const addLineItem = () => {
+    form.line_items.push({
+        product_id: null,
+        description: '',
+        quantity: 1,
+        unit_price: 0,
+        total: 0,
+    });
+};
+
+const removeLineItem = (index: number) => {
+    if (form.line_items.length > 1) {
+        form.line_items.splice(index, 1);
+        calculateTotals();
+    }
+};
+
+const selectProduct = (index: number, productId: number | null) => {
+    const item = form.line_items[index];
+    if (!item) return;
+
+    item.product_id = productId ? productId.toString() : null;
+
+    if (productId) {
+        const product = props.products.find(p => p.id === productId);
+        if (product) {
+            item.description = product.name || '';
+            item.unit_price = product.price || 0;
+        }
+    } else {
+        item.description = '';
+        item.unit_price = 0;
+    }
+
+    calculateLineTotal(item);
+};
+
+const calculateLineTotal = (item: LineItem) => {
+    item.total = (item.quantity || 0) * (item.unit_price || 0);
+    calculateTotals();
+};
+
+const subtotal = computed(() => {
+    return form.line_items.reduce((sum, item) => sum + (item.total || 0), 0);
+});
+
+const discountAmount = computed(() => {
+    const amount = Number(form.discount_amount) || 0;
+    const percentage = Number(form.discount_percentage) || 0;
+
+    // If percentage is specified, calculate amount from percentage
+    if (percentage > 0) {
+        return subtotal.value * (percentage / 100);
+    }
+
+    return amount;
+});
+
+const taxAmount = computed(() => {
+    const subtotalAfterDiscount = subtotal.value - discountAmount.value;
+    return subtotalAfterDiscount * ((form.tax_rate || 0) / 100);
+});
+
+const total = computed(() => {
+    const subtotalAfterDiscount = subtotal.value - discountAmount.value;
+    return subtotalAfterDiscount + taxAmount.value;
+});
+
+const calculateTotals = () => {
+    // This is handled by computed properties
+};
+
+// Watch for customer selection to update title
+watch(() => form.customer_id, (newCustomerId) => {
+    if (newCustomerId && !form.title) {
+        const selectedCustomer = props.customers.find(c => c.id == parseInt(newCustomerId));
+        if (selectedCustomer) {
+            form.title = selectedCustomer.name;
+        }
+    }
+});
+
+// Watch discount fields to clear one when the other is filled
+watch(() => form.discount_amount, (newAmount) => {
+    if (newAmount > 0) {
+        form.discount_percentage = 0;
+    }
+});
+
+watch(() => form.discount_percentage, (newPercentage) => {
+    if (newPercentage > 0) {
+        form.discount_amount = 0;
+    }
+});
+
+const formatCurrency = (value: number | null | undefined) => {
+    const numValue = Number(value) || 0;
+    return numValue.toFixed(2);
+};
+
+const submit = () => {
+    form.post(quotes.store().url);
+};
+</script>

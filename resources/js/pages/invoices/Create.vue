@@ -1,0 +1,420 @@
+<template>
+
+    <Head title="New Invoice" />
+
+    <AppLayout :breadcrumbs="[
+        { title: 'Invoices', href: invoices.index().url },
+        { title: 'Create', href: '#' }
+    ]">
+        <!-- Company Context -->
+        <div class="bg-blue-50 border-b border-blue-200 px-4 py-3">
+            <div class="flex items-center gap-2 text-sm text-blue-700">
+                <span class="font-medium">Creating invoice for:</span>
+                <span class="font-semibold">{{ props.currentCompany.name }}</span>
+            </div>
+        </div>
+
+        <div class="p-4">
+            <!-- Header -->
+            <div class="flex items-center justify-between gap-3 mb-6">
+                <h1 class="text-2xl font-bold text-gray-900">New Invoice</h1>
+            </div>
+
+            <form @submit.prevent="submit" class="space-y-6">
+                <!-- Basic Information -->
+                <div class="bg-white rounded-lg border p-6">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4">Basic Information</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Customer *</label>
+                            <select v-model="form.customer_id" class="w-full rounded border px-3 py-2"
+                                :class="{ 'border-red-500': form.errors.customer_id }" required>
+                                <option value="">Select a customer</option>
+                                <option v-for="customer in props.customers" :key="customer.id" :value="customer.id">
+                                    {{ customer.name }}
+                                </option>
+                            </select>
+                            <div v-if="form.errors.customer_id" class="text-red-500 text-sm mt-1">
+                                {{ form.errors.customer_id }}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Salesperson</label>
+                            <select v-model="form.salesperson_id" class="w-full rounded border px-3 py-2"
+                                :class="{ 'border-red-500': form.errors.salesperson_id }">
+                                <option value="">Select a salesperson</option>
+                                <option v-for="user in props.users" :key="user.id" :value="user.id">
+                                    {{ user.name }}
+                                </option>
+                            </select>
+                            <div v-if="form.errors.salesperson_id" class="text-red-500 text-sm mt-1">
+                                {{ form.errors.salesperson_id }}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                            <input v-model="form.title" type="text" class="w-full rounded border px-3 py-2"
+                                :class="{ 'border-red-500': form.errors.title }" required />
+                            <div v-if="form.errors.title" class="text-red-500 text-sm mt-1">
+                                {{ form.errors.title }}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Invoice Date *</label>
+                            <input v-model="form.invoice_date" type="date" class="w-full rounded border px-3 py-2"
+                                :class="{ 'border-red-500': form.errors.invoice_date }" required />
+                            <div v-if="form.errors.invoice_date" class="text-red-500 text-sm mt-1">
+                                {{ form.errors.invoice_date }}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Due Date *</label>
+                            <input v-model="form.due_date" type="date" class="w-full rounded border px-3 py-2"
+                                :class="{ 'border-red-500': form.errors.due_date }" required />
+                            <div v-if="form.errors.due_date" class="text-red-500 text-sm mt-1">
+                                {{ form.errors.due_date }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                        <textarea v-model="form.description" rows="3" class="w-full rounded border px-3 py-2"
+                            :class="{ 'border-red-500': form.errors.description }"></textarea>
+                        <div v-if="form.errors.description" class="text-red-500 text-sm mt-1">
+                            {{ form.errors.description }}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Line Items -->
+                <div class="bg-white rounded-lg border p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-lg font-semibold text-gray-900">Line Items</h2>
+                        <button type="button" @click="addLineItem"
+                            class="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">
+                            Add Item
+                        </button>
+                    </div>
+
+                    <div v-if="form.errors.line_items" class="text-red-500 text-sm mb-4">
+                        {{ form.errors.line_items }}
+                    </div>
+
+                    <div class="space-y-4">
+                        <div v-for="(item, index) in form.line_items" :key="index" class="border rounded-lg p-4">
+                            <div class="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
+                                <div class="md:col-span-2">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Product</label>
+                                    <select v-model="item.product_id" @change="selectProduct(index, $event)"
+                                        class="w-full rounded border px-3 py-2">
+                                        <option value="">Custom Item</option>
+                                        <option v-for="product in props.products" :key="product.id" :value="product.id">
+                                            {{ product.name }}
+                                        </option>
+                                    </select>
+                                </div>
+
+                                <div class="md:col-span-2">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Description *</label>
+                                    <input v-model="item.description" type="text"
+                                        class="w-full rounded border px-3 py-2" required />
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Quantity *</label>
+                                    <input v-model.number="item.quantity" @input="calculateItemTotal(index)"
+                                        type="number" min="1" class="w-full rounded border px-3 py-2" required />
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Unit Price *</label>
+                                    <input v-model.number="item.unit_price" @input="calculateItemTotal(index)"
+                                        type="number" step="0.01" min="0" class="w-full rounded border px-3 py-2"
+                                        required />
+                                </div>
+                            </div>
+
+                            <div class="flex items-center justify-between mt-4">
+                                <div class="text-sm font-medium text-gray-900">
+                                    Total: {{ formatCurrency(item.total) }}
+                                </div>
+                                <button type="button" @click="removeLineItem(index)"
+                                    class="text-red-600 hover:text-red-800">
+                                    Remove
+                                </button>
+                            </div>
+                        </div>
+                    </div><br />
+
+                    <div class="flex items-center justify-between mb-4">
+                        <button type="button" @click="addLineItem"
+                            class="rounded bg-blue-600 px-3 py-2 text-white hover:bg-blue-700">
+                            +
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Totals -->
+                <div class="bg-white rounded-lg border p-6">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4">Totals</h2>
+                    <div class="space-y-2">
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Subtotal:</span>
+                            <span class="font-medium">{{ formatCurrency(subtotal) }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Discount:</span>
+                            <span class="font-medium text-red-600">-{{ formatCurrency(discountAmount) }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Tax (15%):</span>
+                            <span class="font-medium">{{ formatCurrency(taxAmount) }}</span>
+                        </div>
+                        <div class="flex justify-between text-lg font-semibold border-t pt-2">
+                            <span>Total:</span>
+                            <span>{{ formatCurrency(total) }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Notes and Terms -->
+                <div class="bg-white rounded-lg border p-6">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4">Additional Information</h2>
+                    <div class="space-y-6">
+                        <!-- Discount Fields -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Discount Amount (R)</label>
+                                <input type="number" step="0.01" v-model="form.discount_amount"
+                                    class="w-full rounded border px-3 py-2"
+                                    :class="{ 'border-red-500': form.errors.discount_amount }" placeholder="0.00" />
+                                <div v-if="form.errors.discount_amount" class="text-red-500 text-sm mt-1">
+                                    {{ form.errors.discount_amount }}
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Discount Percentage
+                                    (%)</label>
+                                <input type="number" step="0.01" v-model="form.discount_percentage"
+                                    class="w-full rounded border px-3 py-2"
+                                    :class="{ 'border-red-500': form.errors.discount_percentage }" placeholder="0.00" />
+                                <div v-if="form.errors.discount_percentage" class="text-red-500 text-sm mt-1">
+                                    {{ form.errors.discount_percentage }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                                <textarea v-model="form.notes" rows="4" class="w-full rounded border px-3 py-2"
+                                    :class="{ 'border-red-500': form.errors.notes }"></textarea>
+                                <div v-if="form.errors.notes" class="text-red-500 text-sm mt-1">
+                                    {{ form.errors.notes }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Terms & Conditions</label>
+                            <textarea v-model="form.terms" rows="4" class="w-full rounded border px-3 py-2"
+                                :class="{ 'border-red-500': form.errors.terms }"></textarea>
+                            <div v-if="form.errors.terms" class="text-red-500 text-sm mt-1">
+                                {{ form.errors.terms }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="flex items-center justify-end gap-3">
+                    <Link :href="invoices.index().url"
+                        class="rounded bg-gray-500 px-4 py-2 text-white hover:bg-gray-600">
+                    Cancel
+                    </Link>
+                    <button type="submit" :disabled="form.processing"
+                        class="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50">
+                        {{ form.processing ? 'Creating...' : 'Create Invoice' }}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </AppLayout>
+</template>
+
+<script setup lang="ts">
+import { Head, Link, useForm } from '@inertiajs/vue3';
+import { computed, watch } from 'vue';
+import AppLayout from '@/layouts/AppLayout.vue';
+import invoices from '@/routes/invoices';
+
+interface Customer {
+    id: number;
+    name: string;
+}
+
+interface Product {
+    id: number;
+    name: string;
+    price: number;
+}
+
+interface User {
+    id: number;
+    name: string;
+}
+
+interface Company {
+    id: number;
+    name: string;
+}
+
+interface LineItem {
+    product_id: string | null;
+    description: string;
+    quantity: number;
+    unit_price: number;
+    total: number;
+}
+
+interface Props {
+    customers: Customer[];
+    products: Product[];
+    users: User[];
+    currentCompany: Company;
+    selectedCustomer?: Customer | null;
+    defaultTerms?: string;
+    currentUser: User;
+}
+
+const props = defineProps<Props>();
+
+const form = useForm({
+    title: '',
+    description: '',
+    customer_id: props.selectedCustomer?.id || '',
+    salesperson_id: props.currentUser.id, // Default to current user
+    invoice_date: new Date().toISOString().split('T')[0],
+    due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from now
+    tax_rate: 15,
+    discount_amount: 0,
+    discount_percentage: 0,
+    notes: '',
+    terms: props.defaultTerms || '',
+    line_items: [
+        {
+            product_id: null,
+            description: '',
+            quantity: 1,
+            unit_price: 0,
+            total: 0,
+        },
+    ] as LineItem[],
+});
+
+// Watch for customer changes to update title
+watch(() => form.customer_id, (newCustomerId) => {
+    if (newCustomerId) {
+        const customer = props.customers.find(c => c.id === parseInt(newCustomerId));
+        if (customer) {
+            form.title = `Invoice for ${customer.name}`;
+        }
+    }
+});
+
+// Watch discount fields to clear one when the other is filled
+watch(() => form.discount_amount, (newAmount) => {
+    if (newAmount > 0) {
+        form.discount_percentage = 0;
+    }
+});
+
+watch(() => form.discount_percentage, (newPercentage) => {
+    if (newPercentage > 0) {
+        form.discount_amount = 0;
+    }
+});
+
+const addLineItem = () => {
+    form.line_items.push({
+        product_id: null,
+        description: '',
+        quantity: 1,
+        unit_price: 0,
+        total: 0,
+    });
+};
+
+const removeLineItem = (index: number) => {
+    if (form.line_items.length > 1) {
+        form.line_items.splice(index, 1);
+    }
+};
+
+const selectProduct = (index: number, event: Event) => {
+    const target = event.target as HTMLSelectElement;
+    const productId = target.value;
+
+    if (productId) {
+        const product = props.products.find(p => p.id === parseInt(productId));
+        if (product) {
+            form.line_items[index].product_id = productId;
+            form.line_items[index].description = product.name;
+            form.line_items[index].unit_price = product.price;
+            calculateItemTotal(index);
+        }
+    } else {
+        form.line_items[index].product_id = null;
+        form.line_items[index].description = '';
+        form.line_items[index].unit_price = 0;
+        form.line_items[index].total = 0;
+    }
+};
+
+const calculateItemTotal = (index: number) => {
+    const item = form.line_items[index];
+    item.total = item.quantity * item.unit_price;
+};
+
+const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-ZA', {
+        style: 'currency',
+        currency: 'ZAR',
+    }).format(amount || 0);
+};
+
+const subtotal = computed(() => {
+    return form.line_items.reduce((sum, item) => sum + (item.total || 0), 0);
+});
+
+const discountAmount = computed(() => {
+    const amount = Number(form.discount_amount) || 0;
+    const percentage = Number(form.discount_percentage) || 0;
+
+    // If percentage is specified, calculate amount from percentage
+    if (percentage > 0) {
+        return subtotal.value * (percentage / 100);
+    }
+
+    return amount;
+});
+
+const taxAmount = computed(() => {
+    const subtotalAfterDiscount = subtotal.value - discountAmount.value;
+    return subtotalAfterDiscount * (form.tax_rate / 100);
+});
+
+const total = computed(() => {
+    const subtotalAfterDiscount = subtotal.value - discountAmount.value;
+    return subtotalAfterDiscount + taxAmount.value;
+});
+
+const submit = () => {
+    form.post(invoices.store().url);
+};
+</script>

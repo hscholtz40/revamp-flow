@@ -1,0 +1,60 @@
+<script setup lang="ts">
+import AppLayout from '@/layouts/AppLayout.vue';
+import { Head, Link, router } from '@inertiajs/vue3';
+import users from '@/routes/users';
+import { ref, watch } from 'vue';
+
+interface User { id: number; name: string; email: string }
+
+const props = defineProps<{
+    users: { data: User[] };
+    filters: { search?: string };
+}>();
+
+const search = ref(props.filters?.search ?? '');
+watch(search, (value) => {
+    const params: Record<string, string> = {};
+    if (value && value.trim()) {
+        params.search = value.trim();
+    }
+    
+    router.get(users.index().url, params, { preserveState: true, replace: true });
+});
+</script>
+
+<template>
+    <Head title="Users" />
+
+    <AppLayout :breadcrumbs="[{ title: 'Users', href: users.index().url }]">
+        <div class="flex items-center justify-between gap-3 p-4">
+            <input v-model="search" type="search" placeholder="Search users..." class="w-full max-w-sm rounded border px-3 py-2" />
+            <Link :href="users.create().url" class="rounded bg-blue-600 px-3 py-2 text-white">New User</Link>
+        </div>
+
+        <div class="p-4">
+            <div class="overflow-x-auto">
+                <table class="min-w-full border">
+                    <thead>
+                        <tr class="bg-gray-50">
+                            <th class="p-2 text-left">Name</th>
+                            <th class="p-2 text-left">Email</th>
+                            <th class="p-2 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="u in props.users.data" :key="u.id" class="border-t">
+                            <td class="p-2">{{ u.name }}</td>
+                            <td class="p-2">{{ u.email }}</td>
+                            <td class="p-2 text-right">
+                                <Link :href="users.show(u.id).url" class="rounded border px-2 py-1">View</Link>
+                                <Link :href="users.edit(u.id).url" class="ml-2 rounded bg-gray-200 px-2 py-1">Edit</Link>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </AppLayout>
+</template>
+
+
