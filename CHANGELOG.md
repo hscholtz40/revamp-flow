@@ -98,6 +98,18 @@
 - Direct solution to the missing styles.css file issue.
 - Production deployment should work without CSS file errors.
 
+## [v0.1.9] - 2025-10-03
+
+### Fixed
+- CSS file created at the exact path Laravel is looking for.
+- Corrected the relative path structure for Laravel framework assets.
+- Resolves the specific file_get_contents error path.
+
+### Notes
+- CSS file now exists at the exact path shown in the error message.
+- Direct solution to the missing styles.css file at the correct location.
+- Production deployment should work without CSS file path errors.
+
 ### Fixed
 - Migrations: ensured `company_id` columns and foreign keys are consistent across `customers`, `contacts`, and `xero_settings` with safe ordering.
 - Hardened Xero settings migration to handle missing default company and ensure column existence before constraints.
