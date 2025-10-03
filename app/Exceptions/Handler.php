@@ -76,4 +76,17 @@ class Handler extends ExceptionHandler
 
         return parent::renderHttpException($e);
     }
+
+    /**
+     * Get the view used to render HTTP exceptions.
+     */
+    protected function getHttpExceptionView(HttpException $e)
+    {
+        // Force use of our custom error views instead of Laravel's framework renderer
+        if ($e->getStatusCode() >= 500) {
+            return 'errors::minimal';
+        }
+
+        return parent::getHttpExceptionView($e);
+    }
 }

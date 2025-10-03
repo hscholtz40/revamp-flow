@@ -110,6 +110,19 @@
 - Direct solution to the missing styles.css file at the correct location.
 - Production deployment should work without CSS file path errors.
 
+## [v0.2.0] - 2025-10-03
+
+### Fixed
+- Comprehensive error handling that bypasses Laravel framework renderer.
+- Custom error views for all HTTP status codes (404, 500, 503).
+- Enhanced exception handler with framework renderer override.
+- Resolves Laravel framework CSS file issues at the source.
+
+### Notes
+- Complete bypass of Laravel framework exception renderer.
+- Custom error views for all scenarios without external dependencies.
+- Production deployment should work without any Laravel framework asset issues.
+
 ### Fixed
 - Migrations: ensured `company_id` columns and foreign keys are consistent across `customers`, `contacts`, and `xero_settings` with safe ordering.
 - Hardened Xero settings migration to handle missing default company and ensure column existence before constraints.
