@@ -18,7 +18,83 @@ class DashboardController extends Controller
 {
     public function index(Request $request): Response
     {
-        $currentCompany = auth()->user()->getCurrentCompany();
+        $currentCompany = auth()->user()?->getCurrentCompany();
+
+        // If the user has no accessible/active company, return a safe dashboard with zeroed metrics
+        if (!$currentCompany) {
+            $stats = [
+                'invoices_count' => 0,
+                'contacts_count' => 0,
+            ];
+
+            $revenueStats = [
+                'current_month_revenue' => 0,
+            ];
+
+            $userMonthlyRevenue = [];
+            for ($i = 11; $i >= 0; $i--) {
+                $date = \Carbon\Carbon::now()->subMonths($i);
+                $userMonthlyRevenue[] = [
+                    'month' => $date->format('M Y'),
+                    'revenue' => 0,
+                ];
+            }
+
+            $recentActivity = [
+                'recent_quotes' => [],
+                'recent_invoices' => [],
+                'recent_jobcards' => [],
+            ];
+
+            $overdueItems = [
+                'overdue_invoices' => [],
+                'expiring_quotes' => [],
+            ];
+
+            $lowStockProducts = [];
+            $topCustomers = [];
+
+            $monthlyRevenue = [];
+            for ($i = 5; $i >= 0; $i--) {
+                $date = \Carbon\Carbon::now()->subMonths($i);
+                $monthlyRevenue[] = [
+                    'month' => $date->format('M Y'),
+                    'revenue' => 0,
+                ];
+            }
+
+            $statusCharts = [
+                'quote_status' => [
+                    'labels' => ['Draft', 'Pending', 'Accepted', 'Rejected', 'Expired'],
+                    'data' => [0, 0, 0, 0, 0],
+                    'colors' => ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#6b7280'],
+                ],
+                'invoice_status' => [
+                    'labels' => ['Draft', 'Sent', 'Paid', 'Overdue'],
+                    'data' => [0, 0, 0, 0],
+                    'colors' => ['#6366f1', '#3b82f6', '#10b981', '#ef4444'],
+                ],
+                'jobcard_status' => [
+                    'labels' => ['Draft', 'Pending', 'In Progress', 'Completed', 'Cancelled'],
+                    'data' => [0, 0, 0, 0, 0],
+                    'colors' => ['#6366f1', '#f59e0b', '#3b82f6', '#10b981', '#ef4444'],
+                ],
+            ];
+
+            return Inertia::render('Dashboard', [
+                'stats' => $stats,
+                'revenueStats' => $revenueStats,
+                'userMonthlyRevenue' => $userMonthlyRevenue,
+                'recentActivity' => $recentActivity,
+                'overdueItems' => $overdueItems,
+                'lowStockProducts' => $lowStockProducts,
+                'topCustomers' => $topCustomers,
+                'monthlyRevenue' => $monthlyRevenue,
+                'statusCharts' => $statusCharts,
+                'currentCompany' => null,
+                'warning' => 'No active company access is configured for your user. Please contact an administrator.',
+            ]);
+        }
         
         // Basic counts
         $stats = [

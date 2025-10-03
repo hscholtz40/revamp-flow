@@ -22,6 +22,22 @@
 ### Notes
 - Fresh installs and upgrades are now consistent for `xero_settings` constraints.
 
+## [v0.1.3] - 2025-10-03
+
+### Added
+- Web-based installer at `/install` for no-SSH deployments.
+- Version display in app footer (reads from package.json or git).
+- Admin user seeder with configurable credentials via env vars.
+- Fallback UserFactory for production environments without Faker.
+
+### Fixed
+- Dashboard null company access with safe fallback UI.
+- File permission errors in production with improved error handling.
+
+### Notes
+- Installer configures .env, runs migrations/seeders, creates admin user.
+- Version shows in footer: package.json version, git tag, or commit hash.
+
 ### Fixed
 - Migrations: ensured `company_id` columns and foreign keys are consistent across `customers`, `contacts`, and `xero_settings` with safe ordering.
 - Hardened Xero settings migration to handle missing default company and ensure column existence before constraints.

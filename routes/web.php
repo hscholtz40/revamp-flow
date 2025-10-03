@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
+use App\Http\Middleware\EnsureNotInstalled;
 
 Route::get('/', function () {
     if (auth()->check()) {
@@ -28,3 +29,9 @@ require __DIR__.'/groups.php';
 require __DIR__.'/administration.php';
 require __DIR__.'/company-settings.php';
 require __DIR__.'/xero.php';
+
+// Installer routes (available only before first install)
+Route::middleware([EnsureNotInstalled::class])->group(function () {
+    Route::get('/install', [App\Http\Controllers\InstallerController::class, 'show'])->name('install.show');
+    Route::post('/install', [App\Http\Controllers\InstallerController::class, 'install'])->name('install.perform');
+});

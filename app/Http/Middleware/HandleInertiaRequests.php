@@ -67,6 +67,9 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'name' => config('app.name'),
+            'app' => [
+                'version' => \App\Helpers\Version::get(),
+            ],
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'currentCompany' => $currentCompany ? [
                 'id' => $currentCompany->id,
