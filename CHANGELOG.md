@@ -123,6 +123,18 @@
 - Custom error views for all scenarios without external dependencies.
 - Production deployment should work without any Laravel framework asset issues.
 
+## [v0.2.1] - 2025-10-03
+
+### Fixed
+- Ensured vendor directory with Laravel framework CSS files is included in release.
+- Verified CSS file exists at correct path in vendor directory.
+- Release now includes complete vendor directory with all framework assets.
+
+### Notes
+- Vendor directory properly included in release zip.
+- Laravel framework CSS files available for production deployment.
+- Production deployment should work with complete vendor directory.
+
 ### Fixed
 - Migrations: ensured `company_id` columns and foreign keys are consistent across `customers`, `contacts`, and `xero_settings` with safe ordering.
 - Hardened Xero settings migration to handle missing default company and ensure column existence before constraints.
