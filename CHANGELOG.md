@@ -135,6 +135,18 @@
 - Laravel framework CSS files available for production deployment.
 - Production deployment should work with complete vendor directory.
 
+## [v0.2.2] - 2025-10-03
+
+### Fixed
+- Updated release script to force include vendor directory in production releases.
+- Vendor directory now properly included despite being in .gitignore.
+- Laravel framework CSS files confirmed to be included in release zip.
+
+### Notes
+- Release script now explicitly copies vendor directory for production releases.
+- Complete vendor directory with all Laravel framework assets included.
+- Production deployment should work with all required framework files.
+
 ### Fixed
 - Migrations: ensured `company_id` columns and foreign keys are consistent across `customers`, `contacts`, and `xero_settings` with safe ordering.
 - Hardened Xero settings migration to handle missing default company and ensure column existence before constraints.

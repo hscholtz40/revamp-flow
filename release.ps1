@@ -28,6 +28,12 @@ New-Item -ItemType Directory -Force -Path $Staging | Out-Null
 # robocopy exit codes 1-7 mean success with different conditions
 robocopy $PSScriptRoot $Staging /E /NFL /NDL /NJH /NJS /NC /NS /XD ".git" "dist" ".idea" ".vscode" "tests" "storage\logs" "storage\framework\cache" "storage\framework\sessions" "storage\framework\views" | Out-Null
 
+# Force copy vendor directory if it exists (for production releases)
+if (Test-Path "vendor") {
+    Write-Host "Including vendor directory in release..."
+    robocopy "vendor" "$Staging\vendor" /E /NFL /NDL /NJH /NJS /NC /NS | Out-Null
+}
+
 # Create zip
 if (Test-Path $ZipPath) { Remove-Item $ZipPath -Force }
 Compress-Archive -Path (Join-Path $Staging '*') -DestinationPath $ZipPath -Force
