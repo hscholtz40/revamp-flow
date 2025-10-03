@@ -61,6 +61,18 @@
 - All Laravel framework dependencies properly included.
 - Production deployment should work without missing file errors.
 
+## [v0.1.6] - 2025-10-03
+
+### Fixed
+- Custom exception handler to bypass Laravel framework CSS file issues.
+- Graceful error handling for missing Laravel framework assets.
+- Minimal error page for production environments.
+
+### Notes
+- Resolves Laravel 12 framework CSS file missing errors.
+- Custom error handler provides fallback for framework asset issues.
+- Production deployment should work without CSS file errors.
+
 ### Fixed
 - Migrations: ensured `company_id` columns and foreign keys are consistent across `customers`, `contacts`, and `xero_settings` with safe ordering.
 - Hardened Xero settings migration to handle missing default company and ensure column existence before constraints.
