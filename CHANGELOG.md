@@ -155,3 +155,19 @@
 ### Notes
 - No breaking schema changes; fresh migrate recommended for new deployments.
 
+## [v0.2.3] - 2025-01-27
+
+### Added
+- Enhanced authentication UI with improved branding and visual design.
+- Custom JobCardOnline logo component with gradient styling.
+- Updated login page with modern card-based layout and improved UX.
+- Enhanced auth layout with background patterns and professional styling.
+
+### Fixed
+- Improved visual consistency across authentication pages.
+- Enhanced user experience with better form styling and interactions.
+
+### Notes
+- Updated authentication interface with modern design patterns.
+- Improved branding consistency throughout the application.
+

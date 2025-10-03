@@ -19,14 +19,14 @@ defineProps<{
 
 <template>
     <AuthBase
-        title="Log in to your account"
-        description="Enter your email and password below to log in"
+        title="Welcome back"
+        description="Sign in to your JobCardOnline account to continue"
     >
         <Head title="Log in" />
 
         <div
             v-if="status"
-            class="mb-4 text-center text-sm font-medium text-green-600"
+            class="mb-6 rounded-lg bg-green-50 p-4 text-center text-sm font-medium text-green-700 border border-green-200"
         >
             {{ status }}
         </div>
@@ -35,11 +35,11 @@ defineProps<{
             v-bind="AuthenticatedSessionController.store.form()"
             :reset-on-success="['password']"
             v-slot="{ errors, processing }"
-            class="flex flex-col gap-6"
+            class="space-y-6"
         >
-            <div class="grid gap-6">
-                <div class="grid gap-2">
-                    <Label for="email">Email address</Label>
+            <div class="space-y-5">
+                <div class="space-y-2">
+                    <Label for="email" class="text-sm font-medium text-gray-700">Email address</Label>
                     <Input
                         id="email"
                         type="email"
@@ -48,18 +48,19 @@ defineProps<{
                         autofocus
                         :tabindex="1"
                         autocomplete="email"
-                        placeholder="email@example.com"
+                        placeholder="Enter your email"
+                        class="h-12 px-4 text-base border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                     />
                     <InputError :message="errors.email" />
                 </div>
 
-                <div class="grid gap-2">
+                <div class="space-y-2">
                     <div class="flex items-center justify-between">
-                        <Label for="password">Password</Label>
+                        <Label for="password" class="text-sm font-medium text-gray-700">Password</Label>
                         <TextLink
                             v-if="canResetPassword"
                             :href="request()"
-                            class="text-sm"
+                            class="text-sm text-blue-600 hover:text-blue-500 font-medium"
                             :tabindex="5"
                         >
                             Forgot password?
@@ -72,33 +73,47 @@ defineProps<{
                         required
                         :tabindex="2"
                         autocomplete="current-password"
-                        placeholder="Password"
+                        placeholder="Enter your password"
+                        class="h-12 px-4 text-base border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                     />
                     <InputError :message="errors.password" />
                 </div>
 
                 <div class="flex items-center justify-between">
-                    <Label for="remember" class="flex items-center space-x-3">
-                        <Checkbox id="remember" name="remember" :tabindex="3" />
-                        <span>Remember me</span>
+                    <Label for="remember" class="flex items-center space-x-3 cursor-pointer">
+                        <Checkbox 
+                            id="remember" 
+                            name="remember" 
+                            :tabindex="3"
+                            class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        />
+                        <span class="text-sm text-gray-700">Remember me for 30 days</span>
                     </Label>
                 </div>
 
                 <Button
                     type="submit"
-                    class="mt-4 w-full"
+                    class="w-full h-12 text-base font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-200 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                     :tabindex="4"
                     :disabled="processing"
                     data-test="login-button"
                 >
                     <LoaderCircle
                         v-if="processing"
-                        class="h-4 w-4 animate-spin"
+                        class="h-5 w-5 animate-spin mr-2"
                     />
-                    Log in
+                    {{ processing ? 'Signing in...' : 'Sign in to your account' }}
                 </Button>
             </div>
 
+            <div class="mt-6 text-center">
+                <p class="text-sm text-gray-600">
+                    Don't have an account? 
+                    <a href="#" class="font-medium text-blue-600 hover:text-blue-500">
+                        Contact your administrator
+                    </a>
+                </p>
+            </div>
         </Form>
     </AuthBase>
 </template>
