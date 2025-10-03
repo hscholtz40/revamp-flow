@@ -12,3 +12,13 @@
 - Package includes production Composer autoload (no dev dependencies).
 
 
+## [v0.1.1] - 2025-10-03
+
+### Fixed
+- Migrations: ensured `company_id` columns and foreign keys are consistent across `customers`, `contacts`, and `xero_settings` with safe ordering.
+- Hardened Xero settings migration to handle missing default company and ensure column existence before constraints.
+- Added `doctrine/dbal` to support column changes in migrations.
+
+### Notes
+- No breaking schema changes; fresh migrate recommended for new deployments.
+

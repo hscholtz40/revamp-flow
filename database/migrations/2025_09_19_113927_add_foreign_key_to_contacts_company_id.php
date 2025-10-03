@@ -11,9 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('contacts', function (Blueprint $table) {
-            $table->foreign('company_id')->references('id')->on('companies')->onDelete('cascade');
-        });
+        // company_id foreign key is created in the contacts table creation migration now.
+        // This migration is retained for historical order but does not apply changes anymore.
     }
 
     /**
@@ -21,8 +20,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('contacts', function (Blueprint $table) {
-            $table->dropForeign(['company_id']);
-        });
+        // No-op
     }
 };

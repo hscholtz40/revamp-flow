@@ -11,15 +11,19 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Get the default company
+        // Populate any null company_id values with the default company (if available)
         $defaultCompany = \App\Models\Company::getDefault();
-        
         if ($defaultCompany) {
-            // Update all existing customers to use the default company
             \App\Models\Customer::whereNull('company_id')->update(['company_id' => $defaultCompany->id]);
         }
-        
-        // Add the foreign key constraint
+
+        // Ensure the column exists and then add the foreign key constraint
+        Schema::table('customers', function (Blueprint $table) {
+            if (!Schema::hasColumn('customers', 'company_id')) {
+                $table->foreignId('company_id')->nullable();
+            }
+        });
+
         Schema::table('customers', function (Blueprint $table) {
             $table->foreign('company_id')->references('id')->on('companies')->onDelete('cascade');
         });

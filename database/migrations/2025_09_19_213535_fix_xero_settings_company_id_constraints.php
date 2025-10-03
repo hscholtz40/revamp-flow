@@ -12,11 +12,19 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // First, populate any null company_id values with the default company
+        // First, populate any null company_id values with the default company, if one exists
         $defaultCompany = \App\Models\Company::getDefault();
-        DB::table('xero_settings')->whereNull('company_id')->update(['company_id' => $defaultCompany->id]);
+        if ($defaultCompany) {
+            DB::table('xero_settings')->whereNull('company_id')->update(['company_id' => $defaultCompany->id]);
+        }
         
         // Add foreign key constraint and unique constraint
+        Schema::table('xero_settings', function (Blueprint $table) {
+            if (!Schema::hasColumn('xero_settings', 'company_id')) {
+                $table->foreignId('company_id')->nullable();
+            }
+        });
+
         Schema::table('xero_settings', function (Blueprint $table) {
             $table->foreign('company_id')->references('id')->on('companies')->onDelete('cascade');
             $table->unique('company_id'); // Each company can only have one Xero settings record

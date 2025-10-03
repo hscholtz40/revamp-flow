@@ -13,6 +13,7 @@ return new class extends Migration
     {
         Schema::create('xero_settings', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('company_id')->constrained()->onDelete('cascade');
             $table->boolean('is_enabled')->default(false);
             $table->string('client_id')->nullable();
             $table->string('client_secret')->nullable();
