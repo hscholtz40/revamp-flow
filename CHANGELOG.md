@@ -49,6 +49,18 @@
 - Release now includes complete vendor directory for production deployment.
 - No SSH access required for installation via web installer.
 
+## [v0.1.5] - 2025-10-03
+
+### Fixed
+- Optimized Composer autoload files for production.
+- Complete Laravel framework files included in vendor directory.
+- Resolved missing Laravel exception renderer files.
+
+### Notes
+- Release includes complete and optimized vendor directory.
+- All Laravel framework dependencies properly included.
+- Production deployment should work without missing file errors.
+
 ### Fixed
 - Migrations: ensured `company_id` columns and foreign keys are consistent across `customers`, `contacts`, and `xero_settings` with safe ordering.
 - Hardened Xero settings migration to handle missing default company and ensure column existence before constraints.
