@@ -25,7 +25,6 @@ return new class extends Migration
         
         // Now make the column required and add the foreign key constraint
         Schema::table('products', function (Blueprint $table) {
-            $table->foreignId('company_id')->nullable(false)->change();
             $table->foreign('company_id')->references('id')->on('companies')->onDelete('cascade');
         });
     }

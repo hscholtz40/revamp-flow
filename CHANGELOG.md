@@ -38,6 +38,17 @@
 - Installer configures .env, runs migrations/seeders, creates admin user.
 - Version shows in footer: package.json version, git tag, or commit hash.
 
+## [v0.1.4] - 2025-10-03
+
+### Fixed
+- Composer dependency conflicts resolved (removed doctrine/dbal).
+- Production vendor directory now properly included in releases.
+- Migration compatibility improved for production environments.
+
+### Notes
+- Release now includes complete vendor directory for production deployment.
+- No SSH access required for installation via web installer.
+
 ### Fixed
 - Migrations: ensured `company_id` columns and foreign keys are consistent across `customers`, `contacts`, and `xero_settings` with safe ordering.
 - Hardened Xero settings migration to handle missing default company and ensure column existence before constraints.
