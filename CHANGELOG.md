@@ -73,6 +73,19 @@
 - Custom error handler provides fallback for framework asset issues.
 - Production deployment should work without CSS file errors.
 
+## [v0.1.7] - 2025-10-03
+
+### Fixed
+- Comprehensive error handling for Laravel framework CSS file issues.
+- Multiple error view templates (500, 503, minimal) for different scenarios.
+- Enhanced exception handler with ViewException support.
+- HTTP exception override for server errors.
+
+### Notes
+- Multiple layers of error handling to catch CSS file errors.
+- Custom error views for all server error scenarios.
+- Production deployment should handle all Laravel framework asset issues.
+
 ### Fixed
 - Migrations: ensured `company_id` columns and foreign keys are consistent across `customers`, `contacts`, and `xero_settings` with safe ordering.
 - Hardened Xero settings migration to handle missing default company and ensure column existence before constraints.

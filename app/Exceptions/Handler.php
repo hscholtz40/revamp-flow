@@ -6,6 +6,7 @@ use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Throwable;
+use Illuminate\View\ViewException;
 
 class Handler extends ExceptionHandler
 {
@@ -47,6 +48,32 @@ class Handler extends ExceptionHandler
             ], 500);
         }
 
+        // Handle ViewException that might contain the CSS error
+        if ($e instanceof ViewException && 
+            str_contains($e->getMessage(), 'styles.css')) {
+            
+            return response()->view('errors::minimal', [
+                'exception' => $e,
+                'message' => 'Application error occurred. Please try again.',
+            ], 500);
+        }
+
         return parent::render($request, $e);
+    }
+
+    /**
+     * Render the given HttpException.
+     */
+    protected function renderHttpException(HttpException $e)
+    {
+        // Override to use our custom error view for all HTTP exceptions
+        if ($e->getStatusCode() >= 500) {
+            return response()->view('errors::minimal', [
+                'exception' => $e,
+                'message' => 'Server error occurred. Please try again.',
+            ], $e->getStatusCode());
+        }
+
+        return parent::renderHttpException($e);
     }
 }
