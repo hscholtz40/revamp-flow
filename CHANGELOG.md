@@ -86,6 +86,18 @@
 - Custom error views for all server error scenarios.
 - Production deployment should handle all Laravel framework asset issues.
 
+## [v0.1.8] - 2025-10-03
+
+### Fixed
+- Added missing Laravel framework CSS file to vendor directory.
+- Direct fix for the specific CSS file that Laravel is looking for.
+- Resolves the root cause of the file_get_contents error.
+
+### Notes
+- Includes the exact CSS file that Laravel framework expects.
+- Direct solution to the missing styles.css file issue.
+- Production deployment should work without CSS file errors.
+
 ### Fixed
 - Migrations: ensured `company_id` columns and foreign keys are consistent across `customers`, `contacts`, and `xero_settings` with safe ordering.
 - Hardened Xero settings migration to handle missing default company and ensure column existence before constraints.
