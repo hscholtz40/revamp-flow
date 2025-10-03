@@ -18,15 +18,15 @@ return new class extends Migration
             DB::table('xero_settings')->whereNull('company_id')->update(['company_id' => $defaultCompany->id]);
         }
         
-        // Add foreign key constraint and unique constraint
+        // Ensure the column exists
         Schema::table('xero_settings', function (Blueprint $table) {
             if (!Schema::hasColumn('xero_settings', 'company_id')) {
                 $table->foreignId('company_id')->nullable();
             }
         });
 
+        // Add only the unique constraint here to avoid duplicate FK creation on fresh installs
         Schema::table('xero_settings', function (Blueprint $table) {
-            $table->foreign('company_id')->references('id')->on('companies')->onDelete('cascade');
             $table->unique('company_id'); // Each company can only have one Xero settings record
         });
     }
@@ -37,7 +37,6 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('xero_settings', function (Blueprint $table) {
-            $table->dropForeign(['company_id']);
             $table->dropUnique(['company_id']);
         });
     }
