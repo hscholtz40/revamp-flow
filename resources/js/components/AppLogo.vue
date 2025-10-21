@@ -23,7 +23,7 @@ const company = page.props.company as { name?: string; logo_path?: string } | nu
     </div>
     <div class="ml-1 grid flex-1 text-left text-sm">
         <span class="mb-0.5 truncate leading-tight font-semibold">
-            {{ company?.name || 'Laravel Starter Kit' }}
+            {{ company?.name || 'JobCardOnline' }}
         </span>
     </div>
 </template>
