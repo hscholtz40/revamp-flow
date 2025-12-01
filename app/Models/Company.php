@@ -54,8 +54,8 @@ class Company extends Model
      */
     public function getLogoPathForPdf()
     {
-        if ($this->logo_path) {
-            return storage_path('app/public/' . $this->logo_path);
+        if ($this->logo_path && file_exists(storage_path('app/public/' . $this->logo_path))) {
+            return asset('storage/' . $this->logo_path);
         }
         return null;
     }

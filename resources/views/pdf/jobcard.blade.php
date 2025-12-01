@@ -3,320 +3,490 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Jobcard #{{ $jobcard->job_number ?? 'N/A' }}</title>
+    <title>Job Card #{{ $jobcard->job_number ?? 'N/A' }}</title>
     <style>
         body {
             font-family: Arial, sans-serif;
             line-height: 1.4;
-            color: #333;
+            color: #000;
             margin: 0;
             padding: 20px;
             font-size: 12px;
+            background: white;
         }
-        .header {
-            border-bottom: 2px solid #333;
-            padding-bottom: 15px;
-            margin-bottom: 20px;
-            display: table;
-            width: 100%;
-        }
-        .header-left {
-            display: table-cell;
-            width: 50%;
-            vertical-align: top;
-        }
-        .header-right {
-            display: table-cell;
-            width: 50%;
-            vertical-align: top;
+        
+        .page-header {
             text-align: right;
-        }
-        .company-info {
-            margin-bottom: 15px;
-        }
-        .company-logo {
-            max-width: 150px;
-            max-height: 80px;
+            font-size: 10px;
+            color: #666;
             margin-bottom: 10px;
         }
+        
+        .document-title {
+            text-align: center;
+            font-size: 28px;
+            font-weight: bold;
+            color: #000;
+            margin: 20px 0;
+            text-transform: uppercase;
+        }
+        
+        .company-section {
+            display: table;
+            width: 100%;
+            margin-bottom: 20px;
+            border: 1px solid #000;
+            padding: 15px;
+        }
+        
+        .company-left {
+            display: table-cell;
+            width: 60%;
+            vertical-align: top;
+        }
+        
+        .company-right {
+            display: table-cell;
+            width: 40%;
+            vertical-align: top;
+            text-align: left;
+        }
+        
+        .company-logo {
+            max-width: 200px;
+            max-height: 100px;
+            margin-bottom: 10px;
+        }
+        
         .company-name {
-            font-size: 20px;
-            font-weight: bold;
-            color: #333;
-        }
-        .document-type {
-            font-size: 24px;
-            font-weight: bold;
-            color: #333;
-            margin-bottom: 5px;
-        }
-        .jobcard-title {
             font-size: 16px;
             font-weight: bold;
-            color: #333;
+            color: #000;
             margin-bottom: 5px;
         }
-        .jobcard-number {
-            font-size: 14px;
+        
+        .company-tagline {
+            font-size: 11px;
             color: #666;
+            margin-bottom: 15px;
         }
-        .info-grid {
+        
+        .company-details {
+            font-size: 11px;
+            line-height: 1.3;
+        }
+        
+        .company-details p {
+            margin: 2px 0;
+        }
+        
+        .banking-details {
+            text-align: left;
+            font-size: 11px;
+        }
+        
+        .banking-details h4 {
+            margin: 0 0 8px 0;
+            font-size: 12px;
+            font-weight: bold;
+            color: #000;
+        }
+        
+        .banking-details p {
+            margin: 2px 0;
+        }
+        
+        .customer-section {
             display: table;
             width: 100%;
             margin-bottom: 20px;
         }
-        .info-section {
+        
+        .customer-left {
             display: table-cell;
-            width: 50%;
+            width: 60%;
             vertical-align: top;
-            padding-right: 20px;
         }
-        .info-section h3 {
-            margin: 0 0 8px 0;
-            color: #333;
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            border-bottom: 1px solid #ccc;
-            padding-bottom: 2px;
-        }
-        .info-section p {
-            margin: 0 0 4px 0;
-            font-size: 11px;
-        }
-        .description-section {
-            margin-bottom: 20px;
-        }
-        .description-section h3 {
-            margin: 0 0 8px 0;
-            color: #333;
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            border-bottom: 1px solid #ccc;
-            padding-bottom: 2px;
-        }
-        .line-items {
-            margin-bottom: 20px;
-        }
-        .line-items h3 {
-            margin: 0 0 10px 0;
-            color: #333;
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            border-bottom: 1px solid #ccc;
-            padding-bottom: 2px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 15px;
-        }
-        th, td {
-            padding: 8px;
-            text-align: left;
-            border-bottom: 1px solid #ddd;
-            font-size: 11px;
-        }
-        th {
-            background-color: #f5f5f5;
-            font-weight: bold;
-            color: #333;
-        }
-        .text-right {
+        
+        .customer-right {
+            display: table-cell;
+            width: 40%;
+            vertical-align: top;
             text-align: right;
         }
-        .totals {
-            margin-top: 15px;
-            padding-top: 10px;
-            border-top: 2px solid #333;
+        
+        .customer-info h4 {
+            margin: 0 0 8px 0;
+            font-size: 12px;
+            font-weight: bold;
+            color: #000;
         }
+        
+        .customer-info p {
+            margin: 2px 0;
+            font-size: 11px;
+        }
+        
+        .priority-level {
+            font-size: 11px;
+        }
+        
+        .priority-level label {
+            font-weight: bold;
+        }
+        
+        .separator-line {
+            border-top: 1px solid #000;
+            margin: 15px 0;
+        }
+        
+        .jobcard-details {
+            display: table;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        
+        .jobcard-detail {
+            display: table-cell;
+            width: 25%;
+            border: 1px solid #000;
+            padding: 8px;
+            text-align: center;
+            font-size: 11px;
+        }
+        
+        .jobcard-detail-label {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 4px;
+        }
+        
+        .jobcard-detail-value {
+            color: #000;
+        }
+        
+        .line-items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        
+        .line-items-table th,
+        .line-items-table td {
+            border-bottom: 1px solid #000;
+            padding: 8px;
+            font-size: 11px;
+        }
+        
+        .line-items-table th {
+            font-weight: bold;
+            text-align: left;
+            border-bottom: 2px solid #000;
+        }
+        
+        .line-items-table td {
+            text-align: left;
+        }
+        
+        .line-items-table .text-right {
+            text-align: right;
+        }
+        
+        .totals-section {
+            float: right;
+            width: 300px;
+            margin-top: 20px;
+        }
+        
         .total-row {
             display: table;
             width: 100%;
             margin-bottom: 5px;
         }
+        
         .total-row span {
             display: table-cell;
             font-size: 11px;
+            padding: 2px 0;
         }
+        
+        .total-row span:first-child {
+            text-align: left;
+        }
+        
         .total-row span:last-child {
             text-align: right;
         }
+        
         .total-row.final {
             font-weight: bold;
-            font-size: 13px;
-            color: #333;
-            border-top: 1px solid #ccc;
+            font-size: 12px;
+            border-top: 1px solid #000;
             padding-top: 8px;
             margin-top: 8px;
         }
-        .notes-section, .terms-section {
-            margin-top: 20px;
-            padding-top: 15px;
-            border-top: 1px solid #ccc;
+        
+        .work-notes-section {
+            clear: both;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #000;
+            font-size: 11px;
+            text-align: left;
         }
-        .notes-section h3, .terms-section h3 {
-            margin: 0 0 8px 0;
-            color: #333;
+        
+        .work-notes-section h4 {
+            margin: 0 0 10px 0;
             font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            border-bottom: 1px solid #ccc;
-            padding-bottom: 2px;
+            font-weight: bold;
+            color: #000;
         }
-        .notes-section p, .terms-section p {
-            margin: 0;
+        
+        .work-notes-section p {
+            margin: 0 0 8px 0;
             font-size: 11px;
             line-height: 1.4;
         }
-        .message-section {
-            background-color: #f9f9f9;
-            padding: 10px;
-            border-left: 4px solid #007cba;
+        
+        .signature-section {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #000;
+        }
+        
+        .signature-row {
+            display: table;
+            width: 100%;
             margin-bottom: 15px;
         }
-        .message-section strong {
-            color: #333;
+        
+        .signature-item {
+            display: table-cell;
+            width: 33.33%;
+            text-align: left;
+            font-size: 11px;
+        }
+        
+        .signature-line {
+            border-bottom: 1px dashed #000;
+            height: 20px;
+            margin-top: 5px;
+        }
+        
+        .footer {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            font-size: 9px;
+            color: #666;
+            display: table;
+            width: 100%;
+        }
+        
+        .footer-left {
+            display: table-cell;
+            text-align: left;
+        }
+        
+        .footer-right {
+            display: table-cell;
+            text-align: right;
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <div class="header-left">
-            <div class="company-info">
-                @if($company->getLogoPathForPdf())
-                    <img src="{{ $company->getLogoPathForPdf() }}" alt="Company Logo" class="company-logo">
+    <div class="page-header">Page 1 of 1</div>
+    
+    <div class="document-title">Job Card</div>
+    
+    <div class="company-section">
+        <div class="company-left">
+            @if($company->getLogoPathForPdf())
+                <img src="{{ $company->getLogoPathForPdf() }}" alt="Company Logo" class="company-logo">
+            @endif
+            <div class="company-name">{{ $company->name ?? 'COMPANY NAME' }}</div>
+            <div class="company-tagline">{{ $company->tagline ?? 'BUSINESS DESCRIPTION' }}</div>
+            
+            <div class="company-details">
+                <p><strong>{{ $company->legal_name ?? $company->name }}</strong></p>
+                @if($company->address)
+                    <p>{{ $company->address }}</p>
                 @endif
-                <div class="company-name">{{ $company->name ?? 'Company Name' }}</div>
-                @if($company->email ?? false)
-                    <div style="font-size: 10px; color: #666;">{{ $company->email }}</div>
+                @if($company->city)
+                    <p>{{ $company->city }}</p>
                 @endif
-                @if($company->phone ?? false)
-                    <div style="font-size: 10px; color: #666;">{{ $company->phone }}</div>
+                @if($company->vat_number)
+                    <p>VAT Number {{ $company->vat_number }}</p>
+                @endif
+                @if($company->phone)
+                    <p>Telephone {{ $company->phone }}</p>
+                @endif
+                @if($company->fax)
+                    <p>Fax {{ $company->fax }}</p>
                 @endif
             </div>
         </div>
         
-        <div class="header-right">
-            <div class="document-type">JOB CARD</div>
-            <div class="jobcard-title">{{ $jobcard->title ?? 'Jobcard Title' }}</div>
-            <div class="jobcard-number">Jobcard #{{ $jobcard->job_number ?? 'N/A' }}</div>
+        <div class="company-right">
+            <div class="banking-details">
+                <h4>Banking Details</h4>
+                <p><strong>{{ $company->bank_account_name ?? $company->name }}</strong></p>
+                @if($company->bank_name)
+                    <p>Bank Name: {{ $company->bank_name }}</p>
+                @endif
+                @if($company->bank_account_number)
+                    <p>Acc No: {{ $company->bank_account_number }}</p>
+                @endif
+                @if($company->bank_sort_code)
+                    <p>Sort Code: {{ $company->bank_sort_code }}</p>
+                @endif
+            </div>
         </div>
     </div>
-
-    @if($customMessage ?? false)
-        <div class="message-section">
-            <strong>Message:</strong><br>
-            {{ $customMessage }}
-        </div>
-    @endif
-
-    <div class="info-grid">
-        <div class="info-section">
-            <h3>Customer Information</h3>
-            <p><strong>{{ $jobcard->customer->name ?? 'Customer Name' }}</strong></p>
-            @if($jobcard->customer->email ?? false)
-                <p>{{ $jobcard->customer->email }}</p>
-            @endif
-            @if($jobcard->customer->phone ?? false)
-                <p>{{ $jobcard->customer->phone }}</p>
-            @endif
-            @if($jobcard->customer->address ?? false)
-                <p>{{ $jobcard->customer->address }}</p>
-            @endif
+    
+    <div class="customer-section">
+        <div class="customer-left">
+            <div class="customer-info">
+                <h4>To:</h4>
+                <p><strong>{{ $jobcard->customer->account_code ?? 'N/A' }}</strong></p>
+                <p><strong>{{ $jobcard->customer->name ?? 'CUSTOMER NAME' }}</strong></p>
+                @if($jobcard->customer->address)
+                    <p>{{ $jobcard->customer->address }}</p>
+                @endif
+                @if($jobcard->customer->city)
+                    <p>{{ $jobcard->customer->city }}</p>
+                @endif
+                @if($jobcard->customer->postal_code)
+                    <p>{{ $jobcard->customer->postal_code }}</p>
+                @endif
+            </div>
         </div>
         
-        <div class="info-section">
-            <h3>Jobcard Details</h3>
-            <p><strong>Status:</strong> {{ ucfirst($jobcard->status ?? 'draft') }}</p>
-            @if($jobcard->start_date ?? false)
-                <p><strong>Start Date:</strong> {{ \Carbon\Carbon::parse($jobcard->start_date)->format('M d, Y') }}</p>
-            @endif
-            @if($jobcard->due_date ?? false)
-                <p><strong>Due Date:</strong> {{ \Carbon\Carbon::parse($jobcard->due_date)->format('M d, Y') }}</p>
-            @endif
-            @if($jobcard->completed_date ?? false)
-                <p><strong>Completed:</strong> {{ \Carbon\Carbon::parse($jobcard->completed_date)->format('M d, Y') }}</p>
-            @endif
+        <div class="customer-right">
+            <div class="priority-level">
+                <label>Priority Level</label>
+                <div style="border: 1px solid #000; height: 20px; margin-top: 5px; padding: 2px;">
+                    {{ ucfirst($jobcard->priority ?? 'Normal') }}
+                </div>
+            </div>
         </div>
     </div>
-
-    @if($jobcard->description ?? false)
-        <div class="description-section">
-            <h3>Description</h3>
-            <p>{{ $jobcard->description }}</p>
+    
+    <div class="separator-line"></div>
+    
+    <div class="jobcard-details">
+        <div class="jobcard-detail">
+            <span class="jobcard-detail-label">Account</span>
+            <span class="jobcard-detail-value">{{ $jobcard->customer->account_code ?? 'N/A' }}</span>
         </div>
-    @endif
-
-    <div class="line-items">
-        <h3>Line Items</h3>
-        <table>
-            <thead>
+        <div class="jobcard-detail">
+            <span class="jobcard-detail-label">Date</span>
+            <span class="jobcard-detail-value">{{ $jobcard->created_at ? \Carbon\Carbon::parse($jobcard->created_at)->format('Y/m/d') : date('Y/m/d') }}</span>
+        </div>
+        <div class="jobcard-detail">
+            <span class="jobcard-detail-label">Job No</span>
+            <span class="jobcard-detail-value">{{ $jobcard->job_number ?? 'N/A' }}</span>
+        </div>
+        <div class="jobcard-detail">
+            <span class="jobcard-detail-label">Due Date</span>
+            <span class="jobcard-detail-value">{{ $jobcard->due_date ? \Carbon\Carbon::parse($jobcard->due_date)->format('Y/m/d') : 'TBD' }}</span>
+        </div>
+    </div>
+    
+    <table class="line-items-table">
+        <thead>
+            <tr>
+                <th>Item Code</th>
+                <th>Work Description</th>
+                <th class="text-right">QTY</th>
+                <th class="text-right">Rate</th>
+                <th class="text-right">Hours</th>
+                <th class="text-right">Total (Incl)</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach($jobcard->lineItems ?? [] as $item)
                 <tr>
-                    <th>Description</th>
-                    <th class="text-right">Qty</th>
-                    <th class="text-right">Unit Price</th>
-                    <th class="text-right">Total</th>
+                    <td>{{ $item->product->code ?? 'N/A' }}</td>
+                    <td>{{ $item->description ?? 'Work Description' }}</td>
+                    <td class="text-right">{{ number_format($item->quantity ?? 0, 2) }}</td>
+                    <td class="text-right">R{{ number_format($item->unit_price ?? 0, 2) }}</td>
+                    <td class="text-right">{{ $item->hours ?? 0 }}</td>
+                    <td class="text-right">R{{ number_format($item->total ?? 0, 2) }}</td>
                 </tr>
-            </thead>
-            <tbody>
-                @foreach($jobcard->lineItems ?? [] as $item)
-                    <tr>
-                        <td>{{ $item->description ?? 'Item Description' }}</td>
-                        <td class="text-right">{{ $item->quantity ?? 0 }}</td>
-                        <td class="text-right">R{{ number_format($item->unit_price ?? 0, 2) }}</td>
-                        <td class="text-right">R{{ number_format($item->total ?? 0, 2) }}</td>
-                    </tr>
-                @endforeach
-            </tbody>
-        </table>
-
-        <div class="totals">
-            <div class="total-row">
-                <span>Subtotal:</span>
-                <span>R{{ number_format($jobcard->subtotal ?? 0, 2) }}</span>
+            @endforeach
+        </tbody>
+    </table>
+    
+    <div class="totals-section">
+        <div class="total-row">
+            <span>Total (Excl):</span>
+            <span>R{{ number_format($jobcard->subtotal ?? 0, 2) }}</span>
+        </div>
+        <div class="total-row">
+            <span>Tax:</span>
+            <span>R{{ number_format($jobcard->tax_amount ?? 0, 2) }}</span>
+        </div>
+        <div class="total-row">
+            <span>Total (Incl):</span>
+            <span>R{{ number_format($jobcard->total ?? 0, 2) }}</span>
+        </div>
+        <div class="total-row">
+            <span>Discount:</span>
+            <span>R{{ number_format($jobcard->discount_amount ?? 0, 2) }}</span>
+        </div>
+        <div class="total-row">
+            <span>Rounding:</span>
+            <span>R0.00</span>
+        </div>
+        <div class="total-row">
+            <span>Less: Excess:</span>
+            <span>R0.00</span>
+        </div>
+        <div class="total-row final">
+            <span>Total (Incl):</span>
+            <span>R{{ number_format($jobcard->total ?? 0, 2) }}</span>
+        </div>
+    </div>
+    
+    <div class="work-notes-section">
+        <h4>Work Notes & Instructions</h4>
+        @if($jobcard->description)
+            <p><strong>Job Description:</strong> {{ $jobcard->description }}</p>
+        @endif
+        @if($jobcard->notes)
+            <p><strong>Additional Notes:</strong> {{ $jobcard->notes }}</p>
+        @endif
+        @if($jobcard->terms_conditions)
+            <p><strong>Terms & Conditions:</strong> {{ $jobcard->terms_conditions }}</p>
+        @endif
+    </div>
+    
+    <div class="signature-section">
+        <div class="signature-row">
+            <div class="signature-item">
+                <div>Technician</div>
+                <div class="signature-line"></div>
             </div>
-            @if(($jobcard->discount_amount ?? 0) > 0)
-                <div class="total-row">
-                    <span>Discount:</span>
-                    <span>-R{{ number_format($jobcard->discount_amount ?? 0, 2) }}</span>
-                </div>
-            @endif
-            @if(($jobcard->tax_rate ?? 0) > 0)
-                <div class="total-row">
-                    <span>Tax ({{ $jobcard->tax_rate }}%):</span>
-                    <span>R{{ number_format($jobcard->tax_amount ?? 0, 2) }}</span>
-                </div>
-            @endif
-            <div class="total-row final">
-                <span>Total:</span>
-                <span>R{{ number_format($jobcard->total ?? 0, 2) }}</span>
+            <div class="signature-item">
+                <div>Date Completed</div>
+                <div class="signature-line"></div>
+            </div>
+            <div class="signature-item">
+                <div>Customer Signature</div>
+                <div class="signature-line"></div>
             </div>
         </div>
     </div>
-
-    @if($jobcard->notes ?? false)
-        <div class="notes-section">
-            <h3>Notes</h3>
-            <p>{{ $jobcard->notes }}</p>
+    
+    <div class="footer">
+        <div class="footer-left">
+            JobCard Online (Registered to {{ $company->name ?? 'Company' }})
         </div>
-    @endif
-
-    @if($jobcard->terms_conditions ?? false)
-        <div class="terms-section">
-            <h3>Terms & Conditions</h3>
-            <p>{{ $jobcard->terms_conditions }}</p>
+        <div class="footer-right">
+            {{ date('Y/m/d H:i:s') }}
         </div>
-    @endif
-
-    @if($jobcard->company->jobcard_footer ?? false)
-        <div class="footer-section">
-            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ccc; text-align: center; font-size: 10px; color: #666; line-height: 1.4;">
-                {{ $jobcard->company->jobcard_footer }}
-            </div>
-        </div>
-    @endif
+    </div>
 </body>
 </html>
