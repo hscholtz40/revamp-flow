@@ -53,12 +53,37 @@
                         >
                         {{ formatStatus(props.quote.status) }}
                     </span>
-                        <button
-                            @click="downloadPDF"
-                            class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                        >
-                            Download PDF
-                        </button>
+                        <div class="relative">
+                            <button
+                                @click="showDownloadDropdown = !showDownloadDropdown"
+                                class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 flex items-center gap-2"
+                            >
+                                Download PDF
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </button>
+                            <div
+                                v-if="showDownloadDropdown"
+                                @click.stop
+                                class="absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10"
+                            >
+                                <div class="py-1">
+                                    <button
+                                        @click="downloadPDF('quotation')"
+                                        class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                    >
+                                        Download Quotation
+                                    </button>
+                                    <button
+                                        @click="downloadPDF('proforma-invoice')"
+                                        class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                    >
+                                        Download Proforma Invoice
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                         <button
                             @click="showEmailModal = true"
                             class="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
@@ -279,6 +304,16 @@
                             </div>
                         </div>
                         <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">PDF Type</label>
+                            <select
+                                v-model="emailForm.type"
+                                class="w-full rounded border px-3 py-2"
+                            >
+                                <option value="quotation">Quotation</option>
+                                <option value="proforma-invoice">Proforma Invoice</option>
+                            </select>
+                        </div>
+                        <div class="mb-4">
                             <label class="block text-sm font-medium text-gray-700 mb-1">Message</label>
                             <textarea
                                 v-model="emailForm.message"
@@ -345,7 +380,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import quotes from '@/routes/quotes';
 import invoices from '@/routes/invoices';
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 
 interface Customer {
     id: number;
@@ -399,6 +434,7 @@ const props = defineProps<{
 }>();
 
 const showEmailModal = ref(false);
+const showDownloadDropdown = ref(false);
 const showResultDialog = ref(false);
 const emailResult = ref({
     success: false,
@@ -417,6 +453,7 @@ const canEditQuote = computed(() => {
 const emailForm = useForm({
     email: props.quote.customer?.email || '',
     message: '',
+    type: 'quotation',
 });
 
 const statusOptions = [
@@ -435,9 +472,28 @@ const updateStatus = (status: string) => {
     });
 };
 
-const downloadPDF = () => {
-    window.open(quotes.downloadPdf(props.quote.id).url, '_blank');
+const downloadPDF = (type: string = 'quotation') => {
+    showDownloadDropdown.value = false;
+    const url = new URL(quotes.downloadPdf(props.quote.id).url, window.location.origin);
+    url.searchParams.set('type', type);
+    window.open(url.toString(), '_blank');
 };
+
+// Close dropdown when clicking outside
+const handleClickOutside = (event: MouseEvent) => {
+    const target = event.target as HTMLElement;
+    if (!target.closest('.relative')) {
+        showDownloadDropdown.value = false;
+    }
+};
+
+onMounted(() => {
+    document.addEventListener('click', handleClickOutside);
+});
+
+onUnmounted(() => {
+    document.removeEventListener('click', handleClickOutside);
+});
 
 const sendEmail = () => {
     emailForm.post(quotes.email(props.quote.id).url, {
@@ -450,6 +506,7 @@ const sendEmail = () => {
             };
             showResultDialog.value = true;
             emailForm.reset();
+            emailForm.type = 'quotation';
         },
         onError: (errors) => {
             showEmailModal.value = false;

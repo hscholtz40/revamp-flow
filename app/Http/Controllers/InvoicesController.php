@@ -343,7 +343,8 @@ class InvoicesController extends Controller
     {
         $invoice->load(['customer', 'lineItems.product', 'company']);
         
-        $pdf = Pdf::loadView('pdf.invoice', compact('invoice'));
+        $company = $invoice->company;
+        $pdf = Pdf::loadView('pdf.invoice', compact('invoice', 'company'));
         
         // Update status to sent if it was draft
         if ($invoice->status === 'draft') {
@@ -379,7 +380,8 @@ class InvoicesController extends Controller
 
         try {
             // Generate PDF
-            $pdf = Pdf::loadView('pdf.invoice', compact('invoice'));
+            $company = $invoice->company;
+            $pdf = Pdf::loadView('pdf.invoice', compact('invoice', 'company'));
             $pdfContent = $pdf->output();
             
             // Send email

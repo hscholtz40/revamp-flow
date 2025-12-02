@@ -335,7 +335,7 @@ class QuotesController extends Controller
     /**
      * Download quote as PDF
      */
-    public function downloadPDF(Quote $quote)
+    public function downloadPDF(Request $request, Quote $quote)
     {
         $quote->load(['customer', 'lineItems.product', 'company']);
         
@@ -344,8 +344,16 @@ class QuotesController extends Controller
             $quote->update(['status' => 'sent']);
         }
         
-        $pdf = Pdf::loadView('pdf.quote', compact('quote'));
-        return $pdf->download("quote-{$quote->quote_number}.pdf");
+        $company = $quote->company;
+        $type = $request->get('type', 'quotation'); // 'quotation' or 'proforma-invoice'
+        
+        $view = $type === 'proforma-invoice' ? 'pdf.proforma-invoice' : 'pdf.quote';
+        $filename = $type === 'proforma-invoice' 
+            ? "proforma-invoice-{$quote->quote_number}.pdf" 
+            : "quote-{$quote->quote_number}.pdf";
+        
+        $pdf = Pdf::loadView($view, compact('quote', 'company'));
+        return $pdf->download($filename);
     }
 
     /**
@@ -356,6 +364,7 @@ class QuotesController extends Controller
         $validated = $request->validate([
             'email' => ['required', 'email'],
             'message' => ['nullable', 'string'],
+            'type' => ['nullable', 'in:quotation,proforma-invoice'],
         ]);
 
         $quote->load(['customer', 'lineItems.product', 'company']);
@@ -374,17 +383,26 @@ class QuotesController extends Controller
 
         try {
             // Generate PDF
-            $pdf = Pdf::loadView('pdf.quote', compact('quote'));
+            $company = $quote->company;
+            $type = $validated['type'] ?? 'quotation'; // 'quotation' or 'proforma-invoice'
+            
+            $view = $type === 'proforma-invoice' ? 'pdf.proforma-invoice' : 'pdf.quote';
+            $filename = $type === 'proforma-invoice' 
+                ? "proforma-invoice-{$quote->quote_number}.pdf" 
+                : "quote-{$quote->quote_number}.pdf";
+            $subjectPrefix = $type === 'proforma-invoice' ? 'Proforma Invoice' : 'Quote';
+            
+            $pdf = Pdf::loadView($view, compact('quote', 'company'));
             $pdfContent = $pdf->output();
             
             // Send email
             Mail::mailer('smtp')->send('emails.quote', [
                 'quote' => $quote,
                 'customMessage' => $validated['message'],
-            ], function ($message) use ($validated, $quote, $pdfContent) {
+            ], function ($message) use ($validated, $quote, $pdfContent, $filename, $subjectPrefix) {
                 $message->to($validated['email'])
-                    ->subject("Quote {$quote->quote_number} - {$quote->title}")
-                    ->attachData($pdfContent, "quote-{$quote->quote_number}.pdf", [
+                    ->subject("{$subjectPrefix} {$quote->quote_number} - {$quote->title}")
+                    ->attachData($pdfContent, $filename, [
                         'mime' => 'application/pdf',
                     ]);
             });
