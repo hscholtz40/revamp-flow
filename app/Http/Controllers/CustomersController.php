@@ -6,9 +6,7 @@ use App\Models\Company;
 use App\Models\Customer;
 use App\Models\SMSSettings;
 use App\Models\SMSActivity;
-use App\Models\WhatsAppSettings;
 use App\Services\BulkSMSService;
-use App\Services\WhatsAppService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -241,61 +239,6 @@ class CustomersController extends Controller
         }
     }
 
-    /**
-     * Send WhatsApp message to a customer
-     */
-    public function sendWhatsApp(Request $request, Customer $customer): RedirectResponse
-    {
-        $validated = $request->validate([
-            'message' => ['required', 'string', 'max:1000'],
-        ]);
-
-        $currentCompany = auth()->user()->getCurrentCompany();
-        
-        // Ensure the customer belongs to the current company
-        if ($customer->company_id !== $currentCompany->id) {
-            abort(403, 'Unauthorized access to customer.');
-        }
-
-        // Check if customer has a phone number
-        if (!$customer->phone) {
-            return redirect()->back()
-                ->withErrors(['message' => 'Customer does not have a phone number.']);
-        }
-
-        // Get WhatsApp settings for current company
-        $whatsappSettings = WhatsAppSettings::getCurrent();
-        if (!$whatsappSettings || !$whatsappSettings->is_active) {
-            return redirect()->back()
-                ->withErrors(['message' => 'WhatsApp functionality is not configured or disabled for this company. Please contact your administrator.']);
-        }
-
-        try {
-            // Initialize WhatsApp service
-            $whatsappService = new WhatsAppService(
-                $whatsappSettings->provider,
-                $whatsappSettings->api_key,
-                $whatsappSettings->api_secret,
-                $whatsappSettings->account_sid,
-                $whatsappSettings->from_number,
-                null, // default_template_name - no longer used
-                'en' // default_template_language - default fallback
-            );
-
-            // Send WhatsApp message
-            $result = $whatsappService->sendMessage($customer->phone, $validated['message']);
-
-            if ($result['success']) {
-                return redirect()->back()->with('success', 'WhatsApp message sent successfully');
-            } else {
-                return redirect()->back()
-                    ->withErrors(['message' => $result['message'] ?? 'Failed to send WhatsApp message.']);
-            }
-        } catch (\Exception $e) {
-            return redirect()->back()
-                ->withErrors(['message' => 'Failed to send WhatsApp message: ' . $e->getMessage()]);
-        }
-    }
 }
 
 

@@ -43,6 +43,20 @@ class HandleInertiaRequests extends Middleware
         $isInstalled = file_exists(base_path('.installed'));
         $isInstallerRoute = $request->routeIs('install.*');
         
+        // If .installed file doesn't exist but user is authenticated, treat as installed
+        // This handles cases where the file was deleted but the app is actually installed
+        if (!$isInstalled) {
+            try {
+                // Check if user is authenticated - if so, app is likely installed
+                $hasAuthenticatedUser = $request->user() !== null || auth()->check();
+                if ($hasAuthenticatedUser) {
+                    $isInstalled = true;
+                }
+            } catch (\Exception $e) {
+                // If we can't check auth, assume not installed
+            }
+        }
+        
         // Early return if not installed or on installer route - skip all DB operations
         if (!$isInstalled || $isInstallerRoute) {
             return [
@@ -62,15 +76,37 @@ class HandleInertiaRequests extends Middleware
             ];
         }
         
-        // Get user-specific company data (only if installed)
-        $user = null;
+        // Get user directly from request (handles authentication)
+        $parentShare = parent::share($request);
+        
+        // Try multiple ways to get the user
+        $user = $request->user() ?? auth()->user() ?? auth()->guard('web')->user();
+        
+        // Serialize user to array if it exists (only include safe fields)
+        $userData = null;
+        if ($user) {
+            try {
+                $userData = [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'avatar' => null, // Can be added later if needed
+                    'email_verified_at' => $user->email_verified_at?->toIso8601String(),
+                    'created_at' => $user->created_at?->toIso8601String(),
+                    'updated_at' => $user->updated_at?->toIso8601String(),
+                ];
+            } catch (\Exception $e) {
+                // If serialization fails, continue without user data
+                $userData = null;
+            }
+        }
+        
+        // Get user-specific company data (only if installed and user exists)
         $currentCompany = null;
         $companies = collect();
         
-        try {
-            $user = $request->user();
-            
-            if ($user) {
+        if ($user) {
+            try {
                 $currentCompany = $user->getCurrentCompany();
                 
                 // Get companies the user has access to
@@ -88,16 +124,19 @@ class HandleInertiaRequests extends Middleware
                         ->orderBy('name')
                         ->get(['companies.id', 'companies.name', 'companies.logo_path', 'companies.is_default']);
                 }
+            } catch (\Exception $e) {
+                // If database connection fails for company queries, use empty collections
+                // But keep the user object since authentication doesn't require DB
+                $companies = collect();
+                $currentCompany = null;
             }
-        } catch (\Exception $e) {
-            // If database connection fails, use empty collections
-            $companies = collect();
-            $currentCompany = null;
-            $user = null;
         }
 
+        // Check if parent share already has auth data
+        $parentAuth = $parentShare['auth'] ?? null;
+        
         return [
-            ...parent::share($request),
+            ...$parentShare,
             'name' => config('app.name'),
             'app' => [
                 'version' => \App\Helpers\Version::get(),
@@ -111,8 +150,8 @@ class HandleInertiaRequests extends Middleware
             ] : null,
             'companies' => $companies,
             'auth' => [
-                'user' => $user,
-                'abilities' => $this->getUserAbilities($isInstalled, $user, $isInstallerRoute),
+                'user' => $userData ?? $parentAuth['user'] ?? null,
+                'abilities' => $this->getUserAbilities($isInstalled, $user, $isInstallerRoute) ?? $parentAuth['abilities'] ?? null,
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];

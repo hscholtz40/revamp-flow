@@ -12,7 +12,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::put('/customers/{customer}', [CustomersController::class, 'update'])->middleware('module.permission:customers,edit')->name('customers.update');
     Route::delete('/customers/{customer}', [CustomersController::class, 'destroy'])->middleware('module.permission:customers,delete')->name('customers.destroy');
     Route::post('/customers/{customer}/send-sms', [CustomersController::class, 'sendSMS'])->middleware('module.permission:customers,view')->name('customers.sendSMS');
-    Route::post('/customers/{customer}/send-whatsapp', [CustomersController::class, 'sendWhatsApp'])->middleware('module.permission:customers,view')->name('customers.sendWhatsApp');
 });
 
 

@@ -18,3 +18,16 @@ Schedule::command('xero:sync-invoices')->everyMinute();
 
 // Schedule automated reminders to run daily at 9 AM
 Schedule::command('reminders:send')->dailyAt('09:00');
+
+// Schedule automated backups
+Schedule::call(function () {
+    $schedules = \App\Models\BackupSchedule::where('is_active', true)
+        ->where('next_run_at', '<=', now())
+        ->get();
+    
+    foreach ($schedules as $schedule) {
+        \Illuminate\Support\Facades\Artisan::call('backup:create', [
+            '--schedule' => $schedule->id,
+        ]);
+    }
+})->everyMinute();

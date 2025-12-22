@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Traits\Auditable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -9,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Jobcard extends Model
 {
-    use HasFactory;
+    use HasFactory, Auditable;
 
     protected $fillable = [
         'company_id',
@@ -60,6 +61,11 @@ class Jobcard extends Model
     public function lineItems(): HasMany
     {
         return $this->hasMany(JobcardLineItem::class)->orderBy('sort_order');
+    }
+
+    public function timeEntries(): HasMany
+    {
+        return $this->hasMany(TimeEntry::class)->orderBy('date', 'desc')->orderBy('start_time', 'desc');
     }
 
     public function invoice(): BelongsTo
@@ -151,8 +157,8 @@ class Jobcard extends Model
      */
     public function convertToInvoice(): Invoice
     {
-        // Ensure line items are loaded
-        $this->load('lineItems');
+        // Ensure line items and time entries are loaded
+        $this->load('lineItems', 'timeEntries.user');
         
         $invoice = Invoice::create([
             'company_id' => $this->company_id,
@@ -176,6 +182,7 @@ class Jobcard extends Model
         ]);
 
         // Copy line items
+        $sortOrder = 0;
         foreach ($this->lineItems as $lineItem) {
             InvoiceLineItem::create([
                 'invoice_id' => $invoice->id,
@@ -184,9 +191,101 @@ class Jobcard extends Model
                 'quantity' => $lineItem->quantity,
                 'unit_price' => $lineItem->unit_price,
                 'total' => $lineItem->total,
-                'sort_order' => $lineItem->sort_order,
+                'sort_order' => $sortOrder++,
             ]);
         }
+
+        // Add billable time entries as line items
+        // Filter for billable entries with hourly rates
+        $billableTimeEntries = $this->timeEntries->filter(function ($entry) {
+            return $entry->is_billable === true && $entry->hourly_rate !== null && $entry->hourly_rate > 0;
+        });
+        
+        \Log::info('Jobcard conversion - time entries check', [
+            'jobcard_id' => $this->id,
+            'total_time_entries' => $this->timeEntries->count(),
+            'billable_time_entries_count' => $billableTimeEntries->count(),
+            'time_entries_details' => $this->timeEntries->map(function ($entry) {
+                return [
+                    'id' => $entry->id,
+                    'is_billable' => $entry->is_billable,
+                    'hourly_rate' => $entry->hourly_rate,
+                    'duration_minutes' => $entry->duration_minutes,
+                ];
+            })->toArray(),
+        ]);
+        
+        if ($billableTimeEntries->isNotEmpty()) {
+            // Group time entries by user and hourly rate
+            $groupedEntries = $billableTimeEntries->groupBy(function ($entry) {
+                return $entry->user_id . '_' . ($entry->hourly_rate ?? 0);
+            });
+
+            foreach ($groupedEntries as $group) {
+                $firstEntry = $group->first();
+                
+                // Calculate total hours and amount for the group
+                $totalMinutes = $group->sum('duration_minutes');
+                $totalHours = round($totalMinutes / 60, 2);
+                $hourlyRate = $firstEntry->hourly_rate ?? 0;
+                $totalAmount = round($totalHours * $hourlyRate, 2);
+                
+                // Create description with user name and formatted duration
+                $userName = $firstEntry->user->name ?? 'Unknown User';
+                $hours = floor($totalMinutes / 60);
+                $remainingMinutes = $totalMinutes % 60;
+                $formattedDuration = '';
+                if ($hours > 0 && $remainingMinutes > 0) {
+                    $formattedDuration = "{$hours}h {$remainingMinutes}m";
+                } elseif ($hours > 0) {
+                    $formattedDuration = "{$hours}h";
+                } else {
+                    $formattedDuration = "{$remainingMinutes}m";
+                }
+                $description = "Time: {$userName} ({$formattedDuration} @ R" . number_format($hourlyRate, 2) . "/hr)";
+                
+                \Log::info('Creating invoice line item for time entry', [
+                    'invoice_id' => $invoice->id,
+                    'description' => $description,
+                    'quantity' => $totalHours,
+                    'unit_price' => $hourlyRate,
+                    'total' => $totalAmount,
+                    'sort_order' => $sortOrder,
+                ]);
+                
+                $lineItem = InvoiceLineItem::create([
+                    'invoice_id' => $invoice->id,
+                    'product_id' => null,
+                    'description' => $description,
+                    'quantity' => $totalHours,
+                    'unit_price' => $hourlyRate,
+                    'total' => $totalAmount,
+                    'sort_order' => $sortOrder++,
+                ]);
+                
+                \Log::info('Invoice line item created', [
+                    'line_item_id' => $lineItem->id,
+                    'invoice_id' => $invoice->id,
+                ]);
+            }
+        } else {
+            \Log::info('No billable time entries found for jobcard', [
+                'jobcard_id' => $this->id,
+                'total_time_entries' => $this->timeEntries->count(),
+            ]);
+        }
+
+        // Recalculate invoice totals to include time entry line items
+        $invoice->refresh();
+        $invoice->load('lineItems');
+        $invoice->calculateTotals();
+        
+        \Log::info('Invoice totals recalculated', [
+            'invoice_id' => $invoice->id,
+            'line_items_count' => $invoice->lineItems->count(),
+            'subtotal' => $invoice->subtotal,
+            'total' => $invoice->total,
+        ]);
 
         return $invoice;
     }

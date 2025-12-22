@@ -8,13 +8,17 @@ import groups from '@/routes/groups';
 import companySettings from '@/routes/company-settings';
 import smsSettings from '@/routes/sms-settings';
 import whatsappSettings from '@/routes/whatsapp-settings';
-import { Users, Shield, Building2, UserCheck, Package, Tag, MessageSquare, Zap, FileText } from 'lucide-vue-next';
+import { Users, Shield, Building2, UserCheck, Package, Tag, MessageSquare, Zap, FileText, ClipboardList, Database } from 'lucide-vue-next';
+import auditLogs from '@/routes/audit-logs';
+import backups from '@/routes/backups/index';
 
 const props = defineProps<{
     stats: {
         users_count: number;
         groups_count: number;
         products_count: number;
+        audit_logs_count: number;
+        backups_count: number;
     };
 }>();
 </script>
@@ -209,6 +213,50 @@ const props = defineProps<{
                             class="rounded bg-indigo-600 px-3 py-2 text-sm text-white hover:bg-indigo-700"
                         >
                             Manage Templates
+                        </Link>
+                    </div>
+                </div>
+
+                <!-- Audit Logs Card -->
+                <div class="rounded-lg border bg-white p-6 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold">Audit Logs</h2>
+                            <p class="text-sm text-gray-600">Track all changes and activities in the system</p>
+                            <p class="mt-2 text-2xl font-bold text-purple-600">{{ props.stats.audit_logs_count }}</p>
+                        </div>
+                        <div class="rounded-full bg-purple-100 p-3">
+                            <ClipboardList class="h-6 w-6 text-purple-600" />
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <Link 
+                            :href="auditLogs.index().url" 
+                            class="rounded bg-purple-600 px-3 py-2 text-sm text-white hover:bg-purple-700"
+                        >
+                            View Audit Logs
+                        </Link>
+                    </div>
+                </div>
+
+                <!-- Backups & Restore Card -->
+                <div class="rounded-lg border bg-white p-6 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold">Backups & Restore</h2>
+                            <p class="text-sm text-gray-600">Automated backups, scheduling, and one-click restore</p>
+                            <p class="mt-2 text-2xl font-bold text-blue-600">{{ props.stats.backups_count }}</p>
+                        </div>
+                        <div class="rounded-full bg-blue-100 p-3">
+                            <Database class="h-6 w-6 text-blue-600" />
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <Link 
+                            :href="backups.index().url" 
+                            class="rounded bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700"
+                        >
+                            Manage Backups
                         </Link>
                     </div>
                 </div>

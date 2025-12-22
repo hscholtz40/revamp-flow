@@ -112,6 +112,13 @@
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <!-- Main Content -->
                 <div class="lg:col-span-2 space-y-6">
+                    <!-- Time Tracking -->
+                    <TimeTracking
+                        :jobcard-id="props.jobcard.id"
+                        :time-entries="props.jobcard.time_entries"
+                        :running-timer="props.runningTimer"
+                        :time-summary="props.timeSummary"
+                    />
                     <!-- Customer Information -->
                     <div class="rounded-lg bg-white border border-gray-200 shadow-sm">
                         <div class="border-b border-gray-200 bg-gray-50 px-6 py-4">
@@ -478,6 +485,7 @@ import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import jobcards from '@/routes/jobcards';
 import invoices from '@/routes/invoices';
+import TimeTracking from '@/components/TimeTracking.vue';
 
 interface LineItem {
     id: number;
@@ -495,6 +503,24 @@ interface Customer {
     email: string;
     phone: string | null;
     address: string | null;
+}
+
+interface TimeEntry {
+    id: number;
+    date: string;
+    start_time: string | null;
+    end_time: string | null;
+    duration_minutes: number;
+    hourly_rate: number | null;
+    is_billable: boolean;
+    description: string | null;
+    status: string;
+    formatted_duration: string;
+    formatted_total_amount: string;
+    user?: {
+        id: number;
+        name: string;
+    };
 }
 
 interface Jobcard {
@@ -518,6 +544,7 @@ interface Jobcard {
     updated_at: string;
     customer: Customer;
     line_items: LineItem[];
+    time_entries?: TimeEntry[];
 }
 
 interface Props {
@@ -525,6 +552,12 @@ interface Props {
     canEditCompleted: boolean;
     pdfTemplates?: Array<{ id: number; name: string; module: string; is_default: boolean }>;
     defaultTemplateId?: number | null;
+    runningTimer?: TimeEntry | null;
+    timeSummary?: {
+        total_hours: number;
+        billable_hours: number;
+        total_amount: number;
+    };
 }
 
 const props = defineProps<Props>();

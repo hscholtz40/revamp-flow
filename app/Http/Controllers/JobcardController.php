@@ -181,7 +181,7 @@ class JobcardController extends Controller
      */
     public function show(Jobcard $jobcard): Response
     {
-        $jobcard->load(['customer', 'lineItems', 'invoice']);
+        $jobcard->load(['customer', 'lineItems', 'invoice', 'timeEntries.user']);
 
         $currentCompany = auth()->user()->getCurrentCompany();
         
@@ -194,11 +194,23 @@ class JobcardController extends Controller
         
         $defaultTemplateId = $pdfTemplates->where('is_default', true)->first()?->id ?? null;
         
+        // Get running timer for current user and this jobcard
+        $runningTimer = \App\Models\TimeEntry::getRunningEntry(auth()->id(), $jobcard->id);
+        
+        // Calculate time summary
+        $timeSummary = [
+            'total_hours' => $jobcard->timeEntries->sum('duration_minutes') / 60,
+            'billable_hours' => $jobcard->timeEntries->where('is_billable', true)->sum('duration_minutes') / 60,
+            'total_amount' => $jobcard->timeEntries->where('is_billable', true)->sum('total_amount'),
+        ];
+        
         return Inertia::render('jobcards/Show', [
             'jobcard' => $jobcard,
             'canEditCompleted' => auth()->user()->canEditCompletedJobcards(),
             'pdfTemplates' => $pdfTemplates,
             'defaultTemplateId' => $defaultTemplateId,
+            'runningTimer' => $runningTimer,
+            'timeSummary' => $timeSummary,
         ]);
     }
 
