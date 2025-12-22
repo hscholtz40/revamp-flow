@@ -18,12 +18,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup MySQL
+        uses: actions/setup-mysql@v4
+        with:
+          mysql-version: '8.0'
+          mysql-root-password: ''
+
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: 8.4
           tools: composer:v2
           coverage: xdebug
+          extensions: mbstring, xml, ctype, json, fileinfo, pdo, pdo_mysql
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -47,7 +54,7 @@ jobs:
           if [ -f .env.example ]; then
             cp .env.example .env
           else
-            # Create minimal .env file for testing
+            # Create minimal .env file for testing with MySQL
             cat > .env << EOF
           APP_NAME="JobCard Online"
           APP_ENV=testing
@@ -55,8 +62,12 @@ jobs:
           APP_DEBUG=true
           APP_URL=http://localhost
           
-          DB_CONNECTION=sqlite
-          DB_DATABASE=:memory:
+          DB_CONNECTION=mysql
+          DB_HOST=127.0.0.1
+          DB_PORT=3306
+          DB_DATABASE=laravel_test
+          DB_USERNAME=root
+          DB_PASSWORD=
           
           CACHE_STORE=array
           SESSION_DRIVER=array
@@ -70,6 +81,10 @@ jobs:
 
       - name: Clear Configuration Cache
         run: php artisan config:clear
+
+      - name: Create Test Database
+        run: |
+          mysql -h 127.0.0.1 -u root -e "CREATE DATABASE IF NOT EXISTS laravel_test;"
 
       - name: Build Assets
         run: npm run build
