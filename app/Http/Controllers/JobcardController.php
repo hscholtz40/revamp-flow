@@ -7,8 +7,11 @@ use App\Models\Customer;
 use App\Models\Jobcard;
 use App\Models\JobcardLineItem;
 use App\Models\Product;
+use App\Services\ReminderService;
+use App\Services\StockService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Config;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -115,7 +118,8 @@ class JobcardController extends Controller
 
         $jobcard = Jobcard::create($validated);
 
-        // Create line items
+        // Create line items and deduct stock
+        $stockService = new StockService();
         foreach ($validated['line_items'] as $index => $lineItemData) {
             $lineItem = new JobcardLineItem([
                 'product_id' => $lineItemData['product_id'] ?? null,
@@ -126,10 +130,47 @@ class JobcardController extends Controller
             ]);
             $lineItem->calculateTotal();
             $jobcard->lineItems()->save($lineItem);
+
+            // Deduct stock if product is tracked
+            if ($lineItemData['product_id']) {
+                try {
+                    $product = Product::find($lineItemData['product_id']);
+                    if ($product && $product->track_stock) {
+                        $stockService->removeStock(
+                            $product,
+                            $lineItemData['quantity'],
+                            "Jobcard: {$jobcard->job_number}",
+                            'jobcard',
+                            $jobcard->id,
+                            "Stock deducted for jobcard {$jobcard->job_number}"
+                        );
+                    }
+                } catch (\Exception $e) {
+                    Log::error('Failed to deduct stock for jobcard line item', [
+                        'jobcard_id' => $jobcard->id,
+                        'product_id' => $lineItemData['product_id'],
+                        'quantity' => $lineItemData['quantity'],
+                        'error' => $e->getMessage(),
+                    ]);
+                    // Continue even if stock deduction fails
+                }
+            }
         }
 
         // Calculate totals
         $jobcard->calculateTotals();
+
+        // Send automated reminder if enabled
+        try {
+            $reminderService = new ReminderService();
+            $reminderService->sendJobcardCreatedConfirmation($jobcard);
+        } catch (\Exception $e) {
+            Log::error('Failed to send jobcard created confirmation', [
+                'jobcard_id' => $jobcard->id,
+                'error' => $e->getMessage(),
+            ]);
+            // Don't fail the jobcard creation if reminder fails
+        }
 
         return redirect()->route('jobcards.show', $jobcard)
             ->with('success', 'Jobcard created successfully');
@@ -142,9 +183,22 @@ class JobcardController extends Controller
     {
         $jobcard->load(['customer', 'lineItems', 'invoice']);
 
+        $currentCompany = auth()->user()->getCurrentCompany();
+        
+        // Get available PDF templates for jobcards
+        $pdfTemplates = \App\Models\PdfTemplate::where('company_id', $currentCompany->id)
+            ->where('module', 'jobcard')
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'is_default']);
+        
+        $defaultTemplateId = $pdfTemplates->where('is_default', true)->first()?->id ?? null;
+        
         return Inertia::render('jobcards/Show', [
             'jobcard' => $jobcard,
             'canEditCompleted' => auth()->user()->canEditCompletedJobcards(),
+            'pdfTemplates' => $pdfTemplates,
+            'defaultTemplateId' => $defaultTemplateId,
         ]);
     }
 
@@ -266,6 +320,7 @@ class JobcardController extends Controller
             }
         }
 
+        $oldStatus = $jobcard->status;
         $jobcard->status = $newStatus;
         
         // Set completed_date if status is completed
@@ -274,6 +329,20 @@ class JobcardController extends Controller
         }
         
         $jobcard->save();
+
+        // Send automated reminder if enabled and status actually changed
+        if ($oldStatus !== $newStatus) {
+            try {
+                $reminderService = new ReminderService();
+                $reminderService->sendJobcardStatusUpdatedConfirmation($jobcard, $oldStatus);
+            } catch (\Exception $e) {
+                Log::error('Failed to send jobcard status updated confirmation', [
+                    'jobcard_id' => $jobcard->id,
+                    'error' => $e->getMessage(),
+                ]);
+                // Don't fail the status update if reminder fails
+            }
+        }
 
         return redirect()->back()
             ->with('success', "Jobcard status updated to {$newStatus}");
@@ -299,7 +368,7 @@ class JobcardController extends Controller
     /**
      * Generate and download a PDF version of the jobcard.
      */
-    public function print(Jobcard $jobcard)
+    public function print(Request $request, Jobcard $jobcard)
     {
         $currentCompany = auth()->user()->getCurrentCompany();
         
@@ -309,11 +378,13 @@ class JobcardController extends Controller
         }
 
         $jobcard->load(['customer', 'lineItems.product', 'company']);
+        $templateId = $request->get('template_id');
 
-        $pdf = Pdf::loadView('pdf.jobcard', [
+        $pdfService = new \App\Services\PdfGenerationService();
+        $pdf = $pdfService->generatePdf('jobcard', [
             'jobcard' => $jobcard,
             'company' => $currentCompany,
-        ]);
+        ], $currentCompany, $templateId);
 
         $filename = 'jobcard-' . $jobcard->job_number . '.pdf';
         
@@ -374,11 +445,14 @@ class JobcardController extends Controller
             $fromName = $user->smtp_from_name ?? $user->name;
 
             // Generate PDF
-            $pdf = Pdf::loadView('pdf.jobcard', [
+            $templateId = $request->get('template_id');
+            
+            $pdfService = new \App\Services\PdfGenerationService();
+            $pdf = $pdfService->generatePdf('jobcard', [
                 'jobcard' => $jobcard,
                 'company' => $currentCompany,
                 'customMessage' => $validated['message'] ?? '',
-            ]);
+            ], $currentCompany, $templateId);
 
             $filename = 'jobcard-' . $jobcard->job_number . '.pdf';
 
@@ -448,18 +522,53 @@ class JobcardController extends Controller
         try {
             $invoice = $jobcard->convertToInvoice();
             
-            // Update jobcard to link to invoice
-            $updated = $jobcard->update(['invoice_id' => $invoice->id]);
+            // Update jobcard to link to invoice and set status to completed
+            $oldStatus = $jobcard->status;
+            $updated = $jobcard->update([
+                'invoice_id' => $invoice->id,
+                'status' => 'completed',
+                'completed_date' => now(),
+            ]);
             
             // Refresh the jobcard to get updated data
             $jobcard->refresh();
+            
+            // Send invoice created notification if enabled
+            // Load invoice relationships needed for notifications
+            $invoice->load('customer', 'company');
+            try {
+                $reminderService = new ReminderService();
+                $reminderService->sendInvoiceCreatedConfirmation($invoice);
+            } catch (\Exception $e) {
+                Log::error('Failed to send invoice created confirmation after jobcard conversion', [
+                    'invoice_id' => $invoice->id,
+                    'jobcard_id' => $jobcard->id,
+                    'error' => $e->getMessage(),
+                ]);
+                // Don't fail the conversion if reminder fails
+            }
+            
+            // Send jobcard status updated notification if status changed
+            if ($oldStatus !== 'completed') {
+                try {
+                    $reminderService = new ReminderService();
+                    $reminderService->sendJobcardStatusUpdatedConfirmation($jobcard, $oldStatus);
+                } catch (\Exception $e) {
+                    Log::error('Failed to send jobcard status updated confirmation after conversion', [
+                        'jobcard_id' => $jobcard->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                    // Don't fail the conversion if reminder fails
+                }
+            }
             
             // Log for debugging
             \Log::info('Jobcard conversion completed', [
                 'jobcard_id' => $jobcard->id,
                 'invoice_id' => $invoice->id,
                 'update_success' => $updated,
-                'jobcard_invoice_id_after' => $jobcard->invoice_id
+                'jobcard_invoice_id_after' => $jobcard->invoice_id,
+                'jobcard_status' => $jobcard->status
             ]);
             
             return redirect()->route('invoices.show', $invoice)

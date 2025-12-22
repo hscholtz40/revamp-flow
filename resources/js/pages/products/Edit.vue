@@ -50,12 +50,16 @@ const form = useForm({
     description: props.product.description,
     type: props.product.type,
     sku: props.product.sku,
+    barcode: (props.product as any).barcode || '',
     price: props.product.price,
     cost: props.product.cost,
     unit: props.product.unit,
     stock_quantity: props.product.stock_quantity,
     min_stock_level: props.product.min_stock_level,
     track_stock: props.product.track_stock,
+    track_batches: (props.product as any).track_batches || false,
+    track_serial_numbers: (props.product as any).track_serial_numbers || false,
+    valuation_method: (props.product as any).valuation_method || 'fifo',
     is_active: props.product.is_active,
     category: props.product.category,
     tags: [...props.product.tags],
@@ -245,6 +249,23 @@ function getTypeColor(type: string) {
                                 </div>
                             </div>
 
+                            <!-- Barcode -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">
+                                    Barcode
+                                </label>
+                                <input
+                                    v-model="form.barcode"
+                                    type="text"
+                                    class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    placeholder="Scan or enter barcode"
+                                />
+                                <div v-if="form.errors.barcode" class="mt-1 text-sm text-red-600">
+                                    {{ form.errors.barcode }}
+                                </div>
+                                <p class="mt-1 text-xs text-gray-500">For barcode scanning and quick lookup</p>
+                            </div>
+
                             <!-- Unit -->
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">
@@ -389,6 +410,51 @@ function getTypeColor(type: string) {
                                     {{ form.errors.min_stock_level }}
                                 </div>
                                 <p class="mt-1 text-sm text-gray-500">Alert when stock falls below this level</p>
+                            </div>
+
+                            <!-- Valuation Method -->
+                            <div v-if="form.track_stock">
+                                <label class="block text-sm font-medium text-gray-700">
+                                    Inventory Valuation Method
+                                </label>
+                                <select
+                                    v-model="form.valuation_method"
+                                    class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                >
+                                    <option value="fifo">FIFO (First In, First Out)</option>
+                                    <option value="lifo">LIFO (Last In, First Out)</option>
+                                    <option value="average_cost">Average Cost</option>
+                                </select>
+                                <div v-if="form.errors.valuation_method" class="mt-1 text-sm text-red-600">
+                                    {{ form.errors.valuation_method }}
+                                </div>
+                                <p class="mt-1 text-xs text-gray-500">Method used to calculate cost of goods sold</p>
+                            </div>
+
+                            <!-- Track Batches -->
+                            <div v-if="form.track_stock" class="md:col-span-3">
+                                <label class="flex items-center gap-2">
+                                    <input
+                                        v-model="form.track_batches"
+                                        type="checkbox"
+                                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <span class="text-sm font-medium text-gray-700">Track batches/lots for this product</span>
+                                </label>
+                                <p class="mt-1 text-xs text-gray-500 ml-6">Enable batch tracking for expiry dates and lot numbers</p>
+                            </div>
+
+                            <!-- Track Serial Numbers -->
+                            <div v-if="form.track_stock" class="md:col-span-3">
+                                <label class="flex items-center gap-2">
+                                    <input
+                                        v-model="form.track_serial_numbers"
+                                        type="checkbox"
+                                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <span class="text-sm font-medium text-gray-700">Track serial numbers for this product</span>
+                                </label>
+                                <p class="mt-1 text-xs text-gray-500 ml-6">Enable individual serial number tracking</p>
                             </div>
                         </div>
                     </div>

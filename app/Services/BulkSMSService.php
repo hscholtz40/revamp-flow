@@ -61,19 +61,9 @@ class BulkSMSService
 
             $responseData = $response->json();
 
-            if ($response->successful()) {
-                Log::info('SMS sent successfully', [
-                    'to' => $to,
-                    'response' => $responseData,
-                ]);
-
-                return [
-                    'success' => true,
-                    'message' => 'SMS sent successfully',
-                    'data' => $responseData,
-                ];
-            } else {
-                Log::error('SMS sending failed', [
+            // Check HTTP status first
+            if (!$response->successful()) {
+                Log::error('SMS sending failed - HTTP error', [
                     'to' => $to,
                     'status' => $response->status(),
                     'response' => $responseData,
@@ -81,10 +71,59 @@ class BulkSMSService
 
                 return [
                     'success' => false,
-                    'message' => 'Failed to send SMS: ' . ($responseData['error']['message'] ?? 'Unknown error'),
+                    'message' => 'Failed to send SMS: ' . ($responseData['error']['message'] ?? 'HTTP ' . $response->status()),
                     'data' => $responseData,
                 ];
             }
+
+            // Check the actual message status in the response body
+            // BulkSMS API returns an array of message objects
+            $messages = is_array($responseData) ? $responseData : [$responseData];
+            $hasFailure = false;
+            $failureMessages = [];
+
+            foreach ($messages as $message) {
+                // Check if the message has a status field indicating failure
+                if (isset($message['status'])) {
+                    $statusType = $message['status']['type'] ?? null;
+                    $statusId = $message['status']['id'] ?? null;
+                    
+                    // Check for failure statuses
+                    if ($statusType === 'FAILED' || 
+                        (is_string($statusId) && str_contains(strtoupper($statusId), 'FAILED')) ||
+                        (is_string($statusId) && str_contains(strtoupper($statusId), 'NOT_SENT'))) {
+                        $hasFailure = true;
+                        $failureMessages[] = $message['status']['id'] ?? 'Unknown failure';
+                    }
+                }
+            }
+
+            if ($hasFailure) {
+                $errorMessage = 'SMS failed: ' . implode(', ', $failureMessages);
+                Log::error('SMS sending failed - message status indicates failure', [
+                    'to' => $to,
+                    'response' => $responseData,
+                    'failure_statuses' => $failureMessages,
+                ]);
+
+                return [
+                    'success' => false,
+                    'message' => $errorMessage,
+                    'data' => $responseData,
+                ];
+            }
+
+            // Success - HTTP status is OK and message status indicates success
+            Log::info('SMS sent successfully', [
+                'to' => $to,
+                'response' => $responseData,
+            ]);
+
+            return [
+                'success' => true,
+                'message' => 'SMS sent successfully',
+                'data' => $responseData,
+            ];
 
         } catch (\Exception $e) {
             Log::error('SMS service error', [

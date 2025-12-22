@@ -7,7 +7,8 @@ import users from '@/routes/users';
 import groups from '@/routes/groups';
 import companySettings from '@/routes/company-settings';
 import smsSettings from '@/routes/sms-settings';
-import { Users, Shield, Building2, UserCheck, Package, Tag, MessageSquare, Zap } from 'lucide-vue-next';
+import whatsappSettings from '@/routes/whatsapp-settings';
+import { Users, Shield, Building2, UserCheck, Package, Tag, MessageSquare, Zap, FileText } from 'lucide-vue-next';
 
 const props = defineProps<{
     stats: {
@@ -149,6 +150,27 @@ const props = defineProps<{
                     </div>
                 </div>
 
+                <!-- WhatsApp Settings Card -->
+                <div class="rounded-lg border bg-white p-6 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold">WhatsApp Settings</h2>
+                            <p class="text-sm text-gray-600">Configure WhatsApp Business API for customer messaging</p>
+                        </div>
+                        <div class="rounded-full bg-green-100 p-3">
+                            <MessageSquare class="h-6 w-6 text-green-600" />
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <Link 
+                            :href="whatsappSettings.index().url" 
+                            class="rounded bg-green-600 px-3 py-2 text-sm text-white hover:bg-green-700"
+                        >
+                            Configure WhatsApp
+                        </Link>
+                    </div>
+                </div>
+
                 <!-- Xero Integration Card -->
                 <div class="rounded-lg border bg-white p-6 shadow-sm">
                     <div class="flex items-center justify-between">
@@ -166,6 +188,27 @@ const props = defineProps<{
                             class="rounded bg-orange-600 px-3 py-2 text-sm text-white hover:bg-orange-700"
                         >
                             Configure Xero
+                        </Link>
+                    </div>
+                </div>
+
+                <!-- PDF Templates Card -->
+                <div class="rounded-lg border bg-white p-6 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold">PDF Templates</h2>
+                            <p class="text-sm text-gray-600">Manage PDF templates for invoices, quotes, jobcards, and proforma invoices</p>
+                        </div>
+                        <div class="rounded-full bg-indigo-100 p-3">
+                            <FileText class="h-6 w-6 text-indigo-600" />
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <Link 
+                            :href="administration.pdfTemplates.index().url" 
+                            class="rounded bg-indigo-600 px-3 py-2 text-sm text-white hover:bg-indigo-700"
+                        >
+                            Manage Templates
                         </Link>
                     </div>
                 </div>

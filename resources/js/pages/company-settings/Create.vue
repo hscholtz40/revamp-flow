@@ -14,6 +14,7 @@ const form = useForm({
     state: '',
     postal_code: '',
     country: '',
+    vat_number: '',
     website: '',
     description: '',
     invoice_footer: '',
@@ -197,6 +198,16 @@ function submit() {
                                     class="w-full rounded border px-3 py-2"
                                 />
                                 <div v-if="form.errors.country" class="mt-1 text-sm text-red-600">{{ form.errors.country }}</div>
+                            </div>
+                            
+                            <div>
+                                <label class="mb-1 block text-sm font-medium">VAT Number</label>
+                                <input
+                                    v-model="form.vat_number"
+                                    type="text"
+                                    class="w-full rounded border px-3 py-2"
+                                />
+                                <div v-if="form.errors.vat_number" class="mt-1 text-sm text-red-600">{{ form.errors.vat_number }}</div>
                             </div>
                         </div>
                     </div>

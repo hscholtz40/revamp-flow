@@ -20,6 +20,7 @@ class Company extends Model
         'state',
         'postal_code',
         'country',
+        'vat_number',
         'website',
         'logo_path',
         'description',
@@ -31,11 +32,24 @@ class Company extends Model
         'default_jobcard_terms',
         'is_active',
         'is_default',
+        'smtp_host',
+        'smtp_port',
+        'smtp_username',
+        'smtp_password',
+        'smtp_encryption',
+        'smtp_from_email',
+        'smtp_from_name',
+        'whatsapp_business_number',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
         'is_default' => 'boolean',
+        'smtp_port' => 'integer',
+    ];
+
+    protected $hidden = [
+        'smtp_password',
     ];
 
     /**
@@ -126,5 +140,29 @@ class Company extends Model
         
         // Set this company as default
         $this->update(['is_default' => true]);
+    }
+
+    /**
+     * Get the reminder settings for this company.
+     */
+    public function reminderSettings()
+    {
+        return $this->hasOne(ReminderSettings::class);
+    }
+
+    /**
+     * Get reminder settings, creating if they don't exist.
+     */
+    public function getReminderSettings(): ReminderSettings
+    {
+        return ReminderSettings::getForCompany($this->id);
+    }
+
+    /**
+     * Check if company has SMTP settings configured.
+     */
+    public function hasSmtpConfigured(): bool
+    {
+        return !empty($this->smtp_host) && !empty($this->smtp_username) && !empty($this->smtp_password);
     }
 }

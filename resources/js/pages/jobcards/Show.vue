@@ -58,7 +58,15 @@
                         {{ formatStatus(props.jobcard.status) }}
                     </span>
                         <button
+                            v-if="!props.pdfTemplates || props.pdfTemplates.length === 0"
                             @click="downloadPDF"
+                            class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                        >
+                            Download PDF
+                        </button>
+                        <button
+                            v-else
+                            @click="showTemplateModal = true"
                             class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                         >
                             Download PDF
@@ -340,8 +348,18 @@
                                 {{ emailForm.errors.email }}
                             </div>
                         </div>
-                        
-                        
+                        <div v-if="props.pdfTemplates && props.pdfTemplates.length > 0" class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">PDF Template</label>
+                            <select
+                                v-model="emailForm.template_id"
+                                class="w-full rounded border px-3 py-2"
+                            >
+                                <option :value="null">Use System Template (Default)</option>
+                                <option v-for="template in props.pdfTemplates" :key="template.id" :value="template.id">
+                                    {{ template.name }}
+                                </option>
+                            </select>
+                        </div>
                         <div class="mb-4">
                             <label class="block text-sm font-medium text-gray-700 mb-1">Message</label>
                             <textarea
@@ -413,6 +431,44 @@
                 </div>
             </div>
         </div>
+
+        <!-- Template Selection Modal for Download -->
+        <div v-if="showTemplateModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+            <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+                <div class="mt-3 text-center">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Select PDF Template</h3>
+                    <div class="mb-4">
+                        <label for="template_select" class="block text-sm font-medium text-gray-700 mb-1">Choose Template</label>
+                        <select
+                            id="template_select"
+                            v-model="selectedTemplateId"
+                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        >
+                            <option :value="null">Use System Template (Default)</option>
+                            <option v-for="template in props.pdfTemplates" :key="template.id" :value="template.id">
+                                {{ template.name }}
+                            </option>
+                        </select>
+                    </div>
+                    <div class="flex items-center justify-end gap-3">
+                        <button
+                            type="button"
+                            @click="showTemplateModal = false; selectedTemplateId = null;"
+                            class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            @click="downloadPDF"
+                            class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                        >
+                            Download
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </AppLayout>
 </template>
 
@@ -467,6 +523,8 @@ interface Jobcard {
 interface Props {
     jobcard: Jobcard;
     canEditCompleted: boolean;
+    pdfTemplates?: Array<{ id: number; name: string; module: string; is_default: boolean }>;
+    defaultTemplateId?: number | null;
 }
 
 const props = defineProps<Props>();
@@ -564,6 +622,8 @@ const formatDateTime = (dateTime: string) => {
 // Email functionality
 const showEmailModal = ref(false);
 const showResultDialog = ref(false);
+const showTemplateModal = ref(false);
+const selectedTemplateId = ref<number | null>(props.defaultTemplateId ?? null);
 const emailResult = ref({
     success: false,
     email: '',
@@ -573,10 +633,17 @@ const emailResult = ref({
 const emailForm = useForm({
     email: props.jobcard.customer?.email || '',
     message: '',
+    template_id: null as number | null,
 });
 
 const downloadPDF = () => {
-    window.location.href = jobcards.print(props.jobcard.id).url;
+    const url = new URL(jobcards.print(props.jobcard.id).url, window.location.origin);
+    if (selectedTemplateId.value) {
+        url.searchParams.set('template_id', selectedTemplateId.value.toString());
+    }
+    window.open(url.toString(), '_blank');
+    showTemplateModal.value = false;
+    selectedTemplateId.value = null;
 };
 
 const convertToInvoice = () => {
@@ -586,6 +653,11 @@ const convertToInvoice = () => {
 };
 
 const sendEmail = () => {
+    // Set template_id if default template exists and no template is selected
+    if (!emailForm.template_id && props.defaultTemplateId) {
+        emailForm.template_id = props.defaultTemplateId;
+    }
+    
     emailForm.post(jobcards.email(props.jobcard.id).url, {
         onSuccess: (page) => {
             showEmailModal.value = false;
@@ -596,6 +668,7 @@ const sendEmail = () => {
             };
             showResultDialog.value = true;
             emailForm.reset();
+            emailForm.template_id = null;
         },
         onError: (errors) => {
             showEmailModal.value = false;

@@ -171,10 +171,15 @@ class DashboardController extends Controller
         // Low stock products
         $lowStockProducts = Product::where('company_id', $currentCompany->id)
             ->where('track_stock', true)
-            ->whereRaw('stock_quantity <= min_stock_level')
-            ->orderBy('stock_quantity', 'asc')
-            ->limit(5)
-            ->get();
+            ->where('is_active', true)
+            ->get()
+            ->filter(function ($product) {
+                $threshold = $product->low_stock_threshold ?? $product->min_stock_level ?? 10;
+                return $product->stock_quantity <= $threshold;
+            })
+            ->sortBy('stock_quantity')
+            ->take(10)
+            ->values();
 
         // Top customers by revenue
         $topCustomers = Customer::where('company_id', $currentCompany->id)

@@ -19,6 +19,7 @@ class Customer extends Model
         'address',
         'city',
         'country',
+        'vat_number',
         'notes',
         'xero_contact_id',
     ];

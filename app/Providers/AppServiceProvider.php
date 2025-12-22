@@ -23,6 +23,8 @@ class AppServiceProvider extends ServiceProvider
         \Illuminate\Database\Eloquent\Relations\Relation::morphMap([
             'quote' => \App\Models\Quote::class,
             'jobcard' => \App\Models\Jobcard::class,
+            'purchase_order' => \App\Models\PurchaseOrder::class,
+            'invoice' => \App\Models\Invoice::class,
         ]);
     }
 }

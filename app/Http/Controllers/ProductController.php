@@ -34,7 +34,8 @@ class ProductController extends Controller
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
                   ->orWhere('description', 'like', "%{$search}%")
-                  ->orWhere('sku', 'like', "%{$search}%");
+                  ->orWhere('sku', 'like', "%{$search}%")
+                  ->orWhere('barcode', 'like', "%{$search}%");
             });
         }
 
@@ -86,12 +87,16 @@ class ProductController extends Controller
             'description' => ['nullable', 'string'],
             'type' => ['required', 'in:product,service'],
             'sku' => ['nullable', 'string', 'max:100', 'unique:products,sku'],
+            'barcode' => ['nullable', 'string', 'max:255', 'unique:products,barcode'],
             'price' => ['required', 'numeric', 'min:0'],
             'cost' => ['nullable', 'numeric', 'min:0'],
             'unit' => ['required', 'string', 'max:50'],
             'stock_quantity' => ['nullable', 'integer', 'min:0'],
             'min_stock_level' => ['nullable', 'integer', 'min:0'],
             'track_stock' => ['boolean'],
+            'track_batches' => ['boolean'],
+            'track_serial_numbers' => ['boolean'],
+            'valuation_method' => ['nullable', 'in:fifo,lifo,average_cost'],
             'is_active' => ['boolean'],
             'category' => ['nullable', 'string', 'max:100'],
             'tags' => ['nullable', 'array'],
@@ -118,6 +123,8 @@ class ProductController extends Controller
      */
     public function show(Product $product): Response
     {
+        $product->load('supplier', 'batches', 'serialNumbers');
+        
         return Inertia::render('products/Show', [
             'product' => $product,
         ]);
@@ -148,12 +155,16 @@ class ProductController extends Controller
             'description' => ['nullable', 'string'],
             'type' => ['required', 'in:product,service'],
             'sku' => ['nullable', 'string', 'max:100', 'unique:products,sku,' . $product->id],
+            'barcode' => ['nullable', 'string', 'max:255', 'unique:products,barcode,' . $product->id],
             'price' => ['required', 'numeric', 'min:0'],
             'cost' => ['nullable', 'numeric', 'min:0'],
             'unit' => ['required', 'string', 'max:50'],
             'stock_quantity' => ['nullable', 'integer', 'min:0'],
             'min_stock_level' => ['nullable', 'integer', 'min:0'],
             'track_stock' => ['boolean'],
+            'track_batches' => ['boolean'],
+            'track_serial_numbers' => ['boolean'],
+            'valuation_method' => ['nullable', 'in:fifo,lifo,average_cost'],
             'is_active' => ['boolean'],
             'category' => ['nullable', 'string', 'max:100'],
             'tags' => ['nullable', 'array'],
@@ -183,5 +194,30 @@ class ProductController extends Controller
 
         return redirect()->route('products.index')
             ->with('success', 'Product deleted successfully');
+    }
+
+    /**
+     * Search product by barcode.
+     */
+    public function searchByBarcode(Request $request)
+    {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        $barcode = $request->input('barcode');
+
+        if (!$barcode) {
+            return response()->json(['error' => 'Barcode is required'], 400);
+        }
+
+        $product = Product::where('company_id', $currentCompany->id)
+            ->where('barcode', $barcode)
+            ->first();
+
+        if (!$product) {
+            return response()->json(['error' => 'Product not found'], 404);
+        }
+
+        return response()->json([
+            'product' => $product->load('supplier', 'batches', 'serialNumbers'),
+        ]);
     }
 }

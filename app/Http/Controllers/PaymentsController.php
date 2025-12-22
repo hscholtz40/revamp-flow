@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Services\XeroService;
+use App\Services\ReminderService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -43,6 +44,7 @@ class PaymentsController extends Controller
         $validated['company_id'] = $currentCompany->id;
 
         $payment = Payment::create($validated);
+        $payment->load('invoice.customer', 'invoice.company');
 
         // Update invoice status if fully paid
         if ($invoice->isFullyPaid()) {
@@ -69,6 +71,18 @@ class PaymentsController extends Controller
                 ]);
                 // Don't fail the payment creation if Xero sync fails
             }
+        }
+
+        // Send automated reminder if enabled
+        try {
+            $reminderService = new ReminderService();
+            $reminderService->sendPaymentReceivedConfirmation($payment);
+        } catch (\Exception $e) {
+            Log::error('Failed to send payment received confirmation', [
+                'payment_id' => $payment->id,
+                'error' => $e->getMessage(),
+            ]);
+            // Don't fail the payment creation if reminder fails
         }
 
         return redirect()->back()->with('success', 'Payment added successfully.');

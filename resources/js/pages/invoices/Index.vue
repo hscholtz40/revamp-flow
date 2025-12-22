@@ -105,7 +105,7 @@
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
-                            <tr v-for="invoice in props.invoices.data" :key="invoice.id" class="hover:bg-gray-50">
+                            <tr v-for="invoice in (props.invoices?.data || [])" :key="invoice.id" class="hover:bg-gray-50">
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div>
                                         <div class="text-sm font-medium text-gray-900">{{ invoice.invoice_number }}</div>
@@ -176,18 +176,18 @@
                 </div>
 
                 <!-- Pagination -->
-                <div v-if="props.invoices.links" class="bg-white px-4 py-3 border-t border-gray-200 sm:px-6">
+                <div v-if="props.invoices?.links && props.invoices.links.length > 0" class="bg-white px-4 py-3 border-t border-gray-200 sm:px-6">
                     <div class="flex items-center justify-between">
                         <div class="flex-1 flex justify-between sm:hidden">
                             <Link
-                                v-if="props.invoices.prev_page_url"
+                                v-if="props.invoices?.prev_page_url"
                                 :href="props.invoices.prev_page_url"
                                 class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
                             >
                                 Previous
                             </Link>
                             <Link
-                                v-if="props.invoices.next_page_url"
+                                v-if="props.invoices?.next_page_url"
                                 :href="props.invoices.next_page_url"
                                 class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
                             >
@@ -198,17 +198,17 @@
                             <div>
                                 <p class="text-sm text-gray-700">
                                     Showing
-                                    <span class="font-medium">{{ props.invoices.from }}</span>
+                                    <span class="font-medium">{{ props.invoices.from ?? 0 }}</span>
                                     to
-                                    <span class="font-medium">{{ props.invoices.to }}</span>
+                                    <span class="font-medium">{{ props.invoices.to ?? 0 }}</span>
                                     of
-                                    <span class="font-medium">{{ props.invoices.total }}</span>
+                                    <span class="font-medium">{{ props.invoices.total ?? 0 }}</span>
                                     results
                                 </p>
                             </div>
                             <div>
                                 <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                                    <template v-for="(link, index) in props.invoices.links" :key="index">
+                                    <template v-for="(link, index) in (props.invoices?.links || [])" :key="index">
                                         <Link
                                             v-if="link.url"
                                             :href="link.url"
@@ -270,16 +270,16 @@ interface Company {
 
 interface PaginatedInvoices {
     data: Invoice[];
-    links: Array<{
+    links?: Array<{
         url: string | null;
         label: string;
         active: boolean;
     }>;
-    prev_page_url: string | null;
-    next_page_url: string | null;
-    from: number;
-    to: number;
-    total: number;
+    prev_page_url?: string | null;
+    next_page_url?: string | null;
+    from?: number;
+    to?: number;
+    total?: number;
 }
 
 interface Props {

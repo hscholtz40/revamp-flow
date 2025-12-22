@@ -11,12 +11,16 @@ interface Product {
     description: string;
     type: 'product' | 'service';
     sku: string;
+    barcode?: string;
     price: number;
     cost: number;
     unit: string;
     stock_quantity: number;
     min_stock_level: number;
     track_stock: boolean;
+    track_batches?: boolean;
+    track_serial_numbers?: boolean;
+    valuation_method?: 'fifo' | 'lifo' | 'average_cost';
     is_active: boolean;
     category: string;
     tags: string[];
@@ -252,6 +256,44 @@ function deleteProduct() {
                                     >
                                         {{ getStockStatus(props.product).text }}
                                     </span>
+                                </div>
+                            </div>
+
+                            <!-- Advanced Inventory Features -->
+                            <div v-if="props.product.track_stock" class="mt-6 space-y-4">
+                                <div v-if="(props.product as any).track_batches" class="flex items-center justify-between p-4 bg-blue-50 rounded-lg border border-blue-200">
+                                    <div>
+                                        <div class="text-sm font-medium text-gray-900">Batch/Lot Tracking</div>
+                                        <div class="text-xs text-gray-600">Track batches with expiry dates</div>
+                                    </div>
+                                    <Link
+                                        :href="`/products/${props.product.id}/batches`"
+                                        class="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                                    >
+                                        Manage Batches →
+                                    </Link>
+                                </div>
+
+                                <div v-if="(props.product as any).track_serial_numbers" class="flex items-center justify-between p-4 bg-green-50 rounded-lg border border-green-200">
+                                    <div>
+                                        <div class="text-sm font-medium text-gray-900">Serial Number Tracking</div>
+                                        <div class="text-xs text-gray-600">Track individual serial numbers</div>
+                                    </div>
+                                    <Link
+                                        :href="`/products/${props.product.id}/serial-numbers`"
+                                        class="text-sm text-green-600 hover:text-green-800 font-medium"
+                                    >
+                                        Manage Serial Numbers →
+                                    </Link>
+                                </div>
+
+                                <div v-if="(props.product as any).valuation_method" class="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                    <div class="text-sm font-medium text-gray-900">Valuation Method</div>
+                                    <div class="text-xs text-gray-600 mt-1">
+                                        {{ (props.product as any).valuation_method === 'fifo' ? 'FIFO (First In, First Out)' : 
+                                            (props.product as any).valuation_method === 'lifo' ? 'LIFO (Last In, First Out)' : 
+                                            'Average Cost' }}
+                                    </div>
                                 </div>
                             </div>
                         </div>

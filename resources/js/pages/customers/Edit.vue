@@ -12,6 +12,7 @@ const form = useForm({
     address: props.customer.address ?? '',
     city: props.customer.city ?? '',
     country: props.customer.country ?? '',
+    vat_number: props.customer.vat_number ?? '',
     notes: props.customer.notes ?? '',
 });
 
@@ -51,6 +52,10 @@ function submit() {
                 <label class="block">
                     <span class="mb-1 block">Country</span>
                     <input v-model="form.country" class="w-full rounded border px-3 py-2" />
+                </label>
+                <label class="block">
+                    <span class="mb-1 block">VAT Number</span>
+                    <input v-model="form.vat_number" class="w-full rounded border px-3 py-2" />
                 </label>
             </div>
             <label class="block">

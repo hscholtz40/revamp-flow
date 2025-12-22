@@ -1,0 +1,64 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class Supplier extends Model
+{
+    use HasFactory;
+
+    protected $fillable = [
+        'company_id',
+        'name',
+        'email',
+        'phone',
+        'address',
+        'city',
+        'state',
+        'postal_code',
+        'country',
+        'vat_number',
+        'notes',
+        'is_active',
+    ];
+
+    protected $casts = [
+        'is_active' => 'boolean',
+    ];
+
+    /**
+     * Get the company that owns this supplier.
+     */
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    /**
+     * Get the products supplied by this supplier.
+     */
+    public function products(): HasMany
+    {
+        return $this->hasMany(Product::class);
+    }
+
+    /**
+     * Get the purchase orders for this supplier.
+     */
+    public function purchaseOrders(): HasMany
+    {
+        return $this->hasMany(PurchaseOrder::class);
+    }
+
+    /**
+     * Scope to filter active suppliers.
+     */
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
+    }
+}

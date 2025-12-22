@@ -8,6 +8,7 @@ use App\Models\Quote;
 use App\Models\QuoteLineItem;
 use App\Models\Product;
 use App\Models\Jobcard;
+use App\Services\ReminderService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
@@ -142,6 +143,20 @@ class QuotesController extends Controller
 
         // Calculate totals
         $quote->calculateTotals();
+        $quote->refresh();
+        $quote->load('customer', 'company');
+
+        // Send automated reminder if enabled
+        try {
+            $reminderService = new ReminderService();
+            $reminderService->sendQuoteCreatedConfirmation($quote);
+        } catch (\Exception $e) {
+            \Log::error('Failed to send quote created confirmation', [
+                'quote_id' => $quote->id,
+                'error' => $e->getMessage(),
+            ]);
+            // Don't fail the quote creation if reminder fails
+        }
 
         return redirect()->route('quotes.show', $quote)
             ->with('success', 'Quote created successfully');
@@ -158,9 +173,26 @@ class QuotesController extends Controller
         $quote->calculateTotals();
         $quote->refresh();
         
+        $currentCompany = auth()->user()->getCurrentCompany();
+        
+        // Get available PDF templates for quotes and proforma invoices
+        $pdfTemplates = \App\Models\PdfTemplate::where('company_id', $currentCompany->id)
+            ->whereIn('module', ['quote', 'proforma-invoice'])
+            ->where('is_active', true)
+            ->orderBy('module')
+            ->orderBy('name')
+            ->get(['id', 'name', 'module', 'is_default']);
+        
+        // Get default template IDs for both modules
+        $defaultQuoteTemplateId = $pdfTemplates->where('module', 'quote')->where('is_default', true)->first()?->id ?? null;
+        $defaultProformaTemplateId = $pdfTemplates->where('module', 'proforma-invoice')->where('is_default', true)->first()?->id ?? null;
+        
         return Inertia::render('quotes/Show', [
             'quote' => $quote,
             'canEditCompleted' => auth()->user()->hasModulePermission('quotes', 'edit_completed'),
+            'pdfTemplates' => $pdfTemplates,
+            'defaultQuoteTemplateId' => $defaultQuoteTemplateId,
+            'defaultProformaTemplateId' => $defaultProformaTemplateId,
         ]);
     }
 
@@ -346,13 +378,15 @@ class QuotesController extends Controller
         
         $company = $quote->company;
         $type = $request->get('type', 'quotation'); // 'quotation' or 'proforma-invoice'
+        $templateId = $request->get('template_id');
         
-        $view = $type === 'proforma-invoice' ? 'pdf.proforma-invoice' : 'pdf.quote';
+        $module = $type === 'proforma-invoice' ? 'proforma-invoice' : 'quote';
         $filename = $type === 'proforma-invoice' 
             ? "proforma-invoice-{$quote->quote_number}.pdf" 
             : "quote-{$quote->quote_number}.pdf";
         
-        $pdf = Pdf::loadView($view, compact('quote', 'company'));
+        $pdfService = new \App\Services\PdfGenerationService();
+        $pdf = $pdfService->generatePdf($module, compact('quote', 'company'), $company, $templateId);
         return $pdf->download($filename);
     }
 
@@ -385,14 +419,16 @@ class QuotesController extends Controller
             // Generate PDF
             $company = $quote->company;
             $type = $validated['type'] ?? 'quotation'; // 'quotation' or 'proforma-invoice'
+            $templateId = $request->get('template_id');
             
-            $view = $type === 'proforma-invoice' ? 'pdf.proforma-invoice' : 'pdf.quote';
+            $module = $type === 'proforma-invoice' ? 'proforma-invoice' : 'quote';
             $filename = $type === 'proforma-invoice' 
                 ? "proforma-invoice-{$quote->quote_number}.pdf" 
                 : "quote-{$quote->quote_number}.pdf";
             $subjectPrefix = $type === 'proforma-invoice' ? 'Proforma Invoice' : 'Quote';
             
-            $pdf = Pdf::loadView($view, compact('quote', 'company'));
+            $pdfService = new \App\Services\PdfGenerationService();
+            $pdf = $pdfService->generatePdf($module, compact('quote', 'company'), $company, $templateId);
             $pdfContent = $pdf->output();
             
             // Send email

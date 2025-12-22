@@ -29,6 +29,9 @@ require __DIR__.'/groups.php';
 require __DIR__.'/administration.php';
 require __DIR__.'/company-settings.php';
 require __DIR__.'/xero.php';
+require __DIR__.'/suppliers.php';
+require __DIR__.'/stock-movements.php';
+require __DIR__.'/purchase-orders.php';
 
 // Installer routes (available only before first install)
 Route::middleware([EnsureNotInstalled::class])->group(function () {

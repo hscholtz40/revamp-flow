@@ -139,6 +139,38 @@
                                 </div>
                             </div>
 
+                            <!-- Serial Number Selection -->
+                            <div v-if="item.product_id && props.products.find(p => p.id === parseInt(item.product_id))?.track_serial_numbers" class="mt-4 border-t pt-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    Serial Numbers
+                                    <span class="text-xs text-gray-500">
+                                        (Select {{ item.quantity || 0 }} serial number(s))
+                                    </span>
+                                </label>
+                                <div class="max-h-40 space-y-2 overflow-y-auto rounded border border-gray-300 p-2">
+                                    <label
+                                        v-for="serial in props.products.find(p => p.id === parseInt(item.product_id))?.serialNumbers || []"
+                                        :key="serial.id"
+                                        class="flex items-center gap-2 rounded px-2 py-1 hover:bg-gray-50"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            :value="serial.id"
+                                            v-model="item.serial_number_ids"
+                                            class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                            :disabled="(item.serial_number_ids?.length || 0) >= (item.quantity || 0) && !item.serial_number_ids?.includes(serial.id)"
+                                        />
+                                        <span class="text-sm text-gray-900">{{ serial.serial_number }}</span>
+                                    </label>
+                                    <div v-if="!props.products.find(p => p.id === parseInt(item.product_id))?.serialNumbers || props.products.find(p => p.id === parseInt(item.product_id))?.serialNumbers.length === 0" class="text-sm text-gray-500">
+                                        No available serial numbers for this product.
+                                    </div>
+                                </div>
+                                <p class="mt-1 text-xs text-gray-500">
+                                    Selected: {{ item.serial_number_ids?.length || 0 }} / {{ item.quantity || 0 }}
+                                </p>
+                            </div>
+
                             <div class="flex items-center justify-between mt-4">
                                 <div class="text-sm font-medium text-gray-900">
                                     Total: {{ formatCurrency(item.total) }}
@@ -258,10 +290,21 @@ interface Customer {
     name: string;
 }
 
+interface SerialNumber {
+    id: number;
+    serial_number: string;
+    status: string;
+}
+
 interface Product {
     id: number;
     name: string;
+    sku: string | null;
     price: number;
+    stock_quantity: number;
+    track_stock: boolean;
+    track_serial_numbers: boolean;
+    serialNumbers?: SerialNumber[];
 }
 
 interface User {
@@ -280,6 +323,7 @@ interface LineItem {
     quantity: number;
     unit_price: number;
     total: number;
+    serial_number_ids?: number[];
 }
 
 interface Props {
@@ -313,6 +357,7 @@ const form = useForm({
             quantity: 1,
             unit_price: 0,
             total: 0,
+            serial_number_ids: [],
         },
     ] as LineItem[],
 });
@@ -347,6 +392,7 @@ const addLineItem = () => {
         quantity: 1,
         unit_price: 0,
         total: 0,
+        serial_number_ids: [] as number[],
     });
 };
 
@@ -359,6 +405,11 @@ const removeLineItem = (index: number) => {
 const selectProduct = (index: number, event: Event) => {
     const target = event.target as HTMLSelectElement;
     const productId = target.value;
+
+    // Ensure serial_number_ids is initialized
+    if (!form.line_items[index].serial_number_ids) {
+        form.line_items[index].serial_number_ids = [];
+    }
 
     if (productId) {
         const product = props.products.find(p => p.id === parseInt(productId));
@@ -373,6 +424,7 @@ const selectProduct = (index: number, event: Event) => {
         form.line_items[index].description = '';
         form.line_items[index].unit_price = 0;
         form.line_items[index].total = 0;
+        form.line_items[index].serial_number_ids = [];
     }
 };
 

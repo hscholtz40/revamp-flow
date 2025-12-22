@@ -107,9 +107,55 @@ const sendSMS = () => {
     });
 };
 
+// WhatsApp functionality
+const showWhatsAppModal = ref(false);
+const showWhatsAppResultModal = ref(false);
+const whatsappResult = ref<{ success: boolean; message: string } | null>(null);
+
+const whatsappForm = useForm({
+    message: '',
+});
+
+const openWhatsAppModal = () => {
+    whatsappForm.message = '';
+    showWhatsAppModal.value = true;
+};
+
+const sendWhatsApp = () => {
+    whatsappForm.post(customers.sendWhatsApp(props.customer.id).url, {
+        onSuccess: (page) => {
+            showWhatsAppModal.value = false;
+            whatsappForm.reset();
+            
+            // Show success result
+            whatsappResult.value = {
+                success: true,
+                message: page.props.flash?.success || 'WhatsApp message sent successfully!'
+            };
+            showWhatsAppResultModal.value = true;
+        },
+        onError: (errors) => {
+            showWhatsAppModal.value = false;
+            
+            // Show error result
+            const errorMessage = errors.message || 'Failed to send WhatsApp message. Please try again.';
+            whatsappResult.value = {
+                success: false,
+                message: errorMessage
+            };
+            showWhatsAppResultModal.value = true;
+        },
+    });
+};
+
 const closeSMSResultModal = () => {
     showSMSResultModal.value = false;
     smsResult.value = null;
+};
+
+const closeWhatsAppResultModal = () => {
+    showWhatsAppResultModal.value = false;
+    whatsappResult.value = null;
 };
 
 // Filtering and pagination
@@ -185,6 +231,13 @@ watch([contactSearch, contactsPerPage, smsSearch, smsStatus, smsPerPage], () => 
                             class="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
                         >
                             Send SMS
+                        </button>
+                        <button 
+                            v-if="props.customer.phone"
+                            @click="openWhatsAppModal"
+                            class="rounded-md bg-green-500 px-4 py-2 text-sm font-medium text-white hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                        >
+                            Send WhatsApp
                         </button>
                         <Link 
                             :href="customers.edit(props.customer.id).url" 
@@ -668,6 +721,72 @@ watch([contactSearch, contactsPerPage, smsSearch, smsStatus, smsPerPage], () => 
                         @click="closeSMSResultModal"
                         class="rounded-md px-4 py-2 text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2"
                         :class="smsResult?.success ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500' : 'bg-red-600 hover:bg-red-700 focus:ring-red-500'"
+                    >
+                        OK
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- WhatsApp Modal -->
+        <div v-if="showWhatsAppModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white rounded-lg p-6 w-full max-w-md">
+                <h3 class="text-lg font-semibold mb-4">Send WhatsApp to {{ props.customer.name }}</h3>
+                
+                <form @submit.prevent="sendWhatsApp">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Message (max 1000 characters)</label>
+                        <textarea
+                            v-model="whatsappForm.message"
+                            rows="6"
+                            class="w-full rounded border px-3 py-2"
+                            placeholder="Enter your WhatsApp message..."
+                            maxlength="1000"
+                            required
+                        ></textarea>
+                        <div class="text-xs text-gray-500 mt-1">{{ whatsappForm.message.length }}/1000 characters</div>
+                        <div v-if="whatsappForm.errors.message" class="text-sm text-red-600">{{ whatsappForm.errors.message }}</div>
+                    </div>
+                    
+                    <div class="flex items-center justify-end gap-3">
+                        <button
+                            type="button"
+                            @click="showWhatsAppModal = false"
+                            class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            :disabled="whatsappForm.processing"
+                            class="rounded-md bg-green-500 px-4 py-2 text-sm font-medium text-white hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50"
+                        >
+                            {{ whatsappForm.processing ? 'Sending...' : 'Send WhatsApp' }}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- WhatsApp Result Modal -->
+        <div v-if="showWhatsAppResultModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white rounded-lg p-6 w-full max-w-md">
+                <div class="text-center">
+                    <div v-if="whatsappResult?.success" class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
+                        <svg class="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                    </div>
+                    <div v-else class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                        <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-semibold mb-2">{{ whatsappResult?.success ? 'Success' : 'Error' }}</h3>
+                    <p class="text-sm text-gray-600 mb-4">{{ whatsappResult?.message }}</p>
+                    <button
+                        @click="closeWhatsAppResultModal"
+                        class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                     >
                         OK
                     </button>

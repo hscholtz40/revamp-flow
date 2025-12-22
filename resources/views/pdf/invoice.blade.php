@@ -399,7 +399,17 @@
             @foreach($invoice->lineItems ?? [] as $item)
                 <tr>
                     <td>{{ $item->product->code ?? 'N/A' }}</td>
-                    <td>{{ $item->description ?? 'Item Description' }}</td>
+                    <td>
+                        <div>{{ $item->description ?? 'Item Description' }}</div>
+                        @if(!empty($item->serialNumbers) && $item->serialNumbers->count() > 0)
+                            <div style="margin-top: 4px; font-size: 9px; color: #666;">
+                                <strong>Serial Numbers:</strong>
+                                @foreach($item->serialNumbers as $serial)
+                                    {{ $serial->serial_number }}{{ !$loop->last ? ', ' : '' }}
+                                @endforeach
+                            </div>
+                        @endif
+                    </td>
                     <td class="text-right">{{ number_format($item->quantity ?? 0, 2) }}</td>
                     <td class="text-right">R{{ number_format($item->unit_price ?? 0, 2) }}</td>
                     <td class="text-right">{{ $item->discount_percentage ?? 0 }}%</td>

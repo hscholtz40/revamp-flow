@@ -20,7 +20,7 @@ class UpdateGroupPermissions extends Command
      *
      * @var string
      */
-    protected $description = 'Update group permissions to include contacts module';
+    protected $description = 'Update group permissions to include new inventory modules';
 
     /**
      * Execute the console command.
@@ -38,7 +38,7 @@ class UpdateGroupPermissions extends Command
         }
         
         // Define modules and their permissions
-        $modules = ['customers', 'users', 'groups', 'contacts', 'products'];
+        $modules = ['customers', 'users', 'groups', 'contacts', 'products', 'suppliers', 'stock-movements', 'purchase-orders'];
         
         foreach ($groups as $group) {
             $this->info('Updating permissions for group: ' . $group->name);

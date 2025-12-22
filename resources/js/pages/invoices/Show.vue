@@ -54,11 +54,20 @@
                             {{ formatStatus(props.invoice.status) }}
                         </span>
                         <button
+                            v-if="!props.pdfTemplates || props.pdfTemplates.length === 0"
                             @click="downloadPDF"
                             class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                         >
                             Download PDF
                         </button>
+                        <div v-else class="relative">
+                            <button
+                                @click="showTemplateModal = true"
+                                class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                            >
+                                Download PDF
+                            </button>
+                        </div>
                         <button
                             @click="showEmailModal = true"
                             class="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
@@ -134,16 +143,29 @@
                                 <table class="w-full">
                                     <thead class="bg-gray-50">
                                         <tr>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-2/5">Description</th>
                                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
                                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit Price</th>
                                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
                                         </tr>
                                     </thead>
                                     <tbody class="bg-white divide-y divide-gray-200">
-                                        <tr v-for="item in props.invoice.line_items" :key="item.id">
-                                            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                {{ item.description }}
+                                        <template v-for="item in props.invoice.line_items" :key="item.id">
+                                            <tr>
+                                                <td class="px-4 py-4 text-sm text-gray-900">
+                                                    <div>{{ item.description }}</div>
+                                                    <div v-if="item.serialNumbers && item.serialNumbers.length > 0" class="mt-2">
+                                                        <div class="text-xs font-medium text-gray-600 mb-1">Serial Numbers:</div>
+                                                        <div class="flex flex-wrap gap-1">
+                                                            <span
+                                                                v-for="serial in item.serialNumbers"
+                                                                :key="serial.id"
+                                                                class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800"
+                                                            >
+                                                                {{ serial.serial_number }}
+                                                            </span>
+                                                        </div>
+                                                    </div>
                                             </td>
                                             <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                                                 {{ item.quantity }}
@@ -155,6 +177,7 @@
                                                 {{ formatCurrency(item.total) }}
                                             </td>
                                         </tr>
+                                        </template>
                                     </tbody>
                                 </table>
                             </div>
@@ -359,6 +382,18 @@
                                 {{ emailForm.errors.email }}
                             </div>
                         </div>
+                        <div class="mb-4" v-if="props.pdfTemplates && props.pdfTemplates.length > 0">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">PDF Template</label>
+                            <select
+                                v-model="emailForm.template_id"
+                                class="w-full rounded border px-3 py-2"
+                            >
+                                <option :value="null">Use System Template</option>
+                                <option v-for="template in props.pdfTemplates" :key="template.id" :value="template.id">
+                                    {{ template.name }}
+                                </option>
+                            </select>
+                        </div>
                         <div class="mb-4">
                             <label class="block text-sm font-medium text-gray-700 mb-1">Message</label>
                             <textarea
@@ -385,6 +420,44 @@
                             </button>
                         </div>
                     </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Template Selection Modal for Download -->
+        <div v-if="showTemplateModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+            <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+                <div class="mt-3 text-center">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Select PDF Template</h3>
+                    <div class="mb-4">
+                        <label for="template_select" class="block text-sm font-medium text-gray-700 mb-1">Choose Template</label>
+                        <select
+                            id="template_select"
+                            v-model="selectedTemplateId"
+                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        >
+                            <option :value="null">Use Blade Template (Default)</option>
+                            <option v-for="template in props.pdfTemplates" :key="template.id" :value="template.id">
+                                {{ template.name }}
+                            </option>
+                        </select>
+                    </div>
+                    <div class="flex items-center justify-end gap-3">
+                        <button
+                            type="button"
+                            @click="showTemplateModal = false; selectedTemplateId = null;"
+                            class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            @click="downloadPDF"
+                            class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                        >
+                            Download
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -522,12 +595,20 @@ import invoices from '@/routes/invoices';
 import quotes from '@/routes/quotes';
 import jobcards from '@/routes/jobcards';
 
+interface SerialNumber {
+    id: number;
+    serial_number: string;
+    status: string;
+}
+
 interface LineItem {
     id: number;
     description: string;
     quantity: number;
     unit_price: number;
     total: number;
+    serial_number_ids?: number[];
+    serialNumbers?: SerialNumber[];
 }
 
 interface Customer {
@@ -576,9 +657,16 @@ interface Invoice {
     source?: any;
 }
 
+interface PdfTemplate {
+    id: number;
+    name: string;
+}
+
 interface Props {
     invoice: Invoice;
     canEditCompleted: boolean;
+    pdfTemplates?: PdfTemplate[];
+    defaultTemplateId?: number | null;
 }
 
 const props = defineProps<Props>();
@@ -586,6 +674,8 @@ const props = defineProps<Props>();
 const showEmailModal = ref(false);
 const showResultDialog = ref(false);
 const showPaymentModal = ref(false);
+const showTemplateModal = ref(false);
+const selectedTemplateId = ref<number | null>(props.defaultTemplateId ?? null);
 const emailResult = ref({
     success: false,
     email: '',
@@ -603,6 +693,7 @@ const canEditInvoice = computed(() => {
 const emailForm = useForm({
     email: props.invoice.customer?.email || '',
     customMessage: '',
+    template_id: null as number | null,
 });
 
 const statusOptions = [
@@ -648,7 +739,13 @@ const updateStatus = (status: string) => {
 };
 
 const downloadPDF = () => {
-    window.open(invoices.downloadPdf(props.invoice.id).url, '_blank');
+    const url = new URL(invoices.downloadPdf(props.invoice.id).url, window.location.origin);
+    if (selectedTemplateId.value) {
+        url.searchParams.set('template_id', selectedTemplateId.value.toString());
+    }
+    window.open(url.toString(), '_blank');
+    showTemplateModal.value = false;
+    selectedTemplateId.value = null;
 };
 
 const sendEmail = () => {

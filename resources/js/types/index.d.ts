@@ -39,6 +39,27 @@ export interface Auth {
                     edit?: boolean;
                     delete?: boolean;
                 };
+                suppliers?: {
+                    list?: boolean;
+                    view?: boolean;
+                    create?: boolean;
+                    edit?: boolean;
+                    delete?: boolean;
+                };
+                'stock-movements'?: {
+                    list?: boolean;
+                    view?: boolean;
+                    create?: boolean;
+                    edit?: boolean;
+                    delete?: boolean;
+                };
+                'purchase-orders'?: {
+                    list?: boolean;
+                    view?: boolean;
+                    create?: boolean;
+                    edit?: boolean;
+                    delete?: boolean;
+                };
     };
 }
 

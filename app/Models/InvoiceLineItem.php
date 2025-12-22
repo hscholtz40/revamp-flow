@@ -18,6 +18,7 @@ class InvoiceLineItem extends Model
         'unit_price',
         'total',
         'sort_order',
+        'serial_number_ids',
     ];
 
     protected $casts = [
@@ -25,6 +26,7 @@ class InvoiceLineItem extends Model
         'unit_price' => 'decimal:2',
         'total' => 'decimal:2',
         'sort_order' => 'integer',
+        'serial_number_ids' => 'array',
     ];
 
     /**

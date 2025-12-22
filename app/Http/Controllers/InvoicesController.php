@@ -10,8 +10,11 @@ use App\Models\Product;
 use App\Models\Quote;
 use App\Models\Jobcard;
 use App\Models\User;
+use App\Services\ReminderService;
+use App\Services\StockService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Config;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -67,6 +70,7 @@ class InvoicesController extends Controller
         return Inertia::render('invoices/Index', [
             'invoices' => $invoices,
             'customers' => $customers,
+            'currentCompany' => $currentCompany,
             'filters' => $request->only(['status', 'customer_id', 'search', 'show_paid']),
             'canEditCompleted' => auth()->user()->hasModulePermission('invoices', 'edit_completed'),
         ]);
@@ -84,8 +88,29 @@ class InvoicesController extends Controller
             ->get();
 
         $products = Product::where('company_id', $currentCompany->id)
+            ->with(['serialNumbers' => function($query) {
+                $query->where('status', 'available');
+            }])
             ->orderBy('name')
-            ->get();
+            ->get()
+            ->map(function ($product) {
+                return [
+                    'id' => $product->id,
+                    'name' => $product->name,
+                    'sku' => $product->sku,
+                    'price' => $product->price,
+                    'stock_quantity' => $product->stock_quantity,
+                    'track_stock' => $product->track_stock,
+                    'track_serial_numbers' => $product->track_serial_numbers,
+                    'serialNumbers' => $product->serialNumbers->map(function ($serial) {
+                        return [
+                            'id' => $serial->id,
+                            'serial_number' => $serial->serial_number,
+                            'status' => $serial->status,
+                        ];
+                    })->toArray(),
+                ];
+            });
 
         $users = User::orderBy('name')->get();
 
@@ -102,6 +127,7 @@ class InvoicesController extends Controller
             'selectedCustomer' => $selectedCustomer,
             'defaultTerms' => $currentCompany->default_invoice_terms,
             'currentUser' => auth()->user(),
+            'currentCompany' => $currentCompany,
         ]);
     }
 
@@ -129,6 +155,8 @@ class InvoicesController extends Controller
             'line_items.*.description' => 'required|string',
             'line_items.*.quantity' => 'required|integer|min:1',
             'line_items.*.unit_price' => 'required|numeric|min:0',
+            'line_items.*.serial_number_ids' => 'nullable|array',
+            'line_items.*.serial_number_ids.*' => 'exists:product_serial_numbers,id',
         ]);
 
         // Generate invoice number
@@ -152,11 +180,12 @@ class InvoicesController extends Controller
             'terms' => $validated['terms'],
         ]);
 
-        // Create line items
+        // Create line items and deduct stock
+        $stockService = new StockService();
         foreach ($validated['line_items'] as $index => $lineItemData) {
             $total = $lineItemData['quantity'] * $lineItemData['unit_price'];
             
-            InvoiceLineItem::create([
+            $lineItem = InvoiceLineItem::create([
                 'invoice_id' => $invoice->id,
                 'product_id' => $lineItemData['product_id'],
                 'description' => $lineItemData['description'],
@@ -164,11 +193,72 @@ class InvoicesController extends Controller
                 'unit_price' => $lineItemData['unit_price'],
                 'total' => $total,
                 'sort_order' => $index,
+                'serial_number_ids' => $lineItemData['serial_number_ids'] ?? null,
             ]);
+
+            // Update serial numbers to sold status and link to invoice
+            if (!empty($lineItemData['serial_number_ids'])) {
+                try {
+                    \App\Models\ProductSerialNumber::whereIn('id', $lineItemData['serial_number_ids'])
+                        ->update([
+                            'status' => 'sold',
+                            'invoice_id' => $invoice->id,
+                            'sale_date' => now(),
+                        ]);
+                } catch (\Exception $e) {
+                    Log::error('Failed to update serial numbers for invoice line item', [
+                        'invoice_id' => $invoice->id,
+                        'product_id' => $lineItemData['product_id'],
+                        'serial_number_ids' => $lineItemData['serial_number_ids'],
+                        'error' => $e->getMessage(),
+                    ]);
+                    // Continue even if serial number update fails
+                }
+            }
+
+            // Deduct stock if product is tracked
+            if ($lineItemData['product_id']) {
+                try {
+                    $product = Product::find($lineItemData['product_id']);
+                    if ($product && $product->track_stock) {
+                        $stockService->removeStock(
+                            $product,
+                            $lineItemData['quantity'],
+                            "Invoice: {$invoiceNumber}",
+                            'invoice',
+                            $invoice->id,
+                            "Stock deducted for invoice {$invoiceNumber}",
+                            $lineItemData['serial_number_ids'] ?? null
+                        );
+                    }
+                } catch (\Exception $e) {
+                    Log::error('Failed to deduct stock for invoice line item', [
+                        'invoice_id' => $invoice->id,
+                        'product_id' => $lineItemData['product_id'],
+                        'quantity' => $lineItemData['quantity'],
+                        'error' => $e->getMessage(),
+                    ]);
+                    // Continue even if stock deduction fails
+                }
+            }
         }
 
         // Calculate totals
         $invoice->calculateTotals();
+        $invoice->refresh();
+        $invoice->load('customer', 'company');
+
+        // Send automated reminder if enabled
+        try {
+            $reminderService = new ReminderService();
+            $reminderService->sendInvoiceCreatedConfirmation($invoice);
+        } catch (\Exception $e) {
+            \Log::error('Failed to send invoice created confirmation', [
+                'invoice_id' => $invoice->id,
+                'error' => $e->getMessage(),
+            ]);
+            // Don't fail the invoice creation if reminder fails
+        }
 
         return redirect()->route('invoices.show', $invoice)
             ->with('success', 'Invoice created successfully.');
@@ -191,10 +281,43 @@ class InvoicesController extends Controller
         // Ensure totals are calculated
         $invoice->calculateTotals();
         $invoice->refresh();
+        
+        // Load serial numbers for line items that have serial_number_ids
+        // Do this after refresh to ensure we have the latest data
+        $invoice->load('lineItems');
+        
+        // Convert invoice to array first
+        $invoiceData = $invoice->toArray();
+        
+        // Then manually add serial numbers to each line item in the array
+        if (isset($invoiceData['line_items']) && is_array($invoiceData['line_items'])) {
+            foreach ($invoiceData['line_items'] as $key => $lineItemData) {
+                $serialNumberIds = $lineItemData['serial_number_ids'] ?? null;
+                if ($serialNumberIds && is_array($serialNumberIds) && count($serialNumberIds) > 0) {
+                    $serialNumbers = \App\Models\ProductSerialNumber::whereIn('id', $serialNumberIds)
+                        ->get(['id', 'serial_number', 'status'])
+                        ->toArray();
+                    $invoiceData['line_items'][$key]['serialNumbers'] = $serialNumbers;
+                } else {
+                    $invoiceData['line_items'][$key]['serialNumbers'] = [];
+                }
+            }
+        }
 
+        // Get available PDF templates for invoices
+        $pdfTemplates = \App\Models\PdfTemplate::where('company_id', $currentCompany->id)
+            ->where('module', 'invoice')
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'is_default']);
+        
+        $defaultTemplateId = $pdfTemplates->where('is_default', true)->first()?->id ?? null;
+        
         return Inertia::render('invoices/Show', [
-            'invoice' => $invoice,
+            'invoice' => $invoiceData,
             'canEditCompleted' => auth()->user()->hasModulePermission('invoices', 'edit_completed'),
+            'pdfTemplates' => $pdfTemplates,
+            'defaultTemplateId' => $defaultTemplateId,
         ]);
     }
 
@@ -211,14 +334,58 @@ class InvoicesController extends Controller
             ->orderBy('name')
             ->get();
 
+        // Get all invoice line item serial number IDs for this invoice
+        $invoiceSerialNumberIds = $invoice->lineItems->pluck('serial_number_ids')->flatten()->filter()->unique()->toArray();
+
         $products = Product::where('company_id', $currentCompany->id)
+            ->with(['serialNumbers' => function($query) use ($invoiceSerialNumberIds) {
+                // Include available serial numbers OR sold ones that are on this invoice
+                $query->where(function($q) use ($invoiceSerialNumberIds) {
+                    $q->where('status', 'available')
+                      ->orWhere(function($subQ) use ($invoiceSerialNumberIds) {
+                          $subQ->where('status', 'sold')
+                               ->whereIn('id', $invoiceSerialNumberIds);
+                      });
+                });
+            }])
             ->orderBy('name')
-            ->get();
+            ->get()
+            ->map(function ($product) {
+                return [
+                    'id' => $product->id,
+                    'name' => $product->name,
+                    'sku' => $product->sku,
+                    'price' => $product->price,
+                    'stock_quantity' => $product->stock_quantity,
+                    'track_stock' => $product->track_stock,
+                    'track_serial_numbers' => $product->track_serial_numbers,
+                    'serialNumbers' => $product->serialNumbers->map(function ($serial) {
+                        return [
+                            'id' => $serial->id,
+                            'serial_number' => $serial->serial_number,
+                            'status' => $serial->status,
+                        ];
+                    })->toArray(),
+                ];
+            });
 
         $users = User::orderBy('name')->get();
 
+        // Convert invoice to array and ensure serial_number_ids are included in line items
+        $invoiceData = $invoice->toArray();
+        
+        // Ensure line items have serial_number_ids properly set
+        if (isset($invoiceData['line_items']) && is_array($invoiceData['line_items'])) {
+            foreach ($invoiceData['line_items'] as $key => $lineItemData) {
+                // Make sure serial_number_ids is an array (it might be null or not set)
+                if (!isset($lineItemData['serial_number_ids']) || !is_array($lineItemData['serial_number_ids'])) {
+                    $invoiceData['line_items'][$key]['serial_number_ids'] = [];
+                }
+            }
+        }
+
         return Inertia::render('invoices/Edit', [
-            'invoice' => $invoice,
+            'invoice' => $invoiceData,
             'customers' => $customers,
             'products' => $products,
             'users' => $users,
@@ -249,6 +416,8 @@ class InvoicesController extends Controller
             'line_items.*.description' => 'required|string',
             'line_items.*.quantity' => 'required|integer|min:1',
             'line_items.*.unit_price' => 'required|numeric|min:0',
+            'line_items.*.serial_number_ids' => 'nullable|array',
+            'line_items.*.serial_number_ids.*' => 'exists:product_serial_numbers,id',
         ]);
 
         // Check if user can edit salesperson
@@ -284,14 +453,67 @@ class InvoicesController extends Controller
         // Update invoice
         $invoice->update($updateData);
 
+        // Handle stock adjustments for invoice updates
+        // Only adjust stock if invoice is not cancelled (cancelled invoices don't affect stock)
+        $stockService = new StockService();
+        $invoice->load('lineItems.product');
+        $wasCancelled = $invoice->status === 'cancelled';
+        
+        // Restore stock and serial numbers for old line items (if invoice was not cancelled)
+        // Stock was already restored when invoice was cancelled, so skip if it was cancelled
+        if (!$wasCancelled) {
+            foreach ($invoice->lineItems as $oldLineItem) {
+                // Restore serial numbers to available status
+                if (!empty($oldLineItem->serial_number_ids)) {
+                    try {
+                        \App\Models\ProductSerialNumber::whereIn('id', $oldLineItem->serial_number_ids)
+                            ->where('invoice_id', $invoice->id)
+                            ->update([
+                                'status' => 'available',
+                                'invoice_id' => null,
+                                'sale_date' => null,
+                            ]);
+                    } catch (\Exception $e) {
+                        Log::error('Failed to restore serial numbers for updated invoice line item', [
+                            'invoice_id' => $invoice->id,
+                            'line_item_id' => $oldLineItem->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+
+                if ($oldLineItem->product_id && $oldLineItem->product && $oldLineItem->product->track_stock) {
+                    try {
+                        $stockService->addStock(
+                            $oldLineItem->product,
+                            $oldLineItem->quantity,
+                            null,
+                            "Invoice Updated: {$invoice->invoice_number}",
+                            'invoice',
+                            $invoice->id,
+                            "Stock restored due to invoice line item update"
+                        );
+                    } catch (\Exception $e) {
+                        Log::error('Failed to restore stock for updated invoice line item', [
+                            'invoice_id' => $invoice->id,
+                            'product_id' => $oldLineItem->product_id,
+                            'quantity' => $oldLineItem->quantity,
+                            'error' => $e->getMessage(),
+                        ]);
+                        // Continue even if stock restoration fails
+                    }
+                }
+            }
+        }
+
         // Delete existing line items
         $invoice->lineItems()->delete();
 
-        // Create new line items
+        // Create new line items and deduct stock (if invoice is not cancelled)
         foreach ($validated['line_items'] as $index => $lineItemData) {
             $total = $lineItemData['quantity'] * $lineItemData['unit_price'];
             
-            InvoiceLineItem::create([
+            $lineItem = InvoiceLineItem::create([
                 'invoice_id' => $invoice->id,
                 'product_id' => $lineItemData['product_id'],
                 'description' => $lineItemData['description'],
@@ -299,7 +521,54 @@ class InvoicesController extends Controller
                 'unit_price' => $lineItemData['unit_price'],
                 'total' => $total,
                 'sort_order' => $index,
+                'serial_number_ids' => $lineItemData['serial_number_ids'] ?? null,
             ]);
+
+            // Update serial numbers to sold status and link to invoice
+            if (!empty($lineItemData['serial_number_ids']) && !$wasCancelled) {
+                try {
+                    \App\Models\ProductSerialNumber::whereIn('id', $lineItemData['serial_number_ids'])
+                        ->update([
+                            'status' => 'sold',
+                            'invoice_id' => $invoice->id,
+                            'sale_date' => now(),
+                        ]);
+                } catch (\Exception $e) {
+                    Log::error('Failed to update serial numbers for updated invoice line item', [
+                        'invoice_id' => $invoice->id,
+                        'product_id' => $lineItemData['product_id'],
+                        'serial_number_ids' => $lineItemData['serial_number_ids'],
+                        'error' => $e->getMessage(),
+                    ]);
+                    // Continue even if serial number update fails
+                }
+            }
+
+            // Deduct stock if product is tracked and invoice is not cancelled
+            if ($lineItemData['product_id'] && !$wasCancelled) {
+                try {
+                    $product = Product::find($lineItemData['product_id']);
+                    if ($product && $product->track_stock) {
+                        $stockService->removeStock(
+                            $product,
+                            $lineItemData['quantity'],
+                            "Invoice Updated: {$invoice->invoice_number}",
+                            'invoice',
+                            $invoice->id,
+                            "Stock deducted for invoice line item update",
+                            $lineItemData['serial_number_ids'] ?? null
+                        );
+                    }
+                } catch (\Exception $e) {
+                    Log::error('Failed to deduct stock for updated invoice line item', [
+                        'invoice_id' => $invoice->id,
+                        'product_id' => $lineItemData['product_id'],
+                        'quantity' => $lineItemData['quantity'],
+                        'error' => $e->getMessage(),
+                    ]);
+                    // Continue even if stock deduction fails
+                }
+            }
         }
 
         // Calculate totals
@@ -315,6 +584,62 @@ class InvoicesController extends Controller
      */
     public function destroy(Invoice $invoice): RedirectResponse
     {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        
+        if ($invoice->company_id !== $currentCompany->id) {
+            abort(403, 'You do not have access to this invoice.');
+        }
+
+        // Restore stock and serial numbers for all line items before deleting
+        // Skip if invoice is cancelled (stock was already restored when cancelled)
+        if ($invoice->status !== 'cancelled') {
+            $stockService = new StockService();
+            $invoice->load('lineItems.product');
+            
+            foreach ($invoice->lineItems as $lineItem) {
+                // Restore serial numbers to available status
+                if (!empty($lineItem->serial_number_ids)) {
+                    try {
+                        \App\Models\ProductSerialNumber::whereIn('id', $lineItem->serial_number_ids)
+                            ->where('invoice_id', $invoice->id)
+                            ->update([
+                                'status' => 'available',
+                                'invoice_id' => null,
+                                'sale_date' => null,
+                            ]);
+                    } catch (\Exception $e) {
+                        Log::error('Failed to restore serial numbers for deleted invoice', [
+                            'invoice_id' => $invoice->id,
+                            'line_item_id' => $lineItem->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+
+                if ($lineItem->product_id && $lineItem->product && $lineItem->product->track_stock) {
+                    try {
+                        $stockService->addStock(
+                            $lineItem->product,
+                            $lineItem->quantity,
+                            null, // No unit cost for restoration
+                            "Invoice Deleted: {$invoice->invoice_number}",
+                            'invoice',
+                            $invoice->id,
+                            "Stock restored due to invoice deletion"
+                        );
+                    } catch (\Exception $e) {
+                        Log::error('Failed to restore stock for deleted invoice line item', [
+                            'invoice_id' => $invoice->id,
+                            'product_id' => $lineItem->product_id,
+                            'quantity' => $lineItem->quantity,
+                            'error' => $e->getMessage(),
+                        ]);
+                        // Continue even if stock restoration fails
+                    }
+                }
+            }
+        }
+
         $invoice->delete();
 
         return redirect()->route('invoices.index')
@@ -326,11 +651,96 @@ class InvoicesController extends Controller
      */
     public function updateStatus(Request $request, Invoice $invoice): RedirectResponse
     {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        
+        if ($invoice->company_id !== $currentCompany->id) {
+            abort(403, 'You do not have access to this invoice.');
+        }
+
         $validated = $request->validate([
             'status' => 'required|in:draft,sent,paid,overdue,cancelled',
         ]);
 
-        $invoice->update(['status' => $validated['status']]);
+        $oldStatus = $invoice->status;
+        $newStatus = $validated['status'];
+
+        // Handle stock adjustments based on status changes
+        $stockService = new StockService();
+        $invoice->load('lineItems.product');
+        
+        // If changing TO cancelled, restore stock and serial numbers
+        if ($oldStatus !== 'cancelled' && $newStatus === 'cancelled') {
+            foreach ($invoice->lineItems as $lineItem) {
+                // Restore serial numbers to available status
+                if (!empty($lineItem->serial_number_ids)) {
+                    try {
+                        \App\Models\ProductSerialNumber::whereIn('id', $lineItem->serial_number_ids)
+                            ->where('invoice_id', $invoice->id)
+                            ->update([
+                                'status' => 'available',
+                                'invoice_id' => null,
+                                'sale_date' => null,
+                            ]);
+                    } catch (\Exception $e) {
+                        Log::error('Failed to restore serial numbers for cancelled invoice', [
+                            'invoice_id' => $invoice->id,
+                            'line_item_id' => $lineItem->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+
+                if ($lineItem->product_id && $lineItem->product && $lineItem->product->track_stock) {
+                    try {
+                        $stockService->addStock(
+                            $lineItem->product,
+                            $lineItem->quantity,
+                            null, // No unit cost for restoration
+                            "Invoice Cancelled: {$invoice->invoice_number}",
+                            'invoice',
+                            $invoice->id,
+                            "Stock restored due to invoice cancellation"
+                        );
+                    } catch (\Exception $e) {
+                        Log::error('Failed to restore stock for cancelled invoice line item', [
+                            'invoice_id' => $invoice->id,
+                            'product_id' => $lineItem->product_id,
+                            'quantity' => $lineItem->quantity,
+                            'error' => $e->getMessage(),
+                        ]);
+                        // Continue even if stock restoration fails
+                    }
+                }
+            }
+        }
+        
+        // If changing FROM cancelled TO another status, deduct stock again
+        if ($oldStatus === 'cancelled' && $newStatus !== 'cancelled') {
+            foreach ($invoice->lineItems as $lineItem) {
+                if ($lineItem->product_id && $lineItem->product && $lineItem->product->track_stock) {
+                    try {
+                        $stockService->removeStock(
+                            $lineItem->product,
+                            $lineItem->quantity,
+                            "Invoice Status Changed: {$invoice->invoice_number}",
+                            'invoice',
+                            $invoice->id,
+                            "Stock deducted - invoice status changed from cancelled to {$newStatus}"
+                        );
+                    } catch (\Exception $e) {
+                        Log::error('Failed to deduct stock when invoice status changed from cancelled', [
+                            'invoice_id' => $invoice->id,
+                            'product_id' => $lineItem->product_id,
+                            'quantity' => $lineItem->quantity,
+                            'error' => $e->getMessage(),
+                        ]);
+                        // Continue even if stock deduction fails
+                    }
+                }
+            }
+        }
+
+        $invoice->update(['status' => $newStatus]);
 
         return redirect()->back()
             ->with('success', 'Invoice status updated successfully.');
@@ -339,12 +749,25 @@ class InvoicesController extends Controller
     /**
      * Download PDF of the invoice.
      */
-    public function downloadPdf(Invoice $invoice)
+    public function downloadPdf(Request $request, Invoice $invoice)
     {
         $invoice->load(['customer', 'lineItems.product', 'company']);
         
+        // Load serial numbers for line items that have serial_number_ids
+        foreach ($invoice->lineItems as $lineItem) {
+            if (!empty($lineItem->serial_number_ids)) {
+                $lineItem->serialNumbers = \App\Models\ProductSerialNumber::whereIn('id', $lineItem->serial_number_ids)
+                    ->get(['id', 'serial_number', 'status']);
+            } else {
+                $lineItem->serialNumbers = collect([]);
+            }
+        }
+        
         $company = $invoice->company;
-        $pdf = Pdf::loadView('pdf.invoice', compact('invoice', 'company'));
+        $templateId = $request->get('template_id');
+        
+        $pdfService = new \App\Services\PdfGenerationService();
+        $pdf = $pdfService->generatePdf('invoice', compact('invoice', 'company'), $company, $templateId);
         
         // Update status to sent if it was draft
         if ($invoice->status === 'draft') {
@@ -366,6 +789,16 @@ class InvoicesController extends Controller
 
         $invoice->load(['customer', 'lineItems.product', 'company']);
         
+        // Load serial numbers for line items that have serial_number_ids
+        foreach ($invoice->lineItems as $lineItem) {
+            if (!empty($lineItem->serial_number_ids)) {
+                $lineItem->serialNumbers = \App\Models\ProductSerialNumber::whereIn('id', $lineItem->serial_number_ids)
+                    ->get(['id', 'serial_number', 'status']);
+            } else {
+                $lineItem->serialNumbers = collect([]);
+            }
+        }
+        
         // Get user's SMTP settings
         $user = auth()->user();
         if ($user->smtp_host && $user->smtp_username && $user->smtp_password) {
@@ -381,7 +814,10 @@ class InvoicesController extends Controller
         try {
             // Generate PDF
             $company = $invoice->company;
-            $pdf = Pdf::loadView('pdf.invoice', compact('invoice', 'company'));
+            $templateId = $request->get('template_id');
+            
+            $pdfService = new \App\Services\PdfGenerationService();
+            $pdf = $pdfService->generatePdf('invoice', compact('invoice', 'company'), $company, $templateId);
             $pdfContent = $pdf->output();
             
             // Send email
@@ -492,8 +928,42 @@ class InvoicesController extends Controller
         // Calculate totals
         $invoiceNumber->calculateTotals();
 
-        // Update jobcard status
-        $jobcard->update(['status' => 'completed']);
+        // Update jobcard status to completed and link to invoice
+        $oldStatus = $jobcard->status;
+        $jobcard->update([
+            'status' => 'completed',
+            'completed_date' => now(),
+            'invoice_id' => $invoiceNumber->id,
+        ]);
+
+        // Send invoice created notification if enabled
+        // Load invoice relationships needed for notifications
+        $invoiceNumber->load('customer', 'company');
+        try {
+            $reminderService = new ReminderService();
+            $reminderService->sendInvoiceCreatedConfirmation($invoiceNumber);
+        } catch (\Exception $e) {
+            Log::error('Failed to send invoice created confirmation after jobcard conversion', [
+                'invoice_id' => $invoiceNumber->id,
+                'jobcard_id' => $jobcard->id,
+                'error' => $e->getMessage(),
+            ]);
+            // Don't fail the conversion if reminder fails
+        }
+
+        // Send jobcard status updated notification if status changed
+        if ($oldStatus !== 'completed') {
+            try {
+                $reminderService = new ReminderService();
+                $reminderService->sendJobcardStatusUpdatedConfirmation($jobcard, $oldStatus);
+            } catch (\Exception $e) {
+                Log::error('Failed to send jobcard status updated confirmation after conversion', [
+                    'jobcard_id' => $jobcard->id,
+                    'error' => $e->getMessage(),
+                ]);
+                // Don't fail the conversion if reminder fails
+            }
+        }
 
         return redirect()->route('invoices.show', $invoiceNumber)
             ->with('success', 'Invoice created from jobcard successfully.');

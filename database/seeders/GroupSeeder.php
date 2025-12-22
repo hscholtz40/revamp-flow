@@ -31,7 +31,7 @@ class GroupSeeder extends Seeder
             ]),
         ];
 
-        $modules = ['customers', 'users', 'groups', 'contacts', 'products', 'jobcards', 'quotes', 'invoices'];
+        $modules = ['customers', 'users', 'groups', 'contacts', 'products', 'suppliers', 'stock-movements', 'purchase-orders', 'jobcards', 'quotes', 'invoices'];
         
         // Add permissions for all groups
         foreach ($groups as $groupName => $group) {

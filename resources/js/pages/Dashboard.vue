@@ -16,7 +16,9 @@ import {
     Receipt, 
     Wrench, 
     UserPlus,
-    TrendingUp
+    TrendingUp,
+    Package,
+    AlertTriangle
 } from 'lucide-vue-next';
 
 interface Props {
@@ -417,6 +419,49 @@ const createPieChartPath = (data: number[], colors: string[], labels: string[]) 
                                 </Link>
                             </div>
                         </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <!-- Low Stock Products Alert -->
+            <Card v-if="lowStockProducts && lowStockProducts.length > 0" class="border-orange-200 bg-orange-50/50">
+                <CardHeader>
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <AlertTriangle class="h-5 w-5 text-orange-600" />
+                            <CardTitle class="text-lg font-semibold text-orange-900">Low Stock Alert</CardTitle>
+                        </div>
+                        <Badge variant="destructive" class="bg-orange-600">{{ lowStockProducts.length }} Product{{ lowStockProducts.length !== 1 ? 's' : '' }}</Badge>
+                    </div>
+                    <CardDescription class="text-orange-700">Products that need restocking</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div class="space-y-2">
+                        <Link 
+                            v-for="product in lowStockProducts" 
+                            :key="product.id"
+                            :href="products.show(product.id).url"
+                            class="flex items-center justify-between p-3 rounded-lg border border-orange-200 bg-white hover:bg-orange-50 transition-colors duration-200 cursor-pointer"
+                        >
+                            <div class="flex items-center space-x-3">
+                                <Package class="h-4 w-4 text-orange-600" />
+                                <div>
+                                    <p class="text-sm font-medium text-gray-900">{{ product.name }}</p>
+                                    <p v-if="product.sku" class="text-xs text-gray-500">SKU: {{ product.sku }}</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-sm font-bold text-orange-600">{{ product.stock_quantity }}</p>
+                                <p class="text-xs text-gray-500">in stock</p>
+                            </div>
+                        </Link>
+                    </div>
+                    <div class="mt-4">
+                        <Button as-child variant="outline" class="w-full border-orange-300 text-orange-700 hover:bg-orange-100">
+                            <Link :href="products.index().url">
+                                View All Products
+                            </Link>
+                        </Button>
                     </div>
                 </CardContent>
             </Card>

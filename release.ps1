@@ -1,9 +1,19 @@
 Param(
     [Parameter(Mandatory=$false, Position=0)]
-    [string]$Version = "v0.1.1"
+    [string]$Version = "v1.2.0"
 )
 
 Write-Host "Preparing release for version: $Version"
+
+# Build frontend assets
+Write-Host "Building frontend assets..."
+$npmBuildResult = & npm run build 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "ERROR: npm build failed!" -ForegroundColor Red
+    Write-Host $npmBuildResult
+    exit 1
+}
+Write-Host "Frontend assets built successfully!" -ForegroundColor Green
 
 # Derive short SHA if git is available; otherwise use timestamp
 $ShortSha = $null
@@ -26,7 +36,7 @@ New-Item -ItemType Directory -Force -Path $Staging | Out-Null
 
 # Copy project to staging excluding heavy/dev directories
 # robocopy exit codes 1-7 mean success with different conditions
-robocopy $PSScriptRoot $Staging /E /NFL /NDL /NJH /NJS /NC /NS /XD ".git" "dist" ".idea" ".vscode" "tests" "storage\logs" "storage\framework\cache" "storage\framework\sessions" "storage\framework\views" | Out-Null
+robocopy $PSScriptRoot $Staging /E /NFL /NDL /NJH /NJS /NC /NS /XD ".git" "dist" ".idea" ".vscode" "tests" "node_modules" "storage\logs" "storage\framework\cache" "storage\framework\sessions" "storage\framework\views" | Out-Null
 
 # Force copy vendor directory if it exists (for production releases)
 if (Test-Path "vendor") {

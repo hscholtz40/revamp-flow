@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Product extends Model
 {
@@ -28,6 +29,16 @@ class Product extends Model
         'image_path',
         'notes',
         'xero_item_id',
+        // New inventory fields
+        'supplier_id',
+        'barcode',
+        'low_stock_threshold',
+        'unit_of_measure',
+        'cost_price',
+        'selling_price',
+        'valuation_method',
+        'track_batches',
+        'track_serial_numbers',
     ];
 
     protected $casts = [
@@ -38,6 +49,8 @@ class Product extends Model
         'track_stock' => 'boolean',
         'is_active' => 'boolean',
         'tags' => 'array',
+        'track_batches' => 'boolean',
+        'track_serial_numbers' => 'boolean',
     ];
 
     /**
@@ -69,9 +82,34 @@ class Product extends Model
         return $this->belongsTo(Company::class);
     }
 
+    public function supplier(): BelongsTo
+    {
+        return $this->belongsTo(Supplier::class);
+    }
+
+    public function stockMovements(): HasMany
+    {
+        return $this->hasMany(StockMovement::class);
+    }
+
+    public function purchaseOrderItems(): HasMany
+    {
+        return $this->hasMany(PurchaseOrderItem::class);
+    }
+
     public function jobcardLineItems(): HasMany
     {
         return $this->hasMany(JobcardLineItem::class);
+    }
+
+    public function batches(): HasMany
+    {
+        return $this->hasMany(ProductBatch::class);
+    }
+
+    public function serialNumbers(): HasMany
+    {
+        return $this->hasMany(ProductSerialNumber::class);
     }
 
     /**
@@ -79,7 +117,12 @@ class Product extends Model
      */
     public function isLowStock(): bool
     {
-        return $this->track_stock && $this->stock_quantity <= $this->min_stock_level;
+        if (!$this->track_stock) {
+            return false;
+        }
+        
+        $threshold = $this->low_stock_threshold ?? $this->min_stock_level ?? 10;
+        return $this->stock_quantity <= $threshold;
     }
 
     /**

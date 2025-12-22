@@ -15,6 +15,9 @@ import { dashboard } from '@/routes';
 import customers from '@/routes/customers';
 import contacts from '@/routes/contacts';
 import products from '@/routes/products';
+import suppliers from '@/routes/suppliers';
+import stockMovements from '@/routes/stock-movements';
+import purchaseOrders from '@/routes/purchase-orders';
 import jobcards from '@/routes/jobcards';
 import quotes from '@/routes/quotes';
 import invoices from '@/routes/invoices';
@@ -23,7 +26,7 @@ import groups from '@/routes/groups';
 import administration from '@/routes/administration';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, Users, Settings, UserCheck, Package, Building2, ClipboardList, FileText, Receipt } from 'lucide-vue-next';
+import { BookOpen, Folder, LayoutGrid, Users, Settings, UserCheck, Package, Building2, ClipboardList, FileText, Receipt, Warehouse, ArrowUpDown, ShoppingCart } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
 import { computed } from 'vue';
 
@@ -55,6 +58,21 @@ const mainNavItems: NavItem[] = [
         title: 'Products & Services',
         href: products.index().url,
         icon: Package,
+    },
+    {
+        title: 'Suppliers',
+        href: suppliers.index().url,
+        icon: Warehouse,
+    },
+    {
+        title: 'Stock Movements',
+        href: stockMovements.index().url,
+        icon: ArrowUpDown,
+    },
+    {
+        title: 'Purchase Orders',
+        href: purchaseOrders.index().url,
+        icon: ShoppingCart,
     },
     {
         title: 'Jobcards',
@@ -127,6 +145,15 @@ const footerNavItems: NavItem[] = [
                     }
                     if (item.title === 'Products & Services') {
                         return $page.props.auth?.abilities?.products?.list;
+                    }
+                    if (item.title === 'Suppliers') {
+                        return $page.props.auth?.abilities?.suppliers?.list;
+                    }
+                    if (item.title === 'Stock Movements') {
+                        return $page.props.auth?.abilities?.['stock-movements']?.view;
+                    }
+                    if (item.title === 'Purchase Orders') {
+                        return $page.props.auth?.abilities?.['purchase-orders']?.list;
                     }
                     if (item.title === 'Users') {
                         return $page.props.auth?.abilities?.users?.list;

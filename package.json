@@ -1,7 +1,7 @@
 {
     "private": true,
     "type": "module",
-    "version": "1.0.1",
+    "version": "1.2.0",
     "scripts": {
         "build": "vite build",
         "build:ssr": "vite build && vite build --ssr",
@@ -37,6 +37,8 @@
         "chart.js": "^4.5.0",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
+        "grapesjs": "^0.22.14",
+        "grapesjs-preset-webpage": "^1.0.3",
         "laravel-vite-plugin": "^2.0.0",
         "lucide-vue-next": "^0.468.0",
         "reka-ui": "^2.4.1",
