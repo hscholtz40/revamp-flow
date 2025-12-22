@@ -109,11 +109,30 @@ return new class extends Migration
             $notNull = $column->notnull ? 'NOT NULL' : '';
             $default = '';
             if ($column->dflt_value !== null) {
-                $default = "DEFAULT " . (is_numeric($column->dflt_value) ? $column->dflt_value : "'{$column->dflt_value}'");
+                // SQLite PRAGMA returns default values as strings
+                $dfltVal = (string)$column->dflt_value;
+                $len = strlen($dfltVal);
+                
+                // Remove surrounding quotes if present
+                if ($len >= 2 && $dfltVal[0] === "'" && $dfltVal[$len - 1] === "'") {
+                    $dfltVal = substr($dfltVal, 1, -1);
+                } elseif ($len >= 2 && $dfltVal[0] === '"' && $dfltVal[$len - 1] === '"') {
+                    $dfltVal = substr($dfltVal, 1, -1);
+                }
+                
+                // Check if it's numeric (after removing quotes)
+                if (is_numeric($dfltVal)) {
+                    $default = "DEFAULT {$dfltVal}";
+                } else {
+                    // String default - escape single quotes for SQL
+                    $dfltVal = str_replace("'", "''", $dfltVal);
+                    $default = "DEFAULT '{$dfltVal}'";
+                }
             }
             $pk = $column->pk ? 'PRIMARY KEY' : '';
             
-            $def = trim("{$type} {$notNull} {$default} {$pk}");
+            $parts = array_filter([$type, $notNull, $default, $pk]);
+            $def = implode(' ', $parts);
             $newColumns[] = "`{$newColumnName}` {$def}";
         }
         
