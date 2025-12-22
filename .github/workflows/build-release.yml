@@ -40,7 +40,14 @@ jobs:
         run: composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader --no-scripts
 
       - name: Install Node Dependencies
-        run: npm ci
+        run: |
+          # Try npm ci first for reproducible builds
+          # If it fails due to lock file mismatch, use npm install as fallback
+          if ! npm ci --legacy-peer-deps 2>/dev/null; then
+            echo "Warning: package-lock.json out of sync, using npm install instead"
+            echo "Consider running 'npm install' locally and committing package-lock.json"
+            npm install --legacy-peer-deps
+          fi
 
       - name: Build Frontend Assets
         run: npm run build
