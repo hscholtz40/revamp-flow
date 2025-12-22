@@ -98,8 +98,149 @@ jobs:
             --exclude='.phpunit.cache' \
             ./ "$STAGING_DIR/"
           
-          # Remove .env if it exists (keep .env.example for deployment)
-          rm -f "$STAGING_DIR/.env"
+          # Create .env file with generated APP_KEY for deployment
+          # NOTE: This creates a template .env file. Update it with your actual values on the server!
+          echo "Creating .env file with generated APP_KEY..."
+          
+          # Generate APP_KEY using PHP
+          APP_KEY=$(php -r "echo 'base64:'.base64_encode(random_bytes(32));")
+          
+          # Create .env file template
+          cat > "$STAGING_DIR/.env" << ENVEOF
+APP_NAME="JobCard Online"
+APP_ENV=production
+APP_KEY=${APP_KEY}
+APP_DEBUG=false
+APP_URL=http://localhost
+
+LOG_CHANNEL=stack
+LOG_DEPRECATIONS_CHANNEL=null
+LOG_LEVEL=debug
+
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=laravel
+DB_USERNAME=root
+DB_PASSWORD=
+
+BROADCAST_DRIVER=log
+CACHE_STORE=database
+FILESYSTEM_DISK=local
+QUEUE_CONNECTION=database
+SESSION_DRIVER=database
+SESSION_LIFETIME=120
+
+MEMCACHED_HOST=127.0.0.1
+
+REDIS_HOST=127.0.0.1
+REDIS_PASSWORD=null
+REDIS_PORT=6379
+
+MAIL_MAILER=smtp
+MAIL_HOST=mailpit
+MAIL_PORT=1025
+MAIL_USERNAME=null
+MAIL_PASSWORD=null
+MAIL_ENCRYPTION=null
+MAIL_FROM_ADDRESS="hello@example.com"
+MAIL_FROM_NAME="\${APP_NAME}"
+
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_DEFAULT_REGION=us-east-1
+AWS_BUCKET=
+AWS_USE_PATH_STYLE_ENDPOINT=false
+
+VITE_APP_NAME="\${APP_NAME}"
+ENVEOF
+          
+          echo "Created .env file with APP_KEY: ${APP_KEY:0:20}..."
+          
+          # Also create .env.example without APP_KEY for reference
+          if [ ! -f "$STAGING_DIR/.env.example" ]; then
+            cat > "$STAGING_DIR/.env.example" << 'ENVEOF'
+APP_NAME="JobCard Online"
+APP_ENV=production
+APP_KEY=
+APP_DEBUG=false
+APP_URL=http://localhost
+
+LOG_CHANNEL=stack
+LOG_DEPRECATIONS_CHANNEL=null
+LOG_LEVEL=debug
+
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=laravel
+DB_USERNAME=root
+DB_PASSWORD=
+
+BROADCAST_DRIVER=log
+CACHE_STORE=database
+FILESYSTEM_DISK=local
+QUEUE_CONNECTION=database
+SESSION_DRIVER=database
+SESSION_LIFETIME=120
+
+MEMCACHED_HOST=127.0.0.1
+
+REDIS_HOST=127.0.0.1
+REDIS_PASSWORD=null
+REDIS_PORT=6379
+
+MAIL_MAILER=smtp
+MAIL_HOST=mailpit
+MAIL_PORT=1025
+MAIL_USERNAME=null
+MAIL_PASSWORD=null
+MAIL_ENCRYPTION=null
+MAIL_FROM_ADDRESS="hello@example.com"
+MAIL_FROM_NAME="${APP_NAME}"
+
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_DEFAULT_REGION=us-east-1
+AWS_BUCKET=
+AWS_USE_PATH_STYLE_ENDPOINT=false
+
+VITE_APP_NAME="${APP_NAME}"
+ENVEOF
+            echo "Created .env.example template"
+          fi
+          
+          # Create required storage directories (even if empty, they need to exist)
+          # These directories are excluded from rsync but must exist for Laravel to work
+          mkdir -p "$STAGING_DIR/storage/app/public"
+          mkdir -p "$STAGING_DIR/storage/framework/cache/data"
+          mkdir -p "$STAGING_DIR/storage/framework/sessions"
+          mkdir -p "$STAGING_DIR/storage/framework/testing"
+          mkdir -p "$STAGING_DIR/storage/framework/views"
+          mkdir -p "$STAGING_DIR/storage/logs"
+          mkdir -p "$STAGING_DIR/storage/fonts"
+          mkdir -p "$STAGING_DIR/bootstrap/cache"
+          
+          # Copy .gitignore files to preserve directory structure (rsync excludes .gitignore)
+          # These ensure empty directories are tracked in git and preserved in deployment
+          if [ -f "storage/framework/cache/.gitignore" ]; then
+            cp storage/framework/cache/.gitignore "$STAGING_DIR/storage/framework/cache/.gitignore"
+          fi
+          if [ -f "storage/framework/cache/data/.gitignore" ]; then
+            cp storage/framework/cache/data/.gitignore "$STAGING_DIR/storage/framework/cache/data/.gitignore"
+          fi
+          if [ -f "storage/framework/sessions/.gitignore" ]; then
+            cp storage/framework/sessions/.gitignore "$STAGING_DIR/storage/framework/sessions/.gitignore"
+          fi
+          if [ -f "storage/framework/views/.gitignore" ]; then
+            cp storage/framework/views/.gitignore "$STAGING_DIR/storage/framework/views/.gitignore"
+          fi
+          if [ -f "storage/logs/.gitignore" ]; then
+            cp storage/logs/.gitignore "$STAGING_DIR/storage/logs/.gitignore"
+          fi
+          if [ -f "bootstrap/cache/.gitignore" ]; then
+            cp bootstrap/cache/.gitignore "$STAGING_DIR/bootstrap/cache/.gitignore"
+          fi
           
           # Create zip file
           cd dist
