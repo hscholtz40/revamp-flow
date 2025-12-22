@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use Illuminate\Contracts\Filesystem\FileNotFoundException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 
@@ -38,6 +40,7 @@ class InstallerController extends Controller
         $env = $this->setEnv($env, 'APP_ENV', 'production');
         $env = $this->setEnv($env, 'APP_DEBUG', 'false');
         $env = $this->setEnv($env, 'APP_URL', $data['app_url']);
+        $env = $this->setEnv($env, 'DB_CONNECTION', 'mysql');
         $env = $this->setEnv($env, 'DB_HOST', $data['db_host']);
         $env = $this->setEnv($env, 'DB_PORT', (string)$data['db_port']);
         $env = $this->setEnv($env, 'DB_DATABASE', $data['db_database']);
@@ -50,8 +53,26 @@ class InstallerController extends Controller
         }
         File::put($envPath, $env);
 
+        // Clear config cache to force reload of .env
+        Artisan::call('config:clear');
+        
+        // Update database configuration directly in runtime
+        // This ensures migrations use the new credentials even if .env cache exists
+        Config::set('database.connections.mysql.host', $data['db_host']);
+        Config::set('database.connections.mysql.port', $data['db_port']);
+        Config::set('database.connections.mysql.database', $data['db_database']);
+        Config::set('database.connections.mysql.username', $data['db_username']);
+        Config::set('database.connections.mysql.password', $data['db_password'] ?? '');
+        Config::set('database.default', 'mysql');
+        
+        // Purge the connection to force reconnection with new credentials
+        DB::purge('mysql');
+        
+        // Reconnect with new credentials
+        DB::reconnect('mysql');
+
         // Generate app key if missing
-        if (empty(env('APP_KEY'))) {
+        if (empty(config('app.key')) && empty(env('APP_KEY'))) {
             Artisan::call('key:generate', ['--force' => true]);
         }
 
