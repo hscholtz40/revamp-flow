@@ -46,6 +46,9 @@ class InstallerController extends Controller
         $env = $this->setEnv($env, 'DB_DATABASE', $data['db_database']);
         $env = $this->setEnv($env, 'DB_USERNAME', $data['db_username']);
         $env = $this->setEnv($env, 'DB_PASSWORD', $data['db_password'] ?? '');
+        // Set cache and session to non-database drivers to avoid connection during installation
+        $env = $this->setEnv($env, 'CACHE_STORE', 'array');
+        $env = $this->setEnv($env, 'SESSION_DRIVER', 'file');
         $env = $this->setEnv($env, 'ADMIN_EMAIL', $data['admin_email']);
         $env = $this->setEnv($env, 'ADMIN_PASSWORD', $data['admin_password']);
         if (!Str::contains($env, 'APP_KEY=')) {
@@ -53,30 +56,60 @@ class InstallerController extends Controller
         }
         File::put($envPath, $env);
 
-        // Clear config cache to force reload of .env
-        Artisan::call('config:clear');
+        // CRITICAL: Set cache and session config FIRST to prevent DB connection attempts
+        Config::set('cache.default', 'array');
+        Config::set('session.driver', 'file');
         
-        // Update database configuration directly in runtime
-        // This ensures migrations use the new credentials even if .env cache exists
+        // CRITICAL: Set database config BEFORE any operations
+        // This must happen before any Laravel operations that might connect to DB
+        $dbPassword = $data['db_password'] ?? '';
+        
+        // Update Config directly - this overrides any cached or .env values
         Config::set('database.connections.mysql.host', $data['db_host']);
         Config::set('database.connections.mysql.port', $data['db_port']);
         Config::set('database.connections.mysql.database', $data['db_database']);
         Config::set('database.connections.mysql.username', $data['db_username']);
-        Config::set('database.connections.mysql.password', $data['db_password'] ?? '');
+        Config::set('database.connections.mysql.password', $dbPassword);
         Config::set('database.default', 'mysql');
         
-        // Purge the connection to force reconnection with new credentials
-        DB::purge('mysql');
+        // Also set environment variables for env() helper
+        putenv('DB_CONNECTION=mysql');
+        putenv('DB_HOST=' . $data['db_host']);
+        putenv('DB_PORT=' . $data['db_port']);
+        putenv('DB_DATABASE=' . $data['db_database']);
+        putenv('DB_USERNAME=' . $data['db_username']);
+        putenv('DB_PASSWORD=' . $dbPassword);
         
-        // Reconnect with new credentials
-        DB::reconnect('mysql');
+        // Set $_ENV superglobal as well
+        $_ENV['DB_CONNECTION'] = 'mysql';
+        $_ENV['DB_HOST'] = $data['db_host'];
+        $_ENV['DB_PORT'] = $data['db_port'];
+        $_ENV['DB_DATABASE'] = $data['db_database'];
+        $_ENV['DB_USERNAME'] = $data['db_username'];
+        $_ENV['DB_PASSWORD'] = $dbPassword;
+        
+        // Purge any existing connection to force reconnection with new credentials
+        try {
+            DB::purge('mysql');
+        } catch (\Exception $e) {
+            // Ignore if connection doesn't exist yet
+        }
+        
+        // DO NOT call config:clear - it may try to connect to DB with old credentials
+        // Config::set() above will override any cached values
 
-        // Generate app key if missing
+        // Generate app key if missing - this shouldn't need DB connection
         if (empty(config('app.key')) && empty(env('APP_KEY'))) {
-            Artisan::call('key:generate', ['--force' => true]);
+            try {
+                Artisan::call('key:generate', ['--force' => true]);
+            } catch (\Exception $e) {
+                // If key generation fails, try to continue
+                // The key might already be set in .env
+            }
         }
 
-        // Run migrations and seeders
+        // Now run migrations and seeders with the updated config
+        // These will use the Config::set() values we set above
         Artisan::call('migrate', ['--force' => true]);
         Artisan::call('db:seed', ['--force' => true]);
 
