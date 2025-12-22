@@ -14,15 +14,23 @@ jobs:
   ci:
     runs-on: ubuntu-latest
 
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ''
+          MYSQL_ALLOW_EMPTY_PASSWORD: true
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Setup MySQL
-        uses: actions/setup-mysql@v4
-        with:
-          mysql-version: '8.0'
-          mysql-root-password: ''
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -84,7 +92,7 @@ jobs:
 
       - name: Create Test Database
         run: |
-          mysql -h 127.0.0.1 -u root -e "CREATE DATABASE IF NOT EXISTS laravel_test;"
+          mysql -h 127.0.0.1 -P 3306 -u root -e "CREATE DATABASE IF NOT EXISTS laravel_test;"
 
       - name: Build Assets
         run: npm run build

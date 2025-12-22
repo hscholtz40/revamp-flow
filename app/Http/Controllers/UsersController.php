@@ -88,15 +88,27 @@ class UsersController extends Controller
 
     public function show(User $user): Response
     {
+        $user->load(['groups:id,name', 'companies:id,name']);
+        // Ensure companies are unique (in case of duplicate pivot entries)
+        if ($user->companies) {
+            $user->setRelation('companies', $user->companies->unique('id')->values());
+        }
+        
         return Inertia::render('users/Show', [
-            'user' => $user->load(['groups:id,name', 'companies:id,name']),
+            'user' => $user,
         ]);
     }
 
     public function edit(User $user): Response
     {
+        $user->load(['groups:id,name', 'companies:id,name']);
+        // Ensure companies are unique (in case of duplicate pivot entries)
+        if ($user->companies) {
+            $user->setRelation('companies', $user->companies->unique('id')->values());
+        }
+        
         return Inertia::render('users/Edit', [
-            'user' => $user->load(['groups:id,name', 'companies:id,name']),
+            'user' => $user,
             'groups' => Group::query()->orderBy('name')->get(['id','name']),
             'companies' => Company::query()->orderBy('name')->get(['id','name']),
         ]);
