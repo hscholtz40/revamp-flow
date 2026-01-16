@@ -151,6 +151,13 @@ class BackupService
      */
     protected function backupMySQL(string $database, string $outputFile): void
     {
+        // Check if exec() is available, if not use fallback immediately
+        if (!function_exists('exec')) {
+            Log::info('exec() function is disabled, using Laravel DB fallback method for MySQL backup');
+            $this->backupMySQLFallback($database, $outputFile);
+            return;
+        }
+
         $config = config('database.connections.mysql');
         $host = $config['host'];
         $port = $config['port'] ?? 3306;
@@ -181,7 +188,7 @@ class BackupService
             $command .= ' > ' . escapeshellarg($outputFile) . ' 2>&1';
         }
 
-        exec($command, $output, $returnCode);
+        \exec($command, $output, $returnCode);
 
         // If mysqldump fails, try fallback method using Laravel DB
         if ($returnCode !== 0 || !File::exists($outputFile) || (File::exists($outputFile) && File::size($outputFile) === 0)) {
@@ -189,7 +196,7 @@ class BackupService
             $mysqldumpCheck = PHP_OS_FAMILY === 'Windows' 
                 ? 'where mysqldump 2>nul'
                 : 'which mysqldump 2>/dev/null';
-            exec($mysqldumpCheck, $checkOutput, $checkReturn);
+            \exec($mysqldumpCheck, $checkOutput, $checkReturn);
             
             if ($checkReturn !== 0) {
                 // Fallback to Laravel DB export
@@ -314,13 +321,18 @@ class BackupService
      */
     protected function backupPostgreSQL(string $database, string $outputFile): void
     {
+        // Check if exec() is available
+        if (!function_exists('exec')) {
+            throw new \Exception('exec() function is disabled. PostgreSQL backup requires exec() function.');
+        }
+
         $config = config('database.connections.pgsql');
         $host = $config['host'];
         $port = $config['port'] ?? 5432;
         $username = $config['username'];
         $password = $config['password'];
 
-        putenv("PGPASSWORD={$password}");
+        \putenv("PGPASSWORD={$password}");
         
         $command = sprintf(
             'pg_dump --host=%s --port=%s --username=%s --dbname=%s --file=%s --no-password',
@@ -331,8 +343,8 @@ class BackupService
             escapeshellarg($outputFile)
         );
 
-        exec($command, $output, $returnCode);
-        putenv('PGPASSWORD=');
+        \exec($command, $output, $returnCode);
+        \putenv('PGPASSWORD=');
 
         if ($returnCode !== 0) {
             throw new \Exception('Failed to backup PostgreSQL database');
@@ -579,6 +591,13 @@ class BackupService
      */
     protected function restoreMySQL(string $database, string $sqlFile): void
     {
+        // Check if exec() is available, if not use fallback immediately
+        if (!function_exists('exec')) {
+            Log::info('exec() function is disabled, using Laravel DB fallback method for MySQL restore');
+            $this->restoreMySQLFallback($database, $sqlFile);
+            return;
+        }
+
         $config = config('database.connections.mysql');
         $host = $config['host'];
         $port = $config['port'] ?? 3306;
@@ -593,7 +612,7 @@ class BackupService
         $mysqlCheck = PHP_OS_FAMILY === 'Windows' 
             ? 'where mysql 2>nul'
             : 'which mysql 2>/dev/null';
-        exec($mysqlCheck, $checkOutput, $checkReturn);
+        \exec($mysqlCheck, $checkOutput, $checkReturn);
         
         if ($checkReturn !== 0) {
             // Fallback to Laravel DB method
@@ -646,7 +665,7 @@ class BackupService
                 escapeshellarg($tempSqlFile)
             );
             
-            exec($command . ' 2>&1', $output, $returnCode);
+            \exec($command . ' 2>&1', $output, $returnCode);
             
             // Cleanup temp file
             if (File::exists($tempSqlFile)) {
@@ -669,7 +688,7 @@ class BackupService
                 2 => ['pipe', 'w'], // stderr
             ];
             
-            $process = proc_open($command, $descriptorspec, $pipes);
+            $process = \proc_open($command, $descriptorspec, $pipes);
             
             if (is_resource($process)) {
                 fwrite($pipes[0], $sqlContent);
@@ -834,13 +853,18 @@ class BackupService
      */
     protected function restorePostgreSQL(string $database, string $sqlFile): void
     {
+        // Check if exec() is available
+        if (!function_exists('exec')) {
+            throw new \Exception('exec() function is disabled. PostgreSQL restore requires exec() function.');
+        }
+
         $config = config('database.connections.pgsql');
         $host = $config['host'];
         $port = $config['port'] ?? 5432;
         $username = $config['username'];
         $password = $config['password'];
 
-        putenv("PGPASSWORD={$password}");
+        \putenv("PGPASSWORD={$password}");
         
         $command = sprintf(
             'psql --host=%s --port=%s --username=%s --dbname=%s --file=%s --no-password',
@@ -851,8 +875,8 @@ class BackupService
             escapeshellarg($sqlFile)
         );
 
-        exec($command, $output, $returnCode);
-        putenv('PGPASSWORD=');
+        \exec($command, $output, $returnCode);
+        \putenv('PGPASSWORD=');
 
         if ($returnCode !== 0) {
             throw new \Exception('Failed to restore PostgreSQL database');
