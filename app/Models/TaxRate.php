@@ -18,11 +18,13 @@ class TaxRate extends Model
         'rate',
         'description',
         'is_active',
+        'is_default',
     ];
 
     protected $casts = [
         'rate' => 'decimal:2',
         'is_active' => 'boolean',
+        'is_default' => 'boolean',
     ];
 
     /**
@@ -39,5 +41,24 @@ class TaxRate extends Model
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
+    }
+
+    /**
+     * Scope to get the default tax rate for a company.
+     */
+    public function scopeDefault($query)
+    {
+        return $query->where('is_default', true);
+    }
+
+    /**
+     * Get the default tax rate for a company.
+     */
+    public static function getDefaultForCompany(int $companyId): ?self
+    {
+        return static::where('company_id', $companyId)
+            ->where('is_default', true)
+            ->where('is_active', true)
+            ->first();
     }
 }

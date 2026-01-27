@@ -1201,13 +1201,22 @@ class XeroService
                 'calculated_subtotal' => $lineItem->quantity * $lineItem->unit_price,
             ]);
             
+            // Get default tax code from TaxRate model, fallback to TAX002 if not set
+            $currentCompany = $invoice->company ?? Company::getDefault();
+            $defaultTaxRate = TaxRate::getDefaultForCompany($currentCompany->id);
+            $defaultTaxCode = $defaultTaxRate && $defaultTaxRate->xero_tax_rate_id 
+                ? $defaultTaxRate->xero_tax_rate_id 
+                : ($defaultTaxRate && $defaultTaxRate->code 
+                    ? $defaultTaxRate->code 
+                    : 'TAX002');
+            
             $lineItems[] = [
                 'Description' => $lineItem->description ?? 'Item',
                 'Quantity' => $lineItem->quantity,
                 'UnitAmount' => $lineItem->unit_price,
                 'LineAmount' => $lineAmount,
                 'AccountCode' => '200', // Sales account code - this should be configurable
-                'TaxType' => 'TAX002'//'OUTPUT3', // Output tax for sales
+                'TaxType' => $defaultTaxCode,
             ];
         }
 
@@ -1967,6 +1976,15 @@ class XeroService
     private function createOrUpdateQuoteInXero(Quote $quote): array
     {
         $lineItems = [];
+        // Get default tax code from TaxRate model, fallback to OUTPUT3 if not set
+        $currentCompany = $quote->company ?? Company::getDefault();
+        $defaultTaxRate = TaxRate::getDefaultForCompany($currentCompany->id);
+        $defaultTaxCode = $defaultTaxRate && $defaultTaxRate->xero_tax_rate_id 
+            ? $defaultTaxRate->xero_tax_rate_id 
+            : ($defaultTaxRate && $defaultTaxRate->code 
+                ? $defaultTaxRate->code 
+                : 'OUTPUT3');
+        
         foreach ($quote->lineItems as $lineItem) {
             $lineItems[] = [
                 'Description' => $lineItem->description,
@@ -1974,7 +1992,7 @@ class XeroService
                 'UnitAmount' => $lineItem->unit_price,
                 'LineAmount' => $lineItem->total,
                 'AccountCode' => '200', // Sales account code - this should be configurable
-                'TaxType' => 'OUTPUT3', // Output tax for sales
+                'TaxType' => $defaultTaxCode,
             ];
         }
 

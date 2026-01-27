@@ -47,9 +47,18 @@ class TaxRateController extends Controller
             'rate' => ['required', 'numeric', 'min:0', 'max:100'],
             'description' => ['nullable', 'string'],
             'is_active' => ['boolean'],
+            'is_default' => ['boolean'],
         ]);
 
         $validated['company_id'] = $currentCompany->id;
+        
+        // If setting as default, unset other defaults for this company
+        if ($validated['is_default'] ?? false) {
+            TaxRate::where('company_id', $currentCompany->id)
+                ->where('is_default', true)
+                ->update(['is_default' => false]);
+        }
+        
         TaxRate::create($validated);
 
         return redirect()->route('administration.tax-rates.index')
@@ -105,8 +114,17 @@ class TaxRateController extends Controller
             'rate' => ['required', 'numeric', 'min:0', 'max:100'],
             'description' => ['nullable', 'string'],
             'is_active' => ['boolean'],
+            'is_default' => ['boolean'],
         ]);
 
+        // If setting as default, unset other defaults for this company
+        if ($validated['is_default'] ?? false) {
+            TaxRate::where('company_id', $currentCompany->id)
+                ->where('is_default', true)
+                ->where('id', '!=', $taxRate->id)
+                ->update(['is_default' => false]);
+        }
+        
         $taxRate->update($validated);
 
         return redirect()->route('administration.tax-rates.index')

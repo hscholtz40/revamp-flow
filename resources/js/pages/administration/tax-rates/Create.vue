@@ -10,6 +10,7 @@ const form = useForm({
     rate: 0,
     description: '',
     is_active: true,
+    is_default: false,
 });
 
 function submit() {
@@ -142,6 +143,19 @@ function submit() {
                                     />
                                     <span class="text-sm font-medium text-gray-700">Active (available for selection)</span>
                                 </label>
+                            </div>
+
+                            <!-- Default Status -->
+                            <div>
+                                <label class="flex items-center gap-2">
+                                    <input
+                                        v-model="form.is_default"
+                                        type="checkbox"
+                                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <span class="text-sm font-medium text-gray-700">Set as Default Tax Rate</span>
+                                </label>
+                                <p class="mt-1 text-sm text-gray-500">This tax rate will be used as the default when syncing invoices and quotes to Xero</p>
                             </div>
                         </div>
                     </div>
