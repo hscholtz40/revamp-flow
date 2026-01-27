@@ -204,6 +204,17 @@ class XeroService
     }
 
     /**
+     * Get the company from XeroSettings, ensuring it's loaded
+     */
+    private function getCompany(): Company
+    {
+        if (!$this->settings->relationLoaded('company')) {
+            $this->settings->load('company');
+        }
+        return $this->settings->company;
+    }
+
+    /**
      * Make HTTP request with rate limiting handling
      * 
      * @param string $method HTTP method (get, post, put, patch, delete)
@@ -323,7 +334,8 @@ class XeroService
             return ['skipped' => true, 'message' => 'Customer sync to Xero is disabled'];
         }
 
-        $currentCompany = $company ?? Company::getDefault();
+        // Use company from XeroSettings
+        $currentCompany = $this->getCompany();
         $customers = Customer::where('company_id', $currentCompany->id)->get();
         $results = [];
 
@@ -573,7 +585,8 @@ class XeroService
             return ['skipped' => true, 'message' => 'Customer sync from Xero is disabled'];
         }
 
-        $currentCompany = $company ?? Company::getDefault();
+        // Use company from XeroSettings
+        $currentCompany = $this->getCompany();
         $results = [];
 
         try {
@@ -710,7 +723,8 @@ class XeroService
             return ['skipped' => true, 'message' => 'Product sync to Xero is disabled'];
         }
 
-        $currentCompany = $company ?? Company::getDefault();
+        // Use company from XeroSettings
+        $currentCompany = $this->getCompany();
         $products = Product::where('company_id', $currentCompany->id)->get();
         $results = [];
 
@@ -961,7 +975,8 @@ class XeroService
             return ['skipped' => true, 'message' => 'Product sync from Xero is disabled'];
         }
 
-        $currentCompany = $company ?? Company::getDefault();
+        // Use company from XeroSettings
+        $currentCompany = $this->getCompany();
         $results = [];
 
         try {
@@ -1094,7 +1109,8 @@ class XeroService
             return ['skipped' => true, 'message' => 'Invoice sync to Xero is disabled'];
         }
 
-        $currentCompany = $company ?? Company::getDefault();
+        // Use company from XeroSettings
+        $currentCompany = $this->getCompany();
         $invoices = Invoice::where('company_id', $currentCompany->id)
             ->with(['customer', 'lineItems'])
             ->get();
@@ -1184,7 +1200,8 @@ class XeroService
         }
         
         // Get default tax code from TaxRate model, fallback to TAX002 if not set
-        $currentCompany = $invoice->company ?? Company::getDefault();
+        // Use company from XeroSettings
+        $currentCompany = $this->getCompany();
         $defaultTaxRate = TaxRate::getDefaultForCompany($currentCompany->id);
         $defaultTaxCode = $defaultTaxRate && $defaultTaxRate->xero_tax_rate_id 
             ? $defaultTaxRate->xero_tax_rate_id 
@@ -1546,7 +1563,8 @@ class XeroService
             return ['skipped' => true, 'message' => 'Supplier sync to Xero is disabled'];
         }
 
-        $currentCompany = $company ?? Company::getDefault();
+        // Use company from XeroSettings
+        $currentCompany = $this->getCompany();
         $suppliers = Supplier::where('company_id', $currentCompany->id)->get();
         $results = [];
 
@@ -1614,7 +1632,8 @@ class XeroService
             return ['skipped' => true, 'message' => 'Supplier sync from Xero is disabled'];
         }
 
-        $currentCompany = $company ?? Company::getDefault();
+        // Use company from XeroSettings
+        $currentCompany = $this->getCompany();
         $results = [];
 
         try {
@@ -1827,13 +1846,25 @@ class XeroService
             return ['skipped' => true, 'message' => 'Quote sync to Xero is disabled'];
         }
 
-        $currentCompany = $company ?? Company::getDefault();
+        // Use company from XeroSettings
+        $currentCompany = $this->getCompany();
         $quotes = Quote::where('company_id', $currentCompany->id)
+            ->with(['customer', 'lineItems'])
             ->get();
         $results = [];
+        
+        Log::info('Starting quote sync to Xero', [
+            'company_id' => $currentCompany->id,
+            'quote_count' => $quotes->count(),
+        ]);
 
-        foreach ($quotes as $quote) {
+        foreach ($quotes as $index => $quote) {
             try {
+                // Add delay between requests to avoid rate limiting (except for first request)
+                if ($index > 0) {
+                    sleep(1);
+                }
+                
                 // Check if quote exists in Xero and compare dates
                 if ($quote->xero_quote_id) {
                     $xeroQuote = $this->getXeroQuote($quote->xero_quote_id);
@@ -1863,11 +1894,18 @@ class XeroService
                     'xero_quote_id' => $xeroQuote['QuoteID'] ?? null,
                 ];
             } catch (\Exception $e) {
-                Log::error('Quote sync failed', [
+                // Enhanced error logging with more context
+                Log::error('Quote sync to Xero failed', [
+                    'company_id' => $currentCompany->id,
                     'quote_id' => $quote->id,
                     'quote_number' => $quote->quote_number,
+                    'xero_quote_id' => $quote->xero_quote_id,
+                    'customer_id' => $quote->customer_id,
+                    'has_line_items' => $quote->lineItems()->exists(),
+                    'line_items_count' => $quote->lineItems()->count(),
                     'error' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString()
+                    'error_class' => get_class($e),
+                    'trace' => $e->getTraceAsString(),
                 ]);
                 
                 $results[] = [
@@ -1891,37 +1929,82 @@ class XeroService
             return ['skipped' => true, 'message' => 'Quote sync from Xero is disabled'];
         }
 
-        $currentCompany = $company ?? Company::getDefault();
+        // Use company from XeroSettings
+        $currentCompany = $this->getCompany();
         $results = [];
 
         try {
-            // Get all quotes from Xero (quotes are invoices with Type='QUOTE')
-            $response = Http::withHeaders($this->getHeaders())
-                ->get($this->baseUrl . '/api.xro/2.0/Quotes');
-
-            if (!$response->successful()) {
-                $errorBody = $response->body();
-                $statusCode = $response->status();
-                
-                // Handle authentication errors specifically
-                if ($statusCode === 403 && str_contains($errorBody, 'AuthenticationUnsuccessful')) {
-                    Log::error('Xero authentication failed during quote sync', [
-                        'company_id' => $currentCompany->id,
-                        'status' => $statusCode,
-                        'response' => $errorBody,
-                    ]);
-                    
-                    $this->clearInvalidTokens();
-                    
-                    return ['skipped' => true, 'message' => 'Xero authentication failed. Please re-authorize your Xero connection in the settings.'];
-                }
-                
-                throw new \Exception('Failed to fetch quotes from Xero: ' . $errorBody);
-            }
-
-            $xeroQuotes = $response->json()['Quotes'] ?? [];
+            // Fetch all quotes from Xero with pagination
+            $page = 1;
+            $pageSize = 100; // Xero default, can be up to 1000
+            $allXeroQuotes = [];
             
-            foreach ($xeroQuotes as $xeroQuote) {
+            do {
+                $response = $this->makeXeroRequest('get', $this->baseUrl . '/api.xro/2.0/Quotes?page=' . $page . '&pageSize=' . $pageSize);
+
+                if (!$response->successful()) {
+                    $errorBody = $response->body();
+                    $statusCode = $response->status();
+                    
+                    // Handle authentication errors specifically
+                    if ($statusCode === 403 && str_contains($errorBody, 'AuthenticationUnsuccessful')) {
+                        Log::error('Xero authentication failed during quote sync', [
+                            'company_id' => $currentCompany->id,
+                            'status' => $statusCode,
+                            'response' => $errorBody,
+                        ]);
+                        
+                        $this->clearInvalidTokens();
+                        
+                        return ['skipped' => true, 'message' => 'Xero authentication failed. Please re-authorize your Xero connection in the settings.'];
+                    }
+                    
+                    throw new \Exception('Failed to fetch quotes from Xero: ' . $errorBody);
+                }
+
+                $responseData = $response->json();
+                $xeroQuotes = $responseData['Quotes'] ?? [];
+                $allXeroQuotes = array_merge($allXeroQuotes, $xeroQuotes);
+                
+                // Check if there are more pages
+                // Xero returns pagination info: Page, PageCount, ItemCount
+                $pagination = $responseData['Pagination'] ?? null;
+                $currentPage = $pagination['Page'] ?? $page;
+                $pageCount = $pagination['PageCount'] ?? 1;
+                $itemCount = $pagination['ItemCount'] ?? count($xeroQuotes);
+                
+                // Continue if we got a full page (might be more) OR if pagination says there are more pages
+                $quotesOnPage = count($xeroQuotes);
+                $hasMorePages = ($quotesOnPage >= $pageSize) || ($currentPage < $pageCount);
+                
+                Log::info('Fetched quote page from Xero', [
+                    'company_id' => $currentCompany->id,
+                    'requested_page' => $page,
+                    'current_page' => $currentPage,
+                    'page_count' => $pageCount,
+                    'item_count' => $itemCount,
+                    'quotes_on_page' => $quotesOnPage,
+                    'page_size' => $pageSize,
+                    'total_quotes_so_far' => count($allXeroQuotes),
+                    'has_more_pages' => $hasMorePages,
+                    'pagination_data' => $pagination,
+                ]);
+                
+                $page++;
+                
+                // Add delay between pages to avoid rate limiting
+                if ($hasMorePages) {
+                    sleep(1);
+                }
+            } while ($hasMorePages);
+            
+            Log::info('Fetched quotes from Xero', [
+                'company_id' => $currentCompany->id,
+                'total_quotes' => count($allXeroQuotes),
+                'pages_fetched' => $page - 1,
+            ]);
+            
+            foreach ($allXeroQuotes as $xeroQuote) {
                 try {
                     // Skip if quote doesn't have required fields
                     if (empty($xeroQuote['QuoteNumber'])) {
@@ -1961,6 +2044,14 @@ class XeroService
                         ];
                     }
                 } catch (\Exception $e) {
+                    Log::error('Failed to process quote from Xero', [
+                        'company_id' => $currentCompany->id,
+                        'quote_id' => $xeroQuote['QuoteID'] ?? null,
+                        'quote_number' => $xeroQuote['QuoteNumber'] ?? 'Unknown',
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString(),
+                    ]);
+                    
                     $results[] = [
                         'quote_number' => $xeroQuote['QuoteNumber'] ?? 'Unknown',
                         'status' => 'error',
@@ -1994,8 +2085,23 @@ class XeroService
         // Ensure line items have products loaded
         $quote->load('lineItems.product');
         
+        // Ensure customer is loaded
+        if (!$quote->relationLoaded('customer')) {
+            $quote->load('customer');
+        }
+        
+        if ($quote->lineItems->isEmpty()) {
+            throw new \Exception("Quote '{$quote->quote_number}' has no line items. Cannot sync to Xero.");
+        }
+        
+        // Validate customer exists
+        if (!$quote->customer) {
+            throw new \Exception("Quote '{$quote->quote_number}' has no customer. Cannot sync to Xero.");
+        }
+        
         // Get default tax code from TaxRate model, fallback to OUTPUT3 if not set
-        $currentCompany = $quote->company ?? Company::getDefault();
+        // Use company from XeroSettings
+        $currentCompany = $this->getCompany();
         $defaultTaxRate = TaxRate::getDefaultForCompany($currentCompany->id);
         $defaultTaxCode = $defaultTaxRate && $defaultTaxRate->xero_tax_rate_id 
             ? $defaultTaxRate->xero_tax_rate_id 
@@ -2035,22 +2141,38 @@ class XeroService
             'QuoteNumber' => $quote->quote_number,
         ];
 
+        Log::info('Creating/updating quote in Xero', [
+            'quote_id' => $quote->id,
+            'quote_number' => $quote->quote_number,
+            'xero_quote_id' => $quote->xero_quote_id,
+            'customer_id' => $quote->customer_id,
+            'line_items_count' => count($lineItems),
+            'subtotal' => $quote->subtotal,
+            'tax_amount' => $quote->tax_amount,
+            'total' => $quote->total,
+        ]);
+        
         // If quote already has a Xero ID, update it; otherwise create new
         if ($quote->xero_quote_id) {
             $quoteData['QuoteID'] = $quote->xero_quote_id;
-            $response = Http::withHeaders($this->getHeaders())
-                ->post($this->baseUrl . '/api.xro/2.0/Quotes', [
-                    'Quotes' => [$quoteData]
-                ]);
-        } else {
-            $response = Http::withHeaders($this->getHeaders())
-                ->post($this->baseUrl . '/api.xro/2.0/Quotes', [
-                    'Quotes' => [$quoteData]
-                ]);
         }
+        
+        $response = $this->makeXeroRequest('post', $this->baseUrl . '/api.xro/2.0/Quotes', [
+            'Quotes' => [$quoteData]
+        ]);
 
         if (!$response->successful()) {
-            throw new \Exception('Failed to create/update quote in Xero: ' . $response->body());
+            $errorBody = $response->body();
+            $statusCode = $response->status();
+            
+            Log::error('Failed to create/update quote in Xero', [
+                'quote_id' => $quote->id,
+                'quote_number' => $quote->quote_number,
+                'status' => $statusCode,
+                'response' => $errorBody,
+            ]);
+            
+            throw new \Exception('Failed to create/update quote in Xero: ' . $errorBody);
         }
 
         $result = $response->json();
@@ -2138,8 +2260,31 @@ class XeroService
             ->where('xero_contact_id', $xeroQuote['Contact']['ContactID'])
             ->first();
 
+        // If customer doesn't exist, fetch from Xero and create it
         if (!$customer) {
-            throw new \Exception("Customer with Xero contact ID {$xeroQuote['Contact']['ContactID']} not found. Please sync customers first.");
+            $xeroContactId = $xeroQuote['Contact']['ContactID'];
+            Log::info('Customer not found locally, fetching from Xero', [
+                'company_id' => $company->id,
+                'xero_contact_id' => $xeroContactId,
+                'quote_number' => $xeroQuote['QuoteNumber'] ?? 'Unknown',
+            ]);
+            
+            // Fetch the contact from Xero
+            $xeroContact = $this->getXeroContact($xeroContactId);
+            
+            if (!$xeroContact) {
+                throw new \Exception("Customer with Xero contact ID {$xeroContactId} not found in Xero. Cannot create quote.");
+            }
+            
+            // Create the customer from Xero contact data
+            $customer = $this->createCustomerFromXero($xeroContact, $company);
+            
+            Log::info('Created customer from Xero during quote import', [
+                'company_id' => $company->id,
+                'customer_id' => $customer->id,
+                'customer_name' => $customer->name,
+                'xero_contact_id' => $xeroContactId,
+            ]);
         }
 
         $subtotal = $xeroQuote['SubTotal'] ?? 0;
@@ -2321,7 +2466,7 @@ class XeroService
             'description' => $xeroItem['Description'] ?? null,
             'sku' => $xeroItem['Code'] ?? null,
             'xero_item_id' => $xeroItem['ItemID'],
-            'sales_account_code' => $xeroItem['SalesDetails']['AccountCode'] ?? null,
+            'sales_account_code' => $xeroItem['SalesDetails']['AccountCode'] ?? 200,
             'purchase_account_code' => $xeroItem['PurchaseDetails']['AccountCode'] ?? null,
         ];
 
@@ -2401,7 +2546,8 @@ class XeroService
         }
 
         // Get the default bank account for the company
-        $currentCompany = $invoice->company ?? Company::getDefault();
+        // Use company from XeroSettings
+        $currentCompany = $this->getCompany();
         $defaultBankAccount = BankAccount::getDefaultForCompany($currentCompany->id);
         
         if (!$defaultBankAccount || !$defaultBankAccount->xero_account_id) {
@@ -2475,7 +2621,8 @@ class XeroService
             return ['skipped' => true, 'message' => 'Invoice sync to Xero is disabled'];
         }
 
-        $currentCompany = $company ?? Company::getDefault();
+        // Use company from XeroSettings
+        $currentCompany = $this->getCompany();
         $invoices = Invoice::where('company_id', $currentCompany->id)
             ->whereNotNull('xero_invoice_id')
             ->whereHas('payments')
@@ -2504,7 +2651,8 @@ class XeroService
             return ['skipped' => true, 'message' => 'Tax rate sync from Xero is disabled'];
         }
 
-        $currentCompany = $company ?? Company::getDefault();
+        // Use company from XeroSettings
+        $currentCompany = $this->getCompany();
         $results = [];
 
         try {
@@ -2626,7 +2774,8 @@ class XeroService
             return ['skipped' => true, 'message' => 'Bank account sync from Xero is disabled'];
         }
 
-        $currentCompany = $company ?? Company::getDefault();
+        // Use company from XeroSettings
+        $currentCompany = $this->getCompany();
         $results = [];
 
         try {
@@ -2759,7 +2908,8 @@ class XeroService
             return ['skipped' => true, 'message' => 'Chart of accounts sync from Xero is disabled'];
         }
 
-        $currentCompany = $company ?? Company::getDefault();
+        // Use company from XeroSettings
+        $currentCompany = $this->getCompany();
         $results = [];
 
         try {

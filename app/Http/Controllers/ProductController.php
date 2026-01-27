@@ -50,41 +50,41 @@ class ProductController extends Controller
         $categories = Category::active()->ordered()->pluck('name');
 
         // Calculate totals for all products (not just paginated)
-        $totalsQuery = Product::where('company_id', $currentCompany->id);
+        // Base query with filters (excluding active_only for totals calculation)
+        $baseTotalsQuery = Product::where('company_id', $currentCompany->id);
         
-        // Apply same filters for totals
+        // Apply filters for totals (but not active_only - we'll calculate active/inactive separately)
         if ($request->filled('type')) {
-            $totalsQuery->where('type', $request->type);
+            $baseTotalsQuery->where('type', $request->type);
         }
         if ($request->filled('category')) {
-            $totalsQuery->where('category', $request->category);
+            $baseTotalsQuery->where('category', $request->category);
         }
         if ($request->filled('search')) {
             $search = $request->search;
-            $totalsQuery->where(function ($q) use ($search) {
+            $baseTotalsQuery->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
                   ->orWhere('description', 'like', "%{$search}%")
                   ->orWhere('sku', 'like', "%{$search}%")
                   ->orWhere('barcode', 'like', "%{$search}%");
             });
         }
-        if ($request->filled('active_only')) {
-            $totalsQuery->where('is_active', true);
-        }
 
+        // Calculate totals using cloned queries to avoid query builder mutation
         $totals = [
-            'total_products' => $totalsQuery->count(),
-            'total_products_type' => $totalsQuery->where('type', 'product')->count(),
-            'total_services_type' => $totalsQuery->where('type', 'service')->count(),
-            'total_active' => $totalsQuery->where('is_active', true)->count(),
-            'total_inactive' => $totalsQuery->where('is_active', false)->count(),
-            'total_stock_value' => $totalsQuery->where('type', 'product')
+            'total_products' => (clone $baseTotalsQuery)->count(),
+            'total_products_type' => (clone $baseTotalsQuery)->where('type', 'product')->count(),
+            'total_services_type' => (clone $baseTotalsQuery)->where('type', 'service')->count(),
+            'total_active' => (clone $baseTotalsQuery)->where('is_active', true)->count(),
+            'total_inactive' => (clone $baseTotalsQuery)->where('is_active', false)->count(),
+            'total_stock_value' => (clone $baseTotalsQuery)
+                ->where('type', 'product')
                 ->where('track_stock', true)
                 ->get()
                 ->sum(function ($product) {
                     return ($product->stock_quantity ?? 0) * ($product->cost_price ?? $product->cost ?? 0);
                 }),
-            'total_selling_value' => $totalsQuery->get()->sum(function ($product) {
+            'total_selling_value' => (clone $baseTotalsQuery)->get()->sum(function ($product) {
                 return ($product->stock_quantity ?? 0) * ($product->selling_price ?? $product->price ?? 0);
             }),
         ];

@@ -15,6 +15,7 @@ Schedule::command('xero:refresh-tokens')->cron('*/20 * * * *');
 Schedule::command('xero:sync-customers')->everyMinute();
 Schedule::command('xero:sync-products')->everyMinute();
 Schedule::command('xero:sync-invoices')->everyMinute();
+Schedule::command('xero:sync-quotes')->everyMinute();
 
 // Schedule automated reminders to run daily at 9 AM
 Schedule::command('reminders:send')->dailyAt('09:00');
