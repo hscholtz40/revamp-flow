@@ -196,6 +196,43 @@
                                 </p>
                             </div>
 
+                            <!-- Discount Fields for Line Item -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Discount Amount (R)</label>
+                                    <input
+                                        v-model.number="item.discount_amount"
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        class="w-full rounded border px-3 py-2"
+                                        :class="{ 'border-red-500': form.errors[`line_items.${index}.discount_amount`] }"
+                                        placeholder="0.00"
+                                        @input="watchLineItemDiscount(index)"
+                                    />
+                                    <div v-if="form.errors[`line_items.${index}.discount_amount`]" class="text-red-500 text-sm mt-1">
+                                        {{ form.errors[`line_items.${index}.discount_amount`] }}
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Discount Percentage (%)</label>
+                                    <input
+                                        v-model.number="item.discount_percentage"
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        max="100"
+                                        class="w-full rounded border px-3 py-2"
+                                        :class="{ 'border-red-500': form.errors[`line_items.${index}.discount_percentage`] }"
+                                        placeholder="0.00"
+                                        @input="watchLineItemDiscount(index)"
+                                    />
+                                    <div v-if="form.errors[`line_items.${index}.discount_percentage`]" class="text-red-500 text-sm mt-1">
+                                        {{ form.errors[`line_items.${index}.discount_percentage`] }}
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="flex items-center justify-between mt-4">
                                 <div class="text-sm font-medium text-gray-900">
                                     Total: {{ formatCurrency(item.total) }}
@@ -243,26 +280,28 @@
                 <div class="bg-white rounded-lg border p-6">
                     <h2 class="text-lg font-semibold text-gray-900 mb-4">Additional Information</h2>
                     <div class="space-y-6">
-                        <!-- Discount Fields -->
+                        <!-- Discount Fields (Read-only, calculated from line items) -->
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Discount Amount (R)</label>
-                                <input type="number" step="0.01" v-model="form.discount_amount"
-                                    class="w-full rounded border px-3 py-2"
-                                    :class="{ 'border-red-500': form.errors.discount_amount }" placeholder="0.00" />
-                                <div v-if="form.errors.discount_amount" class="text-red-500 text-sm mt-1">
-                                    {{ form.errors.discount_amount }}
-                                </div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Total Discount (R)</label>
+                                <input
+                                    type="text"
+                                    :value="formatCurrency(discountAmount)"
+                                    class="w-full rounded border px-3 py-2 bg-gray-50"
+                                    readonly
+                                    disabled
+                                />
+                                <p class="text-xs text-gray-500 mt-1">Calculated from line item discounts</p>
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Discount Percentage
-                                    (%)</label>
-                                <input type="number" step="0.01" v-model="form.discount_percentage"
-                                    class="w-full rounded border px-3 py-2"
-                                    :class="{ 'border-red-500': form.errors.discount_percentage }" placeholder="0.00" />
-                                <div v-if="form.errors.discount_percentage" class="text-red-500 text-sm mt-1">
-                                    {{ form.errors.discount_percentage }}
-                                </div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Subtotal Before Discount</label>
+                                <input
+                                    type="text"
+                                    :value="formatCurrency(subtotalBeforeDiscount)"
+                                    class="w-full rounded border px-3 py-2 bg-gray-50"
+                                    readonly
+                                    disabled
+                                />
                             </div>
                         </div>
 
@@ -347,6 +386,8 @@ interface LineItem {
     description: string;
     quantity: number;
     unit_price: number;
+    discount_amount?: number;
+    discount_percentage?: number;
     total: number;
     serial_number_ids?: number[];
 }
@@ -405,9 +446,57 @@ const form = useForm({
         description: item.description,
         quantity: item.quantity,
         unit_price: item.unit_price,
+        discount_amount: (item as any).discount_amount || 0,
+        discount_percentage: (item as any).discount_percentage || 0,
         total: item.total,
         serial_number_ids: Array.isArray((item as any).serial_number_ids) ? (item as any).serial_number_ids : [],
     })) as LineItem[],
+});
+
+// Calculate subtotal before discounts
+const subtotalBeforeDiscount = computed(() => {
+    return form.line_items.reduce((sum, item) => {
+        const quantity = item.quantity || 0;
+        const unitPrice = item.unit_price || 0;
+        return sum + (quantity * unitPrice);
+    }, 0);
+});
+
+// Calculate total discount from line items
+const lineItemDiscountsTotal = computed(() => {
+    return form.line_items.reduce((sum, item) => {
+        const quantity = item.quantity || 0;
+        const unitPrice = item.unit_price || 0;
+        const discountAmount = item.discount_amount || 0;
+        const discountPercentage = item.discount_percentage || 0;
+        
+        const itemSubtotal = quantity * unitPrice;
+        let itemDiscount = discountAmount;
+        if (discountPercentage > 0) {
+            itemDiscount = itemSubtotal * (discountPercentage / 100);
+        }
+        
+        return sum + itemDiscount;
+    }, 0);
+});
+
+const subtotal = computed(() => {
+    return subtotalBeforeDiscount.value - lineItemDiscountsTotal.value;
+});
+
+const discountAmount = computed(() => {
+    // Total discount is the sum of all line item discounts
+    return lineItemDiscountsTotal.value;
+});
+
+const taxAmount = computed(() => {
+    // Subtotal already has discounts applied, so calculate tax directly on it
+    // Round UP to 2 decimal places
+    return Math.ceil((subtotal.value * (form.tax_rate / 100)) * 100) / 100;
+});
+
+const total = computed(() => {
+    return subtotal.value + taxAmount.value;
 });
 
 // Watch for customer changes to update title
@@ -420,17 +509,10 @@ watch(() => form.customer_id, (newCustomerId) => {
     }
 });
 
-// Watch discount fields to clear one when the other is filled
-watch(() => form.discount_amount, (newAmount) => {
-    if (newAmount > 0) {
-        form.discount_percentage = 0;
-    }
-});
-
-watch(() => form.discount_percentage, (newPercentage) => {
-    if (newPercentage > 0) {
-        form.discount_amount = 0;
-    }
+// Update form discount_amount when line item discounts change
+watch(() => lineItemDiscountsTotal.value, (newTotal) => {
+    form.discount_amount = newTotal;
+    form.discount_percentage = 0; // Clear percentage since we're using amount from line items
 });
 
 const addLineItem = () => {
@@ -439,6 +521,8 @@ const addLineItem = () => {
         description: '',
         quantity: 1,
         unit_price: 0,
+        discount_amount: 0,
+        discount_percentage: 0,
         total: 0,
         serial_number_ids: [] as number[],
     });
@@ -479,7 +563,35 @@ const selectProduct = (index: number, event: Event) => {
 
 const calculateItemTotal = (index: number) => {
     const item = form.line_items[index];
-    item.total = item.quantity * item.unit_price;
+    const quantity = item.quantity || 0;
+    const unitPrice = item.unit_price || 0;
+    const discountAmount = item.discount_amount || 0;
+    const discountPercentage = item.discount_percentage || 0;
+    
+    const subtotal = quantity * unitPrice;
+    
+    // Apply discount: percentage takes precedence over amount
+    let finalDiscount = discountAmount;
+    if (discountPercentage > 0) {
+        finalDiscount = subtotal * (discountPercentage / 100);
+    }
+    
+    item.total = Math.max(0, subtotal - finalDiscount);
+};
+
+const watchLineItemDiscount = (index: number) => {
+    const item = form.line_items[index];
+    if (!item) return;
+    
+    // Clear one discount field when the other is filled
+    if (item.discount_amount && item.discount_amount > 0) {
+        item.discount_percentage = 0;
+    }
+    if (item.discount_percentage && item.discount_percentage > 0) {
+        item.discount_amount = 0;
+    }
+    
+    calculateItemTotal(index);
 };
 
 const formatCurrency = (amount: number) => {
@@ -488,32 +600,6 @@ const formatCurrency = (amount: number) => {
         currency: 'ZAR',
     }).format(amount || 0);
 };
-
-const subtotal = computed(() => {
-    return form.line_items.reduce((sum, item) => sum + (item.total || 0), 0);
-});
-
-const discountAmount = computed(() => {
-    const amount = Number(form.discount_amount) || 0;
-    const percentage = Number(form.discount_percentage) || 0;
-
-    // If percentage is specified, calculate amount from percentage
-    if (percentage > 0) {
-        return subtotal.value * (percentage / 100);
-    }
-
-    return amount;
-});
-
-const taxAmount = computed(() => {
-    const subtotalAfterDiscount = subtotal.value - discountAmount.value;
-    return subtotalAfterDiscount * (form.tax_rate / 100);
-});
-
-const total = computed(() => {
-    const subtotalAfterDiscount = subtotal.value - discountAmount.value;
-    return subtotalAfterDiscount + taxAmount.value;
-});
 
 const submit = () => {
     form.put(invoices.update(props.invoice.id).url);

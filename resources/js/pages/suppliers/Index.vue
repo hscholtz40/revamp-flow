@@ -46,6 +46,26 @@ const hasSuppliers = computed(() => {
 // Alias props.suppliers to avoid conflict with imported suppliers route
 const suppliersData = computed(() => props.suppliers);
 
+// Computed properties for pagination info
+const paginationFrom = computed(() => {
+    if (props.suppliers?.meta?.from !== undefined) return props.suppliers.meta.from;
+    if (props.suppliers?.from !== undefined) return props.suppliers.from;
+    return props.suppliers?.data?.length > 0 ? 1 : 0;
+});
+
+const paginationTo = computed(() => {
+    if (props.suppliers?.meta?.to !== undefined) return props.suppliers.meta.to;
+    if (props.suppliers?.to !== undefined) return props.suppliers.to;
+    return props.suppliers?.data?.length ?? 0;
+});
+
+const paginationTotal = computed(() => {
+    if (props.suppliers?.meta?.total !== undefined && props.suppliers.meta.total > 0) return props.suppliers.meta.total;
+    if (props.suppliers?.total !== undefined && props.suppliers.total > 0) return props.suppliers.total;
+    // If meta.total is 0 but we have data, use data length as fallback
+    return props.suppliers?.data?.length ?? 0;
+});
+
 function applyFilters() {
     const params: Record<string, string | boolean> = {};
     
@@ -219,13 +239,13 @@ function deleteSupplier(supplier: Supplier) {
             </div>
 
             <!-- Pagination -->
-            <div v-if="suppliersData?.links && suppliersData.links.length > 3" class="mt-4 flex items-center justify-between">
+            <div v-if="props.suppliers?.links" class="mt-4 flex items-center justify-between">
                 <div class="text-sm text-gray-700">
-                    Showing {{ suppliersData.meta?.from }} to {{ suppliersData.meta?.to }} of {{ suppliersData.meta?.total }} suppliers
+                    Showing {{ paginationFrom }} to {{ paginationTo }} of {{ paginationTotal }} suppliers
                 </div>
-                <div class="flex gap-2">
+                <div v-if="props.suppliers.links.length > 0" class="flex gap-2">
                     <Link
-                        v-for="link in suppliersData.links"
+                        v-for="link in props.suppliers.links"
                         :key="link.label"
                         :href="link.url || '#'"
                         :class="[

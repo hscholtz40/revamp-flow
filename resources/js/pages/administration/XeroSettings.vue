@@ -263,59 +263,108 @@
                                 <p class="text-xs text-gray-500 ml-6">Payments will be automatically synced when invoices are synced to Xero</p>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Payment Account Configuration -->
-                    <div v-if="form.is_enabled && settings.tenant_name" class="space-y-4 border-t pt-6">
-                        <h3 class="text-lg font-medium text-gray-900">Payment Account Configuration</h3>
-                        <p class="text-sm text-gray-600 mb-4">
-                            Configure which Xero accounts to use for different payment methods. These accounts must exist in your Xero organization and be suitable for receiving payments.
-                        </p>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Cash Payments Account</label>
-                                <input
-                                    v-model="form.payment_account_cash"
-                                    type="text"
-                                    class="w-full rounded border px-3 py-2"
-                                    :class="{ 'border-red-500': form.errors.payment_account_cash }"
-                                    placeholder="e.g., 090"
-                                />
-                                <div v-if="form.errors.payment_account_cash" class="text-red-500 text-sm mt-1">
-                                    {{ form.errors.payment_account_cash }}
-                                </div>
-                                <p class="text-xs text-gray-500 mt-1">Account code for cash payments</p>
+                        <!-- Suppliers -->
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-3">
+                                <h4 class="font-medium text-gray-900">Suppliers</h4>
                             </div>
-
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Card Payments Account</label>
-                                <input
-                                    v-model="form.payment_account_card"
-                                    type="text"
-                                    class="w-full rounded border px-3 py-2"
-                                    :class="{ 'border-red-500': form.errors.payment_account_card }"
-                                    placeholder="e.g., 091"
-                                />
-                                <div v-if="form.errors.payment_account_card" class="text-red-500 text-sm mt-1">
-                                    {{ form.errors.payment_account_card }}
-                                </div>
-                                <p class="text-xs text-gray-500 mt-1">Account code for card payments</p>
+                            <div class="space-y-2 ml-6">
+                                <label class="flex items-center">
+                                    <input
+                                        v-model="form.sync_suppliers_to_xero"
+                                        type="checkbox"
+                                        class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                    />
+                                    <span class="ml-2 text-sm text-gray-700">Sync to Xero</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input
+                                        v-model="form.sync_suppliers_from_xero"
+                                        type="checkbox"
+                                        class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                    />
+                                    <span class="ml-2 text-sm text-gray-700">Sync from Xero</span>
+                                </label>
                             </div>
+                        </div>
 
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">EFT/Bank Transfer Account</label>
-                                <input
-                                    v-model="form.payment_account_eft"
-                                    type="text"
-                                    class="w-full rounded border px-3 py-2"
-                                    :class="{ 'border-red-500': form.errors.payment_account_eft }"
-                                    placeholder="e.g., 092"
-                                />
-                                <div v-if="form.errors.payment_account_eft" class="text-red-500 text-sm mt-1">
-                                    {{ form.errors.payment_account_eft }}
-                                </div>
-                                <p class="text-xs text-gray-500 mt-1">Account code for EFT/bank transfer payments</p>
+                        <!-- Quotes -->
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-3">
+                                <h4 class="font-medium text-gray-900">Quotes</h4>
+                            </div>
+                            <div class="space-y-2 ml-6">
+                                <label class="flex items-center">
+                                    <input
+                                        v-model="form.sync_quotes_to_xero"
+                                        type="checkbox"
+                                        class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                    />
+                                    <span class="ml-2 text-sm text-gray-700">Sync to Xero</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input
+                                        v-model="form.sync_quotes_from_xero"
+                                        type="checkbox"
+                                        class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                    />
+                                    <span class="ml-2 text-sm text-gray-700">Sync from Xero</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Tax Rates -->
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-3">
+                                <h4 class="font-medium text-gray-900">Tax Rates</h4>
+                            </div>
+                            <div class="space-y-2 ml-6">
+                                <label class="flex items-center">
+                                    <input
+                                        v-model="form.sync_tax_rates_from_xero"
+                                        type="checkbox"
+                                        class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                    />
+                                    <span class="ml-2 text-sm text-gray-700">Import from Xero</span>
+                                </label>
+                                <p class="text-xs text-gray-500 ml-6">Import tax rates from Xero to JobCardOnline</p>
+                            </div>
+                        </div>
+
+                        <!-- Bank Accounts -->
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-3">
+                                <h4 class="font-medium text-gray-900">Bank Accounts</h4>
+                            </div>
+                            <div class="space-y-2 ml-6">
+                                <label class="flex items-center">
+                                    <input
+                                        v-model="form.sync_bank_accounts_from_xero"
+                                        type="checkbox"
+                                        class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                    />
+                                    <span class="ml-2 text-sm text-gray-700">Import from Xero</span>
+                                </label>
+                                <p class="text-xs text-gray-500 ml-6">Import bank accounts from Xero to JobCardOnline</p>
+                            </div>
+                        </div>
+
+                        <!-- Chart of Accounts -->
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-3">
+                                <h4 class="font-medium text-gray-900">Chart of Accounts</h4>
+                            </div>
+                            <div class="space-y-2 ml-6">
+                                <label class="flex items-center">
+                                    <input
+                                        v-model="form.sync_chart_of_accounts_from_xero"
+                                        type="checkbox"
+                                        class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                    />
+                                    <span class="ml-2 text-sm text-gray-700">Import from Xero</span>
+                                </label>
+                                <p class="text-xs text-gray-500 ml-6">Import chart of accounts from Xero to JobCardOnline</p>
                             </div>
                         </div>
                     </div>
@@ -353,13 +402,37 @@
                     >
                         {{ syncing === 'products' ? 'Syncing...' : 'Sync Products to Xero' }}
                     </button>
+                    <button
+                        v-if="form.sync_suppliers_to_xero"
+                        @click="syncSuppliers"
+                        :disabled="syncing"
+                        class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
+                    >
+                        {{ syncing === 'suppliers' ? 'Syncing...' : 'Sync Suppliers to Xero' }}
+                    </button>
+                    <button
+                        v-if="form.sync_quotes_to_xero"
+                        @click="syncQuotes"
+                        :disabled="syncing"
+                        class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
+                    >
+                        {{ syncing === 'quotes' ? 'Syncing...' : 'Sync Quotes to Xero' }}
+                    </button>
+                    <button
+                        v-if="form.sync_invoices_to_xero"
+                        @click="syncInvoices"
+                        :disabled="syncing"
+                        class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
+                    >
+                        {{ syncing === 'invoices' ? 'Syncing...' : 'Sync Invoices to Xero' }}
+                    </button>
                 </div>
 
                 <!-- Initial Sync from Xero -->
                 <div v-if="settings.tenant_name" class="mt-6 p-4 bg-blue-50 rounded-lg">
                     <h3 class="text-lg font-medium text-blue-900 mb-3">Initial Sync from Xero</h3>
                     <p class="text-sm text-blue-700 mb-4">
-                        Import existing customers and products from your Xero account to get started.
+                        Import existing customers, products, suppliers, quotes, tax rates, bank accounts, and chart of accounts from your Xero account to get started.
                     </p>
                     <div class="flex flex-wrap gap-3">
                         <button
@@ -377,6 +450,46 @@
                             class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
                         >
                             {{ syncing === 'products-from-xero' ? 'Importing...' : 'Import Products from Xero' }}
+                        </button>
+                        <button
+                            v-if="form.sync_suppliers_from_xero"
+                            @click="syncSuppliersFromXero"
+                            :disabled="syncing"
+                            class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+                        >
+                            {{ syncing === 'suppliers-from-xero' ? 'Importing...' : 'Import Suppliers from Xero' }}
+                        </button>
+                        <button
+                            v-if="form.sync_quotes_from_xero"
+                            @click="syncQuotesFromXero"
+                            :disabled="syncing"
+                            class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+                        >
+                            {{ syncing === 'quotes-from-xero' ? 'Importing...' : 'Import Quotes from Xero' }}
+                        </button>
+                        <button
+                            v-if="form.sync_tax_rates_from_xero"
+                            @click="syncTaxRatesFromXero"
+                            :disabled="syncing"
+                            class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+                        >
+                            {{ syncing === 'tax-rates-from-xero' ? 'Importing...' : 'Import Tax Rates from Xero' }}
+                        </button>
+                        <button
+                            v-if="form.sync_bank_accounts_from_xero"
+                            @click="syncBankAccountsFromXero"
+                            :disabled="syncing"
+                            class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+                        >
+                            {{ syncing === 'bank-accounts-from-xero' ? 'Importing...' : 'Import Bank Accounts from Xero' }}
+                        </button>
+                        <button
+                            v-if="form.sync_chart_of_accounts_from_xero"
+                            @click="syncChartOfAccountsFromXero"
+                            :disabled="syncing"
+                            class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+                        >
+                            {{ syncing === 'chart-of-accounts-from-xero' ? 'Importing...' : 'Import Chart of Accounts from Xero' }}
                         </button>
                     </div>
                 </div>
@@ -407,6 +520,13 @@ interface Props {
         sync_products_to_xero: boolean;
         sync_products_from_xero: boolean;
         sync_invoices_to_xero: boolean;
+        sync_suppliers_to_xero: boolean;
+        sync_suppliers_from_xero: boolean;
+        sync_quotes_to_xero: boolean;
+        sync_quotes_from_xero: boolean;
+        sync_tax_rates_from_xero: boolean;
+        sync_bank_accounts_from_xero: boolean;
+        sync_chart_of_accounts_from_xero: boolean;
         payment_account_cash: string | null;
         payment_account_card: string | null;
         payment_account_eft: string | null;
@@ -438,9 +558,13 @@ const form = useForm({
     sync_products_to_xero: props.settings.sync_products_to_xero,
     sync_products_from_xero: props.settings.sync_products_from_xero,
     sync_invoices_to_xero: props.settings.sync_invoices_to_xero,
-    payment_account_cash: props.settings.payment_account_cash || '',
-    payment_account_card: props.settings.payment_account_card || '',
-    payment_account_eft: props.settings.payment_account_eft || '',
+    sync_suppliers_to_xero: props.settings.sync_suppliers_to_xero,
+    sync_suppliers_from_xero: props.settings.sync_suppliers_from_xero,
+    sync_quotes_to_xero: props.settings.sync_quotes_to_xero,
+    sync_quotes_from_xero: props.settings.sync_quotes_from_xero,
+    sync_tax_rates_from_xero: props.settings.sync_tax_rates_from_xero,
+    sync_bank_accounts_from_xero: props.settings.sync_bank_accounts_from_xero,
+    sync_chart_of_accounts_from_xero: props.settings.sync_chart_of_accounts_from_xero,
 });
 
 // Watch for prop changes and update form when company switches
@@ -456,9 +580,13 @@ watch(() => props.settings, (newSettings) => {
     form.sync_products_to_xero = newSettings.sync_products_to_xero;
     form.sync_products_from_xero = newSettings.sync_products_from_xero;
     form.sync_invoices_to_xero = newSettings.sync_invoices_to_xero;
-    form.payment_account_cash = newSettings.payment_account_cash || '';
-    form.payment_account_card = newSettings.payment_account_card || '';
-    form.payment_account_eft = newSettings.payment_account_eft || '';
+    form.sync_suppliers_to_xero = newSettings.sync_suppliers_to_xero;
+    form.sync_suppliers_from_xero = newSettings.sync_suppliers_from_xero;
+    form.sync_quotes_to_xero = newSettings.sync_quotes_to_xero;
+    form.sync_quotes_from_xero = newSettings.sync_quotes_from_xero;
+    form.sync_tax_rates_from_xero = newSettings.sync_tax_rates_from_xero;
+    form.sync_bank_accounts_from_xero = newSettings.sync_bank_accounts_from_xero;
+    form.sync_chart_of_accounts_from_xero = newSettings.sync_chart_of_accounts_from_xero;
 }, { deep: true });
 
 const statusText = computed(() => {
@@ -543,6 +671,142 @@ const syncProductsFromXero = () => {
     
     const syncForm = useForm({});
     syncForm.post('/xero/sync/products-from-xero', {
+        onSuccess: () => {
+            syncing.value = null;
+        },
+        onError: () => {
+            syncing.value = null;
+        },
+        onFinish: () => {
+            syncing.value = null;
+        }
+    });
+};
+
+const syncSuppliers = () => {
+    syncing.value = 'suppliers';
+    
+    const syncForm = useForm({});
+    syncForm.post('/xero/sync/suppliers', {
+        onSuccess: () => {
+            syncing.value = null;
+        },
+        onError: () => {
+            syncing.value = null;
+        },
+        onFinish: () => {
+            syncing.value = null;
+        }
+    });
+};
+
+const syncSuppliersFromXero = () => {
+    syncing.value = 'suppliers-from-xero';
+    
+    const syncForm = useForm({});
+    syncForm.post('/xero/sync/suppliers-from-xero', {
+        onSuccess: () => {
+            syncing.value = null;
+        },
+        onError: () => {
+            syncing.value = null;
+        },
+        onFinish: () => {
+            syncing.value = null;
+        }
+    });
+};
+
+const syncQuotes = () => {
+    syncing.value = 'quotes';
+    
+    const syncForm = useForm({});
+    syncForm.post('/xero/sync/quotes', {
+        onSuccess: () => {
+            syncing.value = null;
+        },
+        onError: () => {
+            syncing.value = null;
+        },
+        onFinish: () => {
+            syncing.value = null;
+        }
+    });
+};
+
+const syncQuotesFromXero = () => {
+    syncing.value = 'quotes-from-xero';
+    
+    const syncForm = useForm({});
+    syncForm.post('/xero/sync/quotes-from-xero', {
+        onSuccess: () => {
+            syncing.value = null;
+        },
+        onError: () => {
+            syncing.value = null;
+        },
+        onFinish: () => {
+            syncing.value = null;
+        }
+    });
+};
+
+const syncInvoices = () => {
+    syncing.value = 'invoices';
+    
+    const syncForm = useForm({});
+    syncForm.post('/xero/sync/invoices', {
+        onSuccess: () => {
+            syncing.value = null;
+        },
+        onError: () => {
+            syncing.value = null;
+        },
+        onFinish: () => {
+            syncing.value = null;
+        }
+    });
+};
+
+const syncTaxRatesFromXero = () => {
+    syncing.value = 'tax-rates-from-xero';
+    
+    const syncForm = useForm({});
+    syncForm.post('/xero/sync/tax-rates-from-xero', {
+        onSuccess: () => {
+            syncing.value = null;
+        },
+        onError: () => {
+            syncing.value = null;
+        },
+        onFinish: () => {
+            syncing.value = null;
+        }
+    });
+};
+
+const syncBankAccountsFromXero = () => {
+    syncing.value = 'bank-accounts-from-xero';
+    
+    const syncForm = useForm({});
+    syncForm.post('/xero/sync/bank-accounts-from-xero', {
+        onSuccess: () => {
+            syncing.value = null;
+        },
+        onError: () => {
+            syncing.value = null;
+        },
+        onFinish: () => {
+            syncing.value = null;
+        }
+    });
+};
+
+const syncChartOfAccountsFromXero = () => {
+    syncing.value = 'chart-of-accounts-from-xero';
+    
+    const syncForm = useForm({});
+    syncForm.post('/xero/sync/chart-of-accounts-from-xero', {
         onSuccess: () => {
             syncing.value = null;
         },

@@ -16,6 +16,8 @@ class QuoteLineItem extends Model
         'description',
         'quantity',
         'unit_price',
+        'discount_amount',
+        'discount_percentage',
         'total',
         'sort_order',
     ];
@@ -23,6 +25,8 @@ class QuoteLineItem extends Model
     protected $casts = [
         'quantity' => 'integer',
         'unit_price' => 'decimal:2',
+        'discount_amount' => 'decimal:2',
+        'discount_percentage' => 'decimal:2',
         'total' => 'decimal:2',
         'sort_order' => 'integer',
     ];
@@ -43,13 +47,23 @@ class QuoteLineItem extends Model
     }
 
     /**
-     * Calculate total based on quantity and unit price
+     * Calculate total based on quantity, unit price, and discounts
      */
     public function calculateTotal(): void
     {
         $quantity = $this->quantity ?? 0;
         $unitPrice = $this->unit_price ?? 0;
-        $this->total = $quantity * $unitPrice;
+        $discountAmount = $this->discount_amount ?? 0;
+        $discountPercentage = $this->discount_percentage ?? 0;
+        
+        $subtotal = $quantity * $unitPrice;
+        
+        // Apply discount: percentage takes precedence over amount
+        if ($discountPercentage > 0) {
+            $discountAmount = $subtotal * ($discountPercentage / 100);
+        }
+        
+        $this->total = max(0, $subtotal - $discountAmount);
     }
 
     /**

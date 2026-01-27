@@ -63,9 +63,13 @@ class XeroSettingsController extends Controller
             'sync_products_to_xero' => 'boolean',
             'sync_products_from_xero' => 'boolean',
             'sync_invoices_to_xero' => 'boolean',
-            'payment_account_cash' => 'nullable|string|max:10',
-            'payment_account_card' => 'nullable|string|max:10',
-            'payment_account_eft' => 'nullable|string|max:10',
+            'sync_suppliers_to_xero' => 'boolean',
+            'sync_suppliers_from_xero' => 'boolean',
+            'sync_quotes_to_xero' => 'boolean',
+            'sync_quotes_from_xero' => 'boolean',
+            'sync_tax_rates_from_xero' => 'boolean',
+            'sync_bank_accounts_from_xero' => 'boolean',
+            'sync_chart_of_accounts_from_xero' => 'boolean',
         ]);
 
         $settings = XeroSettings::getCurrent();
@@ -82,11 +86,15 @@ class XeroSettingsController extends Controller
             'sync_products_to_xero' => $request->boolean('sync_products_to_xero'),
             'sync_products_from_xero' => $request->boolean('sync_products_from_xero'),
             'sync_invoices_to_xero' => $request->boolean('sync_invoices_to_xero'),
+            'sync_suppliers_to_xero' => $request->boolean('sync_suppliers_to_xero'),
+            'sync_suppliers_from_xero' => $request->boolean('sync_suppliers_from_xero'),
+            'sync_quotes_to_xero' => $request->boolean('sync_quotes_to_xero'),
+            'sync_quotes_from_xero' => $request->boolean('sync_quotes_from_xero'),
+            'sync_tax_rates_from_xero' => $request->boolean('sync_tax_rates_from_xero'),
+            'sync_bank_accounts_from_xero' => $request->boolean('sync_bank_accounts_from_xero'),
+            'sync_chart_of_accounts_from_xero' => $request->boolean('sync_chart_of_accounts_from_xero'),
             // Automatically enable payment sync when invoice sync is enabled
             'sync_invoices_from_xero' => $request->boolean('sync_invoices') && $request->boolean('sync_invoices_to_xero'),
-            'payment_account_cash' => $request->payment_account_cash,
-            'payment_account_card' => $request->payment_account_card,
-            'payment_account_eft' => $request->payment_account_eft,
         ]);
 
         return redirect()->back()->with('success', 'Xero settings updated successfully.');

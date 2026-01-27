@@ -17,6 +17,7 @@ class Quote extends Model
         'customer_id',
         'invoice_id',
         'quote_number',
+        'xero_quote_id',
         'title',
         'description',
         'status',
@@ -93,28 +94,40 @@ class Quote extends Model
      */
     public function calculateTotals(): void
     {
+        // Calculate subtotal before discounts (sum of quantity * unit_price)
+        $subtotalBeforeDiscount = $this->lineItems()->get()->sum(function ($item) {
+            return ($item->quantity ?? 0) * ($item->unit_price ?? 0);
+        });
+        
+        // Calculate total discount from line items
+        $totalDiscount = $this->lineItems()->get()->sum(function ($item) {
+            $quantity = $item->quantity ?? 0;
+            $unitPrice = $item->unit_price ?? 0;
+            $discountAmount = $item->discount_amount ?? 0;
+            $discountPercentage = $item->discount_percentage ?? 0;
+            
+            $itemSubtotal = $quantity * $unitPrice;
+            
+            // Apply discount: percentage takes precedence over amount
+            if ($discountPercentage > 0) {
+                return $itemSubtotal * ($discountPercentage / 100);
+            }
+            
+            return $discountAmount;
+        });
+        
+        // Subtotal after discounts (sum of line item totals)
         $subtotal = $this->lineItems()->sum('total') ?? 0;
         
-        // Calculate discount
-        $discountAmount = $this->discount_amount ?? 0;
-        $discountPercentage = $this->discount_percentage ?? 0;
-        
-        // Apply percentage discount if specified
-        if ($discountPercentage > 0) {
-            $discountAmount = $subtotal * ($discountPercentage / 100);
-        }
-        
-        // Calculate subtotal after discount
-        $subtotalAfterDiscount = $subtotal - $discountAmount;
-        
-        // Calculate tax on discounted amount
+        // Calculate tax on discounted amount and round UP to 2 decimal places
         $taxRate = $this->tax_rate ?? 0;
-        $taxAmount = $subtotalAfterDiscount * ($taxRate / 100);
-        $total = $subtotalAfterDiscount + $taxAmount;
+        $taxAmount = ceil(($subtotal * ($taxRate / 100)) * 100) / 100;
+        $total = $subtotal + $taxAmount;
 
         $this->update([
             'subtotal' => $subtotal,
-            'discount_amount' => $discountAmount,
+            'discount_amount' => $totalDiscount,
+            'discount_percentage' => 0, // Clear percentage since we're using amount from line items
             'tax_amount' => $taxAmount,
             'total' => $total,
         ]);

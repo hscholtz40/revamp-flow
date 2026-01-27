@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Category;
 use App\Models\Company;
 use App\Models\Product;
+use App\Models\PurchaseOrderItem;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -43,10 +44,50 @@ class ProductController extends Controller
             $query->where('is_active', true);
         }
 
-        $products = $query->orderBy('name')->paginate(15);
+        $products = $query->orderBy('name')->paginate(15)->withQueryString();
 
         // Get active categories for filter dropdown
         $categories = Category::active()->ordered()->pluck('name');
+
+        // Calculate totals for all products (not just paginated)
+        $totalsQuery = Product::where('company_id', $currentCompany->id);
+        
+        // Apply same filters for totals
+        if ($request->filled('type')) {
+            $totalsQuery->where('type', $request->type);
+        }
+        if ($request->filled('category')) {
+            $totalsQuery->where('category', $request->category);
+        }
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $totalsQuery->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('description', 'like', "%{$search}%")
+                  ->orWhere('sku', 'like', "%{$search}%")
+                  ->orWhere('barcode', 'like', "%{$search}%");
+            });
+        }
+        if ($request->filled('active_only')) {
+            $totalsQuery->where('is_active', true);
+        }
+
+        $totals = [
+            'total_products' => $totalsQuery->count(),
+            'total_products_type' => $totalsQuery->where('type', 'product')->count(),
+            'total_services_type' => $totalsQuery->where('type', 'service')->count(),
+            'total_active' => $totalsQuery->where('is_active', true)->count(),
+            'total_inactive' => $totalsQuery->where('is_active', false)->count(),
+            'total_stock_value' => $totalsQuery->where('type', 'product')
+                ->where('track_stock', true)
+                ->get()
+                ->sum(function ($product) {
+                    return ($product->stock_quantity ?? 0) * ($product->cost_price ?? $product->cost ?? 0);
+                }),
+            'total_selling_value' => $totalsQuery->get()->sum(function ($product) {
+                return ($product->stock_quantity ?? 0) * ($product->selling_price ?? $product->price ?? 0);
+            }),
+        ];
 
         return Inertia::render('products/Index', [
             'products' => $products,
@@ -58,6 +99,7 @@ class ProductController extends Controller
             ],
             'categories' => $categories,
             'currentCompany' => $currentCompany,
+            'totals' => $totals,
         ]);
     }
 
@@ -190,10 +232,28 @@ class ProductController extends Controller
      */
     public function destroy(Product $product): RedirectResponse
     {
-        $product->delete();
+        // Check if product is referenced in purchase orders (which have restrict constraint)
+        $purchaseOrderItemsCount = PurchaseOrderItem::where('product_id', $product->id)->count();
+        
+        if ($purchaseOrderItemsCount > 0) {
+            return redirect()->route('products.index')
+                ->with('error', "Cannot delete product '{$product->name}' because it is referenced in {$purchaseOrderItemsCount} purchase order item(s). Please remove it from all purchase orders first.");
+        }
 
-        return redirect()->route('products.index')
-            ->with('success', 'Product deleted successfully');
+        try {
+            $product->delete();
+
+            return redirect()->route('products.index')
+                ->with('success', 'Product deleted successfully');
+        } catch (\Illuminate\Database\QueryException $e) {
+            // Catch any other foreign key constraint violations
+            if ($e->getCode() === '23000') {
+                return redirect()->route('products.index')
+                    ->with('error', "Cannot delete product '{$product->name}' because it is still being used in the system. Please remove all references to this product first.");
+            }
+            
+            throw $e;
+        }
     }
 
     /**

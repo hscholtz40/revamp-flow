@@ -8,7 +8,7 @@ import groups from '@/routes/groups';
 import companySettings from '@/routes/company-settings';
 import smsSettings from '@/routes/sms-settings';
 import whatsappSettings from '@/routes/whatsapp-settings';
-import { Users, Shield, Building2, UserCheck, Package, Tag, MessageSquare, Zap, FileText, ClipboardList, Database } from 'lucide-vue-next';
+import { Users, Shield, Building2, UserCheck, Package, Tag, MessageSquare, Zap, FileText, ClipboardList, Database, Percent, BookOpen, CreditCard } from 'lucide-vue-next';
 import auditLogs from '@/routes/audit-logs';
 import backups from '@/routes/backups/index';
 
@@ -257,6 +257,87 @@ const props = defineProps<{
                             class="rounded bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700"
                         >
                             Manage Backups
+                        </Link>
+                    </div>
+                </div>
+
+                <!-- Tax Rates Card -->
+                <div class="rounded-lg border bg-white p-6 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold">Tax Rates</h2>
+                            <p class="text-sm text-gray-600">Manage tax rates for invoices, quotes, and jobcards</p>
+                        </div>
+                        <div class="rounded-full bg-red-100 p-3">
+                            <Percent class="h-6 w-6 text-red-600" />
+                        </div>
+                    </div>
+                    <div class="mt-4 flex gap-2">
+                        <Link
+                            :href="administration.taxRates.index().url"
+                            class="rounded bg-red-600 px-3 py-2 text-sm text-white hover:bg-red-700"
+                        >
+                            View Tax Rates
+                        </Link>
+                        <Link
+                            :href="administration.taxRates.create().url"
+                            class="rounded border px-3 py-2 text-sm hover:bg-gray-50"
+                        >
+                            Add Tax Rate
+                        </Link>
+                    </div>
+                </div>
+
+                <!-- Chart of Accounts Card -->
+                <div class="rounded-lg border bg-white p-6 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold">Chart of Accounts</h2>
+                            <p class="text-sm text-gray-600">Manage your company's chart of accounts</p>
+                        </div>
+                        <div class="rounded-full bg-teal-100 p-3">
+                            <BookOpen class="h-6 w-6 text-teal-600" />
+                        </div>
+                    </div>
+                    <div class="mt-4 flex gap-2">
+                        <Link
+                            :href="administration.chartOfAccounts.index().url"
+                            class="rounded bg-teal-600 px-3 py-2 text-sm text-white hover:bg-teal-700"
+                        >
+                            View Accounts
+                        </Link>
+                        <Link
+                            :href="administration.chartOfAccounts.create().url"
+                            class="rounded border px-3 py-2 text-sm hover:bg-gray-50"
+                        >
+                            Add Account
+                        </Link>
+                    </div>
+                </div>
+
+                <!-- Bank Accounts Card -->
+                <div class="rounded-lg border bg-white p-6 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold">Bank Accounts</h2>
+                            <p class="text-sm text-gray-600">Manage bank accounts for your company</p>
+                        </div>
+                        <div class="rounded-full bg-cyan-100 p-3">
+                            <CreditCard class="h-6 w-6 text-cyan-600" />
+                        </div>
+                    </div>
+                    <div class="mt-4 flex gap-2">
+                        <Link
+                            :href="administration.bankAccounts.index().url"
+                            class="rounded bg-cyan-600 px-3 py-2 text-sm text-white hover:bg-cyan-700"
+                        >
+                            View Bank Accounts
+                        </Link>
+                        <Link
+                            :href="administration.bankAccounts.create().url"
+                            class="rounded border px-3 py-2 text-sm hover:bg-gray-50"
+                        >
+                            Add Bank Account
                         </Link>
                     </div>
                 </div>

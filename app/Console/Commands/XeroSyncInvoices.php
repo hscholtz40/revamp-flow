@@ -50,7 +50,7 @@ class XeroSyncInvoices extends Command
             
             try {
                 $xeroService = new XeroService($settings->company);
-                $results = $xeroService->syncInvoicesToXero();
+                $results = $xeroService->syncInvoicesToXero($settings->company);
                 
                 if (isset($results['skipped']) && $results['skipped']) {
                     $this->info("  {$results['message']}");

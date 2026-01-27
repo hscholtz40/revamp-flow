@@ -16,6 +16,8 @@ class InvoiceLineItem extends Model
         'description',
         'quantity',
         'unit_price',
+        'discount_amount',
+        'discount_percentage',
         'total',
         'sort_order',
         'serial_number_ids',
@@ -24,6 +26,8 @@ class InvoiceLineItem extends Model
     protected $casts = [
         'quantity' => 'integer',
         'unit_price' => 'decimal:2',
+        'discount_amount' => 'decimal:2',
+        'discount_percentage' => 'decimal:2',
         'total' => 'decimal:2',
         'sort_order' => 'integer',
         'serial_number_ids' => 'array',
@@ -50,7 +54,19 @@ class InvoiceLineItem extends Model
      */
     public function calculateTotal(): void
     {
-        $this->total = $this->quantity * $this->unit_price;
+        $quantity = $this->quantity ?? 0;
+        $unitPrice = $this->unit_price ?? 0;
+        $discountAmount = $this->discount_amount ?? 0;
+        $discountPercentage = $this->discount_percentage ?? 0;
+        
+        $subtotal = $quantity * $unitPrice;
+        
+        // Apply discount: percentage takes precedence over amount
+        if ($discountPercentage > 0) {
+            $discountAmount = $subtotal * ($discountPercentage / 100);
+        }
+        
+        $this->total = max(0, $subtotal - $discountAmount);
         $this->save();
     }
 

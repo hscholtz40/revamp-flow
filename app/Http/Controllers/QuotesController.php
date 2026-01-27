@@ -128,17 +128,18 @@ class QuotesController extends Controller
 
         // Create line items
         foreach ($validated['line_items'] as $index => $lineItemData) {
-            $total = $lineItemData['quantity'] * $lineItemData['unit_price'];
-            
-            $lineItem = QuoteLineItem::create([
+            $lineItem = new QuoteLineItem([
                 'quote_id' => $quote->id,
                 'product_id' => $lineItemData['product_id'] ?? null,
                 'description' => $lineItemData['description'],
                 'quantity' => $lineItemData['quantity'],
                 'unit_price' => $lineItemData['unit_price'],
-                'total' => $total,
+                'discount_amount' => $lineItemData['discount_amount'] ?? 0,
+                'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
                 'sort_order' => $index,
             ]);
+            $lineItem->calculateTotal();
+            $lineItem->save();
         }
 
         // Calculate totals
@@ -270,17 +271,18 @@ class QuotesController extends Controller
 
         // Create new line items
         foreach ($validated['line_items'] as $index => $lineItemData) {
-            $total = $lineItemData['quantity'] * $lineItemData['unit_price'];
-            
-            $lineItem = QuoteLineItem::create([
+            $lineItem = new QuoteLineItem([
                 'quote_id' => $quote->id,
                 'product_id' => $lineItemData['product_id'] ?? null,
                 'description' => $lineItemData['description'],
                 'quantity' => $lineItemData['quantity'],
                 'unit_price' => $lineItemData['unit_price'],
-                'total' => $total,
+                'discount_amount' => $lineItemData['discount_amount'] ?? 0,
+                'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
                 'sort_order' => $index,
             ]);
+            $lineItem->calculateTotal();
+            $lineItem->save();
         }
 
         // Calculate totals

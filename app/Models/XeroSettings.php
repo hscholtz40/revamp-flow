@@ -26,9 +26,13 @@ class XeroSettings extends Model
         'sync_products_from_xero',
         'sync_invoices_to_xero',
         'sync_invoices_from_xero',
-        'payment_account_cash',
-        'payment_account_card',
-        'payment_account_eft',
+        'sync_suppliers_to_xero',
+        'sync_suppliers_from_xero',
+        'sync_quotes_to_xero',
+        'sync_quotes_from_xero',
+        'sync_tax_rates_from_xero',
+        'sync_bank_accounts_from_xero',
+        'sync_chart_of_accounts_from_xero',
     ];
 
     protected $casts = [
@@ -43,6 +47,13 @@ class XeroSettings extends Model
         'sync_products_from_xero' => 'boolean',
         'sync_invoices_to_xero' => 'boolean',
         'sync_invoices_from_xero' => 'boolean',
+        'sync_suppliers_to_xero' => 'boolean',
+        'sync_suppliers_from_xero' => 'boolean',
+        'sync_quotes_to_xero' => 'boolean',
+        'sync_quotes_from_xero' => 'boolean',
+        'sync_tax_rates_from_xero' => 'boolean',
+        'sync_bank_accounts_from_xero' => 'boolean',
+        'sync_chart_of_accounts_from_xero' => 'boolean',
     ];
 
     /**

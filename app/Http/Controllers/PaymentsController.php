@@ -44,6 +44,11 @@ class PaymentsController extends Controller
         $validated['company_id'] = $currentCompany->id;
 
         $payment = Payment::create($validated);
+        
+        // Refresh invoice to reload payments relationship for accurate calculations
+        $invoice->refresh();
+        $invoice->load('payments');
+        
         $payment->load('invoice.customer', 'invoice.company');
 
         // Update invoice status if fully paid
@@ -102,6 +107,10 @@ class PaymentsController extends Controller
 
         $invoice = $payment->invoice;
         $payment->delete();
+
+        // Refresh invoice to reload payments relationship for accurate calculations
+        $invoice->refresh();
+        $invoice->load('payments');
 
         // Update invoice status if no longer fully paid
         if (!$invoice->isFullyPaid() && $invoice->status === 'paid') {

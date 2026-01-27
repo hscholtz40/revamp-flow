@@ -126,6 +126,8 @@ class JobcardController extends Controller
                 'description' => $lineItemData['description'],
                 'quantity' => $lineItemData['quantity'],
                 'unit_price' => $lineItemData['unit_price'],
+                'discount_amount' => $lineItemData['discount_amount'] ?? 0,
+                'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
                 'sort_order' => $index,
             ]);
             $lineItem->calculateTotal();
@@ -283,6 +285,8 @@ class JobcardController extends Controller
                     'description' => $lineItemData['description'],
                     'quantity' => $lineItemData['quantity'],
                     'unit_price' => $lineItemData['unit_price'],
+                    'discount_amount' => $lineItemData['discount_amount'] ?? 0,
+                    'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
                     'sort_order' => $index,
                 ]);
                 $lineItem->calculateTotal();
@@ -295,6 +299,8 @@ class JobcardController extends Controller
                     'description' => $lineItemData['description'],
                     'quantity' => $lineItemData['quantity'],
                     'unit_price' => $lineItemData['unit_price'],
+                    'discount_amount' => $lineItemData['discount_amount'] ?? 0,
+                    'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
                     'sort_order' => $index,
                 ]);
                 $lineItem->calculateTotal();

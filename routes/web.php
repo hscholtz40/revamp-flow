@@ -35,6 +35,9 @@ require __DIR__.'/purchase-orders.php';
 require __DIR__.'/time-entries.php';
 require __DIR__.'/audit-logs.php';
 require __DIR__.'/backups.php';
+require __DIR__.'/tax-rates.php';
+require __DIR__.'/chart-of-accounts.php';
+require __DIR__.'/bank-accounts.php';
 
 // Installer routes (available only before first install)
 Route::middleware([EnsureNotInstalled::class])->group(function () {

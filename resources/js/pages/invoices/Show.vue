@@ -146,6 +146,7 @@
                                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-2/5">Description</th>
                                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
                                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit Price</th>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Discount</th>
                                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
                                         </tr>
                                     </thead>
@@ -172,6 +173,15 @@
                                             </td>
                                             <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                                                 {{ formatCurrency(item.unit_price) }}
+                                            </td>
+                                            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                <span v-if="item.discount_percentage && item.discount_percentage > 0" class="text-red-600">
+                                                    {{ item.discount_percentage }}%
+                                                </span>
+                                                <span v-else-if="item.discount_amount && item.discount_amount > 0" class="text-red-600">
+                                                    {{ formatCurrency(item.discount_amount) }}
+                                                </span>
+                                                <span v-else class="text-gray-400">—</span>
                                             </td>
                                             <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                                                 {{ formatCurrency(item.total) }}
@@ -289,7 +299,7 @@
                                 <div class="flex justify-between border-t pt-2">
                                     <span class="text-sm font-semibold text-gray-900">Remaining Balance:</span>
                                     <span class="text-sm font-semibold" :class="(props.invoice.remaining_balance || props.invoice.total) > 0 ? 'text-red-600' : 'text-green-600'">
-                                        {{ formatCurrency(props.invoice.remaining_balance || props.invoice.total) }}
+                                        {{ formatCurrency(props.invoice.remaining_balance ?? props.invoice.total) }}
                                     </span>
                                 </div>
                             </div>
@@ -606,6 +616,8 @@ interface LineItem {
     description: string;
     quantity: number;
     unit_price: number;
+    discount_amount?: number;
+    discount_percentage?: number;
     total: number;
     serial_number_ids?: number[];
     serialNumbers?: SerialNumber[];

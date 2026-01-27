@@ -138,82 +138,121 @@
                         <div
                             v-for="(item, index) in form.line_items"
                             :key="index"
-                            class="grid grid-cols-1 md:grid-cols-6 gap-4 p-4 border rounded-lg"
+                            class="border rounded-lg p-4"
                         >
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Product</label>
-                                <select
-                                    :value="item.product_id"
-                                    @change="selectProduct(index, ($event.target as HTMLSelectElement).value ? parseInt(($event.target as HTMLSelectElement).value) : null)"
-                                    class="w-full rounded border px-3 py-2"
-                                >
-                                    <option value="">Custom Item</option>
-                                    <option v-for="product in props.products" :key="product.id" :value="product.id">
-                                        {{ product.name }} ({{ product.type }})
-                                    </option>
-                                </select>
-                            </div>
-
-                            <div class="md:col-span-2">
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Description *</label>
-                                <input
-                                    v-model="item.description"
-                                    type="text"
-                                    class="w-full rounded border px-3 py-2"
-                                    :class="{ 'border-red-500': form.errors[`line_items.${index}.description`] }"
-                                    required
-                                />
-                                <div v-if="form.errors[`line_items.${index}.description`]" class="text-red-500 text-sm mt-1">
-                                    {{ form.errors[`line_items.${index}.description`] }}
+                            <div class="grid grid-cols-1 md:grid-cols-6 gap-4 mb-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Product</label>
+                                    <select
+                                        :value="item.product_id"
+                                        @change="selectProduct(index, ($event.target as HTMLSelectElement).value ? parseInt(($event.target as HTMLSelectElement).value) : null)"
+                                        class="w-full rounded border px-3 py-2"
+                                    >
+                                        <option value="">Custom Item</option>
+                                        <option v-for="product in props.products" :key="product.id" :value="product.id">
+                                            {{ product.name }} ({{ product.type }})
+                                        </option>
+                                    </select>
                                 </div>
-                            </div>
 
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Quantity *</label>
-                                <input
-                                    v-model.number="item.quantity"
-                                    type="number"
-                                    min="1"
-                                    class="w-full rounded border px-3 py-2"
-                                    :class="{ 'border-red-500': form.errors[`line_items.${index}.quantity`] }"
-                                    required
-                                />
-                                <div v-if="form.errors[`line_items.${index}.quantity`]" class="text-red-500 text-sm mt-1">
-                                    {{ form.errors[`line_items.${index}.quantity`] }}
-                                </div>
-                            </div>
-
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Unit Price *</label>
-                                <input
-                                    v-model.number="item.unit_price"
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    class="w-full rounded border px-3 py-2"
-                                    :class="{ 'border-red-500': form.errors[`line_items.${index}.unit_price`] }"
-                                    required
-                                />
-                                <div v-if="form.errors[`line_items.${index}.unit_price`]" class="text-red-500 text-sm mt-1">
-                                    {{ form.errors[`line_items.${index}.unit_price`] }}
-                                </div>
-                            </div>
-
-                            <div class="flex items-end">
-                                <div class="w-full">
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Total</label>
-                                    <div class="w-full rounded border px-3 py-2 bg-gray-50 text-gray-700">
-                                        R{{ calculateLineTotal(item).toFixed(2) }}
+                                <div class="md:col-span-2">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Description *</label>
+                                    <input
+                                        v-model="item.description"
+                                        type="text"
+                                        class="w-full rounded border px-3 py-2"
+                                        :class="{ 'border-red-500': form.errors[`line_items.${index}.description`] }"
+                                        required
+                                    />
+                                    <div v-if="form.errors[`line_items.${index}.description`]" class="text-red-500 text-sm mt-1">
+                                        {{ form.errors[`line_items.${index}.description`] }}
                                     </div>
                                 </div>
-                                <button
-                                    type="button"
-                                    @click="removeLineItem(index)"
-                                    class="ml-2 text-red-600 hover:text-red-800"
-                                    :disabled="form.line_items.length === 1"
-                                >
-                                    Remove
-                                </button>
+
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Quantity *</label>
+                                    <input
+                                        v-model.number="item.quantity"
+                                        type="number"
+                                        min="1"
+                                        class="w-full rounded border px-3 py-2"
+                                        :class="{ 'border-red-500': form.errors[`line_items.${index}.quantity`] }"
+                                        required
+                                    />
+                                    <div v-if="form.errors[`line_items.${index}.quantity`]" class="text-red-500 text-sm mt-1">
+                                        {{ form.errors[`line_items.${index}.quantity`] }}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Unit Price *</label>
+                                    <input
+                                        v-model.number="item.unit_price"
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        class="w-full rounded border px-3 py-2"
+                                        :class="{ 'border-red-500': form.errors[`line_items.${index}.unit_price`] }"
+                                        required
+                                    />
+                                    <div v-if="form.errors[`line_items.${index}.unit_price`]" class="text-red-500 text-sm mt-1">
+                                        {{ form.errors[`line_items.${index}.unit_price`] }}
+                                    </div>
+                                </div>
+
+                                <div class="flex items-end">
+                                    <div class="w-full">
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Total</label>
+                                        <div class="w-full rounded border px-3 py-2 bg-gray-50 text-gray-700">
+                                            R{{ calculateLineTotal(item).toFixed(2) }}
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        @click="removeLineItem(index)"
+                                        class="ml-2 text-red-600 hover:text-red-800"
+                                        :disabled="form.line_items.length === 1"
+                                    >
+                                        Remove
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Discount Fields for Line Item -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Discount Amount (R)</label>
+                                    <input
+                                        v-model.number="item.discount_amount"
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        class="w-full rounded border px-3 py-2"
+                                        :class="{ 'border-red-500': form.errors[`line_items.${index}.discount_amount`] }"
+                                        placeholder="0.00"
+                                        @input="watchLineItemDiscount(index)"
+                                    />
+                                    <div v-if="form.errors[`line_items.${index}.discount_amount`]" class="text-red-500 text-sm mt-1">
+                                        {{ form.errors[`line_items.${index}.discount_amount`] }}
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Discount Percentage (%)</label>
+                                    <input
+                                        v-model.number="item.discount_percentage"
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        max="100"
+                                        class="w-full rounded border px-3 py-2"
+                                        :class="{ 'border-red-500': form.errors[`line_items.${index}.discount_percentage`] }"
+                                        placeholder="0.00"
+                                        @input="watchLineItemDiscount(index)"
+                                    />
+                                    <div v-if="form.errors[`line_items.${index}.discount_percentage`]" class="text-red-500 text-sm mt-1">
+                                        {{ form.errors[`line_items.${index}.discount_percentage`] }}
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div><br />
@@ -257,35 +296,28 @@
                 <div class="bg-white rounded-lg border p-6">
                     <h2 class="text-lg font-semibold text-gray-900 mb-4">Additional Information</h2>
                     <div class="space-y-4">
-                        <!-- Discount Fields -->
+                        <!-- Discount Fields (Read-only, calculated from line items) -->
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Discount Amount (R)</label>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Total Discount (R)</label>
                                 <input
-                                    type="number"
-                                    step="0.01"
-                                    v-model="form.discount_amount"
-                                    class="w-full rounded border px-3 py-2"
-                                    :class="{ 'border-red-500': form.errors.discount_amount }"
-                                    placeholder="0.00"
+                                    type="text"
+                                    :value="discountAmount.toFixed(2)"
+                                    class="w-full rounded border px-3 py-2 bg-gray-50"
+                                    readonly
+                                    disabled
                                 />
-                                <div v-if="form.errors.discount_amount" class="text-red-500 text-sm mt-1">
-                                    {{ form.errors.discount_amount }}
-                                </div>
+                                <p class="text-xs text-gray-500 mt-1">Calculated from line item discounts</p>
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Discount Percentage (%)</label>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Subtotal Before Discount (R)</label>
                                 <input
-                                    type="number"
-                                    step="0.01"
-                                    v-model="form.discount_percentage"
-                                    class="w-full rounded border px-3 py-2"
-                                    :class="{ 'border-red-500': form.errors.discount_percentage }"
-                                    placeholder="0.00"
+                                    type="text"
+                                    :value="subtotalBeforeDiscount.toFixed(2)"
+                                    class="w-full rounded border px-3 py-2 bg-gray-50"
+                                    readonly
+                                    disabled
                                 />
-                                <div v-if="form.errors.discount_percentage" class="text-red-500 text-sm mt-1">
-                                    {{ form.errors.discount_percentage }}
-                                </div>
                             </div>
                         </div>
 
@@ -361,6 +393,8 @@ interface LineItem {
     description: string;
     quantity: number;
     unit_price: number;
+    discount_amount?: number;
+    discount_percentage?: number;
 }
 
 interface Props {
@@ -393,6 +427,8 @@ const form = useForm({
             description: '',
             quantity: 1,
             unit_price: 0,
+            discount_amount: 0,
+            discount_percentage: 0,
         }
     ] as LineItem[],
 });
@@ -407,25 +443,14 @@ watch(() => form.customer_id, (newCustomerId) => {
     }
 });
 
-// Watch discount fields to clear one when the other is filled
-watch(() => form.discount_amount, (newAmount) => {
-    if (newAmount > 0) {
-        form.discount_percentage = 0;
-    }
-});
-
-watch(() => form.discount_percentage, (newPercentage) => {
-    if (newPercentage > 0) {
-        form.discount_amount = 0;
-    }
-});
-
 const addLineItem = () => {
     form.line_items.push({
         product_id: null,
         description: '',
         quantity: 1,
         unit_price: 0,
+        discount_amount: 0,
+        discount_percentage: 0,
     });
 };
 
@@ -456,41 +481,92 @@ const selectProduct = (index: number, productId: number | null) => {
 const calculateLineTotal = (item: LineItem) => {
     const quantity = Number(item.quantity) || 0;
     const unitPrice = Number(item.unit_price) || 0;
-    return quantity * unitPrice;
+    const discountAmount = Number(item.discount_amount) || 0;
+    const discountPercentage = Number(item.discount_percentage) || 0;
+    
+    const subtotal = quantity * unitPrice;
+    
+    // Apply discount: percentage takes precedence over amount
+    let finalDiscount = discountAmount;
+    if (discountPercentage > 0) {
+        finalDiscount = subtotal * (discountPercentage / 100);
+    }
+    
+    return Math.max(0, subtotal - finalDiscount);
 };
 
-const subtotal = computed(() => {
+const watchLineItemDiscount = (index: number) => {
+    const item = form.line_items[index];
+    if (!item) return;
+    
+    // Clear one discount field when the other is filled
+    if (item.discount_amount && item.discount_amount > 0) {
+        item.discount_percentage = 0;
+    }
+    if (item.discount_percentage && item.discount_percentage > 0) {
+        item.discount_amount = 0;
+    }
+};
+
+// Calculate subtotal before discounts
+const subtotalBeforeDiscount = computed(() => {
     if (!form.line_items || form.line_items.length === 0) return 0;
     const result = form.line_items.reduce((sum, item) => {
         if (!item) return sum;
-        return sum + calculateLineTotal(item);
+        const quantity = Number(item.quantity) || 0;
+        const unitPrice = Number(item.unit_price) || 0;
+        return sum + (quantity * unitPrice);
     }, 0);
     return Number(result) || 0;
 });
 
+// Calculate total discount from line items
+const lineItemDiscountsTotal = computed(() => {
+    if (!form.line_items || form.line_items.length === 0) return 0;
+    return form.line_items.reduce((sum, item) => {
+        if (!item) return sum;
+        const quantity = Number(item.quantity) || 0;
+        const unitPrice = Number(item.unit_price) || 0;
+        const discountAmount = Number(item.discount_amount) || 0;
+        const discountPercentage = Number(item.discount_percentage) || 0;
+        
+        const itemSubtotal = quantity * unitPrice;
+        let itemDiscount = discountAmount;
+        if (discountPercentage > 0) {
+            itemDiscount = itemSubtotal * (discountPercentage / 100);
+        }
+        
+        return sum + itemDiscount;
+    }, 0);
+});
+
+const subtotal = computed(() => {
+    return subtotalBeforeDiscount.value - lineItemDiscountsTotal.value;
+});
+
 const discountAmount = computed(() => {
-    const amount = Number(form.discount_amount) || 0;
-    const percentage = Number(form.discount_percentage) || 0;
-    
-    // If percentage is specified, calculate amount from percentage
-    if (percentage > 0) {
-        return subtotal.value * (percentage / 100);
-    }
-    
-    return amount;
+    // Total discount is the sum of all line item discounts
+    return lineItemDiscountsTotal.value;
 });
 
 const taxAmount = computed(() => {
     const rate = Number(form.tax_rate) || 0;
-    const subtotalAfterDiscount = subtotal.value - discountAmount.value;
-    const result = subtotalAfterDiscount * (rate / 100);
-    return Number(result) || 0;
+    // Subtotal already has discounts applied, so calculate tax directly on it
+    // Round UP to 2 decimal places
+    const result = subtotal.value * (rate / 100);
+    return Number(Math.ceil(result * 100) / 100) || 0;
 });
 
 const total = computed(() => {
-    const subtotalAfterDiscount = subtotal.value - discountAmount.value;
-    const result = subtotalAfterDiscount + taxAmount.value;
+    // Subtotal already has discounts applied, so just add tax
+    const result = subtotal.value + taxAmount.value;
     return Number(result) || 0;
+});
+
+// Update form discount_amount when line item discounts change
+watch(() => lineItemDiscountsTotal.value, (newTotal) => {
+    form.discount_amount = newTotal;
+    form.discount_percentage = 0; // Clear percentage since we're using amount from line items
 });
 
 const submit = () => {

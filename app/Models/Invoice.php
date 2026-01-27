@@ -45,6 +45,11 @@ class Invoice extends Model
         'total' => 'decimal:2',
     ];
 
+    protected $appends = [
+        'total_paid',
+        'remaining_balance',
+    ];
+
     /**
      * Get the customer that owns the invoice.
      */
@@ -122,27 +127,39 @@ class Invoice extends Model
      */
     public function calculateTotals(): void
     {
+        // Calculate subtotal before discounts (sum of quantity * unit_price)
+        $subtotalBeforeDiscount = $this->lineItems->sum(function ($item) {
+            return ($item->quantity ?? 0) * ($item->unit_price ?? 0);
+        });
+        
+        // Calculate total discount from line items
+        $totalDiscount = $this->lineItems->sum(function ($item) {
+            $quantity = $item->quantity ?? 0;
+            $unitPrice = $item->unit_price ?? 0;
+            $discountAmount = $item->discount_amount ?? 0;
+            $discountPercentage = $item->discount_percentage ?? 0;
+            
+            $itemSubtotal = $quantity * $unitPrice;
+            
+            // Apply discount: percentage takes precedence over amount
+            if ($discountPercentage > 0) {
+                return $itemSubtotal * ($discountPercentage / 100);
+            }
+            
+            return $discountAmount;
+        });
+        
+        // Subtotal after discounts (sum of line item totals)
         $subtotal = $this->lineItems->sum('total');
         
-        // Calculate discount
-        $discountAmount = $this->discount_amount ?? 0;
-        $discountPercentage = $this->discount_percentage ?? 0;
-        
-        // Apply percentage discount if specified
-        if ($discountPercentage > 0) {
-            $discountAmount = $subtotal * ($discountPercentage / 100);
-        }
-        
-        // Calculate subtotal after discount
-        $subtotalAfterDiscount = $subtotal - $discountAmount;
-        
-        // Calculate tax on discounted amount
-        $taxAmount = $subtotalAfterDiscount * ($this->tax_rate / 100);
-        $total = $subtotalAfterDiscount + $taxAmount;
+        // Calculate tax on discounted amount and round UP to 2 decimal places
+        $taxAmount = ceil(($subtotal * ($this->tax_rate / 100)) * 100) / 100;
+        $total = $subtotal + $taxAmount;
 
         $this->update([
             'subtotal' => $subtotal,
-            'discount_amount' => $discountAmount,
+            'discount_amount' => $totalDiscount,
+            'discount_percentage' => 0, // Clear percentage since we're using amount from line items
             'tax_amount' => $taxAmount,
             'total' => $total,
         ]);
@@ -210,6 +227,10 @@ class Invoice extends Model
      */
     public function getTotalPaidAttribute(): float
     {
+        // Use loaded relationship if available, otherwise query
+        if ($this->relationLoaded('payments')) {
+            return $this->payments->sum('amount');
+        }
         return $this->payments()->sum('amount');
     }
 
@@ -218,7 +239,16 @@ class Invoice extends Model
      */
     public function getRemainingBalanceAttribute(): float
     {
-        return $this->total - $this->total_paid;
+        // Calculate total paid directly to avoid accessor recursion issues
+        $totalPaid = 0;
+        if ($this->relationLoaded('payments')) {
+            $totalPaid = $this->payments->sum('amount');
+        } else {
+            $totalPaid = $this->payments()->sum('amount');
+        }
+        
+        $total = (float) ($this->total ?? 0);
+        return max(0, $total - $totalPaid);
     }
 
     /**

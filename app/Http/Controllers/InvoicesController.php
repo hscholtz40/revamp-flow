@@ -155,6 +155,8 @@ class InvoicesController extends Controller
             'line_items.*.description' => 'required|string',
             'line_items.*.quantity' => 'required|integer|min:1',
             'line_items.*.unit_price' => 'required|numeric|min:0',
+            'line_items.*.discount_amount' => 'nullable|numeric|min:0',
+            'line_items.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
             'line_items.*.serial_number_ids' => 'nullable|array',
             'line_items.*.serial_number_ids.*' => 'exists:product_serial_numbers,id',
         ]);
@@ -183,14 +185,29 @@ class InvoicesController extends Controller
         // Create line items and deduct stock
         $stockService = new StockService();
         foreach ($validated['line_items'] as $index => $lineItemData) {
-            $total = $lineItemData['quantity'] * $lineItemData['unit_price'];
+            // Calculate total before creating
+            $quantity = $lineItemData['quantity'] ?? 0;
+            $unitPrice = $lineItemData['unit_price'] ?? 0;
+            $discountAmount = $lineItemData['discount_amount'] ?? 0;
+            $discountPercentage = $lineItemData['discount_percentage'] ?? 0;
+            
+            $subtotal = $quantity * $unitPrice;
+            
+            // Apply discount: percentage takes precedence over amount
+            if ($discountPercentage > 0) {
+                $discountAmount = $subtotal * ($discountPercentage / 100);
+            }
+            
+            $total = max(0, $subtotal - $discountAmount);
             
             $lineItem = InvoiceLineItem::create([
                 'invoice_id' => $invoice->id,
                 'product_id' => $lineItemData['product_id'],
                 'description' => $lineItemData['description'],
-                'quantity' => $lineItemData['quantity'],
-                'unit_price' => $lineItemData['unit_price'],
+                'quantity' => $quantity,
+                'unit_price' => $unitPrice,
+                'discount_amount' => $lineItemData['discount_amount'] ?? 0,
+                'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
                 'total' => $total,
                 'sort_order' => $index,
                 'serial_number_ids' => $lineItemData['serial_number_ids'] ?? null,
@@ -282,12 +299,28 @@ class InvoicesController extends Controller
         $invoice->calculateTotals();
         $invoice->refresh();
         
+        // Reload relationships after refresh (refresh clears loaded relationships)
+        $invoice->load(['customer', 'salesperson', 'lineItems.product', 'company', 'source', 'payments']);
+        
         // Load serial numbers for line items that have serial_number_ids
         // Do this after refresh to ensure we have the latest data
         $invoice->load('lineItems');
         
+        // Ensure payments are loaded for accurate total_paid and remaining_balance calculations
+        if (!$invoice->relationLoaded('payments')) {
+            $invoice->load('payments');
+        }
+        
         // Convert invoice to array first
         $invoiceData = $invoice->toArray();
+        
+        // Explicitly verify and set total_paid and remaining_balance to ensure they're correct
+        $totalPaid = $invoice->payments->sum('amount');
+        $total = (float) ($invoice->total ?? 0);
+        $remainingBalance = max(0, $total - $totalPaid);
+        
+        $invoiceData['total_paid'] = $totalPaid;
+        $invoiceData['remaining_balance'] = $remainingBalance;
         
         // Then manually add serial numbers to each line item in the array
         if (isset($invoiceData['line_items']) && is_array($invoiceData['line_items'])) {
@@ -416,6 +449,8 @@ class InvoicesController extends Controller
             'line_items.*.description' => 'required|string',
             'line_items.*.quantity' => 'required|integer|min:1',
             'line_items.*.unit_price' => 'required|numeric|min:0',
+            'line_items.*.discount_amount' => 'nullable|numeric|min:0',
+            'line_items.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
             'line_items.*.serial_number_ids' => 'nullable|array',
             'line_items.*.serial_number_ids.*' => 'exists:product_serial_numbers,id',
         ]);
@@ -511,14 +546,29 @@ class InvoicesController extends Controller
 
         // Create new line items and deduct stock (if invoice is not cancelled)
         foreach ($validated['line_items'] as $index => $lineItemData) {
-            $total = $lineItemData['quantity'] * $lineItemData['unit_price'];
+            // Calculate total before creating
+            $quantity = $lineItemData['quantity'] ?? 0;
+            $unitPrice = $lineItemData['unit_price'] ?? 0;
+            $discountAmount = $lineItemData['discount_amount'] ?? 0;
+            $discountPercentage = $lineItemData['discount_percentage'] ?? 0;
+            
+            $subtotal = $quantity * $unitPrice;
+            
+            // Apply discount: percentage takes precedence over amount
+            if ($discountPercentage > 0) {
+                $discountAmount = $subtotal * ($discountPercentage / 100);
+            }
+            
+            $total = max(0, $subtotal - $discountAmount);
             
             $lineItem = InvoiceLineItem::create([
                 'invoice_id' => $invoice->id,
                 'product_id' => $lineItemData['product_id'],
                 'description' => $lineItemData['description'],
-                'quantity' => $lineItemData['quantity'],
-                'unit_price' => $lineItemData['unit_price'],
+                'quantity' => $quantity,
+                'unit_price' => $unitPrice,
+                'discount_amount' => $lineItemData['discount_amount'] ?? 0,
+                'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
                 'total' => $total,
                 'sort_order' => $index,
                 'serial_number_ids' => $lineItemData['serial_number_ids'] ?? null,

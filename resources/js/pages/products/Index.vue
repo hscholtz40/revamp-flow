@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
-import { Plus, Search, Filter, Package, Wrench, Eye, Edit, Trash2 } from 'lucide-vue-next';
+import { computed, ref, onMounted, watch } from 'vue';
+import { Plus, Search, Filter, Package, Wrench, Eye, Edit, Trash2, Grid3x3, List } from 'lucide-vue-next';
 import products from '@/routes/products';
 
 interface Product {
@@ -31,6 +31,16 @@ interface Company {
     name: string;
 }
 
+interface Totals {
+    total_products: number;
+    total_products_type: number;
+    total_services_type: number;
+    total_active: number;
+    total_inactive: number;
+    total_stock_value: number;
+    total_selling_value: number;
+}
+
 interface Props {
     products: {
         data: Product[];
@@ -45,6 +55,7 @@ interface Props {
     };
     categories: string[];
     currentCompany: Company;
+    totals: Totals;
 }
 
 const props = defineProps<Props>();
@@ -53,6 +64,25 @@ const search = ref(props.filters.search || '');
 const typeFilter = ref(props.filters.type || '');
 const categoryFilter = ref(props.filters.category || '');
 const activeOnly = ref(props.filters.active_only || false);
+
+// Load view mode from localStorage or default to grid
+const STORAGE_KEY = 'products_view_mode';
+const getStoredViewMode = (): 'grid' | 'list' => {
+    if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        return (stored === 'grid' || stored === 'list') ? stored : 'grid';
+    }
+    return 'grid';
+};
+
+const viewMode = ref<'grid' | 'list'>(getStoredViewMode());
+
+// Save view mode to localStorage when it changes
+watch(viewMode, (newMode) => {
+    if (typeof window !== 'undefined') {
+        localStorage.setItem(STORAGE_KEY, newMode);
+    }
+});
 
 const filteredProducts = computed(() => props.products.data);
 
@@ -122,14 +152,71 @@ function getStockStatus(product: Product) {
                     <h1 class="text-2xl font-bold text-gray-900">Products & Services</h1>
                     <p class="text-gray-600">Manage your product catalog and service offerings</p>
                 </div>
-                <Link
-                    v-if="$page.props.auth?.abilities?.products?.create"
-                    :href="products.create().url"
-                    class="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-                >
-                    <Plus class="h-4 w-4" />
-                    Add Product/Service
-                </Link>
+                <div class="flex items-center gap-3">
+                    <!-- View Toggle -->
+                    <div class="flex items-center gap-1 rounded-md border border-gray-300 bg-white p-1">
+                        <button
+                            @click="viewMode = 'grid'"
+                            :class="[
+                                'flex items-center gap-1 rounded px-3 py-1.5 text-sm transition-colors',
+                                viewMode === 'grid'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'text-gray-700 hover:bg-gray-100'
+                            ]"
+                        >
+                            <Grid3x3 class="h-4 w-4" />
+                            Grid
+                        </button>
+                        <button
+                            @click="viewMode = 'list'"
+                            :class="[
+                                'flex items-center gap-1 rounded px-3 py-1.5 text-sm transition-colors',
+                                viewMode === 'list'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'text-gray-700 hover:bg-gray-100'
+                            ]"
+                        >
+                            <List class="h-4 w-4" />
+                            List
+                        </button>
+                    </div>
+                    <Link
+                        v-if="$page.props.auth?.abilities?.products?.create"
+                        :href="products.create().url"
+                        class="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+                    >
+                        <Plus class="h-4 w-4" />
+                        Add Product/Service
+                    </Link>
+                </div>
+            </div>
+
+            <!-- Totals -->
+            <div class="mb-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="rounded-lg border bg-white p-4">
+                    <div class="text-sm text-gray-600">Total Products</div>
+                    <div class="mt-1 text-2xl font-semibold text-gray-900">{{ props.totals.total_products }}</div>
+                    <div class="mt-1 text-xs text-gray-500">
+                        {{ props.totals.total_products_type }} products, {{ props.totals.total_services_type }} services
+                    </div>
+                </div>
+                <div class="rounded-lg border bg-white p-4">
+                    <div class="text-sm text-gray-600">Active Products</div>
+                    <div class="mt-1 text-2xl font-semibold text-green-600">{{ props.totals.total_active }}</div>
+                    <div class="mt-1 text-xs text-gray-500">
+                        {{ props.totals.total_inactive }} inactive
+                    </div>
+                </div>
+                <div class="rounded-lg border bg-white p-4">
+                    <div class="text-sm text-gray-600">Stock Value</div>
+                    <div class="mt-1 text-2xl font-semibold text-gray-900">R{{ Number(props.totals.total_stock_value).toFixed(2) }}</div>
+                    <div class="mt-1 text-xs text-gray-500">At cost price</div>
+                </div>
+                <div class="rounded-lg border bg-white p-4">
+                    <div class="text-sm text-gray-600">Selling Value</div>
+                    <div class="mt-1 text-2xl font-semibold text-gray-900">R{{ Number(props.totals.total_selling_value).toFixed(2) }}</div>
+                    <div class="mt-1 text-xs text-gray-500">At selling price</div>
+                </div>
             </div>
 
             <!-- Filters -->
@@ -213,7 +300,8 @@ function getStockStatus(product: Product) {
                 </div>
             </div>
 
-            <div v-else class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <!-- Grid View -->
+            <div v-else-if="viewMode === 'grid'" class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 <div
                     v-for="product in filteredProducts"
                     :key="product.id"
@@ -314,28 +402,146 @@ function getStockStatus(product: Product) {
                 </div>
             </div>
 
+            <!-- List View -->
+            <div v-else class="bg-white rounded-lg border overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full table-auto">
+                        <thead class="bg-gray-50 border-b">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Name
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Type
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    SKU
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Category
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Price
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Stock
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Status
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Actions
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <tr v-for="product in filteredProducts" :key="product.id" class="hover:bg-gray-50">
+                                <td class="px-6 py-4">
+                                    <div class="flex items-start gap-3">
+                                        <component
+                                            :is="getTypeIcon(product.type)"
+                                            :class="['h-5 w-5 mt-0.5 flex-shrink-0', getTypeColor(product.type)]"
+                                        />
+                                        <div class="min-w-0 flex-1">
+                                            <div class="text-sm font-medium text-gray-900">{{ product.name }}</div>
+                                            <div v-if="product.description" class="text-sm text-gray-500 line-clamp-2 max-w-md">
+                                                {{ product.description }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="text-sm text-gray-900">
+                                        {{ product.type.charAt(0).toUpperCase() + product.type.slice(1) }}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="text-sm text-gray-900">{{ product.sku || '-' }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="text-sm text-gray-900">{{ product.category || '-' }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="text-sm font-medium text-gray-900">
+                                        R{{ Number(product.price).toFixed(2) }}
+                                    </div>
+                                    <div class="text-xs text-gray-500">/ {{ product.unit }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div v-if="product.track_stock" class="text-sm">
+                                        <span :class="getStockStatus(product).color">
+                                            {{ product.stock_quantity }}
+                                        </span>
+                                        <div class="text-xs text-gray-500">{{ getStockStatus(product).text }}</div>
+                                    </div>
+                                    <div v-else class="text-sm text-gray-500">N/A</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span
+                                        :class="[
+                                            'inline-flex px-2 py-1 text-xs font-semibold rounded-full',
+                                            product.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                        ]"
+                                    >
+                                        {{ product.is_active ? 'Active' : 'Inactive' }}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    <div class="flex items-center gap-2">
+                                        <Link
+                                            v-if="$page.props.auth?.abilities?.products?.view"
+                                            :href="products.show(product.id).url"
+                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200"
+                                        >
+                                            <Eye class="h-3 w-3 mr-1" />
+                                            View
+                                        </Link>
+                                        <Link
+                                            v-if="$page.props.auth?.abilities?.products?.edit"
+                                            :href="products.edit(product.id).url"
+                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200"
+                                        >
+                                            <Edit class="h-3 w-3 mr-1" />
+                                            Edit
+                                        </Link>
+                                        <button
+                                            v-if="$page.props.auth?.abilities?.products?.delete"
+                                            @click="deleteProduct(product)"
+                                            class="inline-flex items-center px-3 py-1 border border-red-300 text-xs font-medium rounded-md text-red-700 hover:bg-red-50"
+                                        >
+                                            <Trash2 class="h-3 w-3 mr-1" />
+                                            Delete
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <!-- Pagination -->
-            <div v-if="products.links && products.links.length > 3" class="mt-6">
-                <nav class="flex items-center justify-between">
+            <div v-if="props.products.links" class="mt-6 bg-white rounded-lg border p-4">
+                <div class="flex items-center justify-between flex-wrap gap-4">
                     <div class="text-sm text-gray-700">
-                        Showing {{ products.meta.from }} to {{ products.meta.to }} of {{ products.meta.total }} results
+                        Showing {{ props.products.meta?.from || 0 }} to {{ props.products.meta?.to || 0 }} of {{ props.products.meta?.total || 0 }} results
                     </div>
-                    <div class="flex gap-1">
+                    <div v-if="props.products.links.length > 0" class="flex space-x-1">
                         <Link
-                            v-for="link in products.links"
+                            v-for="link in props.products.links"
                             :key="link.label"
                             :href="link.url || '#'"
-                            :class="[
-                                'px-3 py-2 text-sm rounded-md',
-                                link.active
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50',
-                                !link.url ? 'opacity-50 cursor-not-allowed' : ''
-                            ]"
                             v-html="link.label"
+                            :class="[
+                                'px-3 py-2 text-sm border rounded-md',
+                                link.active
+                                    ? 'bg-blue-50 border-blue-500 text-blue-600'
+                                    : 'border-gray-300 text-gray-700 hover:bg-gray-50',
+                                !link.url ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                            ]"
                         />
                     </div>
-                </nav>
+                </div>
             </div>
         </div>
     </AppLayout>

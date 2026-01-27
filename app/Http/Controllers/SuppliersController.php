@@ -60,6 +60,12 @@ class SuppliersController extends Controller
         \Log::info('SuppliersController::index - Filtered suppliers', [
             'company_id' => $currentCompany->id,
             'suppliers_count' => $suppliers->count(),
+            'total' => $suppliers->total(),
+            'from' => $suppliers->firstItem(),
+            'to' => $suppliers->lastItem(),
+            'current_page' => $suppliers->currentPage(),
+            'last_page' => $suppliers->lastPage(),
+            'per_page' => $suppliers->perPage(),
             'suppliers' => $suppliers->map(fn($s) => ['id' => $s->id, 'name' => $s->name])->toArray(),
         ]);
 
