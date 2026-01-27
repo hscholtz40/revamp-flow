@@ -8,20 +8,20 @@ import products from '@/routes/products';
 interface Product {
     id: number;
     name: string;
-    description: string;
+    description: string | null;
     type: 'product' | 'service';
-    sku: string;
+    sku: string | null;
     price: number;
-    cost: number;
+    cost: number | null;
     unit: string;
     stock_quantity: number;
     min_stock_level: number;
     track_stock: boolean;
     is_active: boolean;
-    category: string;
-    tags: string[];
-    image_path: string;
-    notes: string;
+    category: string | null;
+    tags: string[] | null;
+    image_path: string | null;
+    notes: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -37,22 +37,30 @@ interface Company {
     name: string;
 }
 
+interface ChartOfAccount {
+    id: number;
+    account_code: string;
+    account_name: string;
+    account_type: string;
+}
+
 interface Props {
     product: Product;
     categories: Category[];
     currentCompany: Company;
+    chartOfAccounts: ChartOfAccount[];
 }
 
 const props = defineProps<Props>();
 
 const form = useForm({
     name: props.product.name,
-    description: props.product.description,
+    description: props.product.description || '',
     type: props.product.type,
-    sku: props.product.sku,
+    sku: props.product.sku || '',
     barcode: (props.product as any).barcode || '',
     price: props.product.price,
-    cost: props.product.cost,
+    cost: props.product.cost || null,
     unit: props.product.unit,
     stock_quantity: props.product.stock_quantity,
     min_stock_level: props.product.min_stock_level,
@@ -61,10 +69,12 @@ const form = useForm({
     track_serial_numbers: (props.product as any).track_serial_numbers || false,
     valuation_method: (props.product as any).valuation_method || 'fifo',
     is_active: props.product.is_active,
-    category: props.product.category,
-    tags: [...props.product.tags],
-    image_path: props.product.image_path,
-    notes: props.product.notes,
+    category: props.product.category || '',
+    tags: Array.isArray(props.product.tags) ? [...props.product.tags] : [],
+    image_path: props.product.image_path || '',
+    notes: props.product.notes || '',
+    purchase_account_code: (props.product as any).purchase_account_code || '',
+    sales_account_code: (props.product as any).sales_account_code || '',
 });
 
 const newTag = ref('');
@@ -358,6 +368,61 @@ function getTypeColor(type: string) {
                                     {{ form.errors.cost }}
                                 </div>
                                 <p class="mt-1 text-sm text-gray-500">Used for profit margin calculation</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Accounting -->
+                    <div class="rounded-lg border bg-white p-6">
+                        <h2 class="mb-4 text-lg font-semibold text-gray-900">Accounting</h2>
+                        
+                        <div class="grid gap-6 md:grid-cols-2">
+                            <!-- Purchase Account -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">
+                                    Purchase Account
+                                </label>
+                                <select
+                                    v-model="form.purchase_account_code"
+                                    class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                >
+                                    <option value="">-- Select Purchase Account --</option>
+                                    <option
+                                        v-for="account in props.chartOfAccounts"
+                                        :key="account.id"
+                                        :value="account.account_code"
+                                    >
+                                        {{ account.account_code }} - {{ account.account_name }}
+                                    </option>
+                                </select>
+                                <p class="mt-1 text-xs text-gray-500">Account used for purchase transactions</p>
+                                <div v-if="form.errors.purchase_account_code" class="mt-1 text-sm text-red-600">
+                                    {{ form.errors.purchase_account_code }}
+                                </div>
+                            </div>
+
+                            <!-- Sales Account -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">
+                                    Sales Account
+                                </label>
+                                <select
+                                    v-model="form.sales_account_code"
+                                    class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                >
+                                    <option value="">-- Select Sales Account --</option>
+                                    <option
+                                        v-for="account in props.chartOfAccounts"
+                                        :key="account.id"
+                                        :value="account.account_code"
+                                    >
+                                        {{ account.account_code }} - {{ account.account_name }}
+                                    </option>
+                                </select>
+                                <p class="mt-1 text-xs text-gray-500">Account used for sales transactions</p>
+                                <div v-if="form.errors.sales_account_code" class="mt-1 text-sm text-red-600">
+                                    {{ form.errors.sales_account_code }}
+                                </div>
                             </div>
                         </div>
                     </div>

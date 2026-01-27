@@ -1171,6 +1171,9 @@ class XeroService
             $invoice->load('lineItems');
         }
         
+        // Ensure line items have products loaded
+        $invoice->load('lineItems.product');
+        
         // Ensure customer is loaded
         if (!$invoice->relationLoaded('customer')) {
             $invoice->load('customer');
@@ -1179,6 +1182,15 @@ class XeroService
         if ($invoice->lineItems->isEmpty()) {
             throw new \Exception("Invoice '{$invoice->invoice_number}' has no line items. Cannot sync to Xero.");
         }
+        
+        // Get default tax code from TaxRate model, fallback to TAX002 if not set
+        $currentCompany = $invoice->company ?? Company::getDefault();
+        $defaultTaxRate = TaxRate::getDefaultForCompany($currentCompany->id);
+        $defaultTaxCode = $defaultTaxRate && $defaultTaxRate->xero_tax_rate_id 
+            ? $defaultTaxRate->xero_tax_rate_id 
+            : ($defaultTaxRate && $defaultTaxRate->code 
+                ? $defaultTaxRate->code 
+                : 'TAX002');
         
         $lineItems = [];
         foreach ($invoice->lineItems as $lineItem) {
@@ -1190,9 +1202,17 @@ class XeroService
             $discountAmount = (float) ($lineItem->discount_amount ?? 0);
             $discountPercentage = (float) ($lineItem->discount_percentage ?? 0);
             
+            // Get account code from product if available, otherwise use default '200'
+            $accountCode = '200'; // Default for custom products
+            if ($lineItem->product_id && $lineItem->product) {
+                $accountCode = $lineItem->product->sales_account_code ?? '200';
+            }
+            
             Log::debug('Processing invoice line item for Xero', [
                 'invoice_id' => $invoice->id,
                 'line_item_id' => $lineItem->id,
+                'product_id' => $lineItem->product_id,
+                'account_code' => $accountCode,
                 'quantity' => $lineItem->quantity,
                 'unit_price' => $lineItem->unit_price,
                 'discount_amount' => $discountAmount,
@@ -1201,21 +1221,12 @@ class XeroService
                 'calculated_subtotal' => $lineItem->quantity * $lineItem->unit_price,
             ]);
             
-            // Get default tax code from TaxRate model, fallback to TAX002 if not set
-            $currentCompany = $invoice->company ?? Company::getDefault();
-            $defaultTaxRate = TaxRate::getDefaultForCompany($currentCompany->id);
-            $defaultTaxCode = $defaultTaxRate && $defaultTaxRate->xero_tax_rate_id 
-                ? $defaultTaxRate->xero_tax_rate_id 
-                : ($defaultTaxRate && $defaultTaxRate->code 
-                    ? $defaultTaxRate->code 
-                    : 'TAX002');
-            
             $lineItems[] = [
                 'Description' => $lineItem->description ?? 'Item',
                 'Quantity' => $lineItem->quantity,
                 'UnitAmount' => $lineItem->unit_price,
                 'LineAmount' => $lineAmount,
-                'AccountCode' => '200', // Sales account code - this should be configurable
+                'AccountCode' => $accountCode,
                 'TaxType' => $defaultTaxCode,
             ];
         }
@@ -1975,7 +1986,14 @@ class XeroService
      */
     private function createOrUpdateQuoteInXero(Quote $quote): array
     {
-        $lineItems = [];
+        // Ensure line items are loaded
+        if (!$quote->relationLoaded('lineItems')) {
+            $quote->load('lineItems');
+        }
+        
+        // Ensure line items have products loaded
+        $quote->load('lineItems.product');
+        
         // Get default tax code from TaxRate model, fallback to OUTPUT3 if not set
         $currentCompany = $quote->company ?? Company::getDefault();
         $defaultTaxRate = TaxRate::getDefaultForCompany($currentCompany->id);
@@ -1985,13 +2003,20 @@ class XeroService
                 ? $defaultTaxRate->code 
                 : 'OUTPUT3');
         
+        $lineItems = [];
         foreach ($quote->lineItems as $lineItem) {
+            // Get account code from product if available, otherwise use default '200'
+            $accountCode = '200'; // Default for custom products
+            if ($lineItem->product_id && $lineItem->product) {
+                $accountCode = $lineItem->product->sales_account_code ?? '200';
+            }
+            
             $lineItems[] = [
                 'Description' => $lineItem->description,
                 'Quantity' => $lineItem->quantity,
                 'UnitAmount' => $lineItem->unit_price,
                 'LineAmount' => $lineItem->total,
-                'AccountCode' => '200', // Sales account code - this should be configurable
+                'AccountCode' => $accountCode,
                 'TaxType' => $defaultTaxCode,
             ];
         }
@@ -2270,6 +2295,8 @@ class XeroService
             'description' => $xeroItem['Description'] ?? $product->description,
             'sku' => $xeroItem['Code'] ?? $product->sku,
             'xero_item_id' => $xeroItem['ItemID'] ?? $product->xero_item_id,
+            'sales_account_code' => $xeroItem['SalesDetails']['AccountCode'] ?? $product->sales_account_code,
+            'purchase_account_code' => $xeroItem['PurchaseDetails']['AccountCode'] ?? $product->purchase_account_code,
         ];
 
         // Update pricing if available
@@ -2294,6 +2321,8 @@ class XeroService
             'description' => $xeroItem['Description'] ?? null,
             'sku' => $xeroItem['Code'] ?? null,
             'xero_item_id' => $xeroItem['ItemID'],
+            'sales_account_code' => $xeroItem['SalesDetails']['AccountCode'] ?? null,
+            'purchase_account_code' => $xeroItem['PurchaseDetails']['AccountCode'] ?? null,
         ];
 
         // Add pricing if available

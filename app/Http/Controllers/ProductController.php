@@ -110,10 +110,15 @@ class ProductController extends Controller
     {
         $currentCompany = auth()->user()->getCurrentCompany();
         $categories = Category::active()->ordered()->get(['id', 'name', 'color']);
+        $chartOfAccounts = \App\Models\ChartOfAccount::where('company_id', $currentCompany->id)
+            ->where('is_active', true)
+            ->ordered()
+            ->get(['id', 'account_code', 'account_name', 'account_type']);
 
         return Inertia::render('products/Create', [
             'categories' => $categories,
             'currentCompany' => $currentCompany,
+            'chartOfAccounts' => $chartOfAccounts,
         ]);
     }
 
@@ -179,11 +184,16 @@ class ProductController extends Controller
     {
         $currentCompany = auth()->user()->getCurrentCompany();
         $categories = Category::active()->ordered()->get(['id', 'name', 'color']);
+        $chartOfAccounts = \App\Models\ChartOfAccount::where('company_id', $currentCompany->id)
+            ->where('is_active', true)
+            ->ordered()
+            ->get(['id', 'account_code', 'account_name', 'account_type']);
 
         return Inertia::render('products/Edit', [
             'product' => $product,
             'categories' => $categories,
             'currentCompany' => $currentCompany,
+            'chartOfAccounts' => $chartOfAccounts,
         ]);
     }
 
@@ -213,6 +223,8 @@ class ProductController extends Controller
             'tags.*' => ['string', 'max:50'],
             'image_path' => ['nullable', 'string', 'max:500'],
             'notes' => ['nullable', 'string'],
+            'purchase_account_code' => ['nullable', 'string', 'max:50'],
+            'sales_account_code' => ['nullable', 'string', 'max:50'],
         ]);
 
         // For services, don't track stock

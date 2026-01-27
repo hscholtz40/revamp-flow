@@ -30,6 +30,8 @@ class Product extends Model
         'image_path',
         'notes',
         'xero_item_id',
+        'purchase_account_code',
+        'sales_account_code',
         // New inventory fields
         'supplier_id',
         'barcode',
