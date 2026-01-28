@@ -127,9 +127,11 @@ const footerNavItems: NavItem[] = [
                                         :alt="currentCompany.name"
                                         class="w-full h-auto max-h-16 object-contain rounded"
                                     />
-                                    <Building2
+                                    <img
                                         v-else
-                                        class="h-12 w-12 text-blue-600"
+                                        src="/jobcardonline-logo.png"
+                                        alt="JobCardOnline"
+                                        class="w-full h-auto max-h-16 object-contain rounded"
                                     />
                                 </div>
                                 <div class="flex flex-col text-center">
@@ -182,6 +184,14 @@ const footerNavItems: NavItem[] = [
 
         <SidebarFooter>
             <NavFooter :items="footerNavItems" />
+            <!-- Default Logo above user menu when company logo is uploaded -->
+            <div v-if="currentCompany?.logo_path" class="mb-3 px-2">
+                <img
+                    src="/jobcardonline-logo.png"
+                    alt="JobCardOnline"
+                    class="w-full h-auto max-h-12 object-contain opacity-80 hover:opacity-100 transition-opacity"
+                />
+            </div>
             <NavUser />
         </SidebarFooter>
     </Sidebar>
