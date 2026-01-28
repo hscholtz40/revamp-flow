@@ -30,6 +30,10 @@ const props = withDefaults(defineProps<Props>(), {
     products: () => [],
 });
 
+// Track product search queries for each line item
+const productSearchQueries = ref<Record<number, string>>({});
+const productSearchFocused = ref<Record<number, boolean>>({});
+
 interface LineItem {
     product_id: string | number;
     quantity: number;
@@ -60,6 +64,78 @@ function addLineItem() {
 function removeLineItem(index: number) {
     form.items.splice(index, 1);
     calculateTotals();
+}
+
+// Filter products based on search query
+function filteredProducts(index: number) {
+    const query = productSearchQueries.value[index]?.toLowerCase() || '';
+    if (!query) return [];
+    
+    return props.products.filter(product => {
+        const nameMatch = product.name?.toLowerCase().includes(query);
+        const skuMatch = product.sku?.toLowerCase().includes(query);
+        return nameMatch || skuMatch;
+    }).slice(0, 10); // Limit to 10 results
+}
+
+// Get display name for selected product
+function getProductDisplayName(productId: string | number | null | undefined) {
+    if (!productId) return '';
+    const product = props.products.find(p => p.id === parseInt(productId.toString()));
+    if (!product) return '';
+    return product.sku ? `${product.name} (${product.sku})` : product.name;
+}
+
+// Handle product search input
+function handleProductSearch(index: number, event: Event) {
+    const target = event.target as HTMLInputElement;
+    productSearchQueries.value[index] = target.value;
+    
+    // If input is cleared, clear product selection
+    if (!target.value) {
+        clearProduct(index);
+    }
+}
+
+// Handle product input focus
+function handleProductFocus(index: number) {
+    productSearchFocused.value[index] = true;
+    const productId = form.items[index].product_id;
+    if (productId) {
+        // Show current product name/SKU in search
+        const product = props.products.find(p => p.id === parseInt(productId.toString()));
+        if (product) {
+            productSearchQueries.value[index] = product.sku ? `${product.name} ${product.sku}` : product.name;
+        }
+    }
+}
+
+// Handle product input blur (with delay to allow click on dropdown)
+function handleProductBlur(index: number) {
+    setTimeout(() => {
+        productSearchFocused.value[index] = false;
+        productSearchQueries.value[index] = '';
+    }, 200);
+}
+
+// Select product from search results
+function selectProductFromSearch(index: number, product: Product) {
+    selectProduct(index, { target: { value: product.id.toString() } } as Event);
+    productSearchQueries.value[index] = '';
+    productSearchFocused.value[index] = false;
+}
+
+// Select custom item (no product)
+function selectCustomItem(index: number) {
+    selectProduct(index, { target: { value: '' } } as Event);
+    productSearchQueries.value[index] = '';
+    productSearchFocused.value[index] = false;
+}
+
+// Clear product selection
+function clearProduct(index: number) {
+    selectProduct(index, { target: { value: '' } } as Event);
+    productSearchQueries.value[index] = '';
 }
 
 function selectProduct(index: number, event: Event) {
@@ -206,16 +282,44 @@ function submit() {
                                     <label class="mb-1 block text-sm font-medium text-gray-700">
                                         Product
                                     </label>
-                                    <select
-                                        :value="item.product_id"
-                                        @change="selectProduct(index, $event)"
-                                        class="w-full rounded border px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
-                                    >
-                                        <option value="">Custom Item</option>
-                                        <option v-for="product in props.products" :key="product.id" :value="product.id">
-                                            {{ product.name }} {{ product.sku ? `(${product.sku})` : '' }}
-                                        </option>
-                                    </select>
+                                    <div class="relative">
+                                        <input 
+                                            type="text"
+                                            :value="getProductDisplayName(item.product_id)"
+                                            @input="handleProductSearch(index, $event)"
+                                            @focus="handleProductFocus(index)"
+                                            @blur="handleProductBlur(index)"
+                                            placeholder="Search by name or SKU..."
+                                            class="w-full rounded border px-3 py-2 pr-8 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                                        />
+                                        <svg v-if="item.product_id" @click="clearProduct(index)" class="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 hover:text-gray-600 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                        <!-- Dropdown with filtered products -->
+                                        <div 
+                                            v-if="productSearchFocused[index] && productSearchQueries[index] && (filteredProducts(index).length > 0 || !item.product_id)"
+                                            class="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto"
+                                        >
+                                            <!-- Option to use custom item (shown first) -->
+                                            <div 
+                                                v-if="!item.product_id"
+                                                @mousedown.prevent="selectCustomItem(index)"
+                                                class="px-3 py-2 hover:bg-blue-50 cursor-pointer text-gray-600 italic border-b border-gray-100"
+                                            >
+                                                Use custom item
+                                            </div>
+                                            <!-- Filtered products -->
+                                            <div 
+                                                v-for="product in filteredProducts(index)" 
+                                                :key="product.id"
+                                                @mousedown.prevent="selectProductFromSearch(index, product)"
+                                                class="px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                                            >
+                                                <div class="font-medium text-gray-900">{{ product.name }}</div>
+                                                <div v-if="product.sku" class="text-sm text-gray-500">SKU: {{ product.sku }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <div>

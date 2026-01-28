@@ -129,7 +129,16 @@
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Customer</label>
-                                    <p class="text-sm text-gray-900">{{ props.jobcard.customer.name }}</p>
+                                    <p class="text-sm text-gray-900">
+                                        <Link
+                                            v-if="props.jobcard.customer && props.jobcard.customer.id"
+                                            :href="customers.show(props.jobcard.customer.id).url"
+                                            class="text-blue-600 hover:text-blue-800 hover:underline"
+                                        >
+                                            {{ props.jobcard.customer.name }}
+                                        </Link>
+                                        <span v-else>{{ props.jobcard.customer?.name || '-' }}</span>
+                                    </p>
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Email</label>
@@ -195,7 +204,16 @@
                                     <tbody class="bg-white divide-y divide-gray-200">
                                         <tr v-for="item in props.jobcard.line_items" :key="item.id">
                                             <td class="px-4 py-4 whitespace-nowrap">
-                                                <div class="text-sm text-gray-900">{{ item.description }}</div>
+                                                <div class="text-sm text-gray-900">
+                                                    <Link
+                                                        v-if="item.product_id && item.product"
+                                                        :href="products.show(item.product_id).url"
+                                                        class="text-blue-600 hover:text-blue-800 hover:underline"
+                                                    >
+                                                        {{ item.description }}
+                                                    </Link>
+                                                    <span v-else>{{ item.description }}</span>
+                                                </div>
                                             </td>
                                             <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                                                 {{ item.quantity }}
@@ -485,7 +503,14 @@ import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import jobcards from '@/routes/jobcards';
 import invoices from '@/routes/invoices';
+import products from '@/routes/products';
+import customers from '@/routes/customers';
 import TimeTracking from '@/components/TimeTracking.vue';
+
+interface Product {
+    id: number;
+    name: string;
+}
 
 interface LineItem {
     id: number;
@@ -493,6 +518,8 @@ interface LineItem {
     quantity: number;
     unit_price: number | null;
     total: number | null;
+    product_id?: number | null;
+    product?: Product | null;
     formatted_unit_price: string;
     formatted_total: string;
 }

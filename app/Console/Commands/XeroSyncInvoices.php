@@ -69,7 +69,34 @@ class XeroSyncInvoices extends Command
                     $this->info("  Successfully synced {$successCount} invoices to Xero.");
                 }
                 
-                // Also sync payments for invoices that have been synced
+                // Sync payments FROM Xero (created in the last hour)
+                $this->info("  Syncing payments from Xero...");
+                try {
+                    $paymentSyncFromXero = $xeroService->syncPaymentsFromXero();
+                    
+                    // Check if sync was skipped entirely (boolean true)
+                    if (isset($paymentSyncFromXero['skipped']) && $paymentSyncFromXero['skipped'] === true) {
+                        $message = $paymentSyncFromXero['message'] ?? 'Payment sync skipped';
+                        $this->info("  {$message}");
+                    } else {
+                        // Normal return with counts
+                        $createdPayments = $paymentSyncFromXero['created'] ?? 0;
+                        $skippedPayments = is_numeric($paymentSyncFromXero['skipped'] ?? null) ? $paymentSyncFromXero['skipped'] : 0;
+                        $paymentErrors = $paymentSyncFromXero['errors'] ?? 0;
+                        
+                        if ($paymentErrors > 0) {
+                            $this->warn("  Imported {$createdPayments} payments from Xero, {$skippedPayments} skipped, {$paymentErrors} failed.");
+                        } elseif ($createdPayments > 0 || $skippedPayments > 0) {
+                            $this->info("  Imported {$createdPayments} payments from Xero" . ($skippedPayments > 0 ? ", {$skippedPayments} skipped" : '') . ".");
+                        } else {
+                            $this->info("  No new payments found in Xero from the last hour.");
+                        }
+                    }
+                } catch (\Exception $e) {
+                    $this->warn("  Failed to sync payments from Xero: " . $e->getMessage());
+                }
+                
+                // Also sync payments for invoices that have been synced TO Xero
                 $this->info("  Syncing payments to Xero...");
                 $paymentResults = $xeroService->syncAllPaymentsToXero();
                 

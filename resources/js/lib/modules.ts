@@ -10,6 +10,7 @@ export const modules = [
     { key: 'jobcards', label: 'Jobcards' },
     { key: 'quotes', label: 'Quotes' },
     { key: 'invoices', label: 'Invoices' },
+    { key: 'reports', label: 'Reports' },
 ] as const
 
 export type ModuleKey = typeof modules[number]['key']

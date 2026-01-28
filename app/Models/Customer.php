@@ -21,6 +21,7 @@ class Customer extends Model
         'city',
         'country',
         'vat_number',
+        'account_code',
         'notes',
         'xero_contact_id',
     ];
@@ -53,6 +54,47 @@ class Customer extends Model
     public function quotes(): HasMany
     {
         return $this->hasMany(Quote::class);
+    }
+
+    /**
+     * Generate a unique account code based on customer name
+     */
+    public static function generateAccountCode(string $name, int $companyId): string
+    {
+        // Extract first 2 letters from name (uppercase, remove spaces and special chars)
+        $cleanedName = preg_replace('/[^a-zA-Z]/', '', $name);
+        
+        if (strlen($cleanedName) === 0) {
+            // Fallback if no letters found
+            $prefix = 'CU';
+        } elseif (strlen($cleanedName) === 1) {
+            // If only one letter, duplicate it
+            $prefix = strtoupper($cleanedName . $cleanedName);
+        } else {
+            // Take first 2 letters
+            $prefix = strtoupper(substr($cleanedName, 0, 2));
+        }
+
+        // Find the next available number
+        $number = 1;
+        do {
+            $accountCode = $prefix . str_pad($number, 2, '0', STR_PAD_LEFT);
+            $exists = self::where('company_id', $companyId)
+                ->where('account_code', $accountCode)
+                ->exists();
+            
+            if (!$exists) {
+                return $accountCode;
+            }
+            
+            $number++;
+            
+            // Safety limit to prevent infinite loop
+            if ($number > 9999) {
+                // Fallback to timestamp-based code if we hit the limit
+                return $prefix . time();
+            }
+        } while (true);
     }
 }
 

@@ -21,12 +21,13 @@ import purchaseOrders from '@/routes/purchase-orders';
 import jobcards from '@/routes/jobcards';
 import quotes from '@/routes/quotes';
 import invoices from '@/routes/invoices';
+import reports from '@/routes/reports';
 import users from '@/routes/users';
 import groups from '@/routes/groups';
 import administration from '@/routes/administration';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, Users, Settings, UserCheck, Package, Building2, ClipboardList, FileText, Receipt, Warehouse, ArrowUpDown, ShoppingCart, Clock } from 'lucide-vue-next';
+import { BookOpen, Folder, LayoutGrid, Users, Settings, UserCheck, Package, Building2, ClipboardList, FileText, Receipt, Warehouse, ArrowUpDown, ShoppingCart, Clock, BarChart3 } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
 import { computed } from 'vue';
 
@@ -88,6 +89,11 @@ const mainNavItems: NavItem[] = [
         title: 'Invoices',
         href: invoices.index().url,
         icon: Receipt,
+    },
+    {
+        title: 'Reports',
+        href: reports.index().url,
+        icon: BarChart3,
     },
     {
         title: 'Timesheet',
@@ -165,6 +171,9 @@ const footerNavItems: NavItem[] = [
                     }
                     if (item.title === 'Groups') {
                         return $page.props.auth?.abilities?.groups?.list;
+                    }
+                    if (item.title === 'Reports') {
+                        return $page.props.auth?.abilities?.reports?.list;
                     }
                     return true;
                 })"

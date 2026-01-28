@@ -113,7 +113,16 @@
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Customer</label>
-                                    <p class="text-sm text-gray-900">{{ props.invoice.customer?.name }}</p>
+                                    <p class="text-sm text-gray-900">
+                                        <Link
+                                            v-if="props.invoice.customer && props.invoice.customer.id"
+                                            :href="customers.show(props.invoice.customer.id).url"
+                                            class="text-blue-600 hover:text-blue-800 hover:underline"
+                                        >
+                                            {{ props.invoice.customer.name }}
+                                        </Link>
+                                        <span v-else>{{ props.invoice.customer?.name || '-' }}</span>
+                                    </p>
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Email</label>
@@ -154,7 +163,27 @@
                                         <template v-for="item in props.invoice.line_items" :key="item.id">
                                             <tr>
                                                 <td class="px-4 py-4 text-sm text-gray-900">
-                                                    <div>{{ item.description }}</div>
+                                                    <div>
+                                                        <template v-if="item.product && item.product.id">
+                                                            <Link
+                                                                :href="products.show(item.product.id).url"
+                                                                class="text-blue-600 hover:text-blue-800 hover:underline"
+                                                            >
+                                                                {{ item.description }}
+                                                            </Link>
+                                                        </template>
+                                                        <template v-else-if="item.product_id">
+                                                            <Link
+                                                                :href="products.show(item.product_id).url"
+                                                                class="text-blue-600 hover:text-blue-800 hover:underline"
+                                                            >
+                                                                {{ item.description }}
+                                                            </Link>
+                                                        </template>
+                                                        <template v-else>
+                                                            <span>{{ item.description }}</span>
+                                                        </template>
+                                                    </div>
                                                     <div v-if="item.serialNumbers && item.serialNumbers.length > 0" class="mt-2">
                                                         <div class="text-xs font-medium text-gray-600 mb-1">Serial Numbers:</div>
                                                         <div class="flex flex-wrap gap-1">
@@ -604,11 +633,18 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import invoices from '@/routes/invoices';
 import quotes from '@/routes/quotes';
 import jobcards from '@/routes/jobcards';
+import products from '@/routes/products';
+import customers from '@/routes/customers';
 
 interface SerialNumber {
     id: number;
     serial_number: string;
     status: string;
+}
+
+interface Product {
+    id: number;
+    name: string;
 }
 
 interface LineItem {
@@ -619,6 +655,8 @@ interface LineItem {
     discount_amount?: number;
     discount_percentage?: number;
     total: number;
+    product_id?: number | null;
+    product?: Product | null;
     serial_number_ids?: number[];
     serialNumbers?: SerialNumber[];
 }

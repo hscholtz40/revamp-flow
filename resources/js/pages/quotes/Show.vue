@@ -150,7 +150,16 @@
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-500">Customer Name</label>
-                                    <p class="mt-1 text-sm text-gray-900">{{ props.quote.customer?.name }}</p>
+                                    <p class="mt-1 text-sm text-gray-900">
+                                        <Link
+                                            v-if="props.quote.customer && props.quote.customer.id"
+                                            :href="customers.show(props.quote.customer.id).url"
+                                            class="text-blue-600 hover:text-blue-800 hover:underline"
+                                        >
+                                            {{ props.quote.customer.name }}
+                                        </Link>
+                                        <span v-else>{{ props.quote.customer?.name || '-' }}</span>
+                                    </p>
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-500">Email</label>
@@ -195,7 +204,27 @@
                                 <tbody class="bg-white divide-y divide-gray-200">
                                     <tr v-for="item in props.quote.line_items" :key="item.id">
                                         <td class="px-6 py-4 whitespace-nowrap">
-                                            <div class="text-sm text-gray-900">{{ item.description }}</div>
+                                            <div class="text-sm text-gray-900">
+                                                <template v-if="item.product && item.product.id">
+                                                    <Link
+                                                        :href="products.show(item.product.id).url"
+                                                        class="text-blue-600 hover:text-blue-800 hover:underline"
+                                                    >
+                                                        {{ item.description }}
+                                                    </Link>
+                                                </template>
+                                                <template v-else-if="item.product_id">
+                                                    <Link
+                                                        :href="products.show(item.product_id).url"
+                                                        class="text-blue-600 hover:text-blue-800 hover:underline"
+                                                    >
+                                                        {{ item.description }}
+                                                    </Link>
+                                                </template>
+                                                <template v-else>
+                                                    <span>{{ item.description }}</span>
+                                                </template>
+                                            </div>
                                             <div v-if="item.product" class="text-xs text-gray-500">
                                                 Product: {{ item.product.name }}
                                             </div>
@@ -439,6 +468,8 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import quotes from '@/routes/quotes';
 import invoices from '@/routes/invoices';
+import products from '@/routes/products';
+import customers from '@/routes/customers';
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 
 interface Customer {
@@ -460,9 +491,10 @@ interface LineItem {
     quantity: number;
     unit_price: number;
     total: number;
+    product_id?: number | null;
     formatted_unit_price: string;
     formatted_total: string;
-    product?: Product;
+    product?: Product | null;
 }
 
 interface Quote {

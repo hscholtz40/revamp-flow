@@ -224,13 +224,14 @@ class XeroService
      * @return \Illuminate\Http\Client\Response
      * @throws \Exception
      */
-    private function makeXeroRequest(string $method, string $url, array $data = [], int $maxRetries = 2): \Illuminate\Http\Client\Response
+    private function makeXeroRequest(string $method, string $url, array $data = [], int $maxRetries = 2, array $additionalHeaders = []): \Illuminate\Http\Client\Response
     {
         $attempt = 0;
         
         while ($attempt <= $maxRetries) {
             try {
-                $request = Http::withHeaders($this->getHeaders());
+                $headers = array_merge($this->getHeaders(), $additionalHeaders);
+                $request = Http::withHeaders($headers);
                 
                 switch (strtolower($method)) {
                     case 'get':
@@ -399,6 +400,11 @@ class XeroService
                         ]
                     ] : [],
                 ];
+                
+                // Add AccountNumber if account_code exists
+                if ($customer->account_code) {
+                    $contactData['AccountNumber'] = $customer->account_code;
+                }
                 
                 // Add ContactID if customer already exists in Xero
                 if ($customer->xero_contact_id) {
@@ -696,6 +702,11 @@ class XeroService
                 ]
             ] : [],
         ];
+        
+        // Add AccountNumber if account_code exists
+        if ($customer->account_code) {
+            $contactData['AccountNumber'] = $customer->account_code;
+        }
 
         // Add ContactID if customer already exists in Xero
         if ($customer->xero_contact_id) {
@@ -1111,7 +1122,11 @@ class XeroService
 
         // Use company from XeroSettings
         $currentCompany = $this->getCompany();
+        
+        // Only sync invoices that were modified in the last hour
+        $oneHourAgo = now()->subHour();
         $invoices = Invoice::where('company_id', $currentCompany->id)
+            ->where('updated_at', '>=', $oneHourAgo)
             ->with(['customer', 'lineItems'])
             ->get();
         $results = [];
@@ -1119,6 +1134,8 @@ class XeroService
         Log::info('Starting invoice sync to Xero', [
             'company_id' => $currentCompany->id,
             'invoice_count' => $invoices->count(),
+            'filter_applied' => true,
+            'modified_since' => $oneHourAgo->toIso8601String(),
         ]);
 
         foreach ($invoices as $index => $invoice) {
@@ -1133,6 +1150,88 @@ class XeroService
                 if ($invoice->xero_invoice_id) {
                     $xeroInvoice = $this->getXeroInvoice($invoice->xero_invoice_id);
                     if ($xeroInvoice) {
+                        // Check payment status in both systems
+                        $isPaidInXero = ($xeroInvoice['AmountDue'] ?? $xeroInvoice['AmountOwing'] ?? $xeroInvoice['Total'] ?? 0) <= 0.01;
+                        $isPaidLocally = $invoice->isFullyPaid();
+                        
+                        // If paid in both systems, skip updating
+                        if ($isPaidInXero && $isPaidLocally) {
+                            Log::info('Invoice is fully paid in both systems, skipping update', [
+                                'invoice_id' => $invoice->id,
+                                'invoice_number' => $invoice->invoice_number,
+                                'xero_invoice_id' => $invoice->xero_invoice_id,
+                            ]);
+                            $results[] = [
+                                'invoice_id' => $invoice->id,
+                                'invoice_number' => $invoice->invoice_number,
+                                'status' => 'skipped',
+                                'message' => 'Invoice is fully paid in both systems',
+                            ];
+                            continue;
+                        }
+                        
+                        // If paid in Xero but not locally, import payments from Xero
+                        if ($isPaidInXero && !$isPaidLocally) {
+                            Log::info('Invoice is paid in Xero but not locally, importing payments', [
+                                'invoice_id' => $invoice->id,
+                                'invoice_number' => $invoice->invoice_number,
+                                'xero_invoice_id' => $invoice->xero_invoice_id,
+                            ]);
+                            
+                            try {
+                                // Fetch payments for this invoice from Xero
+                                $this->syncPaymentsForInvoiceFromXero($invoice, $xeroInvoice);
+                                
+                                // Refresh invoice to get updated payment status
+                                $invoice->refresh();
+                                
+                                $results[] = [
+                                    'invoice_id' => $invoice->id,
+                                    'invoice_number' => $invoice->invoice_number,
+                                    'status' => 'payments_imported',
+                                    'message' => 'Payments imported from Xero',
+                                ];
+                            } catch (\Exception $e) {
+                                Log::error('Failed to import payments from Xero for invoice', [
+                                    'invoice_id' => $invoice->id,
+                                    'invoice_number' => $invoice->invoice_number,
+                                    'error' => $e->getMessage(),
+                                ]);
+                                // Continue with normal sync if payment import fails
+                            }
+                        }
+                        
+                        // If paid locally but not in Xero, sync payments to Xero
+                        if (!$isPaidInXero && $isPaidLocally) {
+                            Log::info('Invoice is paid locally but not in Xero, syncing payments to Xero', [
+                                'invoice_id' => $invoice->id,
+                                'invoice_number' => $invoice->invoice_number,
+                                'xero_invoice_id' => $invoice->xero_invoice_id,
+                            ]);
+                            
+                            try {
+                                $paymentResults = $this->syncPaymentsToXero($invoice);
+                                $successCount = collect($paymentResults)->where('status', 'success')->count();
+                                
+                                if ($successCount > 0) {
+                                    $results[] = [
+                                        'invoice_id' => $invoice->id,
+                                        'invoice_number' => $invoice->invoice_number,
+                                        'status' => 'payments_synced',
+                                        'message' => "Synced {$successCount} payment(s) to Xero",
+                                    ];
+                                    continue; // Skip invoice update since payments were synced
+                                }
+                            } catch (\Exception $e) {
+                                Log::error('Failed to sync payments to Xero for invoice', [
+                                    'invoice_id' => $invoice->id,
+                                    'invoice_number' => $invoice->invoice_number,
+                                    'error' => $e->getMessage(),
+                                ]);
+                                // Continue with normal sync if payment sync fails
+                            }
+                        }
+                        
                         $appUpdated = $invoice->updated_at;
                         $xeroUpdated = $this->parseXeroDate($xeroInvoice['UpdatedDateUTC']);
                         
@@ -1172,6 +1271,181 @@ class XeroService
                     'error' => $e->getMessage(),
                 ];
             }
+        }
+
+        return $results;
+    }
+
+    /**
+     * Sync invoices FROM Xero (import invoices from Xero to local database)
+     */
+    public function syncInvoicesFromXero(): array
+    {
+        if (!$this->settings->sync_invoices_from_xero) {
+            return ['skipped' => true, 'message' => 'Invoice sync from Xero is disabled'];
+        }
+
+        // Use company from XeroSettings
+        $currentCompany = $this->getCompany();
+        $results = [];
+
+        try {
+            // Fetch and process invoices page by page (100 at a time)
+            // Note: Xero invoices are of Type='ACCREC' (Accounts Receivable)
+            $page = 1;
+            $pageSize = 100; // Xero default, can be up to 1000
+            $totalProcessed = 0;
+            
+            do {
+                Log::info('Fetching invoice page from Xero', [
+                    'company_id' => $currentCompany->id,
+                    'page' => $page,
+                    'page_size' => $pageSize,
+                ]);
+
+                $response = $this->makeXeroRequest('get', $this->baseUrl . '/api.xro/2.0/Invoices?page=' . $page . '&pageSize=' . $pageSize);
+
+                if (!$response->successful()) {
+                    $errorBody = $response->body();
+                    $statusCode = $response->status();
+                    
+                    // Handle authentication errors specifically
+                    if ($statusCode === 403 && str_contains($errorBody, 'AuthenticationUnsuccessful')) {
+                        Log::error('Xero authentication failed during invoice sync', [
+                            'company_id' => $currentCompany->id,
+                            'status' => $statusCode,
+                            'response' => $errorBody,
+                        ]);
+                        
+                        $this->clearInvalidTokens();
+                        
+                        return ['skipped' => true, 'message' => 'Xero authentication failed. Please re-authorize your Xero connection in the settings.'];
+                    }
+                    
+                    throw new \Exception('Failed to fetch invoices from Xero: ' . $errorBody);
+                }
+
+                $responseData = $response->json();
+                $xeroInvoices = $responseData['Invoices'] ?? [];
+                
+                // Check if there are more pages
+                $pagination = $responseData['Pagination'] ?? null;
+                $currentPage = $pagination['Page'] ?? $page;
+                $pageCount = $pagination['PageCount'] ?? 1;
+                $itemCount = $pagination['ItemCount'] ?? count($xeroInvoices);
+                
+                $invoicesOnPage = count($xeroInvoices);
+                $hasMorePages = ($invoicesOnPage >= $pageSize) || ($currentPage < $pageCount);
+                
+                Log::info('Fetched invoice page from Xero, processing now', [
+                    'company_id' => $currentCompany->id,
+                    'requested_page' => $page,
+                    'current_page' => $currentPage,
+                    'page_count' => $pageCount,
+                    'item_count' => $itemCount,
+                    'invoices_on_page' => $invoicesOnPage,
+                    'page_size' => $pageSize,
+                    'has_more_pages' => $hasMorePages,
+                ]);
+
+                // Process invoices from this page immediately
+                foreach ($xeroInvoices as $xeroInvoice) {
+                    try {
+                        // Skip if invoice doesn't have required fields
+                        if (empty($xeroInvoice['InvoiceNumber']) && empty($xeroInvoice['Reference'])) {
+                            continue;
+                        }
+
+                        // Check if invoice already exists in app by Xero invoice ID
+                        $existingInvoice = Invoice::where('company_id', $currentCompany->id)
+                            ->where('xero_invoice_id', $xeroInvoice['InvoiceID'])
+                            ->first();
+
+                        // If not found by Xero ID, check by invoice number
+                        if (!$existingInvoice) {
+                            $invoiceNumber = $xeroInvoice['InvoiceNumber'] ?? $xeroInvoice['Reference'] ?? null;
+                            if ($invoiceNumber) {
+                                $existingInvoice = Invoice::where('company_id', $currentCompany->id)
+                                    ->where('invoice_number', $invoiceNumber)
+                                    ->whereNull('xero_invoice_id')
+                                    ->first();
+                            }
+                        }
+
+                        if ($existingInvoice) {
+                            // Update existing invoice and link it to Xero
+                            $this->updateInvoiceFromXeroData($existingInvoice, $xeroInvoice);
+                            if (!$existingInvoice->xero_invoice_id) {
+                                $existingInvoice->update(['xero_invoice_id' => $xeroInvoice['InvoiceID']]);
+                            }
+                            $results[] = [
+                                'invoice_id' => $existingInvoice->id,
+                                'invoice_number' => $existingInvoice->invoice_number,
+                                'status' => 'updated',
+                                'message' => 'Invoice updated from Xero and linked to existing invoice',
+                            ];
+                        } else {
+                            // Create new invoice
+                            $invoice = $this->createInvoiceFromXero($xeroInvoice, $currentCompany);
+                            $results[] = [
+                                'invoice_id' => $invoice->id,
+                                'invoice_number' => $invoice->invoice_number,
+                                'status' => 'created',
+                                'message' => 'Invoice imported from Xero',
+                            ];
+                        }
+                        
+                        $totalProcessed++;
+                    } catch (\Exception $e) {
+                        Log::error('Failed to process invoice from Xero', [
+                            'company_id' => $currentCompany->id,
+                            'invoice_id' => $xeroInvoice['InvoiceID'] ?? 'Unknown',
+                            'invoice_number' => $xeroInvoice['InvoiceNumber'] ?? $xeroInvoice['Reference'] ?? 'Unknown',
+                            'xero_contact_id' => $xeroInvoice['Contact']['ContactID'] ?? 'Unknown',
+                            'has_line_items' => !empty($xeroInvoice['LineItems']),
+                            'line_items_count' => isset($xeroInvoice['LineItems']) ? count($xeroInvoice['LineItems']) : 0,
+                            'error_class' => get_class($e),
+                            'error' => $e->getMessage(),
+                            'trace' => $e->getTraceAsString(),
+                        ]);
+                        
+                        $results[] = [
+                            'invoice_id' => null,
+                            'invoice_number' => $xeroInvoice['InvoiceNumber'] ?? $xeroInvoice['Reference'] ?? 'Unknown',
+                            'status' => 'error',
+                            'error' => $e->getMessage(),
+                        ];
+                    }
+                }
+
+                Log::info('Completed processing invoice page', [
+                    'company_id' => $currentCompany->id,
+                    'page' => $page,
+                    'invoices_processed_on_page' => $invoicesOnPage,
+                    'total_processed_so_far' => $totalProcessed,
+                ]);
+                
+                $page++;
+                
+                // Add delay before fetching next page to avoid rate limiting
+                if ($hasMorePages) {
+                    sleep(1);
+                }
+            } while ($hasMorePages);
+
+            Log::info('Finished processing all invoices from Xero', [
+                'company_id' => $currentCompany->id,
+                'total_invoices_processed' => $totalProcessed,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to sync invoices from Xero', [
+                'company_id' => $currentCompany->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            
+            throw $e;
         }
 
         return $results;
@@ -1225,6 +1499,39 @@ class XeroService
                 $accountCode = $lineItem->product->sales_account_code ?? '200';
             }
             
+            // Calculate expected subtotal (Quantity * UnitAmount)
+            $expectedSubtotal = $lineItem->quantity * $lineItem->unit_price;
+            
+            // Verify LineAmount matches expected calculation
+            $calculatedLineAmount = $expectedSubtotal;
+            $hasDiscount = false;
+            
+            // Determine discount type and calculate LineAmount
+            if ($discountPercentage > 0) {
+                // Percentage-based discount
+                $hasDiscount = true;
+                $calculatedLineAmount = $expectedSubtotal * (1 - ($discountPercentage / 100));
+            } elseif ($discountAmount > 0) {
+                // Amount-based discount
+                $hasDiscount = true;
+                $calculatedLineAmount = $expectedSubtotal - $discountAmount;
+            }
+            
+            // Use calculated amount if it differs significantly from stored total
+            // (within 0.01 tolerance for rounding differences)
+            if ($hasDiscount && abs($calculatedLineAmount - $lineAmount) > 0.01) {
+                Log::warning('LineAmount mismatch detected, using calculated value', [
+                    'invoice_id' => $invoice->id,
+                    'line_item_id' => $lineItem->id,
+                    'stored_total' => $lineAmount,
+                    'calculated_total' => $calculatedLineAmount,
+                    'expected_subtotal' => $expectedSubtotal,
+                    'discount_amount' => $discountAmount,
+                    'discount_percentage' => $discountPercentage,
+                ]);
+                $lineAmount = round($calculatedLineAmount, 2);
+            }
+            
             Log::debug('Processing invoice line item for Xero', [
                 'invoice_id' => $invoice->id,
                 'line_item_id' => $lineItem->id,
@@ -1235,10 +1542,11 @@ class XeroService
                 'discount_amount' => $discountAmount,
                 'discount_percentage' => $discountPercentage,
                 'line_item_total' => $lineAmount,
-                'calculated_subtotal' => $lineItem->quantity * $lineItem->unit_price,
+                'expected_subtotal' => $expectedSubtotal,
+                'calculated_line_amount' => $calculatedLineAmount,
             ]);
             
-            $lineItems[] = [
+            $lineItemData = [
                 'Description' => $lineItem->description ?? 'Item',
                 'Quantity' => $lineItem->quantity,
                 'UnitAmount' => $lineItem->unit_price,
@@ -1246,6 +1554,18 @@ class XeroService
                 'AccountCode' => $accountCode,
                 'TaxType' => $defaultTaxCode,
             ];
+            
+            // Add discount field based on discount type
+            // Xero requires DiscountRate for percentage discounts or DiscountAmount for amount discounts
+            if ($discountPercentage > 0) {
+                // Use DiscountRate for percentage-based discounts
+                $lineItemData['DiscountRate'] = round($discountPercentage, 2);
+            } elseif ($discountAmount > 0) {
+                // Use DiscountAmount for amount-based discounts
+                $lineItemData['DiscountAmount'] = round($discountAmount, 2);
+            }
+            
+            $lineItems[] = $lineItemData;
         }
 
         // Get customer Xero contact ID
@@ -1508,6 +1828,11 @@ class XeroService
             'xero_contact_id' => $xeroCustomer['ContactID'] ?? $customer->xero_contact_id,
         ];
 
+        // Update account_code from Xero AccountNumber if available
+        if (isset($xeroCustomer['AccountNumber']) && !empty($xeroCustomer['AccountNumber'])) {
+            $updateData['account_code'] = $xeroCustomer['AccountNumber'];
+        }
+
         // Update phone if available
         if (isset($xeroCustomer['Phones']) && !empty($xeroCustomer['Phones'])) {
             $phone = collect($xeroCustomer['Phones'])->first();
@@ -1536,6 +1861,11 @@ class XeroService
             'email' => $xeroContact['EmailAddress'] ?? null,
             'xero_contact_id' => $xeroContact['ContactID'],
         ];
+
+        // Add account_code from Xero AccountNumber if available
+        if (isset($xeroContact['AccountNumber']) && !empty($xeroContact['AccountNumber'])) {
+            $customerData['account_code'] = $xeroContact['AccountNumber'];
+        }
 
         // Add phone if available
         if (isset($xeroContact['Phones']) && !empty($xeroContact['Phones'])) {
@@ -2337,6 +2667,223 @@ class XeroService
     }
 
     /**
+     * Create invoice from Xero invoice data
+     */
+    private function createInvoiceFromXero(array $xeroInvoice, Company $company): Invoice
+    {
+        // Find customer by Xero contact ID
+        $customer = Customer::where('company_id', $company->id)
+            ->where('xero_contact_id', $xeroInvoice['Contact']['ContactID'])
+            ->first();
+
+        // If customer doesn't exist, fetch from Xero and create it
+        if (!$customer) {
+            $xeroContactId = $xeroInvoice['Contact']['ContactID'];
+            Log::info('Customer not found locally, fetching from Xero', [
+                'company_id' => $company->id,
+                'xero_contact_id' => $xeroContactId,
+                'invoice_number' => $xeroInvoice['InvoiceNumber'] ?? $xeroInvoice['Reference'] ?? 'Unknown',
+            ]);
+            
+            // Fetch the contact from Xero
+            $xeroContact = $this->getXeroContact($xeroContactId);
+            
+            if (!$xeroContact) {
+                throw new \Exception("Customer with Xero contact ID {$xeroContactId} not found in Xero. Cannot create invoice.");
+            }
+            
+            // Create the customer from Xero contact data
+            $customer = $this->createCustomerFromXero($xeroContact, $company);
+            
+            Log::info('Created customer from Xero during invoice import', [
+                'company_id' => $company->id,
+                'customer_id' => $customer->id,
+                'customer_name' => $customer->name,
+                'xero_contact_id' => $xeroContactId,
+            ]);
+        }
+
+        $subtotal = $xeroInvoice['SubTotal'] ?? 0;
+        $taxAmount = $xeroInvoice['TotalTax'] ?? 0;
+        $total = $xeroInvoice['Total'] ?? 0;
+        
+        // Calculate discount amount if available
+        $discountAmount = 0;
+        if (isset($xeroInvoice['TotalDiscount'])) {
+            $discountAmount = $xeroInvoice['TotalDiscount'];
+        }
+        
+        // Calculate tax rate from tax amount and subtotal
+        $taxRate = 0;
+        if ($subtotal > 0 && $taxAmount > 0) {
+            $taxRate = ($taxAmount / $subtotal) * 100;
+        }
+
+        // Get invoice number (prefer InvoiceNumber, fallback to Reference)
+        $invoiceNumber = $xeroInvoice['InvoiceNumber'] ?? $xeroInvoice['Reference'] ?? null;
+        if (!$invoiceNumber) {
+            throw new \Exception('Invoice from Xero has no InvoiceNumber or Reference');
+        }
+
+        $invoiceData = [
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+            'invoice_number' => $invoiceNumber,
+            'xero_invoice_id' => $xeroInvoice['InvoiceID'],
+            'title' => $xeroInvoice['Reference'] ?? 'Invoice from Xero',
+            'status' => $this->mapXeroStatusToLocal($xeroInvoice['Status'] ?? 'AUTHORISED'),
+            'subtotal' => $subtotal,
+            'discount_amount' => $discountAmount,
+            'tax_rate' => round($taxRate, 2),
+            'tax_amount' => $taxAmount,
+            'total' => $total,
+        ];
+
+        // Set invoice date
+        if (isset($xeroInvoice['DateString'])) {
+            $invoiceData['invoice_date'] = \Carbon\Carbon::parse($xeroInvoice['DateString'])->format('Y-m-d');
+        } elseif (isset($xeroInvoice['Date'])) {
+            $invoiceData['invoice_date'] = \Carbon\Carbon::parse($xeroInvoice['Date'])->format('Y-m-d');
+        } else {
+            $invoiceData['invoice_date'] = now()->format('Y-m-d');
+        }
+
+        // Set due date
+        if (isset($xeroInvoice['DueDateString'])) {
+            $invoiceData['due_date'] = \Carbon\Carbon::parse($xeroInvoice['DueDateString'])->format('Y-m-d');
+        } elseif (isset($xeroInvoice['DueDate'])) {
+            $invoiceData['due_date'] = \Carbon\Carbon::parse($xeroInvoice['DueDate'])->format('Y-m-d');
+        } else {
+            // Default to invoice date + 30 days if not set
+            $invoiceData['due_date'] = \Carbon\Carbon::parse($invoiceData['invoice_date'])->addDays(30)->format('Y-m-d');
+        }
+
+        // Set salesperson if available (from Contact's Salesperson field or similar)
+        // Note: This might need to be adjusted based on your Xero data structure
+
+        $invoice = Invoice::create($invoiceData);
+
+        // Create line items
+        if (isset($xeroInvoice['LineItems']) && is_array($xeroInvoice['LineItems'])) {
+            foreach ($xeroInvoice['LineItems'] as $index => $xeroLineItem) {
+                // Try to find product by Xero item ID or SKU
+                $product = null;
+                
+                // Xero line items can have ItemID/Code directly or nested in Item object
+                // ItemID is the Xero item ID, Code is the SKU
+                $itemId = $xeroLineItem['ItemID'] ?? $xeroLineItem['Item']['ItemID'] ?? null;
+                $itemCode = $xeroLineItem['Code'] ?? $xeroLineItem['ItemCode'] ?? $xeroLineItem['Item']['Code'] ?? null;
+                
+                // First try to match by Xero ItemID (xero_item_id)
+                if (!empty($itemId)) {
+                    $product = Product::where('company_id', $company->id)
+                        ->where('xero_item_id', $itemId)
+                        ->first();
+                    
+                    Log::debug('Trying to match product by ItemID', [
+                        'item_id' => $itemId,
+                        'found_product' => $product ? $product->id : null,
+                        'company_id' => $company->id,
+                    ]);
+                }
+                
+                // If not found by ItemID, try to match by SKU (Code)
+                if (!$product && !empty($itemCode)) {
+                    $product = Product::where('company_id', $company->id)
+                        ->where('sku', $itemCode)
+                        ->first();
+                    
+                    Log::debug('Trying to match product by Code/SKU', [
+                        'item_code' => $itemCode,
+                        'found_product' => $product ? $product->id : null,
+                        'company_id' => $company->id,
+                    ]);
+                }
+                
+                // Fallback: If no ItemID or Code, try matching by product name/description
+                // This handles custom line items that weren't linked to Xero Items
+                if (!$product && !empty($xeroLineItem['Description'])) {
+                    $description = trim($xeroLineItem['Description']);
+                    // Try exact match first (case-insensitive)
+                    $product = Product::where('company_id', $company->id)
+                        ->whereRaw('LOWER(name) = ?', [strtolower($description)])
+                        ->first();
+                    
+                    // If no exact match, try partial match
+                    if (!$product) {
+                        $product = Product::where('company_id', $company->id)
+                            ->where(function($query) use ($description) {
+                                $query->whereRaw('LOWER(name) LIKE ?', ['%' . strtolower($description) . '%'])
+                                      ->orWhereRaw('LOWER(description) LIKE ?', ['%' . strtolower($description) . '%']);
+                            })
+                            ->first();
+                    }
+                    
+                    if ($product) {
+                        Log::debug('Matched product by name/description', [
+                            'description' => $description,
+                            'product_id' => $product->id,
+                            'product_name' => $product->name,
+                            'company_id' => $company->id,
+                        ]);
+                    }
+                }
+                
+                // Log if no product found - include full line item structure for debugging
+                if (!$product) {
+                    Log::info('No product match found for line item', [
+                        'description' => $xeroLineItem['Description'] ?? '',
+                        'item_id' => $itemId,
+                        'item_code' => $itemCode,
+                        'line_item_keys' => array_keys($xeroLineItem),
+                        'has_item_object' => isset($xeroLineItem['Item']),
+                        'item_object_keys' => isset($xeroLineItem['Item']) ? array_keys($xeroLineItem['Item']) : [],
+                        'full_line_item' => $xeroLineItem, // Full structure for debugging
+                    ]);
+                } else {
+                    Log::info('Product matched for line item', [
+                        'description' => $xeroLineItem['Description'] ?? '',
+                        'product_id' => $product->id,
+                        'product_name' => $product->name,
+                        'matched_by' => !empty($itemId) ? 'ItemID' : (!empty($itemCode) ? 'Code/SKU' : 'Name/Description'),
+                        'item_id' => $itemId,
+                        'item_code' => $itemCode,
+                    ]);
+                }
+                
+                // Calculate discount for line item
+                $lineItemTotal = $xeroLineItem['LineAmount'] ?? 0;
+                $lineItemQuantity = $xeroLineItem['Quantity'] ?? 1;
+                $lineItemUnitPrice = $xeroLineItem['UnitAmount'] ?? 0;
+                $lineItemSubtotal = $lineItemQuantity * $lineItemUnitPrice;
+                $lineItemDiscountAmount = $lineItemSubtotal - $lineItemTotal;
+                $lineItemDiscountPercentage = 0;
+                if ($lineItemSubtotal > 0) {
+                    $lineItemDiscountPercentage = ($lineItemDiscountAmount / $lineItemSubtotal) * 100;
+                }
+
+                \App\Models\InvoiceLineItem::create([
+                    'invoice_id' => $invoice->id,
+                    'product_id' => $product?->id,
+                    'description' => $xeroLineItem['Description'] ?? '',
+                    'quantity' => $lineItemQuantity,
+                    'unit_price' => $lineItemUnitPrice,
+                    'discount_amount' => round($lineItemDiscountAmount, 2),
+                    'discount_percentage' => round($lineItemDiscountPercentage, 2),
+                    'total' => $lineItemTotal,
+                    'sort_order' => $index,
+                ]);
+            }
+        }
+
+        // Don't recalculate totals - we already have the correct values from Xero
+        // The tax_rate is set correctly above, so if totals need recalculation later,
+        // they will be correct
+
+        return $invoice;
+    }
+
+    /**
      * Get Xero quote by ID
      */
     private function getXeroQuote(string $quoteId): ?array
@@ -2387,22 +2934,165 @@ class XeroService
      */
     private function updateInvoiceFromXeroData(Invoice $invoice, array $xeroInvoice): void
     {
+        $subtotal = $xeroInvoice['SubTotal'] ?? $invoice->subtotal;
+        $taxAmount = $xeroInvoice['TotalTax'] ?? $invoice->tax_amount;
+        $total = $xeroInvoice['Total'] ?? $invoice->total;
+        
+        // Calculate discount amount if available
+        $discountAmount = $invoice->discount_amount;
+        if (isset($xeroInvoice['TotalDiscount'])) {
+            $discountAmount = $xeroInvoice['TotalDiscount'];
+        }
+        
+        // Calculate tax rate from tax amount and subtotal
+        $taxRate = $invoice->tax_rate;
+        if ($subtotal > 0 && $taxAmount > 0) {
+            $taxRate = ($taxAmount / $subtotal) * 100;
+        }
+
         $updateData = [
             'status' => $this->mapXeroStatusToLocal($xeroInvoice['Status'] ?? $invoice->status),
-            'total' => $xeroInvoice['Total'] ?? $invoice->total,
-            'subtotal' => $xeroInvoice['SubTotal'] ?? $invoice->subtotal,
-            'tax_amount' => $xeroInvoice['TotalTax'] ?? $invoice->tax_amount,
+            'total' => $total,
+            'subtotal' => $subtotal,
+            'discount_amount' => $discountAmount,
+            'tax_rate' => round($taxRate, 2),
+            'tax_amount' => $taxAmount,
         ];
+
+        // Update Xero invoice ID if not set
+        if (!$invoice->xero_invoice_id && isset($xeroInvoice['InvoiceID'])) {
+            $updateData['xero_invoice_id'] = $xeroInvoice['InvoiceID'];
+        }
 
         // Update dates if available
         if (isset($xeroInvoice['DateString'])) {
             $updateData['invoice_date'] = \Carbon\Carbon::parse($xeroInvoice['DateString'])->format('Y-m-d');
+        } elseif (isset($xeroInvoice['Date'])) {
+            $updateData['invoice_date'] = \Carbon\Carbon::parse($xeroInvoice['Date'])->format('Y-m-d');
         }
         if (isset($xeroInvoice['DueDateString'])) {
             $updateData['due_date'] = \Carbon\Carbon::parse($xeroInvoice['DueDateString'])->format('Y-m-d');
+        } elseif (isset($xeroInvoice['DueDate'])) {
+            $updateData['due_date'] = \Carbon\Carbon::parse($xeroInvoice['DueDate'])->format('Y-m-d');
         }
 
         $invoice->update($updateData);
+        
+        // Update line items if provided (optional - only if line items exist in Xero data)
+        if (isset($xeroInvoice['LineItems']) && is_array($xeroInvoice['LineItems'])) {
+            // Delete existing line items and recreate from Xero data
+            $invoice->lineItems()->delete();
+            
+            foreach ($xeroInvoice['LineItems'] as $index => $xeroLineItem) {
+                // Try to find product by Xero item ID or SKU
+                $product = null;
+                
+                // Xero line items can have ItemID/Code directly or nested in Item object
+                // ItemID is the Xero item ID, Code is the SKU
+                $itemId = $xeroLineItem['ItemID'] ?? $xeroLineItem['Item']['ItemID'] ?? null;
+                $itemCode = $xeroLineItem['Code'] ?? $xeroLineItem['ItemCode'] ?? $xeroLineItem['Item']['Code'] ?? null;
+                
+                // First try to match by Xero ItemID (xero_item_id)
+                if (!empty($itemId)) {
+                    $product = Product::where('company_id', $invoice->company_id)
+                        ->where('xero_item_id', $itemId)
+                        ->first();
+                    
+                    Log::debug('Trying to match product by ItemID (update)', [
+                        'item_id' => $itemId,
+                        'found_product' => $product ? $product->id : null,
+                        'company_id' => $invoice->company_id,
+                    ]);
+                }
+                
+                // If not found by ItemID, try to match by SKU (Code)
+                if (!$product && !empty($itemCode)) {
+                    $product = Product::where('company_id', $invoice->company_id)
+                        ->where('sku', $itemCode)
+                        ->first();
+                    
+                    Log::debug('Trying to match product by Code/SKU (update)', [
+                        'item_code' => $itemCode,
+                        'found_product' => $product ? $product->id : null,
+                        'company_id' => $invoice->company_id,
+                    ]);
+                }
+                
+                // Fallback: If no ItemID or Code, try matching by product name/description
+                // This handles custom line items that weren't linked to Xero Items
+                if (!$product && !empty($xeroLineItem['Description'])) {
+                    $description = trim($xeroLineItem['Description']);
+                    // Try exact match first (case-insensitive)
+                    $product = Product::where('company_id', $invoice->company_id)
+                        ->whereRaw('LOWER(name) = ?', [strtolower($description)])
+                        ->first();
+                    
+                    // If no exact match, try partial match
+                    if (!$product) {
+                        $product = Product::where('company_id', $invoice->company_id)
+                            ->where(function($query) use ($description) {
+                                $query->whereRaw('LOWER(name) LIKE ?', ['%' . strtolower($description) . '%'])
+                                      ->orWhereRaw('LOWER(description) LIKE ?', ['%' . strtolower($description) . '%']);
+                            })
+                            ->first();
+                    }
+                    
+                    if ($product) {
+                        Log::debug('Matched product by name/description (update)', [
+                            'description' => $description,
+                            'product_id' => $product->id,
+                            'product_name' => $product->name,
+                            'company_id' => $invoice->company_id,
+                        ]);
+                    }
+                }
+                
+                // Log if no product found - include full line item structure for debugging
+                if (!$product) {
+                    Log::info('No product match found for line item (update)', [
+                        'description' => $xeroLineItem['Description'] ?? '',
+                        'item_id' => $itemId,
+                        'item_code' => $itemCode,
+                        'line_item_keys' => array_keys($xeroLineItem),
+                        'has_item_object' => isset($xeroLineItem['Item']),
+                        'item_object_keys' => isset($xeroLineItem['Item']) ? array_keys($xeroLineItem['Item']) : [],
+                        'full_line_item' => $xeroLineItem, // Full structure for debugging
+                    ]);
+                } else {
+                    Log::info('Product matched for line item (update)', [
+                        'description' => $xeroLineItem['Description'] ?? '',
+                        'product_id' => $product->id,
+                        'product_name' => $product->name,
+                        'matched_by' => !empty($itemId) ? 'ItemID' : (!empty($itemCode) ? 'Code/SKU' : 'Name/Description'),
+                        'item_id' => $itemId,
+                        'item_code' => $itemCode,
+                    ]);
+                }
+                
+                // Calculate discount for line item
+                $lineItemTotal = $xeroLineItem['LineAmount'] ?? 0;
+                $lineItemQuantity = $xeroLineItem['Quantity'] ?? 1;
+                $lineItemUnitPrice = $xeroLineItem['UnitAmount'] ?? 0;
+                $lineItemSubtotal = $lineItemQuantity * $lineItemUnitPrice;
+                $lineItemDiscountAmount = $lineItemSubtotal - $lineItemTotal;
+                $lineItemDiscountPercentage = 0;
+                if ($lineItemSubtotal > 0) {
+                    $lineItemDiscountPercentage = ($lineItemDiscountAmount / $lineItemSubtotal) * 100;
+                }
+
+                \App\Models\InvoiceLineItem::create([
+                    'invoice_id' => $invoice->id,
+                    'product_id' => $product?->id,
+                    'description' => $xeroLineItem['Description'] ?? '',
+                    'quantity' => $lineItemQuantity,
+                    'unit_price' => $lineItemUnitPrice,
+                    'discount_amount' => round($lineItemDiscountAmount, 2),
+                    'discount_percentage' => round($lineItemDiscountPercentage, 2),
+                    'total' => $lineItemTotal,
+                    'sort_order' => $index,
+                ]);
+            }
+        }
     }
 
     /**
@@ -2613,6 +3303,160 @@ class XeroService
 
 
     /**
+     * Sync payments for a specific invoice FROM Xero
+     */
+    private function syncPaymentsForInvoiceFromXero(Invoice $invoice, array $xeroInvoice = null): void
+    {
+        // If xeroInvoice not provided, fetch it
+        if (!$xeroInvoice && $invoice->xero_invoice_id) {
+            $xeroInvoice = $this->getXeroInvoice($invoice->xero_invoice_id);
+        }
+        
+        if (!$xeroInvoice) {
+            Log::warning('Cannot sync payments - Xero invoice not found', [
+                'invoice_id' => $invoice->id,
+                'invoice_number' => $invoice->invoice_number,
+                'xero_invoice_id' => $invoice->xero_invoice_id,
+            ]);
+            return;
+        }
+
+        // Get payments from Xero invoice data
+        // Note: Payments might not be included in the invoice response, so we may need to fetch them separately
+        $xeroPayments = $xeroInvoice['Payments'] ?? [];
+        
+        // If no payments in invoice data, try fetching payments for this invoice
+        if (empty($xeroPayments) && $invoice->xero_invoice_id) {
+            try {
+                // Fetch payments for this invoice from Xero Payments API
+                $response = $this->makeXeroRequest('get', $this->baseUrl . '/api.xro/2.0/Payments?where=Invoice.InvoiceID==Guid("' . $invoice->xero_invoice_id . '")');
+                
+                if ($response->successful()) {
+                    $responseData = $response->json();
+                    $xeroPayments = $responseData['Payments'] ?? [];
+                }
+            } catch (\Exception $e) {
+                Log::warning('Failed to fetch payments for invoice from Xero', [
+                    'invoice_id' => $invoice->id,
+                    'xero_invoice_id' => $invoice->xero_invoice_id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+        
+        if (empty($xeroPayments)) {
+            Log::info('No payments found in Xero for invoice', [
+                'invoice_id' => $invoice->id,
+                'invoice_number' => $invoice->invoice_number,
+                'xero_invoice_id' => $invoice->xero_invoice_id,
+            ]);
+            return;
+        }
+
+        $currentCompany = $this->getCompany();
+        $createdCount = 0;
+
+        foreach ($xeroPayments as $xeroPayment) {
+            try {
+                // Parse payment date
+                $paymentDate = null;
+                if (isset($xeroPayment['Date'])) {
+                    $dateValue = $xeroPayment['Date'];
+                    if (is_string($dateValue) && (strpos($dateValue, '/Date(') === 0)) {
+                        $paymentDate = $this->parseXeroDate($dateValue);
+                    } else {
+                        $paymentDate = \Carbon\Carbon::parse($dateValue);
+                    }
+                } elseif (isset($xeroPayment['DateString'])) {
+                    $paymentDate = \Carbon\Carbon::parse($xeroPayment['DateString']);
+                } else {
+                    Log::warning('Payment from Xero invoice has no date', [
+                        'invoice_id' => $invoice->id,
+                        'payment_id' => $xeroPayment['PaymentID'] ?? 'Unknown',
+                    ]);
+                    continue;
+                }
+
+                $amount = $xeroPayment['Amount'] ?? 0;
+                if ($amount <= 0) {
+                    continue;
+                }
+
+                // Check if payment already exists (match by invoice, amount, and date)
+                $existingPayment = Payment::where('invoice_id', $invoice->id)
+                    ->where('amount', $amount)
+                    ->whereDate('payment_date', $paymentDate->format('Y-m-d'))
+                    ->first();
+
+                if ($existingPayment) {
+                    Log::info('Payment already exists locally', [
+                        'payment_id' => $existingPayment->id,
+                        'invoice_id' => $invoice->id,
+                        'amount' => $amount,
+                        'date' => $paymentDate->format('Y-m-d'),
+                    ]);
+                    continue;
+                }
+
+                // Determine payment method from Xero payment type
+                $paymentMethod = 'eft';
+                if (isset($xeroPayment['PaymentType'])) {
+                    $paymentType = strtoupper($xeroPayment['PaymentType']);
+                    if (strpos($paymentType, 'CASH') !== false) {
+                        $paymentMethod = 'cash';
+                    } elseif (strpos($paymentType, 'CARD') !== false || strpos($paymentType, 'CREDIT') !== false) {
+                        $paymentMethod = 'card';
+                    }
+                }
+
+                // Extract notes from reference
+                $notes = $xeroPayment['Reference'] ?? null;
+
+                // Create payment
+                $payment = Payment::create([
+                    'invoice_id' => $invoice->id,
+                    'company_id' => $currentCompany->id,
+                    'amount' => $amount,
+                    'payment_method' => $paymentMethod,
+                    'payment_date' => $paymentDate->format('Y-m-d'),
+                    'notes' => $notes,
+                ]);
+
+                $createdCount++;
+                
+                Log::info('Created payment from Xero invoice', [
+                    'payment_id' => $payment->id,
+                    'invoice_id' => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'amount' => $amount,
+                    'date' => $paymentDate->format('Y-m-d'),
+                ]);
+
+            } catch (\Exception $e) {
+                Log::error('Failed to process payment from Xero invoice', [
+                    'invoice_id' => $invoice->id,
+                    'payment_id' => $xeroPayment['PaymentID'] ?? 'Unknown',
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        // Update invoice status if fully paid
+        if ($createdCount > 0) {
+            $invoice->refresh();
+            if ($invoice->isFullyPaid()) {
+                $invoice->update(['status' => 'paid']);
+            }
+        }
+
+        Log::info('Finished syncing payments for invoice from Xero', [
+            'invoice_id' => $invoice->id,
+            'invoice_number' => $invoice->invoice_number,
+            'payments_created' => $createdCount,
+        ]);
+    }
+
+    /**
      * Sync all payments for all invoices to Xero
      */
     public function syncAllPaymentsToXero(Company $company = null): array
@@ -2640,6 +3484,267 @@ class XeroService
         }
 
         return $results;
+    }
+
+    /**
+     * Sync payments FROM Xero (import payments created in Xero in the last hour)
+     */
+    public function syncPaymentsFromXero(): array
+    {
+        if (!$this->settings->sync_invoices_to_xero) {
+            return ['skipped' => true, 'message' => 'Invoice sync to Xero is disabled'];
+        }
+
+        // Use company from XeroSettings
+        $currentCompany = $this->getCompany();
+        $results = [];
+        $createdCount = 0;
+        $skippedCount = 0;
+        $errorCount = 0;
+
+        try {
+            // Calculate date one hour ago for filtering payments
+            $oneHourAgo = now()->subHour();
+            $ifModifiedSince = $oneHourAgo->format('D, d M Y H:i:s \G\M\T');
+            
+            Log::info('Starting payment sync from Xero with date filter', [
+                'company_id' => $currentCompany->id,
+                'if_modified_since' => $ifModifiedSince,
+                'one_hour_ago' => $oneHourAgo->toIso8601String(),
+            ]);
+
+            // Fetch payments from Xero created in the last hour
+            // Note: Xero Payments API doesn't directly support IfModifiedSince, so we'll fetch and filter
+            $response = $this->makeXeroRequest(
+                'get',
+                $this->baseUrl . '/api.xro/2.0/Payments',
+                [],
+                2,
+                ['If-Modified-Since' => $ifModifiedSince]
+            );
+
+            $statusCode = $response->status();
+            
+            // Handle 304 Not Modified - no payments have been modified since the specified date
+            if ($statusCode === 304) {
+                Log::info('No payments modified since last hour', [
+                    'company_id' => $currentCompany->id,
+                    'if_modified_since' => $ifModifiedSince,
+                ]);
+                return [
+                    'skipped' => true,
+                    'created' => 0,
+                    'skipped_count' => 0,
+                    'errors' => 0,
+                    'message' => 'No payments modified since last hour',
+                ];
+            }
+
+            if (!$response->successful()) {
+                $errorBody = $response->body();
+                Log::error('Failed to fetch payments from Xero', [
+                    'company_id' => $currentCompany->id,
+                    'status' => $statusCode,
+                    'response' => $errorBody,
+                ]);
+                throw new \Exception('Failed to fetch payments from Xero: ' . $errorBody);
+            }
+
+            $responseData = $response->json();
+            $xeroPayments = $responseData['Payments'] ?? [];
+
+            Log::info('Fetched payments from Xero', [
+                'company_id' => $currentCompany->id,
+                'total_payments' => count($xeroPayments),
+            ]);
+
+            foreach ($xeroPayments as $xeroPayment) {
+                try {
+                    // Check if payment was updated/created in the last hour
+                    // Use UpdatedDateUTC if available, otherwise use payment Date
+                    $paymentCreatedDate = null;
+                    if (isset($xeroPayment['UpdatedDateUTC'])) {
+                        $paymentCreatedDate = $this->parseXeroDate($xeroPayment['UpdatedDateUTC']);
+                    } elseif (isset($xeroPayment['Date'])) {
+                        // Date might be in Xero format /Date(...)/ or standard format
+                        $dateValue = $xeroPayment['Date'];
+                        if (is_string($dateValue) && (strpos($dateValue, '/Date(') === 0)) {
+                            $paymentCreatedDate = $this->parseXeroDate($dateValue);
+                        } else {
+                            $paymentCreatedDate = \Carbon\Carbon::parse($dateValue);
+                        }
+                    } elseif (isset($xeroPayment['DateString'])) {
+                        $paymentCreatedDate = \Carbon\Carbon::parse($xeroPayment['DateString']);
+                    }
+                    
+                    if (!$paymentCreatedDate) {
+                        Log::warning('Payment from Xero has no date', [
+                            'payment_id' => $xeroPayment['PaymentID'] ?? 'Unknown',
+                            'payment_data' => $xeroPayment,
+                        ]);
+                        continue;
+                    }
+
+                    // Only process payments created/updated in the last hour
+                    if ($paymentCreatedDate->lt($oneHourAgo)) {
+                        continue;
+                    }
+
+                    // Parse payment date for storing in database
+                    $paymentDate = null;
+                    if (isset($xeroPayment['Date'])) {
+                        // Date might be in Xero format /Date(...)/ or standard format
+                        $dateValue = $xeroPayment['Date'];
+                        if (is_string($dateValue) && (strpos($dateValue, '/Date(') === 0)) {
+                            $paymentDate = $this->parseXeroDate($dateValue);
+                        } else {
+                            $paymentDate = \Carbon\Carbon::parse($dateValue);
+                        }
+                    } elseif (isset($xeroPayment['DateString'])) {
+                        $paymentDate = \Carbon\Carbon::parse($xeroPayment['DateString']);
+                    } else {
+                        $paymentDate = $paymentCreatedDate; // Fallback to created date
+                    }
+
+                    // Get invoice ID from payment
+                    $xeroInvoiceId = $xeroPayment['Invoice']['InvoiceID'] ?? null;
+                    if (!$xeroInvoiceId) {
+                        Log::warning('Payment from Xero has no invoice ID', [
+                            'payment_id' => $xeroPayment['PaymentID'] ?? 'Unknown',
+                        ]);
+                        continue;
+                    }
+
+                    // Find local invoice by Xero invoice ID
+                    $invoice = Invoice::where('company_id', $currentCompany->id)
+                        ->where('xero_invoice_id', $xeroInvoiceId)
+                        ->first();
+
+                    if (!$invoice) {
+                        Log::info('Invoice not found locally for Xero payment', [
+                            'company_id' => $currentCompany->id,
+                            'xero_invoice_id' => $xeroInvoiceId,
+                            'payment_id' => $xeroPayment['PaymentID'] ?? 'Unknown',
+                        ]);
+                        $skippedCount++;
+                        continue;
+                    }
+
+                    // Check if payment already exists (match by invoice, amount, and date)
+                    $amount = $xeroPayment['Amount'] ?? 0;
+                    $existingPayment = Payment::where('invoice_id', $invoice->id)
+                        ->where('amount', $amount)
+                        ->whereDate('payment_date', $paymentDate->format('Y-m-d'))
+                        ->first();
+
+                    if ($existingPayment) {
+                        Log::info('Payment already exists locally', [
+                            'payment_id' => $existingPayment->id,
+                            'invoice_id' => $invoice->id,
+                            'amount' => $amount,
+                            'date' => $paymentDate->format('Y-m-d'),
+                        ]);
+                        $skippedCount++;
+                        continue;
+                    }
+
+                    // Determine payment method from Xero payment type or account
+                    // Default to 'eft' if we can't determine
+                    $paymentMethod = 'eft';
+                    if (isset($xeroPayment['PaymentType'])) {
+                        $paymentType = strtoupper($xeroPayment['PaymentType']);
+                        if (str_contains($paymentType, 'CASH')) {
+                            $paymentMethod = 'cash';
+                        } elseif (str_contains($paymentType, 'CARD') || str_contains($paymentType, 'CREDIT')) {
+                            $paymentMethod = 'card';
+                        }
+                    }
+
+                    // Extract notes from reference
+                    $notes = $xeroPayment['Reference'] ?? null;
+
+                    // Create payment
+                    $payment = Payment::create([
+                        'invoice_id' => $invoice->id,
+                        'company_id' => $currentCompany->id,
+                        'amount' => $amount,
+                        'payment_method' => $paymentMethod,
+                        'payment_date' => $paymentDate->format('Y-m-d'),
+                        'notes' => $notes,
+                    ]);
+
+                    $createdCount++;
+                    
+                    Log::info('Created payment from Xero', [
+                        'payment_id' => $payment->id,
+                        'invoice_id' => $invoice->id,
+                        'invoice_number' => $invoice->invoice_number,
+                        'amount' => $amount,
+                        'date' => $paymentDate->format('Y-m-d'),
+                    ]);
+
+                    // Update invoice status if fully paid
+                    $invoice->refresh();
+                    if ($invoice->isFullyPaid()) {
+                        $invoice->update(['status' => 'paid']);
+                    }
+
+                    $results[] = [
+                        'payment_id' => $payment->id,
+                        'invoice_id' => $invoice->id,
+                        'invoice_number' => $invoice->invoice_number,
+                        'amount' => $amount,
+                        'status' => 'created',
+                    ];
+
+                } catch (\Exception $e) {
+                    Log::error('Failed to process payment from Xero', [
+                        'company_id' => $currentCompany->id,
+                        'payment_id' => $xeroPayment['PaymentID'] ?? 'Unknown',
+                        'xero_invoice_id' => $xeroPayment['Invoice']['InvoiceID'] ?? 'Unknown',
+                        'payment_date' => $xeroPayment['Date'] ?? 'N/A',
+                        'payment_date_type' => gettype($xeroPayment['Date'] ?? null),
+                        'updated_date_utc' => $xeroPayment['UpdatedDateUTC'] ?? 'N/A',
+                        'error' => $e->getMessage(),
+                        'error_file' => $e->getFile(),
+                        'error_line' => $e->getLine(),
+                        'trace' => $e->getTraceAsString(),
+                    ]);
+                    
+                    $errorCount++;
+                    $results[] = [
+                        'payment_id' => null,
+                        'xero_payment_id' => $xeroPayment['PaymentID'] ?? 'Unknown',
+                        'xero_invoice_id' => $xeroPayment['Invoice']['InvoiceID'] ?? 'Unknown',
+                        'status' => 'error',
+                        'error' => $e->getMessage(),
+                    ];
+                }
+            }
+
+            Log::info('Finished syncing payments from Xero', [
+                'company_id' => $currentCompany->id,
+                'created' => $createdCount,
+                'skipped' => $skippedCount,
+                'errors' => $errorCount,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to sync payments from Xero', [
+                'company_id' => $currentCompany->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            throw $e;
+        }
+
+        return [
+            'created' => $createdCount,
+            'skipped' => $skippedCount,
+            'errors' => $errorCount,
+            'results' => $results,
+            'message' => "Synced {$createdCount} payments, {$skippedCount} skipped, {$errorCount} errors",
+        ];
     }
 
     /**

@@ -256,24 +256,24 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
         
         return redirect()->back()->with('success', "Successfully imported {$createdCount} accounts and updated {$updatedCount} accounts from Xero.");
     })->name('xero.sync.chart-of-accounts-from-xero');
-    
-    // Xero Webhook Route
-    Route::post('/xero/webhook', function (\Illuminate\Http\Request $request) {
-        // For webhooks, we need to determine the company based on the tenant_id in the webhook data
-        $tenantId = $request->input('tenantId') ?? $request->input('tenant_id');
-        if ($tenantId) {
-            $settings = \App\Models\XeroSettings::where('tenant_id', $tenantId)->first();
-            if ($settings) {
-                $company = $settings->company;
-                $xeroService = new \App\Services\XeroService($company);
-                $xeroService->handleInvoiceWebhook($request->all());
-                return response()->json(['status' => 'success']);
-            }
-        }
-        
-        // Fallback to default behavior if no matching company found
-        $xeroService = app(\App\Services\XeroService::class);
-        $xeroService->handleInvoiceWebhook($request->all());
-        return response()->json(['status' => 'success']);
-    })->name('xero.webhook');
 });
+
+// Xero Webhook Route (outside auth middleware - webhooks don't use authentication)
+Route::post('/xero/webhook', function (\Illuminate\Http\Request $request) {
+    // For webhooks, we need to determine the company based on the tenant_id in the webhook data
+    $tenantId = $request->input('tenantId') ?? $request->input('tenant_id');
+    if ($tenantId) {
+        $settings = \App\Models\XeroSettings::where('tenant_id', $tenantId)->first();
+        if ($settings) {
+            $company = $settings->company;
+            $xeroService = new \App\Services\XeroService($company);
+            $xeroService->handleInvoiceWebhook($request->all());
+            return response()->json(['status' => 'success']);
+        }
+    }
+    
+    // Fallback to default behavior if no matching company found
+    $xeroService = app(\App\Services\XeroService::class);
+    $xeroService->handleInvoiceWebhook($request->all());
+    return response()->json(['status' => 'success']);
+})->name('xero.webhook');

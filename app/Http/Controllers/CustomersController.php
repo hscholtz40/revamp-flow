@@ -23,7 +23,8 @@ class CustomersController extends Controller
                 $query->where(function ($q) use ($search) {
                     $q->where('name', 'like', "%{$search}%")
                         ->orWhere('email', 'like', "%{$search}%")
-                        ->orWhere('phone', 'like', "%{$search}%");
+                        ->orWhere('phone', 'like', "%{$search}%")
+                        ->orWhere('account_code', 'like', "%{$search}%");
                 });
             })
             ->orderByDesc('id')
@@ -56,13 +57,90 @@ class CustomersController extends Controller
             'city' => ['nullable', 'string', 'max:100'],
             'country' => ['nullable', 'string', 'max:100'],
             'vat_number' => ['nullable', 'string', 'max:50'],
+            'account_code' => ['nullable', 'string', 'max:50'],
             'notes' => ['nullable', 'string'],
         ]);
 
         $validated['company_id'] = $currentCompany->id;
-        Customer::create($validated);
+        
+        // Auto-generate account code if not provided
+        if (empty($validated['account_code'])) {
+            $validated['account_code'] = Customer::generateAccountCode($validated['name'], $currentCompany->id);
+        } else {
+            // Validate uniqueness if manually provided
+            $exists = Customer::where('company_id', $currentCompany->id)
+                ->where('account_code', $validated['account_code'])
+                ->exists();
+            
+            if ($exists) {
+                return redirect()->back()
+                    ->withErrors(['account_code' => 'This account code is already in use.'])
+                    ->withInput();
+            }
+        }
+        
+        $customer = Customer::create($validated);
+
+        // If this is an AJAX request (quick create), return JSON
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'customer' => $customer,
+            ]);
+        }
 
         return redirect()->route('customers.index')->with('success', 'Customer created');
+    }
+    
+    /**
+     * Search customers for autocomplete/search
+     */
+    public function search(Request $request)
+    {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        
+        $search = $request->string('q', '')->toString();
+        
+        $customers = Customer::where('company_id', $currentCompany->id)
+            ->when($search, function ($query) use ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('phone', 'like', "%{$search}%")
+                        ->orWhere('account_code', 'like', "%{$search}%");
+                });
+            })
+            ->orderBy('name')
+            ->limit(20)
+            ->get(['id', 'name', 'email', 'phone', 'account_code']);
+        
+        return response()->json($customers);
+    }
+    
+    /**
+     * Quick create customer (for inline creation in forms)
+     */
+    public function quickCreate(Request $request)
+    {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', 'unique:customers,email,NULL,id,company_id,' . $currentCompany->id],
+            'phone' => ['nullable', 'string', 'max:50'],
+        ]);
+
+        $validated['company_id'] = $currentCompany->id;
+        
+        // Auto-generate account code
+        $validated['account_code'] = Customer::generateAccountCode($validated['name'], $currentCompany->id);
+        
+        $customer = Customer::create($validated);
+
+        return response()->json([
+            'success' => true,
+            'customer' => $customer->only(['id', 'name', 'email', 'phone', 'account_code']),
+        ]);
     }
 
     public function edit(Customer $customer): Response
@@ -141,8 +219,23 @@ class CustomersController extends Controller
             'city' => ['nullable', 'string', 'max:100'],
             'country' => ['nullable', 'string', 'max:100'],
             'vat_number' => ['nullable', 'string', 'max:50'],
+            'account_code' => ['nullable', 'string', 'max:50'],
             'notes' => ['nullable', 'string'],
         ]);
+
+        // Validate account code uniqueness if changed
+        if (!empty($validated['account_code']) && $validated['account_code'] !== $customer->account_code) {
+            $exists = Customer::where('company_id', $currentCompany->id)
+                ->where('account_code', $validated['account_code'])
+                ->where('id', '!=', $customer->id)
+                ->exists();
+            
+            if ($exists) {
+                return redirect()->back()
+                    ->withErrors(['account_code' => 'This account code is already in use.'])
+                    ->withInput();
+            }
+        }
 
         $customer->update($validated);
 

@@ -183,7 +183,7 @@ class JobcardController extends Controller
      */
     public function show(Jobcard $jobcard): Response
     {
-        $jobcard->load(['customer', 'lineItems', 'invoice', 'timeEntries.user']);
+        $jobcard->load(['customer', 'lineItems.product', 'invoice', 'timeEntries.user']);
 
         $currentCompany = auth()->user()->getCurrentCompany();
         

@@ -224,6 +224,34 @@ class HandleInertiaRequests extends Middleware
                     'edit' => $user->hasModulePermission('purchase-orders', 'edit'),
                     'delete' => $user->hasModulePermission('purchase-orders', 'delete'),
                 ],
+                'jobcards' => [
+                    'list' => $user->hasModulePermission('jobcards', 'list'),
+                    'view' => $user->hasModulePermission('jobcards', 'view'),
+                    'create' => $user->hasModulePermission('jobcards', 'create'),
+                    'edit' => $user->hasModulePermission('jobcards', 'edit'),
+                    'delete' => $user->hasModulePermission('jobcards', 'delete'),
+                ],
+                'quotes' => [
+                    'list' => $user->hasModulePermission('quotes', 'list'),
+                    'view' => $user->hasModulePermission('quotes', 'view'),
+                    'create' => $user->hasModulePermission('quotes', 'create'),
+                    'edit' => $user->hasModulePermission('quotes', 'edit'),
+                    'delete' => $user->hasModulePermission('quotes', 'delete'),
+                ],
+                'invoices' => [
+                    'list' => $user->hasModulePermission('invoices', 'list'),
+                    'view' => $user->hasModulePermission('invoices', 'view'),
+                    'create' => $user->hasModulePermission('invoices', 'create'),
+                    'edit' => $user->hasModulePermission('invoices', 'edit'),
+                    'delete' => $user->hasModulePermission('invoices', 'delete'),
+                ],
+                'reports' => [
+                    'list' => $user->hasModulePermission('reports', 'list'),
+                    'view' => $user->hasModulePermission('reports', 'view'),
+                    'create' => $user->hasModulePermission('reports', 'create'),
+                    'edit' => $user->hasModulePermission('reports', 'edit'),
+                    'delete' => $user->hasModulePermission('reports', 'delete'),
+                ],
             ];
         } catch (\Exception $e) {
             // If database connection fails, return null

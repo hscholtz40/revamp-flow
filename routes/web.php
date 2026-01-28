@@ -38,6 +38,7 @@ require __DIR__.'/backups.php';
 require __DIR__.'/tax-rates.php';
 require __DIR__.'/chart-of-accounts.php';
 require __DIR__.'/bank-accounts.php';
+require __DIR__.'/reports.php';
 
 // Installer routes (available only before first install)
 Route::middleware([EnsureNotInstalled::class])->group(function () {

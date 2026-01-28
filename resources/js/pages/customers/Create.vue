@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
+import { computed } from 'vue';
 import customers from '@/routes/customers';
 
 const form = useForm({
@@ -11,7 +12,26 @@ const form = useForm({
     city: '',
     country: '',
     vat_number: '',
+    account_code: '',
     notes: '',
+});
+
+// Generate preview of account code based on name
+const accountCodePreview = computed(() => {
+    if (!form.name || form.name.trim().length === 0) {
+        return '';
+    }
+    
+    // Extract first 2 letters (uppercase, remove spaces and special chars)
+    const cleanedName = form.name.replace(/[^a-zA-Z]/g, '');
+    
+    if (cleanedName.length === 0) {
+        return 'CU01';
+    } else if (cleanedName.length === 1) {
+        return (cleanedName + cleanedName).toUpperCase() + '01';
+    } else {
+        return cleanedName.substring(0, 2).toUpperCase() + '01';
+    }
 });
 
 function submit() {
@@ -54,6 +74,22 @@ function submit() {
                 <label class="block">
                     <span class="mb-1 block">VAT Number</span>
                     <input v-model="form.vat_number" class="w-full rounded border px-3 py-2" />
+                </label>
+                <label class="block">
+                    <span class="mb-1 block">Account Code</span>
+                    <input 
+                        :value="accountCodePreview || 'Auto-generated'"
+                        class="w-full rounded border px-3 py-2 bg-gray-50 cursor-not-allowed text-gray-600" 
+                        placeholder="Auto-generated"
+                        readonly
+                        disabled
+                    />
+                    <div class="text-xs text-gray-500 mt-1">
+                        <span v-if="form.name">Preview: <span class="font-mono font-semibold">{{ accountCodePreview }}</span></span>
+                        <span v-else>Will be auto-generated based on customer name</span>
+                        <span v-if="form.name"> (or next available number if code exists)</span>
+                    </div>
+                    <div v-if="form.errors.account_code" class="text-sm text-red-600">{{ form.errors.account_code }}</div>
                 </label>
             </div>
             <label class="block">

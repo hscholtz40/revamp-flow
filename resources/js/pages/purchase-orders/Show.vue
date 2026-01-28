@@ -4,6 +4,8 @@ import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { ArrowLeft, Package, Building2, Calendar, FileText, CheckCircle, XCircle, Download, Mail } from 'lucide-vue-next';
 import { ref, computed } from 'vue';
 import purchaseOrders from '@/routes/purchase-orders';
+import products from '@/routes/products';
+import suppliers from '@/routes/suppliers';
 
 interface Product {
     id: number;
@@ -292,7 +294,16 @@ const sendEmail = () => {
                         <div class="flex items-center gap-3">
                             <Building2 class="h-5 w-5 text-gray-400" />
                             <div>
-                                <div class="font-medium text-gray-900">{{ props.purchaseOrder.supplier.name }}</div>
+                                <div class="font-medium text-gray-900">
+                                    <Link
+                                        v-if="props.purchaseOrder.supplier && props.purchaseOrder.supplier.id"
+                                        :href="suppliers.show(props.purchaseOrder.supplier.id).url"
+                                        class="text-blue-600 hover:text-blue-800 hover:underline"
+                                    >
+                                        {{ props.purchaseOrder.supplier.name }}
+                                    </Link>
+                                    <span v-else>{{ props.purchaseOrder.supplier?.name || '-' }}</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -317,7 +328,16 @@ const sendEmail = () => {
                                             <div class="flex items-center gap-2">
                                                 <Package class="h-4 w-4 text-gray-400" />
                                                 <div>
-                                                    <div class="font-medium text-gray-900">{{ item.product.name }}</div>
+                                                    <div class="font-medium text-gray-900">
+                                                        <Link
+                                                            v-if="item.product && item.product.id"
+                                                            :href="products.show(item.product.id).url"
+                                                            class="text-blue-600 hover:text-blue-800 hover:underline"
+                                                        >
+                                                            {{ item.product.name }}
+                                                        </Link>
+                                                        <span v-else>{{ item.product.name }}</span>
+                                                    </div>
                                                     <div v-if="item.product.sku" class="text-xs text-gray-500">{{ item.product.sku }}</div>
                                                     <div v-if="item.description" class="text-xs text-gray-500">{{ item.description }}</div>
                                                 </div>
