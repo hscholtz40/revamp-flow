@@ -204,7 +204,7 @@ class DashboardController extends Controller
             ];
         }
 
-        // Chart data for status distributions
+        // Chart data for status distributions with modern brand colors
         $statusCharts = [
             'quote_status' => [
                 'labels' => ['Draft', 'Pending', 'Accepted', 'Rejected', 'Expired'],
@@ -215,7 +215,8 @@ class DashboardController extends Controller
                     Quote::where('company_id', $currentCompany->id)->where('status', 'rejected')->count(),
                     Quote::where('company_id', $currentCompany->id)->where('status', 'expired')->count(),
                 ],
-                'colors' => ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#6b7280'], // Indigo, amber, emerald, red, gray
+                // Brand colors: Dark Blue (#2B5DA7), Teal (#2CBDB9), Lighter Blue (#3F72B5), Red, Gray
+                'colors' => ['#2B5DA7', '#2CBDB9', '#3F72B5', '#ef4444', '#6b7280'],
             ],
             'invoice_status' => [
                 'labels' => ['Draft', 'Sent', 'Paid', 'Overdue'],
@@ -225,7 +226,8 @@ class DashboardController extends Controller
                     Invoice::where('company_id', $currentCompany->id)->where('status', 'paid')->count(),
                     Invoice::where('company_id', $currentCompany->id)->where('status', 'overdue')->count(),
                 ],
-                'colors' => ['#6366f1', '#3b82f6', '#10b981', '#ef4444'], // Indigo, blue, emerald, red
+                // Brand colors: Dark Blue, Teal, Green (success), Red (danger)
+                'colors' => ['#2B5DA7', '#2CBDB9', '#10b981', '#ef4444'],
             ],
             'jobcard_status' => [
                 'labels' => ['Draft', 'Pending', 'In Progress', 'Completed', 'Cancelled'],
@@ -236,7 +238,8 @@ class DashboardController extends Controller
                     Jobcard::where('company_id', $currentCompany->id)->where('status', 'completed')->count(),
                     Jobcard::where('company_id', $currentCompany->id)->where('status', 'cancelled')->count(),
                 ],
-                'colors' => ['#6366f1', '#f59e0b', '#3b82f6', '#10b981', '#ef4444'], // Indigo, amber, blue, emerald, red
+                // Brand colors: Dark Blue, Teal, Lighter Blue, Green (success), Red (danger)
+                'colors' => ['#2B5DA7', '#2CBDB9', '#3F72B5', '#10b981', '#ef4444'],
             ],
         ];
 

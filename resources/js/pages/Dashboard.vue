@@ -103,136 +103,43 @@ const getStatusColor = (status: string) => {
     }
 };
 
-// Pie chart calculation functions
-const getPieChartPath = (value: number, data: number[]) => {
-    const total = data.reduce((sum, item) => sum + item, 0);
-    if (total === 0) return '0 251.2'; // Full circle if no data
-    const percentage = value / total;
-    const circumference = 2 * Math.PI * 40; // radius = 40
-    return `${percentage * circumference} ${circumference}`;
-};
-
-const getPieChartOffset = (index: number, data: number[]) => {
-    const total = data.reduce((sum, item) => sum + item, 0);
-    if (total === 0) return 0;
-    
-    let offset = 0;
-    for (let i = 0; i < index; i++) {
-        const percentage = data[i] / total;
-        const circumference = 2 * Math.PI * 40;
-        offset += percentage * circumference;
-    }
-    return offset;
-};
-
-// Modern pie chart with enhanced styling and animations
-const createPieChartPath = (data: number[], colors: string[], labels: string[]) => {
-    const total = data.reduce((sum, item) => sum + item, 0);
-    if (total === 0) return [];
-    
-    const radius = 45;
-    const centerX = 50;
-    const centerY = 50;
-    const innerRadius = 15; // For donut effect
-    let currentAngle = -90; // Start from top
-    
-    return data.map((value, index) => {
-        if (value === 0) return null;
-        
-        const percentage = value / total;
-        const angle = percentage * 360;
-        const startAngle = currentAngle;
-        const endAngle = currentAngle + angle;
-        
-        // Handle full circle case (100% single status)
-        if (angle >= 360) {
-            const pathData = [
-                `M ${centerX} ${centerY - radius}`,
-                `A ${radius} ${radius} 0 1 1 ${centerX} ${centerY + radius}`,
-                `A ${radius} ${radius} 0 1 1 ${centerX} ${centerY - radius}`,
-                `M ${centerX} ${centerY - innerRadius}`,
-                `A ${innerRadius} ${innerRadius} 0 1 0 ${centerX} ${centerY + innerRadius}`,
-                `A ${innerRadius} ${innerRadius} 0 1 0 ${centerX} ${centerY - innerRadius}`,
-                'Z'
-            ].join(' ');
-            
-            return {
-                path: pathData,
-                color: colors[index],
-                value: value,
-                label: labels[index],
-                percentage: Math.round(percentage * 100)
-            };
-        }
-        
-        // Outer arc
-        const x1 = centerX + radius * Math.cos((startAngle * Math.PI) / 180);
-        const y1 = centerY + radius * Math.sin((startAngle * Math.PI) / 180);
-        const x2 = centerX + radius * Math.cos((endAngle * Math.PI) / 180);
-        const y2 = centerY + radius * Math.sin((endAngle * Math.PI) / 180);
-        
-        // Inner arc
-        const x3 = centerX + innerRadius * Math.cos((endAngle * Math.PI) / 180);
-        const y3 = centerY + innerRadius * Math.sin((endAngle * Math.PI) / 180);
-        const x4 = centerX + innerRadius * Math.cos((startAngle * Math.PI) / 180);
-        const y4 = centerY + innerRadius * Math.sin((startAngle * Math.PI) / 180);
-        
-        const largeArcFlag = angle > 180 ? 1 : 0;
-        
-        const pathData = [
-            `M ${x1} ${y1}`,
-            `A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2}`,
-            `L ${x3} ${y3}`,
-            `A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 0 ${x4} ${y4}`,
-            'Z'
-        ].join(' ');
-        
-        currentAngle += angle;
-        
-        return {
-            path: pathData,
-            color: colors[index],
-            value: value,
-            label: labels[index],
-            percentage: Math.round(percentage * 100)
-        };
-    }).filter(Boolean);
-};
 </script>
 
 <style scoped>
-@keyframes chartSegment {
+@keyframes shimmer {
     0% {
-        opacity: 0;
-        transform: scale(0.8);
+        transform: translateX(-100%);
     }
     100% {
-        opacity: 1;
-        transform: scale(1);
+        transform: translateX(100%);
     }
 }
 
-.chart-segment {
-    animation: chartSegment 0.6s ease-out forwards;
+.animate-shimmer {
+    animation: shimmer 2s infinite;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.group\/item {
+    animation: slideIn 0.4s ease-out forwards;
     opacity: 0;
-    stroke: rgba(255, 255, 255, 0.1);
-    stroke-width: 0.5;
 }
 
-.chart-segment:hover {
-    filter: brightness(1.05);
-    transform: scale(1.02);
-    stroke: rgba(255, 255, 255, 0.3);
-    stroke-width: 1;
-}
-
-.legend-item {
-    transition: all 0.2s ease-in-out;
-}
-
-.legend-item:hover {
-    transform: translateX(4px);
-}
+.group\/item:nth-child(1) { animation-delay: 0ms; }
+.group\/item:nth-child(2) { animation-delay: 100ms; }
+.group\/item:nth-child(3) { animation-delay: 200ms; }
+.group\/item:nth-child(4) { animation-delay: 300ms; }
+.group\/item:nth-child(5) { animation-delay: 400ms; }
 </style>
 
 <template>
@@ -468,179 +375,137 @@ const createPieChartPath = (data: number[], colors: string[], labels: string[]) 
 
             <!-- Status Charts Section -->
             <div class="grid gap-6 md:grid-cols-3">
-                <!-- Quote Status Pie Chart -->
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Quote Status</CardTitle>
-                        <CardDescription>Distribution of quote statuses</CardDescription>
+                <!-- Quote Status Bar Chart -->
+                <Card class="relative overflow-hidden border-0 bg-white shadow-lg hover:shadow-xl transition-all duration-300">
+                    <CardHeader class="pb-4">
+                        <CardTitle class="text-lg font-bold">Quote Status</CardTitle>
+                        <CardDescription class="text-xs text-muted-foreground">Distribution of quote statuses</CardDescription>
                     </CardHeader>
-                    <CardContent>
-                        <div v-if="statusCharts && statusCharts.quote_status" class="space-y-6">
-                            <!-- Modern Donut Chart -->
-                            <div class="flex justify-center">
-                                <div class="relative w-40 h-40 group">
-                                    <svg class="w-40 h-40" viewBox="0 0 100 100">
-                                        <path
-                                            v-for="(segment, index) in createPieChartPath(statusCharts.quote_status.data, statusCharts.quote_status.colors, statusCharts.quote_status.labels)"
-                                            :key="index"
-                                            :d="segment.path"
-                                            :fill="segment.color"
-                                            class="chart-segment cursor-pointer"
-                                            :style="{ 
-                                                transformOrigin: '50% 50%',
-                                                animationDelay: `${index * 100}ms`
-                                            }"
-                                        />
-                                    </svg>
-                                    <div class="absolute inset-0 flex flex-col items-center justify-center">
-                                        <span class="text-lg font-bold text-foreground">
-                                            {{ statusCharts.quote_status.data.reduce((a, b) => a + b, 0) }}
-                                        </span>
-                                        <span class="text-xs text-muted-foreground font-medium">Total</span>
-                                    </div>
+                    <CardContent class="pt-0 pb-6">
+                        <div v-if="statusCharts && statusCharts.quote_status && statusCharts.quote_status.data.reduce((a, b) => a + b, 0) > 0" class="space-y-4">
+                            <div v-for="(label, index) in statusCharts.quote_status.labels" :key="index" 
+                                 class="relative">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm font-semibold text-gray-700">{{ label }}</span>
+                                    <span 
+                                        class="text-base font-bold"
+                                        :style="{ color: statusCharts.quote_status.colors[index] }"
+                                    >
+                                        {{ Math.round((statusCharts.quote_status.data[index] / statusCharts.quote_status.data.reduce((a, b) => a + b, 0)) * 100) }}%
+                                    </span>
                                 </div>
-                            </div>
-                            <!-- Modern Legend -->
-                            <div class="space-y-3">
-                                <div v-for="(label, index) in statusCharts.quote_status.labels" :key="index" 
-                                     class="legend-item flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors duration-200">
-                                    <div class="flex items-center space-x-3">
-                                        <div 
-                                            class="w-3 h-3 rounded-full" 
-                                            :style="{ backgroundColor: statusCharts.quote_status.colors[index] }"
-                                        ></div>
-                                        <span class="text-sm font-medium text-foreground">{{ label }}</span>
-                                    </div>
-                                    <div class="flex items-center space-x-2">
-                                        <span class="text-sm font-bold text-foreground">{{ statusCharts.quote_status.data[index] }}</span>
-                                        <span class="text-xs text-muted-foreground">
-                                            ({{ Math.round((statusCharts.quote_status.data[index] / statusCharts.quote_status.data.reduce((a, b) => a + b, 0)) * 100) }}%)
-                                        </span>
-                                    </div>
+                                <!-- Fully Rounded Horizontal Bar -->
+                                <div class="relative h-6 rounded-full shadow-md overflow-hidden"
+                                     :style="{ 
+                                         backgroundColor: `${statusCharts.quote_status.colors[index]}20`
+                                     }">
+                                    <div 
+                                        class="absolute left-0 top-0 h-full rounded-full transition-all duration-700 ease-out"
+                                        :style="{ 
+                                            width: `${(statusCharts.quote_status.data[index] / statusCharts.quote_status.data.reduce((a, b) => a + b, 0)) * 100}%`,
+                                            backgroundColor: statusCharts.quote_status.colors[index],
+                                            boxShadow: `0 2px 4px ${statusCharts.quote_status.colors[index]}40`
+                                        }"
+                                    ></div>
                                 </div>
                             </div>
                         </div>
-                        <div v-else class="text-center py-8 text-muted-foreground">
-                            <p>No quote data available</p>
-                            <p class="text-xs mt-1">Create some quotes to see status distribution</p>
+                        <div v-else class="text-center py-12 text-muted-foreground">
+                            <div class="w-16 h-16 mx-auto mb-3 rounded-2xl bg-gray-100 flex items-center justify-center">
+                                <FileText class="h-8 w-8 text-gray-400" />
+                            </div>
+                            <p class="font-semibold">No quote data available</p>
+                            <p class="text-xs mt-1 text-muted-foreground">Create some quotes to see status distribution</p>
                         </div>
                     </CardContent>
                 </Card>
 
-                <!-- Invoice Status Pie Chart -->
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Invoice Status</CardTitle>
-                        <CardDescription>Distribution of invoice statuses</CardDescription>
+                <!-- Invoice Status Bar Chart -->
+                <Card class="relative overflow-hidden border-0 bg-white shadow-lg hover:shadow-xl transition-all duration-300">
+                    <CardHeader class="pb-4">
+                        <CardTitle class="text-lg font-bold">Invoice Status</CardTitle>
+                        <CardDescription class="text-xs text-muted-foreground">Distribution of invoice statuses</CardDescription>
                     </CardHeader>
-                    <CardContent>
-                        <div v-if="statusCharts && statusCharts.invoice_status" class="space-y-6">
-                            <!-- Modern Donut Chart -->
-                            <div class="flex justify-center">
-                                <div class="relative w-40 h-40 group">
-                                    <svg class="w-40 h-40" viewBox="0 0 100 100">
-                                        <path
-                                            v-for="(segment, index) in createPieChartPath(statusCharts.invoice_status.data, statusCharts.invoice_status.colors, statusCharts.invoice_status.labels)"
-                                            :key="index"
-                                            :d="segment.path"
-                                            :fill="segment.color"
-                                            class="chart-segment cursor-pointer"
-                                            :style="{ 
-                                                transformOrigin: '50% 50%',
-                                                animationDelay: `${index * 100}ms`
-                                            }"
-                                        />
-                                    </svg>
-                                    <div class="absolute inset-0 flex flex-col items-center justify-center">
-                                        <span class="text-lg font-bold text-foreground">
-                                            {{ statusCharts.invoice_status.data.reduce((a, b) => a + b, 0) }}
-                                        </span>
-                                        <span class="text-xs text-muted-foreground font-medium">Total</span>
-                                    </div>
+                    <CardContent class="pt-0 pb-6">
+                        <div v-if="statusCharts && statusCharts.invoice_status && statusCharts.invoice_status.data.reduce((a, b) => a + b, 0) > 0" class="space-y-4">
+                            <div v-for="(label, index) in statusCharts.invoice_status.labels" :key="index" 
+                                 class="relative">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm font-semibold text-gray-700">{{ label }}</span>
+                                    <span 
+                                        class="text-base font-bold"
+                                        :style="{ color: statusCharts.invoice_status.colors[index] }"
+                                    >
+                                        {{ Math.round((statusCharts.invoice_status.data[index] / statusCharts.invoice_status.data.reduce((a, b) => a + b, 0)) * 100) }}%
+                                    </span>
                                 </div>
-                            </div>
-                            <!-- Modern Legend -->
-                            <div class="space-y-3">
-                                <div v-for="(label, index) in statusCharts.invoice_status.labels" :key="index" 
-                                     class="legend-item flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors duration-200">
-                                    <div class="flex items-center space-x-3">
-                                        <div 
-                                            class="w-3 h-3 rounded-full" 
-                                            :style="{ backgroundColor: statusCharts.invoice_status.colors[index] }"
-                                        ></div>
-                                        <span class="text-sm font-medium text-foreground">{{ label }}</span>
-                                    </div>
-                                    <div class="flex items-center space-x-2">
-                                        <span class="text-sm font-bold text-foreground">{{ statusCharts.invoice_status.data[index] }}</span>
-                                        <span class="text-xs text-muted-foreground">
-                                            ({{ Math.round((statusCharts.invoice_status.data[index] / statusCharts.invoice_status.data.reduce((a, b) => a + b, 0)) * 100) }}%)
-                                        </span>
-                                    </div>
+                                <!-- Fully Rounded Horizontal Bar -->
+                                <div class="relative h-6 rounded-full shadow-md overflow-hidden"
+                                     :style="{ 
+                                         backgroundColor: `${statusCharts.invoice_status.colors[index]}20`
+                                     }">
+                                    <div 
+                                        class="absolute left-0 top-0 h-full rounded-full transition-all duration-700 ease-out"
+                                        :style="{ 
+                                            width: `${(statusCharts.invoice_status.data[index] / statusCharts.invoice_status.data.reduce((a, b) => a + b, 0)) * 100}%`,
+                                            backgroundColor: statusCharts.invoice_status.colors[index],
+                                            boxShadow: `0 2px 4px ${statusCharts.invoice_status.colors[index]}40`
+                                        }"
+                                    ></div>
                                 </div>
                             </div>
                         </div>
-                        <div v-else class="text-center py-8 text-muted-foreground">
-                            <p>No invoice data available</p>
-                            <p class="text-xs mt-1">Create some invoices to see status distribution</p>
+                        <div v-else class="text-center py-12 text-muted-foreground">
+                            <div class="w-16 h-16 mx-auto mb-3 rounded-2xl bg-gray-100 flex items-center justify-center">
+                                <Receipt class="h-8 w-8 text-gray-400" />
+                            </div>
+                            <p class="font-semibold">No invoice data available</p>
+                            <p class="text-xs mt-1 text-muted-foreground">Create some invoices to see status distribution</p>
                         </div>
                     </CardContent>
                 </Card>
 
-                <!-- Jobcard Status Pie Chart -->
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Jobcard Status</CardTitle>
-                        <CardDescription>Distribution of jobcard statuses</CardDescription>
+                <!-- Jobcard Status Bar Chart -->
+                <Card class="relative overflow-hidden border-0 bg-white shadow-lg hover:shadow-xl transition-all duration-300">
+                    <CardHeader class="pb-4">
+                        <CardTitle class="text-lg font-bold">Jobcard Status</CardTitle>
+                        <CardDescription class="text-xs text-muted-foreground">Distribution of jobcard statuses</CardDescription>
                     </CardHeader>
-                    <CardContent>
-                        <div v-if="statusCharts && statusCharts.jobcard_status" class="space-y-6">
-                            <!-- Modern Donut Chart -->
-                            <div class="flex justify-center">
-                                <div class="relative w-40 h-40 group">
-                                    <svg class="w-40 h-40" viewBox="0 0 100 100">
-                                        <path
-                                            v-for="(segment, index) in createPieChartPath(statusCharts.jobcard_status.data, statusCharts.jobcard_status.colors, statusCharts.jobcard_status.labels)"
-                                            :key="index"
-                                            :d="segment.path"
-                                            :fill="segment.color"
-                                            class="chart-segment cursor-pointer"
-                                            :style="{ 
-                                                transformOrigin: '50% 50%',
-                                                animationDelay: `${index * 100}ms`
-                                            }"
-                                        />
-                                    </svg>
-                                    <div class="absolute inset-0 flex flex-col items-center justify-center">
-                                        <span class="text-lg font-bold text-foreground">
-                                            {{ statusCharts.jobcard_status.data.reduce((a, b) => a + b, 0) }}
-                                        </span>
-                                        <span class="text-xs text-muted-foreground font-medium">Total</span>
-                                    </div>
+                    <CardContent class="pt-0 pb-6">
+                        <div v-if="statusCharts && statusCharts.jobcard_status && statusCharts.jobcard_status.data.reduce((a, b) => a + b, 0) > 0" class="space-y-4">
+                            <div v-for="(label, index) in statusCharts.jobcard_status.labels" :key="index" 
+                                 class="relative">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm font-semibold text-gray-700">{{ label }}</span>
+                                    <span 
+                                        class="text-base font-bold"
+                                        :style="{ color: statusCharts.jobcard_status.colors[index] }"
+                                    >
+                                        {{ Math.round((statusCharts.jobcard_status.data[index] / statusCharts.jobcard_status.data.reduce((a, b) => a + b, 0)) * 100) }}%
+                                    </span>
                                 </div>
-                            </div>
-                            <!-- Modern Legend -->
-                            <div class="space-y-3">
-                                <div v-for="(label, index) in statusCharts.jobcard_status.labels" :key="index" 
-                                     class="legend-item flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors duration-200">
-                                    <div class="flex items-center space-x-3">
-                                        <div 
-                                            class="w-3 h-3 rounded-full" 
-                                            :style="{ backgroundColor: statusCharts.jobcard_status.colors[index] }"
-                                        ></div>
-                                        <span class="text-sm font-medium text-foreground">{{ label }}</span>
-                                    </div>
-                                    <div class="flex items-center space-x-2">
-                                        <span class="text-sm font-bold text-foreground">{{ statusCharts.jobcard_status.data[index] }}</span>
-                                        <span class="text-xs text-muted-foreground">
-                                            ({{ Math.round((statusCharts.jobcard_status.data[index] / statusCharts.jobcard_status.data.reduce((a, b) => a + b, 0)) * 100) }}%)
-                                        </span>
-                                    </div>
+                                <!-- Fully Rounded Horizontal Bar -->
+                                <div class="relative h-6 rounded-full shadow-md overflow-hidden"
+                                     :style="{ 
+                                         backgroundColor: `${statusCharts.jobcard_status.colors[index]}20`
+                                     }">
+                                    <div 
+                                        class="absolute left-0 top-0 h-full rounded-full transition-all duration-700 ease-out"
+                                        :style="{ 
+                                            width: `${(statusCharts.jobcard_status.data[index] / statusCharts.jobcard_status.data.reduce((a, b) => a + b, 0)) * 100}%`,
+                                            backgroundColor: statusCharts.jobcard_status.colors[index],
+                                            boxShadow: `0 2px 4px ${statusCharts.jobcard_status.colors[index]}40`
+                                        }"
+                                    ></div>
                                 </div>
                             </div>
                         </div>
-                        <div v-else class="text-center py-8 text-muted-foreground">
-                            <p>No jobcard data available</p>
-                            <p class="text-xs mt-1">Create some jobcards to see status distribution</p>
+                        <div v-else class="text-center py-12 text-muted-foreground">
+                            <div class="w-16 h-16 mx-auto mb-3 rounded-2xl bg-gray-100 flex items-center justify-center">
+                                <Wrench class="h-8 w-8 text-gray-400" />
+                            </div>
+                            <p class="font-semibold">No jobcard data available</p>
+                            <p class="text-xs mt-1 text-muted-foreground">Create some jobcards to see status distribution</p>
                         </div>
                     </CardContent>
                 </Card>
