@@ -116,23 +116,23 @@ const footerNavItems: NavItem[] = [
         <SidebarHeader>
             <SidebarMenu>
                 <SidebarMenuItem>
-                    <SidebarMenuButton size="lg" as-child>
-                        <Link :href="dashboard().url">
+                    <SidebarMenuButton size="lg" as-child class="!h-auto py-3">
+                        <Link :href="dashboard().url" class="block w-full">
                             <!-- Company Logo or Fallback -->
-                            <div class="flex items-center gap-3">
-                                <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100">
+                            <div class="flex flex-col gap-2 w-full">
+                                <div class="flex w-full items-center justify-center rounded-lg bg-blue-100 p-2">
                                     <img
                                         v-if="currentCompany?.logo_path"
                                         :src="`/storage/${currentCompany.logo_path}`"
                                         :alt="currentCompany.name"
-                                        class="h-6 w-6 rounded object-cover"
+                                        class="w-full h-auto max-h-16 object-contain rounded"
                                     />
                                     <Building2
                                         v-else
-                                        class="h-5 w-5 text-blue-600"
+                                        class="h-12 w-12 text-blue-600"
                                     />
                                 </div>
-                                <div class="flex flex-col">
+                                <div class="flex flex-col text-center">
                                     <span class="text-sm font-semibold text-gray-900">
                                         {{ currentCompany?.name || 'Company' }}
                                     </span>

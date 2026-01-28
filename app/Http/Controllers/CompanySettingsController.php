@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Company;
+use App\Models\PdfTemplate;
 use App\Models\ReminderSettings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
