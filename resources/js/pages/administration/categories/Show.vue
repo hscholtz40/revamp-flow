@@ -30,7 +30,6 @@ function deleteCategory() {
     
     if (confirm(`Are you sure you want to delete "${props.category.name}"?`)) {
         // This would need to be implemented with a form or router.delete
-        console.log('Delete category:', props.category.id);
     }
 }
 </script>

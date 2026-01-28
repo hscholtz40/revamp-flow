@@ -172,13 +172,6 @@ onMounted(() => {
     form.smtp_from_name = props.company.smtp_from_name || '';
     form.whatsapp_business_number = props.company.whatsapp_business_number || '';
 
-    // Debug: Log form data after initialization
-    console.log('Form data initialized:', {
-        name: form.name,
-        email: form.email,
-        hasLogo: !!form.logo,
-        formData: form.data()
-    });
 });
 
 const logoPreview = ref<string | null>(props.company.logo_path ? `/storage/${props.company.logo_path}` : null);
@@ -198,14 +191,6 @@ function handleLogoChange(event: Event) {
 }
 
 function submit() {
-    // Debug: Log form data before submission
-    console.log('Submitting form with data:', {
-        name: form.name,
-        email: form.email,
-        hasLogo: !!form.logo,
-        logoFileName: form.logo?.name,
-        formData: form.data()
-    });
     
     // Ensure all form fields are properly set before submission
     if (!form.name || form.name.trim() === '') {
@@ -247,7 +232,6 @@ function submit() {
     formWithoutLogo.put(companySettings.update(props.company.id).url, { 
         preserveScroll: true,
         onSuccess: () => {
-            console.log('Form submitted successfully');
             // If there's a logo, upload it separately
             if (form.logo) {
                 uploadLogo();
@@ -261,9 +245,7 @@ function submit() {
 
 function uploadLogo() {
     if (!form.logo) return;
-    
-    console.log('Uploading logo separately:', form.logo.name);
-    
+        
     const logoForm = useForm({
         logo: form.logo,
     });
@@ -271,7 +253,6 @@ function uploadLogo() {
     logoForm.post(companySettings.uploadLogo(props.company.id).url, {
         preserveScroll: true,
         onSuccess: () => {
-            console.log('Logo uploaded successfully');
         },
         onError: (errors) => {
             console.error('Logo upload errors:', errors);
@@ -413,7 +394,6 @@ function submitReminderSettings() {
     reminderForm.put(`/company-settings/${props.company.id}/reminder-settings`, {
         preserveScroll: true,
         onSuccess: () => {
-            console.log('Reminder settings updated successfully');
         },
         onError: (errors) => {
             console.error('Reminder settings update errors:', errors);

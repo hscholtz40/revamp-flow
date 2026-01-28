@@ -234,14 +234,6 @@ interface Props {
 
 const props = defineProps<Props>();
 
-// Debug: Log the received props
-console.log('Jobcards Index Props:', {
-    jobcards: props.jobcards,
-    customers: props.customers,
-    filters: props.filters,
-    currentCompany: props.currentCompany
-});
-
 const search = ref(props.filters?.search || '');
 const status = ref(props.filters?.status || '');
 const customerId = ref(props.filters?.customer_id || '');
@@ -290,8 +282,6 @@ const deleteJobcard = (jobcard: Jobcard) => {
     if (confirm(`Are you sure you want to delete jobcard ${jobNumber}?`)) {
         router.delete(jobcards.destroy(jobcard.id).url, {
             onSuccess: () => {
-                // Optional: Show success message
-                console.log('Jobcard deleted successfully');
             },
             onError: (errors) => {
                 console.error('Error deleting jobcard:', errors);

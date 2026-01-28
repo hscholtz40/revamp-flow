@@ -62,7 +62,6 @@ const profitMargin = computed(() => {
 function deleteProduct() {
     if (confirm(`Are you sure you want to delete "${props.product.name}"?`)) {
         // This would need to be implemented with a form or router.delete
-        console.log('Delete product:', props.product.id);
     }
 }
 </script>
