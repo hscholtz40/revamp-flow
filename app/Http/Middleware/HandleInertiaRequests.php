@@ -147,6 +147,7 @@ class HandleInertiaRequests extends Middleware
                 'name' => $currentCompany->name,
                 'logo_path' => $currentCompany->logo_path,
                 'is_default' => $currentCompany->is_default,
+                'visible_modules' => $currentCompany->visible_modules,
             ] : null,
             'companies' => $companies,
             'auth' => [

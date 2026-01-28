@@ -1,7 +1,5 @@
 export const modules = [
     { key: 'customers', label: 'Customers' },
-    { key: 'users', label: 'Users' },
-    { key: 'groups', label: 'Groups' },
     { key: 'contacts', label: 'Contacts' },
     { key: 'products', label: 'Products & Services' },
     { key: 'suppliers', label: 'Suppliers' },
@@ -11,6 +9,7 @@ export const modules = [
     { key: 'quotes', label: 'Quotes' },
     { key: 'invoices', label: 'Invoices' },
     { key: 'reports', label: 'Reports' },
+    { key: 'timesheet', label: 'Timesheet' },
 ] as const
 
 export type ModuleKey = typeof modules[number]['key']

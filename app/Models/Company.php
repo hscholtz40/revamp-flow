@@ -40,12 +40,14 @@ class Company extends Model
         'smtp_from_email',
         'smtp_from_name',
         'whatsapp_business_number',
+        'visible_modules',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
         'is_default' => 'boolean',
         'smtp_port' => 'integer',
+        'visible_modules' => 'array',
     ];
 
     protected $hidden = [
@@ -164,5 +166,36 @@ class Company extends Model
     public function hasSmtpConfigured(): bool
     {
         return !empty($this->smtp_host) && !empty($this->smtp_username) && !empty($this->smtp_password);
+    }
+
+    /**
+     * Check if a module is visible for this company.
+     * If visible_modules is null, all modules are visible by default.
+     */
+    public function isModuleVisible(string $moduleKey): bool
+    {
+        if ($this->visible_modules === null) {
+            return true; // All modules visible by default
+        }
+        
+        return in_array($moduleKey, $this->visible_modules ?? []);
+    }
+
+    /**
+     * Get visible modules array.
+     * Returns null if all modules should be visible, or array of module keys.
+     */
+    public function getVisibleModules(): ?array
+    {
+        return $this->visible_modules;
+    }
+
+    /**
+     * Set visible modules.
+     */
+    public function setVisibleModules(?array $modules): void
+    {
+        $this->visible_modules = $modules;
+        $this->save();
     }
 }

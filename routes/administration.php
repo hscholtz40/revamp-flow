@@ -9,6 +9,13 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::get('/administration', [AdministrationController::class, 'index'])->name('administration.index');
     
+    // Database Upgrade route
+    Route::post('/administration/upgrade-database', [AdministrationController::class, 'upgradeDatabase'])->name('administration.upgrade-database');
+    
+    // Module Visibility routes
+    Route::get('/administration/module-visibility', [AdministrationController::class, 'moduleVisibility'])->name('administration.module-visibility');
+    Route::put('/administration/module-visibility', [AdministrationController::class, 'update'])->name('administration.module-visibility.update');
+    
     // SMS Settings routes
     Route::get('/administration/sms-settings', [SMSSettingsController::class, 'index'])->name('sms-settings.index');
     Route::post('/administration/sms-settings', [SMSSettingsController::class, 'store'])->name('sms-settings.store');

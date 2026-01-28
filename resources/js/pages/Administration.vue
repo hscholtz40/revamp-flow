@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 import administration from '@/routes/administration';
 import products from '@/routes/products';
 import users from '@/routes/users';
@@ -8,9 +8,25 @@ import groups from '@/routes/groups';
 import companySettings from '@/routes/company-settings';
 import smsSettings from '@/routes/sms-settings';
 import whatsappSettings from '@/routes/whatsapp-settings';
-import { Users, Shield, Building2, UserCheck, Package, Tag, MessageSquare, Zap, FileText, ClipboardList, Database, Percent, BookOpen, CreditCard } from 'lucide-vue-next';
+import { Users, Shield, Building2, UserCheck, Package, Tag, MessageSquare, Zap, FileText, ClipboardList, Database, Percent, BookOpen, CreditCard, ArrowUpCircle, Eye } from 'lucide-vue-next';
 import auditLogs from '@/routes/audit-logs';
 import backups from '@/routes/backups/index';
+import { ref } from 'vue';
+
+const upgradeForm = useForm({});
+const isUpgrading = ref(false);
+
+const upgradeDatabase = () => {
+    if (confirm('Are you sure you want to upgrade the database? This will run pending migrations.')) {
+        isUpgrading.value = true;
+        upgradeForm.post('/administration/upgrade-database', {
+            preserveScroll: true,
+            onFinish: () => {
+                isUpgrading.value = false;
+            },
+        });
+    }
+};
 
 const props = defineProps<{
     stats: {
@@ -28,33 +44,41 @@ const props = defineProps<{
 
     <AppLayout :breadcrumbs="[{ title: 'Administration', href: administration.index().url }]">
         <div class="p-4">
+            <!-- Flash Messages -->
+            <div v-if="$page.props.flash?.success" class="mb-4 rounded-lg bg-green-100 border border-green-400 px-4 py-3 text-green-700">
+                {{ $page.props.flash.success }}
+            </div>
+            <div v-if="$page.props.flash?.error" class="mb-4 rounded-lg bg-red-100 border border-red-400 px-4 py-3 text-red-700">
+                {{ $page.props.flash.error }}
+            </div>
+            
             <h1 class="mb-6 text-2xl font-bold">Administration</h1>
             
             <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
                 <!-- Users Card -->
-                <div class="rounded-lg border bg-white p-6 shadow-sm">
+                <div class="flex flex-col rounded-lg border bg-white p-6 shadow-sm">
                     <div class="flex items-center justify-between">
                         <div>
                             <h2 class="text-lg font-semibold">Users</h2>
                             <p class="text-sm text-gray-600">Manage user accounts and permissions</p>
-                            <p class="mt-2 text-2xl font-bold text-blue-600">{{ props.stats.users_count }}</p>
+                            <p class="mt-2 text-2xl font-bold text-primary">{{ props.stats.users_count }}</p>
                         </div>
-                        <div class="rounded-full bg-blue-100 p-3">
-                            <Users class="h-6 w-6 text-blue-600" />
+                        <div class="rounded-full bg-primary/10 p-3">
+                            <Users class="h-6 w-6 text-primary" />
                         </div>
                     </div>
-                    <div class="mt-4 flex gap-2">
+                    <div class="mt-auto flex gap-2 pt-4">
                         <Link 
                             v-if="$page.props.auth?.abilities?.users?.list"
                             :href="users.index().url" 
-                            class="rounded bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700"
+                            class="rounded bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
                         >
                             View Users
                         </Link>
                         <Link 
                             v-if="$page.props.auth?.abilities?.users?.create"
                             :href="users.create().url" 
-                            class="rounded border px-3 py-2 text-sm hover:bg-gray-50"
+                            class="rounded border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                         >
                             Add User
                         </Link>
@@ -62,29 +86,29 @@ const props = defineProps<{
                 </div>
 
                 <!-- Groups Card -->
-                <div class="rounded-lg border bg-white p-6 shadow-sm">
+                <div class="flex flex-col rounded-lg border bg-white p-6 shadow-sm">
                     <div class="flex items-center justify-between">
                         <div>
                             <h2 class="text-lg font-semibold">Groups</h2>
                             <p class="text-sm text-gray-600">Manage user groups and permissions</p>
-                            <p class="mt-2 text-2xl font-bold text-green-600">{{ props.stats.groups_count }}</p>
+                            <p class="mt-2 text-2xl font-bold text-primary">{{ props.stats.groups_count }}</p>
                         </div>
-                        <div class="rounded-full bg-green-100 p-3">
-                            <Shield class="h-6 w-6 text-green-600" />
+                        <div class="rounded-full bg-primary/10 p-3">
+                            <Shield class="h-6 w-6 text-primary" />
                         </div>
                     </div>
-                    <div class="mt-4 flex gap-2">
+                    <div class="mt-auto flex gap-2 pt-4">
                         <Link 
                             v-if="$page.props.auth?.abilities?.groups?.list"
                             :href="groups.index().url" 
-                            class="rounded bg-green-600 px-3 py-2 text-sm text-white hover:bg-green-700"
+                            class="rounded bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
                         >
                             View Groups
                         </Link>
                         <Link 
                             v-if="$page.props.auth?.abilities?.groups?.create"
                             :href="groups.create().url" 
-                            class="rounded border px-3 py-2 text-sm hover:bg-gray-50"
+                            class="rounded border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                         >
                             Add Group
                         </Link>
@@ -92,20 +116,20 @@ const props = defineProps<{
                 </div>
 
                 <!-- Categories Card -->
-                <div class="rounded-lg border bg-white p-6 shadow-sm">
+                <div class="flex flex-col rounded-lg border bg-white p-6 shadow-sm">
                     <div class="flex items-center justify-between">
                         <div>
                             <h2 class="text-lg font-semibold">Categories</h2>
                             <p class="text-sm text-gray-600">Manage product and service categories</p>
                         </div>
-                        <div class="rounded-full bg-purple-100 p-3">
-                            <Tag class="h-6 w-6 text-purple-600" />
+                        <div class="rounded-full bg-primary/10 p-3">
+                            <Tag class="h-6 w-6 text-primary" />
                         </div>
                     </div>
-                    <div class="mt-4">
+                    <div class="mt-auto pt-4">
                         <Link
                             :href="administration.categories.index().url"
-                            class="rounded bg-purple-600 px-3 py-2 text-sm text-white hover:bg-purple-700"
+                            class="rounded bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
                         >
                             Manage Categories
                         </Link>
@@ -113,20 +137,20 @@ const props = defineProps<{
                 </div>
 
                 <!-- Company Settings Card -->
-                <div class="rounded-lg border bg-white p-6 shadow-sm">
+                <div class="flex flex-col rounded-lg border bg-white p-6 shadow-sm">
                     <div class="flex items-center justify-between">
                         <div>
                             <h2 class="text-lg font-semibold">Companies</h2>
                             <p class="text-sm text-gray-600">Manage company information and branding</p>
                         </div>
-                        <div class="rounded-full bg-purple-100 p-3">
-                            <Building2 class="h-6 w-6 text-purple-600" />
+                        <div class="rounded-full bg-primary/10 p-3">
+                            <Building2 class="h-6 w-6 text-primary" />
                         </div>
                     </div>
-                    <div class="mt-4">
+                    <div class="mt-auto pt-4">
                         <Link 
                             :href="companySettings.index().url" 
-                            class="rounded bg-purple-600 px-3 py-2 text-sm text-white hover:bg-purple-700"
+                            class="rounded bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
                         >
                             Manage Companies
                         </Link>
@@ -134,20 +158,20 @@ const props = defineProps<{
                 </div>
 
                 <!-- SMS Settings Card -->
-                <div class="rounded-lg border bg-white p-6 shadow-sm">
+                <div class="flex flex-col rounded-lg border bg-white p-6 shadow-sm">
                     <div class="flex items-center justify-between">
                         <div>
                             <h2 class="text-lg font-semibold">SMS Settings</h2>
                             <p class="text-sm text-gray-600">Configure BulkSMS for customer messaging</p>
                         </div>
-                        <div class="rounded-full bg-green-100 p-3">
-                            <MessageSquare class="h-6 w-6 text-green-600" />
+                        <div class="rounded-full bg-primary/10 p-3">
+                            <MessageSquare class="h-6 w-6 text-primary" />
                         </div>
                     </div>
-                    <div class="mt-4">
+                    <div class="mt-auto pt-4">
                         <Link 
                             :href="smsSettings.index().url" 
-                            class="rounded bg-green-600 px-3 py-2 text-sm text-white hover:bg-green-700"
+                            class="rounded bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
                         >
                             Configure SMS
                         </Link>
@@ -155,20 +179,20 @@ const props = defineProps<{
                 </div>
 
                 <!-- WhatsApp Settings Card -->
-                <div class="rounded-lg border bg-white p-6 shadow-sm">
+                <div class="flex flex-col rounded-lg border bg-white p-6 shadow-sm">
                     <div class="flex items-center justify-between">
                         <div>
                             <h2 class="text-lg font-semibold">WhatsApp Settings</h2>
                             <p class="text-sm text-gray-600">Configure WhatsApp Business API for customer messaging</p>
                         </div>
-                        <div class="rounded-full bg-green-100 p-3">
-                            <MessageSquare class="h-6 w-6 text-green-600" />
+                        <div class="rounded-full bg-primary/10 p-3">
+                            <MessageSquare class="h-6 w-6 text-primary" />
                         </div>
                     </div>
-                    <div class="mt-4">
+                    <div class="mt-auto pt-4">
                         <Link 
                             :href="whatsappSettings.index().url" 
-                            class="rounded bg-green-600 px-3 py-2 text-sm text-white hover:bg-green-700"
+                            class="rounded bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
                         >
                             Configure WhatsApp
                         </Link>
@@ -176,20 +200,20 @@ const props = defineProps<{
                 </div>
 
                 <!-- Xero Integration Card -->
-                <div class="rounded-lg border bg-white p-6 shadow-sm">
+                <div class="flex flex-col rounded-lg border bg-white p-6 shadow-sm">
                     <div class="flex items-center justify-between">
                         <div>
                             <h2 class="text-lg font-semibold">Xero Integration</h2>
                             <p class="text-sm text-gray-600">Sync customers, products, and invoices with Xero</p>
                         </div>
-                        <div class="rounded-full bg-orange-100 p-3">
-                            <Zap class="h-6 w-6 text-orange-600" />
+                        <div class="rounded-full bg-primary/10 p-3">
+                            <Zap class="h-6 w-6 text-primary" />
                         </div>
                     </div>
-                    <div class="mt-4">
+                    <div class="mt-auto pt-4">
                         <Link 
                             href="/administration/xero-settings" 
-                            class="rounded bg-orange-600 px-3 py-2 text-sm text-white hover:bg-orange-700"
+                            class="rounded bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
                         >
                             Configure Xero
                         </Link>
@@ -197,20 +221,20 @@ const props = defineProps<{
                 </div>
 
                 <!-- PDF Templates Card -->
-                <div class="rounded-lg border bg-white p-6 shadow-sm">
+                <div class="flex flex-col rounded-lg border bg-white p-6 shadow-sm">
                     <div class="flex items-center justify-between">
                         <div>
                             <h2 class="text-lg font-semibold">PDF Templates</h2>
                             <p class="text-sm text-gray-600">Manage PDF templates for invoices, quotes, jobcards, and proforma invoices</p>
                         </div>
-                        <div class="rounded-full bg-indigo-100 p-3">
-                            <FileText class="h-6 w-6 text-indigo-600" />
+                        <div class="rounded-full bg-primary/10 p-3">
+                            <FileText class="h-6 w-6 text-primary" />
                         </div>
                     </div>
-                    <div class="mt-4">
+                    <div class="mt-auto pt-4">
                         <Link 
                             :href="administration.pdfTemplates.index().url" 
-                            class="rounded bg-indigo-600 px-3 py-2 text-sm text-white hover:bg-indigo-700"
+                            class="rounded bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
                         >
                             Manage Templates
                         </Link>
@@ -218,21 +242,21 @@ const props = defineProps<{
                 </div>
 
                 <!-- Audit Logs Card -->
-                <div class="rounded-lg border bg-white p-6 shadow-sm">
+                <div class="flex flex-col rounded-lg border bg-white p-6 shadow-sm">
                     <div class="flex items-center justify-between">
                         <div>
                             <h2 class="text-lg font-semibold">Audit Logs</h2>
                             <p class="text-sm text-gray-600">Track all changes and activities in the system</p>
-                            <p class="mt-2 text-2xl font-bold text-purple-600">{{ props.stats.audit_logs_count }}</p>
+                            <p class="mt-2 text-2xl font-bold text-primary">{{ props.stats.audit_logs_count }}</p>
                         </div>
-                        <div class="rounded-full bg-purple-100 p-3">
-                            <ClipboardList class="h-6 w-6 text-purple-600" />
+                        <div class="rounded-full bg-primary/10 p-3">
+                            <ClipboardList class="h-6 w-6 text-primary" />
                         </div>
                     </div>
-                    <div class="mt-4">
+                    <div class="mt-auto pt-4">
                         <Link 
                             :href="auditLogs.index().url" 
-                            class="rounded bg-purple-600 px-3 py-2 text-sm text-white hover:bg-purple-700"
+                            class="rounded bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
                         >
                             View Audit Logs
                         </Link>
@@ -240,48 +264,92 @@ const props = defineProps<{
                 </div>
 
                 <!-- Backups & Restore Card -->
-                <div class="rounded-lg border bg-white p-6 shadow-sm">
+                <div class="flex flex-col rounded-lg border bg-white p-6 shadow-sm">
                     <div class="flex items-center justify-between">
                         <div>
                             <h2 class="text-lg font-semibold">Backups & Restore</h2>
                             <p class="text-sm text-gray-600">Automated backups, scheduling, and one-click restore</p>
-                            <p class="mt-2 text-2xl font-bold text-blue-600">{{ props.stats.backups_count }}</p>
+                            <p class="mt-2 text-2xl font-bold text-primary">{{ props.stats.backups_count }}</p>
                         </div>
-                        <div class="rounded-full bg-blue-100 p-3">
-                            <Database class="h-6 w-6 text-blue-600" />
+                        <div class="rounded-full bg-primary/10 p-3">
+                            <Database class="h-6 w-6 text-primary" />
                         </div>
                     </div>
-                    <div class="mt-4">
+                    <div class="mt-auto pt-4">
                         <Link 
                             :href="backups.index().url" 
-                            class="rounded bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700"
+                            class="rounded bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
                         >
                             Manage Backups
                         </Link>
                     </div>
                 </div>
 
+                <!-- Database Upgrade Card -->
+                <div class="flex flex-col rounded-lg border bg-white p-6 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold">Database Upgrade</h2>
+                            <p class="text-sm text-gray-600">Run pending database migrations to upgrade the system</p>
+                        </div>
+                        <div class="rounded-full bg-primary/10 p-3">
+                            <ArrowUpCircle class="h-6 w-6 text-primary" />
+                        </div>
+                    </div>
+                    <div class="mt-auto pt-4">
+                        <button
+                            @click="upgradeDatabase"
+                            :disabled="isUpgrading"
+                            class="rounded bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                            <span v-if="isUpgrading">Upgrading...</span>
+                            <span v-else>Upgrade Database</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Module Visibility Card -->
+                <div class="flex flex-col rounded-lg border bg-white p-6 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold">Module Visibility</h2>
+                            <p class="text-sm text-gray-600">Control which modules appear in the sidebar menu</p>
+                        </div>
+                        <div class="rounded-full bg-primary/10 p-3">
+                            <Eye class="h-6 w-6 text-primary" />
+                        </div>
+                    </div>
+                    <div class="mt-auto pt-4">
+                        <Link 
+                            :href="administration.moduleVisibility().url" 
+                            class="rounded bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
+                        >
+                            Manage Modules
+                        </Link>
+                    </div>
+                </div>
+
                 <!-- Tax Rates Card -->
-                <div class="rounded-lg border bg-white p-6 shadow-sm">
+                <div class="flex flex-col rounded-lg border bg-white p-6 shadow-sm">
                     <div class="flex items-center justify-between">
                         <div>
                             <h2 class="text-lg font-semibold">Tax Rates</h2>
                             <p class="text-sm text-gray-600">Manage tax rates for invoices, quotes, and jobcards</p>
                         </div>
-                        <div class="rounded-full bg-red-100 p-3">
-                            <Percent class="h-6 w-6 text-red-600" />
+                        <div class="rounded-full bg-primary/10 p-3">
+                            <Percent class="h-6 w-6 text-primary" />
                         </div>
                     </div>
-                    <div class="mt-4 flex gap-2">
+                    <div class="mt-auto flex gap-2 pt-4">
                         <Link
                             :href="administration.taxRates.index().url"
-                            class="rounded bg-red-600 px-3 py-2 text-sm text-white hover:bg-red-700"
+                            class="rounded bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
                         >
                             View Tax Rates
                         </Link>
                         <Link
                             :href="administration.taxRates.create().url"
-                            class="rounded border px-3 py-2 text-sm hover:bg-gray-50"
+                            class="rounded border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                         >
                             Add Tax Rate
                         </Link>
@@ -289,26 +357,26 @@ const props = defineProps<{
                 </div>
 
                 <!-- Chart of Accounts Card -->
-                <div class="rounded-lg border bg-white p-6 shadow-sm">
+                <div class="flex flex-col rounded-lg border bg-white p-6 shadow-sm">
                     <div class="flex items-center justify-between">
                         <div>
                             <h2 class="text-lg font-semibold">Chart of Accounts</h2>
                             <p class="text-sm text-gray-600">Manage your company's chart of accounts</p>
                         </div>
-                        <div class="rounded-full bg-teal-100 p-3">
-                            <BookOpen class="h-6 w-6 text-teal-600" />
+                        <div class="rounded-full bg-primary/10 p-3">
+                            <BookOpen class="h-6 w-6 text-primary" />
                         </div>
                     </div>
-                    <div class="mt-4 flex gap-2">
+                    <div class="mt-auto flex gap-2 pt-4">
                         <Link
                             :href="administration.chartOfAccounts.index().url"
-                            class="rounded bg-teal-600 px-3 py-2 text-sm text-white hover:bg-teal-700"
+                            class="rounded bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
                         >
                             View Accounts
                         </Link>
                         <Link
                             :href="administration.chartOfAccounts.create().url"
-                            class="rounded border px-3 py-2 text-sm hover:bg-gray-50"
+                            class="rounded border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                         >
                             Add Account
                         </Link>
@@ -316,26 +384,26 @@ const props = defineProps<{
                 </div>
 
                 <!-- Bank Accounts Card -->
-                <div class="rounded-lg border bg-white p-6 shadow-sm">
+                <div class="flex flex-col rounded-lg border bg-white p-6 shadow-sm">
                     <div class="flex items-center justify-between">
                         <div>
                             <h2 class="text-lg font-semibold">Bank Accounts</h2>
                             <p class="text-sm text-gray-600">Manage bank accounts for your company</p>
                         </div>
-                        <div class="rounded-full bg-cyan-100 p-3">
-                            <CreditCard class="h-6 w-6 text-cyan-600" />
+                        <div class="rounded-full bg-primary/10 p-3">
+                            <CreditCard class="h-6 w-6 text-primary" />
                         </div>
                     </div>
-                    <div class="mt-4 flex gap-2">
+                    <div class="mt-auto flex gap-2 pt-4">
                         <Link
                             :href="administration.bankAccounts.index().url"
-                            class="rounded bg-cyan-600 px-3 py-2 text-sm text-white hover:bg-cyan-700"
+                            class="rounded bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
                         >
                             View Bank Accounts
                         </Link>
                         <Link
                             :href="administration.bankAccounts.create().url"
-                            class="rounded border px-3 py-2 text-sm hover:bg-gray-50"
+                            class="rounded border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                         >
                             Add Bank Account
                         </Link>
