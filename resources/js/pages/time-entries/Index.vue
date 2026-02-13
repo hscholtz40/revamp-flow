@@ -9,16 +9,16 @@
             </div>
 
             <!-- Summary Cards -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="grid grid-cols-1 gap-4 mb-6" :class="isLimitedUser ? 'md:grid-cols-1' : 'md:grid-cols-3'">
                 <div class="bg-white rounded-lg border p-4">
                     <p class="text-sm text-gray-600">Total Hours</p>
                     <p class="text-2xl font-bold text-gray-900">{{ Number(summary.total_hours || 0).toFixed(2) }}h</p>
                 </div>
-                <div class="bg-white rounded-lg border p-4">
+                <div v-if="!isLimitedUser" class="bg-white rounded-lg border p-4">
                     <p class="text-sm text-gray-600">Billable Hours</p>
                     <p class="text-2xl font-bold text-green-600">{{ Number(summary.billable_hours || 0).toFixed(2) }}h</p>
                 </div>
-                <div class="bg-white rounded-lg border p-4">
+                <div v-if="!isLimitedUser" class="bg-white rounded-lg border p-4">
                     <p class="text-sm text-gray-600">Total Amount</p>
                     <p class="text-2xl font-bold text-blue-600">R{{ Number(summary.total_amount || 0).toFixed(2) }}</p>
                 </div>
@@ -36,7 +36,7 @@
                             </option>
                         </select>
                     </div>
-                    <div>
+                    <div v-if="!isLimitedUser">
                         <label class="block text-sm font-medium text-gray-700 mb-1">User</label>
                         <select v-model="filters.user_id" class="w-full rounded border px-3 py-2">
                             <option value="">All Users</option>
@@ -80,12 +80,12 @@
                             <tr>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Jobcard</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
+                                <th v-if="!isLimitedUser" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Duration</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rate</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
+                                <th v-if="!isLimitedUser" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rate</th>
+                                <th v-if="!isLimitedUser" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                <th v-if="!isLimitedUser" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
@@ -98,16 +98,16 @@
                                         {{ entry.jobcard.job_number }}
                                     </Link>
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <td v-if="!isLimitedUser" class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     {{ entry.user?.name }}
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     {{ entry.formatted_duration }}
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <td v-if="!isLimitedUser" class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     {{ entry.hourly_rate ? `R${Number(entry.hourly_rate).toFixed(2)}` : '-' }}
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                <td v-if="!isLimitedUser" class="px-6 py-4 whitespace-nowrap text-sm">
                                     <span v-if="entry.is_billable" class="text-green-600 font-medium">
                                         {{ entry.formatted_total_amount }}
                                     </span>
@@ -125,7 +125,7 @@
                                         {{ entry.status }}
                                     </span>
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <td v-if="!isLimitedUser" class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                     <button
                                         @click="deleteEntry(entry.id)"
                                         class="text-red-600 hover:text-red-900"
@@ -135,7 +135,7 @@
                                 </td>
                             </tr>
                             <tr v-if="timeEntries.data.length === 0">
-                                <td colspan="8" class="px-6 py-4 text-center text-sm text-gray-500">
+                                <td :colspan="isLimitedUser ? 5 : 8" class="px-6 py-4 text-center text-sm text-gray-500">
                                     No time entries found
                                 </td>
                             </tr>
@@ -172,8 +172,8 @@
 
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
-import { Head, Link, router } from '@inertiajs/vue3';
-import { ref, watch } from 'vue';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { ref, computed, watch } from 'vue';
 
 interface Props {
     timeEntries: {
@@ -200,6 +200,9 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+
+const page = usePage();
+const isLimitedUser = computed(() => (page.props.auth as any)?.user?.user_type === 'limited');
 
 const filters = ref({
     jobcard_id: props.filters.jobcard_id || '',

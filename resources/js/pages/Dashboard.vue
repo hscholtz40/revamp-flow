@@ -7,7 +7,8 @@ import invoices from '@/routes/invoices';
 import jobcards from '@/routes/jobcards';
 import products from '@/routes/products';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +18,7 @@ import {
     Wrench, 
     UserPlus,
     TrendingUp,
+    CheckCircle2,
     Package,
     AlertTriangle
 } from 'lucide-vue-next';
@@ -33,6 +35,15 @@ interface Props {
         month: string;
         revenue: number;
     }[];
+    userMonthlyJobcards: {
+        month: string;
+        count: number;
+    }[];
+    jobcardsPerUser: {
+        name: string;
+        count: number;
+    }[];
+    currentMonthCompletedJobcards: number;
     recentActivity: {
         recent_quotes: any[];
         recent_invoices: any[];
@@ -54,6 +65,9 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+
+const page = usePage();
+const isLimitedUser = computed(() => (page.props.auth as any)?.user?.user_type === 'limited');
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -85,6 +99,34 @@ const getBarHeight = (revenue: number) => {
     // Use 100px for the tallest bar, scale others proportionally
     const maxHeight = 100; // pixels
     const height = (revenue / maxRevenue) * maxHeight;
+    return Math.max(height, 8);
+};
+
+// Jobcard bar chart height calculation
+const getJobcardBarHeight = (count: number) => {
+    if (!props.userMonthlyJobcards || props.userMonthlyJobcards.length === 0) return 8;
+    
+    const maxCount = Math.max(...props.userMonthlyJobcards.map(item => item.count));
+    
+    if (maxCount === 0) return 8;
+    if (count === 0) return 8;
+    
+    const maxHeight = 100;
+    const height = (count / maxCount) * maxHeight;
+    return Math.max(height, 8);
+};
+
+// Per-user jobcard bar chart height calculation
+const getPerUserBarHeight = (count: number) => {
+    if (!props.jobcardsPerUser || props.jobcardsPerUser.length === 0) return 8;
+    
+    const maxCount = Math.max(...props.jobcardsPerUser.map(item => item.count));
+    
+    if (maxCount === 0) return 8;
+    if (count === 0) return 8;
+    
+    const maxHeight = 100;
+    const height = (count / maxCount) * maxHeight;
     return Math.max(height, 8);
 };
 
@@ -158,7 +200,7 @@ const getStatusColor = (status: string) => {
             </div>
 
             <!-- Quick Actions -->
-            <Card>
+            <Card v-if="!isLimitedUser">
                 <CardHeader>
                     <CardTitle>Quick Actions</CardTitle>
                     <CardDescription>Create new items quickly</CardDescription>
@@ -194,7 +236,7 @@ const getStatusColor = (status: string) => {
             </Card>
 
             <!-- Current Month Revenue with 12-Month Chart -->
-            <Card>
+            <Card v-if="!isLimitedUser">
                 <CardHeader>
                     <div class="flex items-center justify-between">
                     <div>
@@ -244,6 +286,98 @@ const getStatusColor = (status: string) => {
                 </CardContent>
             </Card>
 
+            <!-- Jobcard Completions Chart -->
+            <Card>
+                <CardHeader>
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <CardTitle class="text-lg font-semibold">
+                                {{ isLimitedUser ? 'Your Jobcard Completions' : 'Jobcard Completions by User' }}
+                            </CardTitle>
+                            <CardDescription>
+                                {{ isLimitedUser ? 'Completed jobcards per month over the last 12 months' : 'All completed jobcards broken down by user' }}
+                            </CardDescription>
+                        </div>
+                        <CheckCircle2 class="h-5 w-5 text-muted-foreground" />
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    <!-- Standard users: per-user breakdown -->
+                    <div v-if="!isLimitedUser">
+                        <div class="grid gap-2 md:grid-cols-4">
+                            <div class="space-y-1">
+                                <div>
+                                    <div class="text-3xl font-bold">{{ currentMonthCompletedJobcards }}</div>
+                                    <p class="text-sm text-muted-foreground">Completed This Month</p>
+                                </div>
+                            </div>
+                            <div class="md:col-span-3">
+                                <h4 class="text-sm font-medium mb-2">Completed Jobcards per User</h4>
+                                <div v-if="jobcardsPerUser && jobcardsPerUser.length > 0" class="h-28 flex items-end justify-between gap-2">
+                                    <div v-for="(data, index) in jobcardsPerUser" :key="index" class="flex flex-col items-center flex-1">
+                                        <div class="text-xs text-muted-foreground mb-1 truncate max-w-full" :title="data.name">{{ data.name.split(' ')[0] }}</div>
+                                        <div 
+                                            class="w-full bg-emerald-500 rounded-t transition-all duration-300 hover:bg-emerald-600 cursor-pointer"
+                                            :style="{ height: getPerUserBarHeight(data.count) + 'px', minHeight: '8px' }"
+                                            :title="`${data.name}: ${data.count} completed`"
+                                        ></div>
+                                        <div class="text-xs text-muted-foreground mt-1 text-center">
+                                            {{ data.count }}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div v-else class="h-28 flex items-center justify-center text-muted-foreground border-2 border-dashed border-gray-300 rounded-lg">
+                                    <div class="text-center">
+                                        <div class="text-sm font-medium">No completion data</div>
+                                        <div class="text-xs">Complete jobcards to see user stats</div>
+                                    </div>
+                                </div>
+                                <div class="mt-2 text-xs text-muted-foreground text-center">
+                                    Hover over bars to see full name and count
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Limited users: own 12-month trend -->
+                    <div v-else>
+                        <div class="grid gap-2 md:grid-cols-4">
+                            <div class="space-y-1">
+                                <div>
+                                    <div class="text-3xl font-bold">{{ currentMonthCompletedJobcards }}</div>
+                                    <p class="text-sm text-muted-foreground">Completed This Month</p>
+                                </div>
+                            </div>
+                            <div class="md:col-span-3">
+                                <h4 class="text-sm font-medium mb-2">12-Month Completion Trend</h4>
+                                <div v-if="userMonthlyJobcards && userMonthlyJobcards.length > 0" class="h-28 flex items-end justify-between gap-2">
+                                    <div v-for="(data, index) in userMonthlyJobcards" :key="index" class="flex flex-col items-center flex-1">
+                                        <div class="text-xs text-muted-foreground mb-1">{{ data.month }}</div>
+                                        <div 
+                                            class="w-full bg-emerald-500 rounded-t transition-all duration-300 hover:bg-emerald-600 cursor-pointer"
+                                            :style="{ height: getJobcardBarHeight(data.count) + 'px', minHeight: '8px' }"
+                                            :title="`${data.count} completed`"
+                                        ></div>
+                                        <div class="text-xs text-muted-foreground mt-1 text-center">
+                                            {{ data.count }}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div v-else class="h-28 flex items-center justify-center text-muted-foreground border-2 border-dashed border-gray-300 rounded-lg">
+                                    <div class="text-center">
+                                        <div class="text-sm font-medium">No completion data</div>
+                                        <div class="text-xs">Complete jobcards to see your trends</div>
+                                    </div>
+                                </div>
+                                <div class="mt-2 text-xs text-muted-foreground text-center">
+                                    Hover over bars to see exact counts
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
             <!-- Recent Activity -->
             <Card>
                 <CardHeader>
@@ -253,7 +387,7 @@ const getStatusColor = (status: string) => {
                 <CardContent>
                     <div class="grid gap-6 md:grid-cols-3">
                         <!-- Recent Quotes -->
-                        <div v-if="recentActivity.recent_quotes.length > 0">
+                        <div v-if="!isLimitedUser && recentActivity.recent_quotes.length > 0">
                             <h4 class="text-sm font-medium mb-2">Recent Quotes</h4>
                             <div class="space-y-2">
                                 <Link 
@@ -278,7 +412,7 @@ const getStatusColor = (status: string) => {
                 </div>
                         
                         <!-- Recent Invoices -->
-                        <div v-if="recentActivity.recent_invoices.length > 0">
+                        <div v-if="!isLimitedUser && recentActivity.recent_invoices.length > 0">
                             <h4 class="text-sm font-medium mb-2">Recent Invoices</h4>
                             <div class="space-y-2">
                                 <Link 
@@ -374,9 +508,9 @@ const getStatusColor = (status: string) => {
             </Card>
 
             <!-- Status Charts Section -->
-            <div class="grid gap-6 md:grid-cols-3">
+            <div class="grid gap-6" :class="isLimitedUser ? 'md:grid-cols-1' : 'md:grid-cols-3'">
                 <!-- Quote Status Bar Chart -->
-                <Card class="relative overflow-hidden border-0 bg-white shadow-lg hover:shadow-xl transition-all duration-300">
+                <Card v-if="!isLimitedUser" class="relative overflow-hidden border-0 bg-white shadow-lg hover:shadow-xl transition-all duration-300">
                     <CardHeader class="pb-4">
                         <CardTitle class="text-lg font-bold">Quote Status</CardTitle>
                         <CardDescription class="text-xs text-muted-foreground">Distribution of quote statuses</CardDescription>
@@ -421,7 +555,7 @@ const getStatusColor = (status: string) => {
                 </Card>
 
                 <!-- Invoice Status Bar Chart -->
-                <Card class="relative overflow-hidden border-0 bg-white shadow-lg hover:shadow-xl transition-all duration-300">
+                <Card v-if="!isLimitedUser" class="relative overflow-hidden border-0 bg-white shadow-lg hover:shadow-xl transition-all duration-300">
                     <CardHeader class="pb-4">
                         <CardTitle class="text-lg font-bold">Invoice Status</CardTitle>
                         <CardDescription class="text-xs text-muted-foreground">Distribution of invoice statuses</CardDescription>

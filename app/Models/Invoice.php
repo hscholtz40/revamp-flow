@@ -127,13 +127,10 @@ class Invoice extends Model
      */
     public function calculateTotals(): void
     {
-        // Calculate subtotal before discounts (sum of quantity * unit_price)
-        $subtotalBeforeDiscount = $this->lineItems->sum(function ($item) {
-            return ($item->quantity ?? 0) * ($item->unit_price ?? 0);
-        });
-        
+        $lineItems = $this->lineItems;
+
         // Calculate total discount from line items
-        $totalDiscount = $this->lineItems->sum(function ($item) {
+        $totalDiscount = $lineItems->sum(function ($item) {
             $quantity = $item->quantity ?? 0;
             $unitPrice = $item->unit_price ?? 0;
             $discountAmount = $item->discount_amount ?? 0;
@@ -141,7 +138,6 @@ class Invoice extends Model
             
             $itemSubtotal = $quantity * $unitPrice;
             
-            // Apply discount: percentage takes precedence over amount
             if ($discountPercentage > 0) {
                 return $itemSubtotal * ($discountPercentage / 100);
             }
@@ -150,16 +146,16 @@ class Invoice extends Model
         });
         
         // Subtotal after discounts (sum of line item totals)
-        $subtotal = $this->lineItems->sum('total');
+        $subtotal = $lineItems->sum('total');
         
-        // Calculate tax on discounted amount and round UP to 2 decimal places
-        $taxAmount = ceil(($subtotal * ($this->tax_rate / 100)) * 100) / 100;
+        // Tax is now calculated per line item - sum all line item tax amounts
+        $taxAmount = $lineItems->sum('tax_amount') ?? 0;
         $total = $subtotal + $taxAmount;
 
         $this->update([
             'subtotal' => $subtotal,
             'discount_amount' => $totalDiscount,
-            'discount_percentage' => 0, // Clear percentage since we're using amount from line items
+            'discount_percentage' => 0,
             'tax_amount' => $taxAmount,
             'total' => $total,
         ]);

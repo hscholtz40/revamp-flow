@@ -7,6 +7,7 @@ use App\Models\Backup;
 use App\Models\Contact;
 use App\Models\Group;
 use App\Models\Product;
+use App\Models\Team;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Artisan;
@@ -30,6 +31,9 @@ class AdministrationController extends Controller
                         ? AuditLog::where('company_id', $currentCompany->id)->count()
                         : AuditLog::count(),
                     'backups_count' => Backup::where('status', 'completed')->count(),
+                    'teams_count' => $currentCompany
+                        ? Team::where('company_id', $currentCompany->id)->count()
+                        : Team::count(),
                 ],
         ]);
     }

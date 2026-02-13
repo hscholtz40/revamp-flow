@@ -77,34 +77,36 @@
                         >
                             Email
                         </button>
-                        <button
-                            v-if="!props.jobcard.invoice_id"
-                            @click="convertToInvoice"
-                            class="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
-                        >
-                            Convert to Invoice
-                        </button>
-                        <Link
-                            v-else
-                            :href="invoices.show(props.jobcard.invoice_id).url"
-                            class="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-                        >
-                            View Invoice
-                        </Link>
-                        <Link
-                            v-if="canEditJobcard"
-                            :href="jobcards.edit(props.jobcard.id).url"
-                            class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                        >
-                            Edit
-                        </Link>
-                        <span
-                            v-else
-                            class="rounded-md bg-gray-400 px-4 py-2 text-sm font-medium text-white cursor-not-allowed"
-                            title="Cannot edit completed jobcards without permission"
-                        >
-                            Edit
-                        </span>
+                        <template v-if="!isLimitedUser">
+                            <button
+                                v-if="!props.jobcard.invoice_id"
+                                @click="convertToInvoice"
+                                class="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                            >
+                                Convert to Invoice
+                            </button>
+                            <Link
+                                v-else
+                                :href="invoices.show(props.jobcard.invoice_id).url"
+                                class="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                            >
+                                View Invoice
+                            </Link>
+                            <Link
+                                v-if="canEditJobcard"
+                                :href="jobcards.edit(props.jobcard.id).url"
+                                class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                            >
+                                Edit
+                            </Link>
+                            <span
+                                v-else
+                                class="rounded-md bg-gray-400 px-4 py-2 text-sm font-medium text-white cursor-not-allowed"
+                                title="Cannot edit completed jobcards without permission"
+                            >
+                                Edit
+                            </span>
+                        </template>
                     </div>
                 </div>
             </div>
@@ -187,41 +189,42 @@
                                 <table class="w-full">
                                     <thead class="bg-gray-50">
                                         <tr>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                Description
-                                            </th>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                Qty
-                                            </th>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                Unit Price
-                                            </th>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                Total
-                                            </th>
+                                            <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Qty</th>
+                                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                                            <th v-if="!isLimitedUser" class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Price</th>
+                                            <th v-if="!isLimitedUser" class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Discount</th>
+                                            <th v-if="!isLimitedUser" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">Tax</th>
+                                            <th v-if="!isLimitedUser" class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Total</th>
                                         </tr>
                                     </thead>
                                     <tbody class="bg-white divide-y divide-gray-200">
                                         <tr v-for="item in props.jobcard.line_items" :key="item.id">
-                                            <td class="px-4 py-4 whitespace-nowrap">
-                                                <div class="text-sm text-gray-900">
-                                                    <Link
-                                                        v-if="item.product_id && item.product"
-                                                        :href="products.show(item.product_id).url"
-                                                        class="text-blue-600 hover:text-blue-800 hover:underline"
-                                                    >
-                                                        {{ item.description }}
-                                                    </Link>
-                                                    <span v-else>{{ item.description }}</span>
-                                                </div>
-                                            </td>
-                                            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900 text-center">
                                                 {{ item.quantity }}
                                             </td>
-                                            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            <td class="px-3 py-3 text-sm text-gray-900">
+                                                <Link
+                                                    v-if="item.product_id && item.product"
+                                                    :href="products.show(item.product_id).url"
+                                                    class="text-blue-600 hover:text-blue-800 hover:underline"
+                                                >
+                                                    {{ item.description }}
+                                                </Link>
+                                                <span v-else>{{ item.description }}</span>
+                                            </td>
+                                            <td v-if="!isLimitedUser" class="px-3 py-3 whitespace-nowrap text-sm text-gray-900 text-right">
                                                 {{ item.formatted_unit_price }}
                                             </td>
-                                            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            <td v-if="!isLimitedUser" class="px-3 py-3 whitespace-nowrap text-sm text-right">
+                                                <span v-if="item.discount_percentage && item.discount_percentage > 0" class="text-red-600">{{ item.discount_percentage }}%</span>
+                                                <span v-else-if="item.discount_amount && item.discount_amount > 0" class="text-red-600">R{{ Number(item.discount_amount).toFixed(2) }}</span>
+                                                <span v-else class="text-gray-400">&mdash;</span>
+                                            </td>
+                                            <td v-if="!isLimitedUser" class="px-3 py-3 whitespace-nowrap text-sm text-gray-900">
+                                                <span v-if="item.tax_rate" class="inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-700">{{ item.tax_rate.name }} ({{ item.tax_rate.rate }}%)</span>
+                                                <span v-else class="text-gray-400">&mdash;</span>
+                                            </td>
+                                            <td v-if="!isLimitedUser" class="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900 text-right">
                                                 {{ item.formatted_total }}
                                             </td>
                                         </tr>
@@ -266,6 +269,25 @@
                                         {{ formatStatus(props.jobcard.status) }}
                                     </span>
                                 </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Assigned To</label>
+                                    <p class="text-sm text-gray-900">
+                                        <span v-if="props.jobcard.assigned_user" class="inline-flex items-center gap-1.5">
+                                            <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-medium text-blue-700">
+                                                {{ props.jobcard.assigned_user.name.charAt(0).toUpperCase() }}
+                                            </span>
+                                            {{ props.jobcard.assigned_user.name }}
+                                        </span>
+                                        <span v-else-if="props.jobcard.assigned_team" class="inline-flex items-center gap-1.5">
+                                            <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-purple-100 text-xs font-medium text-purple-700">
+                                                {{ props.jobcard.assigned_team.name.charAt(0).toUpperCase() }}
+                                            </span>
+                                            {{ props.jobcard.assigned_team.name }}
+                                            <span class="text-xs text-gray-400">(Team)</span>
+                                        </span>
+                                        <span v-else class="text-gray-400">Unassigned</span>
+                                    </p>
+                                </div>
                                 <div v-if="props.jobcard.start_date">
                                     <label class="block text-sm font-medium text-gray-700">Start Date</label>
                                     <p class="text-sm text-gray-900">{{ formatDate(props.jobcard.start_date) }}</p>
@@ -291,7 +313,7 @@
                     </div>
 
                     <!-- Pricing Summary -->
-                    <div class="rounded-lg bg-white border border-gray-200 shadow-sm">
+                    <div v-if="!isLimitedUser" class="rounded-lg bg-white border border-gray-200 shadow-sm">
                         <div class="border-b border-gray-200 bg-gray-50 px-6 py-4">
                             <h2 class="text-lg font-semibold text-gray-900">Pricing Summary</h2>
                             <p class="text-sm text-gray-600">Cost breakdown and totals</p>
@@ -307,7 +329,7 @@
                                     <span class="text-sm font-medium text-red-600">-R{{ (Number(props.jobcard.discount_amount) || 0).toFixed(2) }}</span>
                                 </div>
                                 <div class="flex justify-between">
-                                    <span class="text-sm text-gray-600">Tax ({{ props.jobcard.tax_rate || 0 }}%):</span>
+                                    <span class="text-sm text-gray-600">Tax:</span>
                                     <span class="text-sm font-medium">R{{ (Number(props.jobcard.tax_amount) || 0).toFixed(2) }}</span>
                                 </div>
                                 <div class="flex justify-between border-t pt-3">
@@ -319,7 +341,7 @@
                     </div>
 
                     <!-- Actions -->
-                    <div class="rounded-lg bg-white border border-gray-200 shadow-sm">
+                    <div v-if="!isLimitedUser" class="rounded-lg bg-white border border-gray-200 shadow-sm">
                         <div class="border-b border-gray-200 bg-gray-50 px-6 py-4">
                             <h2 class="text-lg font-semibold text-gray-900">Actions</h2>
                             <p class="text-sm text-gray-600">Manage this jobcard</p>
@@ -499,13 +521,16 @@
 
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
-import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import jobcards from '@/routes/jobcards';
 import invoices from '@/routes/invoices';
 import products from '@/routes/products';
 import customers from '@/routes/customers';
 import TimeTracking from '@/components/TimeTracking.vue';
+
+const page = usePage();
+const isLimitedUser = computed(() => (page.props.auth as any)?.user?.user_type === 'limited');
 
 interface Product {
     id: number;
@@ -550,6 +575,16 @@ interface TimeEntry {
     };
 }
 
+interface AssignedUser {
+    id: number;
+    name: string;
+}
+
+interface AssignedTeam {
+    id: number;
+    name: string;
+}
+
 interface Jobcard {
     id: number;
     invoice_id?: number;
@@ -557,6 +592,10 @@ interface Jobcard {
     title: string;
     description: string | null;
     status: string;
+    assigned_to_user_id: number | null;
+    assigned_to_team_id: number | null;
+    assigned_user: AssignedUser | null;
+    assigned_team: AssignedTeam | null;
     start_date: string | null;
     due_date: string | null;
     completed_date: string | null;

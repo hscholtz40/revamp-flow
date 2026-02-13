@@ -14,6 +14,11 @@ return Application::configure(basePath: dirname(__DIR__))
         web: __DIR__.'/../routes/web.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
+        then: function () {
+            // Stateless API routes (no CSRF, no session)
+            \Illuminate\Support\Facades\Route::middleware('throttle:60,1')
+                ->group(base_path('routes/api.php'));
+        },
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
@@ -22,11 +27,13 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleAppearance::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
+            \App\Http\Middleware\RestrictLimitedUser::class,
         ]);
 
         $middleware->alias([
             'module.permission' => EnsureModulePermission::class,
             'admin' => EnsureUserIsAdministrator::class,
+            'licensing' => \App\Http\Middleware\EnsureLicensingInstance::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

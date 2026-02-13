@@ -46,16 +46,16 @@
             </div>
             
             <!-- Time Summary -->
-            <div v-if="timeSummary" class="grid grid-cols-3 gap-4 pt-4 border-t border-gray-200">
+            <div v-if="timeSummary" class="grid gap-4 pt-4 border-t border-gray-200" :class="isLimitedUser ? 'grid-cols-1' : 'grid-cols-3'">
                 <div>
                     <p class="text-sm text-gray-600">Total Hours</p>
                     <p class="text-lg font-semibold">{{ timeSummary.total_hours.toFixed(2) }}h</p>
                 </div>
-                <div>
+                <div v-if="!isLimitedUser">
                     <p class="text-sm text-gray-600">Billable Hours</p>
                     <p class="text-lg font-semibold">{{ timeSummary.billable_hours.toFixed(2) }}h</p>
                 </div>
-                <div>
+                <div v-if="!isLimitedUser">
                     <p class="text-sm text-gray-600">Total Amount</p>
                     <p class="text-lg font-semibold">R{{ timeSummary.total_amount.toFixed(2) }}</p>
                 </div>
@@ -75,7 +75,7 @@
                             <p class="text-xs text-gray-600">{{ formatDate(entry.date) }} • {{ entry.formatted_duration }}</p>
                             <p v-if="entry.description" class="text-xs text-gray-500 mt-1">{{ entry.description }}</p>
                         </div>
-                        <div class="text-right">
+                        <div v-if="!isLimitedUser" class="text-right">
                             <p v-if="entry.is_billable" class="text-sm font-medium text-green-600">{{ entry.formatted_total_amount }}</p>
                             <p v-else class="text-sm text-gray-500">Non-billable</p>
                         </div>
@@ -105,7 +105,7 @@
                                 placeholder="What are you working on?"
                             ></textarea>
                         </div>
-                        <div>
+                        <div v-if="!isLimitedUser">
                             <label class="block text-sm font-medium text-gray-700 mb-1">Hourly Rate (R)</label>
                             <input
                                 v-model.number="timerForm.hourly_rate"
@@ -186,8 +186,13 @@
                                 min="0"
                                 max="24"
                                 class="w-full rounded-md border-gray-300 shadow-sm"
+                                :class="{ 'bg-gray-100': entryForm.start_time && entryForm.end_time }"
+                                :readonly="!!(entryForm.start_time && entryForm.end_time)"
                                 placeholder="2.5"
                             />
+                            <p v-if="entryForm.start_time && entryForm.end_time" class="text-xs text-gray-500 mt-1">
+                                Auto-calculated from start and end times
+                            </p>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
@@ -197,7 +202,7 @@
                                 rows="3"
                             ></textarea>
                         </div>
-                        <div>
+                        <div v-if="!isLimitedUser">
                             <label class="block text-sm font-medium text-gray-700 mb-1">Hourly Rate (R)</label>
                             <input
                                 v-model.number="entryForm.hourly_rate"
@@ -238,8 +243,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { router, useForm } from '@inertiajs/vue3';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { router, useForm, usePage } from '@inertiajs/vue3';
 import { Link } from '@inertiajs/vue3';
 
 interface Props {
@@ -255,6 +260,10 @@ interface Props {
 
 const props = defineProps<Props>();
 
+const page = usePage();
+const isLimitedUser = computed(() => (page.props.auth as any)?.user?.user_type === 'limited');
+const userHourlyRate = computed(() => (page.props.auth as any)?.user?.hourly_rate ?? null);
+
 const showStartTimerDialog = ref(false);
 const showManualEntryDialog = ref(false);
 const elapsedTime = ref(0);
@@ -263,7 +272,7 @@ let intervalId: number | null = null;
 const timerForm = useForm({
     jobcard_id: props.jobcardId,
     description: '',
-    hourly_rate: null as number | null,
+    hourly_rate: userHourlyRate.value as number | null,
     is_billable: true,
 });
 
@@ -274,9 +283,29 @@ const entryForm = useForm({
     end_time: '',
     duration_hours: null as number | null,
     description: '',
-    hourly_rate: null as number | null,
+    hourly_rate: userHourlyRate.value as number | null,
     is_billable: true,
 });
+
+// Auto-calculate duration when start and end times change
+watch(
+    () => [entryForm.start_time, entryForm.end_time],
+    ([startTime, endTime]) => {
+        if (startTime && endTime) {
+            const [startHours, startMinutes] = startTime.split(':').map(Number);
+            const [endHours, endMinutes] = endTime.split(':').map(Number);
+
+            let durationMinutes = (endHours * 60 + endMinutes) - (startHours * 60 + startMinutes);
+
+            // Handle overnight (e.g., 22:00 to 06:00)
+            if (durationMinutes < 0) {
+                durationMinutes += 24 * 60;
+            }
+
+            entryForm.duration_hours = Math.round((durationMinutes / 60) * 100) / 100;
+        }
+    }
+);
 
 const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString();

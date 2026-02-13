@@ -135,4 +135,16 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Licensing Instance
+    |--------------------------------------------------------------------------
+    |
+    | When enabled, the Licensing module becomes available, allowing this
+    | instance to manage and issue license keys for other instances.
+    |
+    */
+
+    'is_licensing_instance' => (bool) env('IS_LICENSING_INSTANCE', false),
+
 ];

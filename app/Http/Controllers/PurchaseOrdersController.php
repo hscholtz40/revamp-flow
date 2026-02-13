@@ -6,6 +6,7 @@ use App\Models\Product;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
 use App\Models\Supplier;
+use App\Models\TaxRate;
 use App\Services\StockService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -65,8 +66,13 @@ class PurchaseOrdersController extends Controller
     {
         $currentCompany = auth()->user()->getCurrentCompany();
         
+        $taxRates = TaxRate::where('company_id', $currentCompany->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'rate', 'is_default_purchasing']);
+        $defaultPurchasingTaxRate = TaxRate::getDefaultPurchasingForCompany($currentCompany->id);
+
         return Inertia::render('purchase-orders/Create', [
             'supplier_id' => $request->integer('supplier_id'),
+            'taxRates' => $taxRates,
+            'defaultPurchasingTaxRateId' => $defaultPurchasingTaxRate?->id,
             'suppliers' => Supplier::where('company_id', $currentCompany->id)
                 ->where('is_active', true)
                 ->orderBy('name')
@@ -106,6 +112,7 @@ class PurchaseOrdersController extends Controller
             'items.*.quantity' => ['required', 'integer', 'min:1'],
             'items.*.unit_cost' => ['required', 'numeric', 'min:0'],
             'items.*.description' => ['nullable', 'string'],
+            'items.*.tax_rate_id' => ['nullable', 'exists:tax_rates,id'],
         ]);
 
         $supplier = Supplier::findOrFail($validated['supplier_id']);
@@ -133,6 +140,7 @@ class PurchaseOrdersController extends Controller
                 'quantity' => $item['quantity'],
                 'unit_cost' => $item['unit_cost'],
                 'description' => $item['description'] ?? null,
+                'tax_rate_id' => $item['tax_rate_id'] ?? null,
             ]);
         }
 
@@ -380,7 +388,7 @@ class PurchaseOrdersController extends Controller
             abort(403, 'Unauthorized access to purchase order.');
         }
 
-        $purchaseOrder->load(['supplier', 'items.product', 'company']);
+        $purchaseOrder->load(['supplier', 'items.product', 'items.taxRate', 'company']);
         
         $company = $purchaseOrder->company;
         $templateId = $request->get('template_id');
@@ -412,7 +420,7 @@ class PurchaseOrdersController extends Controller
             'customMessage' => 'nullable|string',
         ]);
 
-        $purchaseOrder->load(['supplier', 'items.product', 'company']);
+        $purchaseOrder->load(['supplier', 'items.product', 'items.taxRate', 'company']);
         
         // Get user's SMTP settings
         $user = auth()->user();

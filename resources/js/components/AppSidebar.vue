@@ -27,7 +27,8 @@ import groups from '@/routes/groups';
 import administration from '@/routes/administration';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, Users, Settings, UserCheck, Package, Building2, ClipboardList, FileText, Receipt, Warehouse, ArrowUpDown, ShoppingCart, Clock, BarChart3 } from 'lucide-vue-next';
+import { BookOpen, Folder, LayoutGrid, Users, Settings, UserCheck, Package, Building2, ClipboardList, FileText, Receipt, Warehouse, ArrowUpDown, ShoppingCart, Clock, BarChart3, KeyRound } from 'lucide-vue-next';
+import licenses from '@/routes/licenses';
 import AppLogo from './AppLogo.vue';
 import { computed } from 'vue';
 
@@ -39,6 +40,8 @@ const currentCompany = computed(() => page.props.currentCompany as {
     logo_path: string | null;
     visible_modules: string[] | null;
 } | null);
+
+const isLicensingInstance = computed(() => (page.props as any).isLicensingInstance === true);
 
 const mainNavItems: NavItem[] = [
     {
@@ -101,6 +104,11 @@ const mainNavItems: NavItem[] = [
         href: '/time-entries',
         icon: Clock,
     },
+    {
+        title: 'Licensing',
+        href: licenses.index().url,
+        icon: KeyRound,
+    },
 ];
 
 const footerNavItems: NavItem[] = [
@@ -125,11 +133,23 @@ const moduleKeyMap: Record<string, string> = {
     'Timesheet': 'timesheet',
 };
 
+const userType = computed(() => (page.props.auth?.user as any)?.user_type ?? 'standard');
+
 const filteredNavItems = computed(() => {
     return mainNavItems.filter((item) => {
         // Dashboard is always visible
         if (item.title === 'Dashboard') {
             return true;
+        }
+
+        // Limited users can only see Jobcards and Timesheet
+        if (userType.value === 'limited') {
+            return item.title === 'Jobcards' || item.title === 'Timesheet';
+        }
+
+        // Licensing is only visible on licensing instances
+        if (item.title === 'Licensing') {
+            return isLicensingInstance.value;
         }
         
         // Check module visibility settings first
@@ -228,7 +248,7 @@ const filteredNavItems = computed(() => {
         </SidebarContent>
 
         <SidebarFooter>
-            <NavFooter :items="footerNavItems" />
+            <NavFooter v-if="userType !== 'limited'" :items="footerNavItems" />
             <!-- Default Logo above user menu when company logo is uploaded -->
             <div v-if="currentCompany?.logo_path" class="mb-3 px-2">
                 <img

@@ -11,6 +11,8 @@ const props = defineProps<{
 const form = useForm({ 
     name: '', 
     email: '', 
+    user_type: 'standard' as 'standard' | 'limited' | 'info',
+    hourly_rate: null as number | null,
     password: '', 
     groups: [] as number[],
     companies: [] as number[],
@@ -40,6 +42,23 @@ function submit() { form.post(users.store().url); }
                 <div v-if="form.errors.email" class="text-sm text-red-600">{{ form.errors.email }}</div>
             </label>
             <label class="block">
+                <span class="mb-1 block">User Type</span>
+                <select v-model="form.user_type" class="w-full rounded border px-3 py-2">
+                    <option value="standard">Standard</option>
+                    <option value="limited">Limited</option>
+                    <option value="info">Info</option>
+                </select>
+                <p v-if="form.user_type === 'limited'" class="mt-1 text-xs text-gray-500">Limited users can only view jobcards, change jobcard status, and create booked time.</p>
+                <p v-if="form.user_type === 'info'" class="mt-1 text-xs text-gray-500">Info users are for reference only and will not have login access.</p>
+                <div v-if="form.errors.user_type" class="text-sm text-red-600">{{ form.errors.user_type }}</div>
+            </label>
+            <label class="block">
+                <span class="mb-1 block">Hourly Rate (R)</span>
+                <input v-model.number="form.hourly_rate" type="number" step="0.01" min="0" class="w-full rounded border px-3 py-2" placeholder="0.00" />
+                <p class="mt-1 text-xs text-gray-500">Default hourly rate used when logging time on jobcards.</p>
+                <div v-if="form.errors.hourly_rate" class="text-sm text-red-600">{{ form.errors.hourly_rate }}</div>
+            </label>
+            <label v-if="form.user_type !== 'info'" class="block">
                 <span class="mb-1 block">Password</span>
                 <input v-model="form.password" type="password" class="w-full rounded border px-3 py-2" />
                 <div v-if="form.errors.password" class="text-sm text-red-600">{{ form.errors.password }}</div>

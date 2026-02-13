@@ -9,6 +9,7 @@ use App\Models\Quote;
 use App\Models\Jobcard;
 use App\Models\Product;
 use App\Models\Contact;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -32,11 +33,16 @@ class DashboardController extends Controller
             ];
 
             $userMonthlyRevenue = [];
+            $userMonthlyJobcards = [];
             for ($i = 11; $i >= 0; $i--) {
                 $date = \Carbon\Carbon::now()->subMonths($i);
                 $userMonthlyRevenue[] = [
                     'month' => $date->format('M Y'),
                     'revenue' => 0,
+                ];
+                $userMonthlyJobcards[] = [
+                    'month' => $date->format('M Y'),
+                    'count' => 0,
                 ];
             }
 
@@ -85,7 +91,10 @@ class DashboardController extends Controller
                 'stats' => $stats,
                 'revenueStats' => $revenueStats,
                 'userMonthlyRevenue' => $userMonthlyRevenue,
-                'recentActivity' => $recentActivity,
+            'userMonthlyJobcards' => $userMonthlyJobcards,
+            'jobcardsPerUser' => [],
+            'currentMonthCompletedJobcards' => 0,
+            'recentActivity' => $recentActivity,
                 'overdueItems' => $overdueItems,
                 'lowStockProducts' => $lowStockProducts,
                 'topCustomers' => $topCustomers,
@@ -128,6 +137,64 @@ class DashboardController extends Controller
                 'month' => $monthName,
                 'revenue' => $revenue
             ];
+        }
+
+        // Jobcard completion data
+        $jobcardsPerUser = [];
+
+        if (auth()->user()->isLimitedUser()) {
+            // Limited users: show their own 12-month trend
+            $userMonthlyJobcards = [];
+            for ($i = 11; $i >= 0; $i--) {
+                $date = Carbon::now()->subMonths($i);
+                $monthName = $date->format('M Y');
+                $count = Jobcard::where('company_id', $currentCompany->id)
+                    ->where('assigned_to_user_id', auth()->id())
+                    ->where('status', 'completed')
+                    ->whereMonth('completed_date', $date->month)
+                    ->whereYear('completed_date', $date->year)
+                    ->count();
+                
+                $userMonthlyJobcards[] = [
+                    'month' => $monthName,
+                    'count' => $count,
+                ];
+            }
+
+            $currentMonthCompletedJobcards = Jobcard::where('company_id', $currentCompany->id)
+                ->where('assigned_to_user_id', auth()->id())
+                ->where('status', 'completed')
+                ->whereMonth('completed_date', Carbon::now()->month)
+                ->whereYear('completed_date', Carbon::now()->year)
+                ->count();
+        } else {
+            // Standard users: show completed jobcards per user
+            $userMonthlyJobcards = [];
+
+            $companyUserIds = User::whereHas('companies', function ($query) use ($currentCompany) {
+                $query->where('companies.id', $currentCompany->id);
+            })->pluck('id', 'name');
+
+            foreach ($companyUserIds as $userName => $userId) {
+                $count = Jobcard::where('company_id', $currentCompany->id)
+                    ->where('assigned_to_user_id', $userId)
+                    ->where('status', 'completed')
+                    ->count();
+
+                $jobcardsPerUser[] = [
+                    'name' => $userName,
+                    'count' => $count,
+                ];
+            }
+
+            // Sort descending by count
+            usort($jobcardsPerUser, fn($a, $b) => $b['count'] <=> $a['count']);
+
+            $currentMonthCompletedJobcards = Jobcard::where('company_id', $currentCompany->id)
+                ->where('status', 'completed')
+                ->whereMonth('completed_date', Carbon::now()->month)
+                ->whereYear('completed_date', Carbon::now()->year)
+                ->count();
         }
 
         // Recent activity
@@ -247,6 +314,9 @@ class DashboardController extends Controller
             'stats' => $stats,
             'revenueStats' => $revenueStats,
             'userMonthlyRevenue' => $userMonthlyRevenue,
+            'userMonthlyJobcards' => $userMonthlyJobcards,
+            'jobcardsPerUser' => $jobcardsPerUser,
+            'currentMonthCompletedJobcards' => $currentMonthCompletedJobcards,
             'recentActivity' => $recentActivity,
             'overdueItems' => $overdueItems,
             'lowStockProducts' => $lowStockProducts,

@@ -9,6 +9,7 @@ use App\Models\InvoiceLineItem;
 use App\Models\Product;
 use App\Models\Quote;
 use App\Models\Jobcard;
+use App\Models\TaxRate;
 use App\Models\User;
 use App\Services\ReminderService;
 use App\Services\StockService;
@@ -120,6 +121,9 @@ class InvoicesController extends Controller
             $selectedCustomer = Customer::find($request->customer_id);
         }
 
+        $taxRates = TaxRate::where('company_id', $currentCompany->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'rate', 'is_default_sales']);
+        $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
+
         return Inertia::render('invoices/Create', [
             'customers' => $customers,
             'products' => $products,
@@ -128,6 +132,8 @@ class InvoicesController extends Controller
             'defaultTerms' => $currentCompany->default_invoice_terms,
             'currentUser' => auth()->user(),
             'currentCompany' => $currentCompany,
+            'taxRates' => $taxRates,
+            'defaultSalesTaxRateId' => $defaultSalesTaxRate?->id,
         ]);
     }
 
@@ -157,6 +163,7 @@ class InvoicesController extends Controller
             'line_items.*.unit_price' => 'required|numeric|min:0',
             'line_items.*.discount_amount' => 'nullable|numeric|min:0',
             'line_items.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
+            'line_items.*.tax_rate_id' => 'nullable|exists:tax_rates,id',
             'line_items.*.serial_number_ids' => 'nullable|array',
             'line_items.*.serial_number_ids.*' => 'exists:product_serial_numbers,id',
         ]);
@@ -200,6 +207,16 @@ class InvoicesController extends Controller
             
             $total = max(0, $subtotal - $discountAmount);
             
+            // Calculate per-line-item tax
+            $taxRateId = $lineItemData['tax_rate_id'] ?? null;
+            $lineTaxAmount = 0;
+            if ($taxRateId) {
+                $taxRateModel = TaxRate::find($taxRateId);
+                if ($taxRateModel) {
+                    $lineTaxAmount = ceil(($total * ($taxRateModel->rate / 100)) * 100) / 100;
+                }
+            }
+
             $lineItem = InvoiceLineItem::create([
                 'invoice_id' => $invoice->id,
                 'product_id' => $lineItemData['product_id'],
@@ -209,6 +226,8 @@ class InvoicesController extends Controller
                 'discount_amount' => $lineItemData['discount_amount'] ?? 0,
                 'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
                 'total' => $total,
+                'tax_rate_id' => $taxRateId,
+                'tax_amount' => $lineTaxAmount,
                 'sort_order' => $index,
                 'serial_number_ids' => $lineItemData['serial_number_ids'] ?? null,
             ]);
@@ -293,14 +312,14 @@ class InvoicesController extends Controller
             abort(403, 'You do not have access to this invoice.');
         }
 
-        $invoice->load(['customer', 'salesperson', 'lineItems.product', 'company', 'source', 'payments']);
+        $invoice->load(['customer', 'salesperson', 'lineItems.product', 'lineItems.taxRate', 'company', 'source', 'payments']);
         
         // Ensure totals are calculated
         $invoice->calculateTotals();
         $invoice->refresh();
         
         // Reload relationships after refresh (refresh clears loaded relationships)
-        $invoice->load(['customer', 'salesperson', 'lineItems.product', 'company', 'source', 'payments']);
+        $invoice->load(['customer', 'salesperson', 'lineItems.product', 'lineItems.taxRate', 'company', 'source', 'payments']);
         
         // Load serial numbers for line items that have serial_number_ids
         // Do this after refresh to ensure we have the latest data
@@ -417,11 +436,16 @@ class InvoicesController extends Controller
             }
         }
 
+        $taxRates = TaxRate::where('company_id', $currentCompany->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'rate', 'is_default_sales']);
+        $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
+
         return Inertia::render('invoices/Edit', [
             'invoice' => $invoiceData,
             'customers' => $customers,
             'products' => $products,
             'users' => $users,
+            'taxRates' => $taxRates,
+            'defaultSalesTaxRateId' => $defaultSalesTaxRate?->id,
             'canEditSalesperson' => auth()->user()->canEditSalesperson('invoices'),
             'canEditCompleted' => auth()->user()->hasModulePermission('invoices', 'edit_completed'),
         ]);
@@ -451,6 +475,7 @@ class InvoicesController extends Controller
             'line_items.*.unit_price' => 'required|numeric|min:0',
             'line_items.*.discount_amount' => 'nullable|numeric|min:0',
             'line_items.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
+            'line_items.*.tax_rate_id' => 'nullable|exists:tax_rates,id',
             'line_items.*.serial_number_ids' => 'nullable|array',
             'line_items.*.serial_number_ids.*' => 'exists:product_serial_numbers,id',
         ]);
@@ -561,6 +586,16 @@ class InvoicesController extends Controller
             
             $total = max(0, $subtotal - $discountAmount);
             
+            // Calculate per-line-item tax
+            $taxRateId = $lineItemData['tax_rate_id'] ?? null;
+            $lineTaxAmount = 0;
+            if ($taxRateId) {
+                $taxRateModel = TaxRate::find($taxRateId);
+                if ($taxRateModel) {
+                    $lineTaxAmount = ceil(($total * ($taxRateModel->rate / 100)) * 100) / 100;
+                }
+            }
+
             $lineItem = InvoiceLineItem::create([
                 'invoice_id' => $invoice->id,
                 'product_id' => $lineItemData['product_id'],
@@ -570,6 +605,8 @@ class InvoicesController extends Controller
                 'discount_amount' => $lineItemData['discount_amount'] ?? 0,
                 'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
                 'total' => $total,
+                'tax_rate_id' => $taxRateId,
+                'tax_amount' => $lineTaxAmount,
                 'sort_order' => $index,
                 'serial_number_ids' => $lineItemData['serial_number_ids'] ?? null,
             ]);
@@ -801,7 +838,7 @@ class InvoicesController extends Controller
      */
     public function downloadPdf(Request $request, Invoice $invoice)
     {
-        $invoice->load(['customer', 'lineItems.product', 'company']);
+        $invoice->load(['customer', 'lineItems.product', 'lineItems.taxRate', 'company']);
         
         // Load serial numbers for line items that have serial_number_ids
         foreach ($invoice->lineItems as $lineItem) {
@@ -837,7 +874,7 @@ class InvoicesController extends Controller
             'customMessage' => 'nullable|string',
         ]);
 
-        $invoice->load(['customer', 'lineItems.product', 'company']);
+        $invoice->load(['customer', 'lineItems.product', 'lineItems.taxRate', 'company']);
         
         // Load serial numbers for line items that have serial_number_ids
         foreach ($invoice->lineItems as $lineItem) {
@@ -925,6 +962,8 @@ class InvoicesController extends Controller
                 'quantity' => $quoteLineItem->quantity,
                 'unit_price' => $quoteLineItem->unit_price,
                 'total' => $quoteLineItem->total,
+                'tax_rate_id' => $quoteLineItem->tax_rate_id,
+                'tax_amount' => $quoteLineItem->tax_amount,
                 'sort_order' => $quoteLineItem->sort_order,
             ]);
         }
@@ -971,6 +1010,8 @@ class InvoicesController extends Controller
                 'quantity' => $jobcardLineItem->quantity,
                 'unit_price' => $jobcardLineItem->unit_price,
                 'total' => $jobcardLineItem->total,
+                'tax_rate_id' => $jobcardLineItem->tax_rate_id,
+                'tax_amount' => $jobcardLineItem->tax_amount,
                 'sort_order' => $jobcardLineItem->sort_order,
             ]);
         }

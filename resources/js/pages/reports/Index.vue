@@ -2,7 +2,7 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
-import { Plus, FileText, FileBarChart, Trash2, Eye, Edit, Copy } from 'lucide-vue-next';
+import { Plus, FileText, FileBarChart, Trash2, Eye, Edit, Copy, ClipboardList } from 'lucide-vue-next';
 
 interface Report {
     id: number;
@@ -81,6 +81,25 @@ const deleteTemplate = (templateId: number, event: Event) => {
                     <Plus class="w-4 h-4" />
                     Run Report
                 </Link>
+            </div>
+
+            <!-- Built-in Reports -->
+            <div class="mb-8">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4">Built-in Reports</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <Link
+                        href="/reports/jobcard-detail"
+                        class="bg-white rounded-lg border p-4 hover:shadow-md transition-shadow flex items-start gap-3"
+                    >
+                        <div class="rounded-full bg-primary/10 p-2 mt-0.5">
+                            <ClipboardList class="w-5 h-5 text-primary" />
+                        </div>
+                        <div>
+                            <h3 class="font-semibold text-gray-900">Detailed Jobcards Report</h3>
+                            <p class="text-sm text-gray-500 mt-1">Comprehensive jobcard report with line items, booked time entries, financial summaries, and export to CSV</p>
+                        </div>
+                    </Link>
+                </div>
             </div>
 
             <!-- Templates Section -->

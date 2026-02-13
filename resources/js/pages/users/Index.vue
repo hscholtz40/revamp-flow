@@ -4,7 +4,7 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import users from '@/routes/users';
 import { ref, watch } from 'vue';
 
-interface User { id: number; name: string; email: string }
+interface User { id: number; name: string; email: string; user_type: 'standard' | 'limited' | 'info' }
 
 const props = defineProps<{
     users: { data: User[] };
@@ -38,6 +38,7 @@ watch(search, (value) => {
                         <tr class="bg-gray-50">
                             <th class="p-2 text-left">Name</th>
                             <th class="p-2 text-left">Email</th>
+                            <th class="p-2 text-left">Type</th>
                             <th class="p-2 text-right">Actions</th>
                         </tr>
                     </thead>
@@ -45,6 +46,18 @@ watch(search, (value) => {
                         <tr v-for="u in props.users.data" :key="u.id" class="border-t">
                             <td class="p-2">{{ u.name }}</td>
                             <td class="p-2">{{ u.email }}</td>
+                            <td class="p-2">
+                                <span
+                                    :class="{
+                                        'bg-green-100 text-green-800': u.user_type === 'standard' || !u.user_type,
+                                        'bg-yellow-100 text-yellow-800': u.user_type === 'limited',
+                                        'bg-gray-100 text-gray-600': u.user_type === 'info',
+                                    }"
+                                    class="inline-flex rounded-full px-2 py-0.5 text-xs font-semibold capitalize"
+                                >
+                                    {{ u.user_type || 'standard' }}
+                                </span>
+                            </td>
                             <td class="p-2 text-right">
                                 <Link :href="users.show(u.id).url" class="rounded border px-2 py-1">View</Link>
                                 <Link :href="users.edit(u.id).url" class="ml-2 rounded bg-gray-200 px-2 py-1">Edit</Link>

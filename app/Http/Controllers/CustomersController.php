@@ -7,6 +7,7 @@ use App\Models\Customer;
 use App\Models\SMSSettings;
 use App\Models\SMSActivity;
 use App\Services\BulkSMSService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -45,7 +46,7 @@ class CustomersController extends Controller
         return Inertia::render('customers/Create');
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request): RedirectResponse|JsonResponse
     {
         $currentCompany = auth()->user()->getCurrentCompany();
         
@@ -81,8 +82,8 @@ class CustomersController extends Controller
         
         $customer = Customer::create($validated);
 
-        // If this is an AJAX request (quick create), return JSON
-        if ($request->wantsJson() || $request->ajax()) {
+        // If this is a non-Inertia JSON request (quick create from jobcard forms), return JSON
+        if ($request->wantsJson() && !$request->header('X-Inertia')) {
             return response()->json([
                 'success' => true,
                 'customer' => $customer,

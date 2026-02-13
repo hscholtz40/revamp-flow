@@ -16,6 +16,8 @@ class PurchaseOrderItem extends Model
         'quantity',
         'unit_cost',
         'total',
+        'tax_rate_id',
+        'tax_amount',
         'quantity_received',
         'description',
         'product_batch_id',
@@ -26,6 +28,7 @@ class PurchaseOrderItem extends Model
         'quantity' => 'integer',
         'unit_cost' => 'decimal:2',
         'total' => 'decimal:2',
+        'tax_amount' => 'decimal:2',
         'quantity_received' => 'integer',
         'serial_number_ids' => 'array',
     ];
@@ -46,6 +49,11 @@ class PurchaseOrderItem extends Model
         return $this->belongsTo(Product::class);
     }
 
+    public function taxRate(): BelongsTo
+    {
+        return $this->belongsTo(TaxRate::class);
+    }
+
     /**
      * Get the batch for this item.
      */
@@ -63,6 +71,18 @@ class PurchaseOrderItem extends Model
 
         static::saving(function ($item) {
             $item->total = $item->quantity * $item->unit_cost;
+
+            // Calculate tax amount based on associated tax rate
+            if ($item->tax_rate_id) {
+                $taxRate = TaxRate::find($item->tax_rate_id);
+                if ($taxRate) {
+                    $item->tax_amount = ceil(($item->total * ($taxRate->rate / 100)) * 100) / 100;
+                } else {
+                    $item->tax_amount = 0;
+                }
+            } else {
+                $item->tax_amount = 0;
+            }
         });
     }
 

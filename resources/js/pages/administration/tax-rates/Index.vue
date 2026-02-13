@@ -11,7 +11,8 @@ interface TaxRate {
     rate: number;
     description: string | null;
     is_active: boolean;
-    is_default: boolean;
+    is_default_sales: boolean;
+    is_default_purchasing: boolean;
     created_at: string;
     updated_at: string;
 }
@@ -88,10 +89,16 @@ function deleteTaxRate(taxRate: TaxRate) {
                                         <div class="flex items-center gap-2">
                                             <span class="font-medium text-gray-900">{{ taxRate.name }}</span>
                                             <span
-                                                v-if="taxRate.is_default"
+                                                v-if="taxRate.is_default_sales"
                                                 class="inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-800"
                                             >
-                                                Default
+                                                Default Sales
+                                            </span>
+                                            <span
+                                                v-if="taxRate.is_default_purchasing"
+                                                class="inline-flex rounded-full bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-800"
+                                            >
+                                                Default Purchasing
                                             </span>
                                         </div>
                                         <div v-if="taxRate.description" class="text-sm text-gray-500 line-clamp-1">

@@ -99,10 +99,12 @@ class PurchaseOrder extends Model
      */
     public function calculateTotals(): void
     {
-        $subtotal = $this->items()->sum('total');
+        $items = $this->items()->get();
+        $subtotal = $items->sum('total');
+        $taxAmount = $items->sum('tax_amount') ?? 0;
+        
         $this->subtotal = $subtotal;
-        // Tax calculation can be added here if needed
-        $this->tax_amount = 0;
-        $this->total = $subtotal + $this->tax_amount;
+        $this->tax_amount = $taxAmount;
+        $this->total = $subtotal + $taxAmount;
     }
 }

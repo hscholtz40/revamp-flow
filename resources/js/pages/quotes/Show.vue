@@ -187,55 +187,53 @@
                             <table class="w-full">
                                 <thead class="bg-gray-50">
                                     <tr>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Description
-                                        </th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Quantity
-                                        </th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Unit Price
-                                        </th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Total
-                                        </th>
+                                        <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Qty</th>
+                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                                        <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Price</th>
+                                        <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Discount</th>
+                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">Tax</th>
+                                        <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Total</th>
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200">
                                     <tr v-for="item in props.quote.line_items" :key="item.id">
-                                        <td class="px-6 py-4 whitespace-nowrap">
-                                            <div class="text-sm text-gray-900">
-                                                <template v-if="item.product && item.product.id">
-                                                    <Link
-                                                        :href="products.show(item.product.id).url"
-                                                        class="text-blue-600 hover:text-blue-800 hover:underline"
-                                                    >
-                                                        {{ item.description }}
-                                                    </Link>
-                                                </template>
-                                                <template v-else-if="item.product_id">
-                                                    <Link
-                                                        :href="products.show(item.product_id).url"
-                                                        class="text-blue-600 hover:text-blue-800 hover:underline"
-                                                    >
-                                                        {{ item.description }}
-                                                    </Link>
-                                                </template>
-                                                <template v-else>
-                                                    <span>{{ item.description }}</span>
-                                                </template>
-                                            </div>
-                                            <div v-if="item.product" class="text-xs text-gray-500">
-                                                Product: {{ item.product.name }}
-                                            </div>
-                                        </td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900 text-center">
                                             {{ item.quantity }}
                                         </td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        <td class="px-3 py-3 text-sm text-gray-900">
+                                            <template v-if="item.product && item.product.id">
+                                                <Link
+                                                    :href="products.show(item.product.id).url"
+                                                    class="text-blue-600 hover:text-blue-800 hover:underline"
+                                                >
+                                                    {{ item.description }}
+                                                </Link>
+                                            </template>
+                                            <template v-else-if="item.product_id">
+                                                <Link
+                                                    :href="products.show(item.product_id).url"
+                                                    class="text-blue-600 hover:text-blue-800 hover:underline"
+                                                >
+                                                    {{ item.description }}
+                                                </Link>
+                                            </template>
+                                            <template v-else>
+                                                <span>{{ item.description }}</span>
+                                            </template>
+                                        </td>
+                                        <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900 text-right">
                                             {{ item.formatted_unit_price }}
                                         </td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                        <td class="px-3 py-3 whitespace-nowrap text-sm text-right">
+                                            <span v-if="item.discount_percentage && item.discount_percentage > 0" class="text-red-600">{{ item.discount_percentage }}%</span>
+                                            <span v-else-if="item.discount_amount && item.discount_amount > 0" class="text-red-600">R{{ Number(item.discount_amount).toFixed(2) }}</span>
+                                            <span v-else class="text-gray-400">&mdash;</span>
+                                        </td>
+                                        <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900">
+                                            <span v-if="item.tax_rate" class="inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-700">{{ item.tax_rate.name }} ({{ item.tax_rate.rate }}%)</span>
+                                            <span v-else class="text-gray-400">&mdash;</span>
+                                        </td>
+                                        <td class="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900 text-right">
                                             {{ item.formatted_total }}
                                         </td>
                                     </tr>
@@ -307,7 +305,7 @@
                                 <span class="text-sm font-medium text-red-600">-R{{ formatCurrency(props.quote.discount_amount) }}</span>
                             </div>
                             <div class="flex justify-between">
-                                <span class="text-sm text-gray-500">Tax ({{ props.quote.tax_rate || 0 }}%):</span>
+                                <span class="text-sm text-gray-500">Tax:</span>
                                 <span class="text-sm font-medium text-gray-900">R{{ formatCurrency(props.quote.tax_amount) }}</span>
                             </div>
                             <div class="border-t border-gray-200 pt-3">

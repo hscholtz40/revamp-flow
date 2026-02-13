@@ -21,6 +21,11 @@ class TimeEntryController extends Controller
         $query = TimeEntry::with(['jobcard', 'user'])
             ->where('company_id', $currentCompany->id);
         
+        // Limited users can only see their own time entries
+        if (auth()->user()->isLimitedUser()) {
+            $query->where('user_id', auth()->id());
+        }
+        
         // Filter by jobcard
         if ($request->filled('jobcard_id')) {
             $query->where('jobcard_id', $request->jobcard_id);
@@ -137,7 +142,7 @@ class TimeEntryController extends Controller
             'start_time' => $validated['start_time'] ?? null,
             'end_time' => $validated['end_time'] ?? null,
             'duration_minutes' => $durationMinutes,
-            'hourly_rate' => $validated['hourly_rate'] ?? null,
+            'hourly_rate' => $validated['hourly_rate'] ?? auth()->user()->hourly_rate ?? null,
             'is_billable' => $validated['is_billable'] ?? true,
             'description' => $validated['description'] ?? null,
             'status' => 'completed',
@@ -200,6 +205,11 @@ class TimeEntryController extends Controller
      */
     public function destroy(TimeEntry $timeEntry): RedirectResponse
     {
+        // Limited users cannot delete time entries
+        if (auth()->user()->isLimitedUser()) {
+            abort(403, 'Your account does not have permission to delete time entries.');
+        }
+
         $timeEntry->delete();
         
         return redirect()->back()->with('success', 'Time entry deleted successfully');
@@ -230,7 +240,7 @@ class TimeEntryController extends Controller
             'jobcard_id' => $validated['jobcard_id'],
             'user_id' => auth()->id(),
             'date' => now()->toDateString(),
-            'hourly_rate' => $validated['hourly_rate'] ?? null,
+            'hourly_rate' => $validated['hourly_rate'] ?? auth()->user()->hourly_rate ?? null,
             'is_billable' => $validated['is_billable'] ?? true,
             'description' => $validated['description'] ?? null,
             'status' => 'running',

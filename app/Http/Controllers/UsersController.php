@@ -44,10 +44,14 @@ class UsersController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $isInfoUser = $request->input('user_type') === 'info';
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:8'],
+            'user_type' => ['required', 'string', 'in:standard,limited,info'],
+            'hourly_rate' => ['nullable', 'numeric', 'min:0'],
+            'password' => [$isInfoUser ? 'nullable' : 'required', 'string', 'min:8'],
             'groups' => ['array'],
             'groups.*' => ['integer', 'exists:groups,id'],
             'companies' => ['array'],
@@ -64,7 +68,11 @@ class UsersController extends Controller
         $user = new User();
         $user->name = $validated['name'];
         $user->email = $validated['email'];
-        $user->password = Hash::make($validated['password']);
+        $user->user_type = $validated['user_type'];
+        $user->hourly_rate = $validated['hourly_rate'] ?? null;
+        if (!empty($validated['password'])) {
+            $user->password = Hash::make($validated['password']);
+        }
         
         // Set SMTP settings
         $user->smtp_host = $validated['smtp_host'] ?? null;
@@ -119,6 +127,8 @@ class UsersController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email,' . $user->id],
+            'user_type' => ['required', 'string', 'in:standard,limited,info'],
+            'hourly_rate' => ['nullable', 'numeric', 'min:0'],
             'password' => ['nullable', 'string', 'min:8'],
             'groups' => ['sometimes','array'],
             'groups.*' => ['integer', 'exists:groups,id'],
@@ -135,6 +145,8 @@ class UsersController extends Controller
 
         $user->name = $validated['name'];
         $user->email = $validated['email'];
+        $user->user_type = $validated['user_type'];
+        $user->hourly_rate = $validated['hourly_rate'] ?? null;
         if (!empty($validated['password'])) {
             $user->password = Hash::make($validated['password']);
         }

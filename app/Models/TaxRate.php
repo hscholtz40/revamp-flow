@@ -18,13 +18,15 @@ class TaxRate extends Model
         'rate',
         'description',
         'is_active',
-        'is_default',
+        'is_default_sales',
+        'is_default_purchasing',
     ];
 
     protected $casts = [
         'rate' => 'decimal:2',
         'is_active' => 'boolean',
-        'is_default' => 'boolean',
+        'is_default_sales' => 'boolean',
+        'is_default_purchasing' => 'boolean',
     ];
 
     /**
@@ -44,20 +46,39 @@ class TaxRate extends Model
     }
 
     /**
-     * Scope to get the default tax rate for a company.
+     * Scope to get the default sales tax rate.
      */
-    public function scopeDefault($query)
+    public function scopeDefaultSales($query)
     {
-        return $query->where('is_default', true);
+        return $query->where('is_default_sales', true);
     }
 
     /**
-     * Get the default tax rate for a company.
+     * Scope to get the default purchasing tax rate.
      */
-    public static function getDefaultForCompany(int $companyId): ?self
+    public function scopeDefaultPurchasing($query)
+    {
+        return $query->where('is_default_purchasing', true);
+    }
+
+    /**
+     * Get the default sales tax rate for a company (used by invoices, quotes, jobcards).
+     */
+    public static function getDefaultSalesForCompany(int $companyId): ?self
     {
         return static::where('company_id', $companyId)
-            ->where('is_default', true)
+            ->where('is_default_sales', true)
+            ->where('is_active', true)
+            ->first();
+    }
+
+    /**
+     * Get the default purchasing tax rate for a company (used by purchase orders).
+     */
+    public static function getDefaultPurchasingForCompany(int $companyId): ?self
+    {
+        return static::where('company_id', $companyId)
+            ->where('is_default_purchasing', true)
             ->where('is_active', true)
             ->first();
     }

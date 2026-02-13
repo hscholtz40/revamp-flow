@@ -208,94 +208,178 @@
                 <div class="bg-white rounded-lg border p-6">
                     <div class="flex items-center justify-between mb-4">
                         <h2 class="text-lg font-semibold text-gray-900">Line Items</h2>
-                        <button type="button" @click="addLineItem"
-                            class="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">
-                            Add Item
-                        </button>
                     </div>
 
                     <div v-if="form.errors.line_items" class="text-red-500 text-sm mb-4">
                         {{ form.errors.line_items }}
                     </div>
 
-                    <div class="space-y-4">
-                        <div v-for="(item, index) in form.line_items" :key="index" class="border rounded-lg p-4">
-                            <div class="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
-                                <div class="md:col-span-2 relative">
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Product</label>
-                                    <div class="relative">
-                                        <input 
+                    <!-- Table Header -->
+                    <div class="hidden md:grid md:grid-cols-[3.5rem_1fr_6.5rem_9rem_8rem_5.5rem_2rem] gap-2 px-3 pb-2 text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
+                        <div>Qty</div>
+                        <div>Description</div>
+                        <div>Price</div>
+                        <div>Discount</div>
+                        <div>Tax</div>
+                        <div class="text-right">Total</div>
+                        <div></div>
+                    </div>
+
+                    <div class="divide-y divide-gray-100">
+                        <div
+                            v-for="(item, index) in form.line_items"
+                            :key="index"
+                            class="py-3 px-1"
+                        >
+                            <div class="grid grid-cols-1 md:grid-cols-[3.5rem_1fr_6.5rem_9rem_8rem_5.5rem_2rem] gap-2 items-start">
+                                <!-- Qty -->
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1 md:hidden">Qty</label>
+                                    <input
+                                        v-model.number="item.quantity"
+                                        type="number"
+                                        min="1"
+                                        class="w-full rounded border border-gray-300 px-2 py-1.5 text-sm text-center focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                        required
+                                    />
+                                </div>
+
+                                <!-- Description / Product Search -->
+                                <div class="relative">
+                                    <label class="block text-xs text-gray-500 mb-1 md:hidden">Description</label>
+                                    <div class="flex items-center gap-1">
+                                        <input
+                                            v-model="item.description"
+                                            @input="handleDescriptionInput(index)"
+                                            @focus="showProductSuggestions[index] = true"
+                                            @blur="handleDescriptionBlur(index)"
                                             type="text"
-                                            :value="getProductDisplayName(item.product_id)"
-                                            @input="handleProductSearch(index, $event)"
-                                            @focus="handleProductFocus(index)"
-                                            @blur="handleProductBlur(index)"
-                                            placeholder="Search by name or SKU..."
-                                            class="w-full rounded border px-3 py-2 pr-8"
+                                            placeholder="Type description or search products..."
+                                            class="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                            :class="{ 'border-red-500': form.errors[`line_items.${index}.description`] }"
+                                            required
                                         />
-                                        <svg v-if="item.product_id" @click="clearProduct(index)" class="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 hover:text-gray-600 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                                        </svg>
-                                        <!-- Dropdown with filtered products -->
-                                        <div 
-                                            v-if="productSearchFocused[index] && productSearchQueries[index] && (filteredProducts(index).length > 0 || !item.product_id)"
-                                            class="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto"
+                                        <span
+                                            v-if="item.product_id"
+                                            class="flex-shrink-0 inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700 border border-blue-200"
+                                            :title="getProductName(item.product_id)"
                                         >
-                                            <!-- Option to use custom item (shown first) -->
-                                            <div 
-                                                v-if="!item.product_id"
-                                                @mousedown.prevent="selectCustomItem(index)"
-                                                class="px-3 py-2 hover:bg-blue-50 cursor-pointer text-gray-600 italic border-b border-gray-100"
-                                            >
-                                                Use custom item
-                                            </div>
-                                            <!-- Filtered products -->
-                                            <div 
-                                                v-for="product in filteredProducts(index)" 
-                                                :key="product.id"
-                                                @mousedown.prevent="selectProductFromSearch(index, product)"
-                                                class="px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0"
-                                            >
-                                                <div class="font-medium text-gray-900">{{ product.name }}</div>
-                                                <div v-if="product.sku" class="text-sm text-gray-500">SKU: {{ product.sku }}</div>
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                                            <button type="button" @click="unlinkProduct(index)" class="ml-0.5 text-blue-400 hover:text-blue-600">&times;</button>
+                                        </span>
+                                    </div>
+                                    <!-- Product Suggestions Dropdown -->
+                                    <div
+                                        v-if="showProductSuggestions[index] && productSuggestions(index).length > 0"
+                                        class="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-auto"
+                                    >
+                                        <div
+                                            v-for="product in productSuggestions(index)"
+                                            :key="product.id"
+                                            @mousedown.prevent="selectProductSuggestion(index, product)"
+                                            class="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm border-b border-gray-50 last:border-b-0"
+                                        >
+                                            <div class="flex items-center justify-between">
+                                                <div>
+                                                    <span class="font-medium text-gray-900">{{ product.name }}</span>
+                                                    <span v-if="product.sku" class="text-gray-400 ml-1 text-xs">({{ product.sku }})</span>
+                                                </div>
+                                                <span class="text-gray-500 text-xs ml-2">R{{ product.price.toFixed(2) }}</span>
                                             </div>
                                         </div>
                                     </div>
+                                    <div v-if="form.errors[`line_items.${index}.description`]" class="text-red-500 text-xs mt-0.5">
+                                        {{ form.errors[`line_items.${index}.description`] }}
+                                    </div>
                                 </div>
 
-                                <div class="md:col-span-2">
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Description *</label>
-                                    <input v-model="item.description" type="text"
-                                        class="w-full rounded border px-3 py-2" required />
-                                </div>
-
+                                <!-- Unit Price -->
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Quantity *</label>
-                                    <input v-model.number="item.quantity" @input="calculateItemTotal(index)"
-                                        type="number" min="1" class="w-full rounded border px-3 py-2" required />
+                                    <label class="block text-xs text-gray-500 mb-1 md:hidden">Price</label>
+                                    <input
+                                        v-model.number="item.unit_price"
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        class="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                        required
+                                    />
                                 </div>
 
+                                <!-- Discount -->
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Unit Price *</label>
-                                    <input v-model.number="item.unit_price" @input="calculateItemTotal(index)"
-                                        type="number" step="0.01" min="0" class="w-full rounded border px-3 py-2"
-                                        required />
+                                    <label class="block text-xs text-gray-500 mb-1 md:hidden">Discount</label>
+                                    <div class="flex">
+                                        <input
+                                            :value="getDiscountValue(index)"
+                                            @input="setDiscountValue(index, $event)"
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            :max="discountTypes[index] === 'percentage' ? 100 : undefined"
+                                            class="w-full min-w-0 rounded-l border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                            placeholder="0"
+                                        />
+                                        <select
+                                            :value="discountTypes[index] || 'amount'"
+                                            @change="handleDiscountTypeChange(index, $event)"
+                                            class="rounded-r border border-l-0 border-gray-300 bg-gray-50 px-1 py-1.5 text-xs font-medium text-gray-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                        >
+                                            <option value="amount">R</option>
+                                            <option value="percentage">%</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- Tax Rate -->
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1 md:hidden">Tax</label>
+                                    <select
+                                        v-model="item.tax_rate_id"
+                                        class="w-full rounded border border-gray-300 px-1 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                    >
+                                        <option :value="null">None</option>
+                                        <option v-for="tr in props.taxRates" :key="tr.id" :value="tr.id">
+                                            {{ tr.name }} ({{ tr.rate }}%)
+                                        </option>
+                                    </select>
+                                </div>
+
+                                <!-- Total -->
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1 md:hidden">Total</label>
+                                    <div class="text-right text-sm font-medium text-gray-700 py-1.5">
+                                        {{ formatCurrency(calculateLineTotalValue(item)) }}
+                                    </div>
+                                </div>
+
+                                <!-- Remove -->
+                                <div class="flex items-center justify-center md:pt-1.5">
+                                    <button
+                                        type="button"
+                                        @click="removeLineItem(index)"
+                                        class="text-gray-400 hover:text-red-600 transition-colors"
+                                        :disabled="form.line_items.length === 1"
+                                        :class="{ 'opacity-30 cursor-not-allowed': form.line_items.length === 1 }"
+                                    >
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                    </button>
                                 </div>
                             </div>
 
-                            <!-- Serial Number Selection -->
-                            <div v-if="item.product_id && props.products.find(p => p.id === parseInt(item.product_id))?.track_serial_numbers" class="mt-4 border-t pt-4">
-                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                            <!-- Serial Number Selection (preserved from original) -->
+                            <div v-if="item.product_id && props.products.find(p => p.id === parseInt(item.product_id))?.track_serial_numbers" class="mt-3 ml-14 border-l-2 border-blue-200 pl-3">
+                                <label class="block text-xs font-medium text-gray-500 mb-1">
                                     Serial Numbers
-                                    <span class="text-xs text-gray-500">
-                                        (Select {{ item.quantity || 0 }} serial number(s))
-                                    </span>
+                                    <span class="text-gray-400">(Select {{ item.quantity || 0 }})</span>
                                 </label>
-                                <div class="max-h-40 space-y-2 overflow-y-auto rounded border border-gray-300 p-2">
+                                <div class="max-h-32 space-y-1 overflow-y-auto rounded border border-gray-200 p-1.5 bg-gray-50">
                                     <label
                                         v-for="serial in props.products.find(p => p.id === parseInt(item.product_id))?.serialNumbers || []"
                                         :key="serial.id"
-                                        class="flex items-center gap-2 rounded px-2 py-1 hover:bg-gray-50"
+                                        class="flex items-center gap-2 rounded px-2 py-0.5 hover:bg-white text-sm"
                                     >
                                         <input
                                             type="checkbox"
@@ -304,72 +388,27 @@
                                             class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                             :disabled="(item.serial_number_ids?.length || 0) >= (item.quantity || 0) && !item.serial_number_ids?.includes(serial.id)"
                                         />
-                                        <span class="text-sm text-gray-900">{{ serial.serial_number }}</span>
+                                        <span class="text-gray-700">{{ serial.serial_number }}</span>
                                     </label>
-                                    <div v-if="!props.products.find(p => p.id === parseInt(item.product_id))?.serialNumbers || props.products.find(p => p.id === parseInt(item.product_id))?.serialNumbers.length === 0" class="text-sm text-gray-500">
-                                        No available serial numbers for this product.
+                                    <div v-if="!props.products.find(p => p.id === parseInt(item.product_id))?.serialNumbers?.length" class="text-xs text-gray-400 px-1">
+                                        No serial numbers available.
                                     </div>
                                 </div>
-                                <p class="mt-1 text-xs text-gray-500">
+                                <p class="mt-0.5 text-xs text-gray-400">
                                     Selected: {{ item.serial_number_ids?.length || 0 }} / {{ item.quantity || 0 }}
                                 </p>
                             </div>
-
-                            <!-- Discount Fields for Line Item -->
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Discount Amount (R)</label>
-                                    <input
-                                        v-model.number="item.discount_amount"
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
-                                        class="w-full rounded border px-3 py-2"
-                                        :class="{ 'border-red-500': form.errors[`line_items.${index}.discount_amount`] }"
-                                        placeholder="0.00"
-                                        @input="watchLineItemDiscount(index)"
-                                    />
-                                    <div v-if="form.errors[`line_items.${index}.discount_amount`]" class="text-red-500 text-sm mt-1">
-                                        {{ form.errors[`line_items.${index}.discount_amount`] }}
-                                    </div>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Discount Percentage (%)</label>
-                                    <input
-                                        v-model.number="item.discount_percentage"
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
-                                        max="100"
-                                        class="w-full rounded border px-3 py-2"
-                                        :class="{ 'border-red-500': form.errors[`line_items.${index}.discount_percentage`] }"
-                                        placeholder="0.00"
-                                        @input="watchLineItemDiscount(index)"
-                                    />
-                                    <div v-if="form.errors[`line_items.${index}.discount_percentage`]" class="text-red-500 text-sm mt-1">
-                                        {{ form.errors[`line_items.${index}.discount_percentage`] }}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="flex items-center justify-between mt-4">
-                                <div class="text-sm font-medium text-gray-900">
-                                    Total: {{ formatCurrency(item.total) }}
-                                </div>
-                                <button type="button" @click="removeLineItem(index)"
-                                    class="text-red-600 hover:text-red-800">
-                                    Remove
-                                </button>
-                            </div>
                         </div>
-                    </div><br />
-
-                    <div class="flex items-center justify-between mb-4">
-                        <button type="button" @click="addLineItem"
-                            class="rounded bg-blue-600 px-3 py-2 text-white hover:bg-blue-700">
-                            +
-                        </button>
                     </div>
+
+                    <!-- Add Line Item button -->
+                    <button
+                        type="button"
+                        @click="addLineItem"
+                        class="mt-3 w-full rounded border-2 border-dashed border-gray-300 py-2 text-sm text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors"
+                    >
+                        + Add Line Item
+                    </button>
                 </div>
 
                 <!-- Totals -->
@@ -385,7 +424,7 @@
                             <span class="font-medium text-red-600">-{{ formatCurrency(discountAmount) }}</span>
                         </div>
                         <div class="flex justify-between">
-                            <span class="text-gray-600">Tax (15%):</span>
+                            <span class="text-gray-600">Tax:</span>
                             <span class="font-medium">{{ formatCurrency(taxAmount) }}</span>
                         </div>
                         <div class="flex justify-between text-lg font-semibold border-t pt-2">
@@ -512,6 +551,7 @@ interface LineItem {
     discount_percentage?: number;
     total: number;
     serial_number_ids?: number[];
+    tax_rate_id?: number | null;
 }
 
 interface Props {
@@ -522,13 +562,15 @@ interface Props {
     selectedCustomer?: Customer | null;
     defaultTerms?: string;
     currentUser: User;
+    taxRates: { id: number; name: string; rate: number; is_default_sales: boolean }[];
+    defaultSalesTaxRateId: number | null;
 }
 
 const props = defineProps<Props>();
 
-// Track product search queries for each line item
-const productSearchQueries = ref<Record<number, string>>({});
-const productSearchFocused = ref<Record<number, boolean>>({});
+// Track product suggestions and discount types for each line item
+const showProductSuggestions = ref<Record<number, boolean>>({});
+const discountTypes = ref<Record<number, 'amount' | 'percentage'>>({});
 
 // Customer search
 const customerSearchQuery = ref('');
@@ -564,6 +606,7 @@ const form = useForm({
             discount_percentage: 0,
             total: 0,
             serial_number_ids: [],
+            tax_rate_id: props.defaultSalesTaxRateId || null,
         },
     ] as LineItem[],
 });
@@ -680,6 +723,7 @@ watch(() => form.customer_id, (newCustomerId) => {
 });
 
 const addLineItem = () => {
+    const newIndex = form.line_items.length;
     form.line_items.push({
         product_id: null,
         description: '',
@@ -689,7 +733,9 @@ const addLineItem = () => {
         discount_percentage: 0,
         total: 0,
         serial_number_ids: [] as number[],
+        tax_rate_id: props.defaultSalesTaxRateId || null,
     });
+    discountTypes.value[newIndex] = 'amount';
 };
 
 const removeLineItem = (index: number) => {
@@ -698,123 +744,7 @@ const removeLineItem = (index: number) => {
     }
 };
 
-// Filter products based on search query
-const filteredProducts = (index: number) => {
-    const query = productSearchQueries.value[index]?.toLowerCase() || '';
-    if (!query) return [];
-    
-    return props.products.filter(product => {
-        const nameMatch = product.name?.toLowerCase().includes(query);
-        const skuMatch = product.sku?.toLowerCase().includes(query);
-        return nameMatch || skuMatch;
-    }).slice(0, 10); // Limit to 10 results
-};
-
-// Get display name for selected product
-const getProductDisplayName = (productId: string | null) => {
-    if (!productId) return '';
-    const product = props.products.find(p => p.id === parseInt(productId));
-    if (!product) return '';
-    return product.sku ? `${product.name} (${product.sku})` : product.name;
-};
-
-// Handle product search input
-const handleProductSearch = (index: number, event: Event) => {
-    const target = event.target as HTMLInputElement;
-    productSearchQueries.value[index] = target.value;
-    
-    // If input is cleared, clear product selection
-    if (!target.value) {
-        clearProduct(index);
-    }
-};
-
-// Handle product input focus
-const handleProductFocus = (index: number) => {
-    productSearchFocused.value[index] = true;
-    const productId = form.line_items[index].product_id;
-    if (productId) {
-        // Show current product name/SKU in search
-        const product = props.products.find(p => p.id === parseInt(productId));
-        if (product) {
-            productSearchQueries.value[index] = product.sku ? `${product.name} ${product.sku}` : product.name;
-        }
-    }
-};
-
-// Handle product input blur (with delay to allow click on dropdown)
-const handleProductBlur = (index: number) => {
-    setTimeout(() => {
-        productSearchFocused.value[index] = false;
-        productSearchQueries.value[index] = '';
-    }, 200);
-};
-
-// Select product from search results
-const selectProductFromSearch = (index: number, product: Product) => {
-    // Ensure serial_number_ids is initialized
-    if (!form.line_items[index].serial_number_ids) {
-        form.line_items[index].serial_number_ids = [];
-    }
-
-    form.line_items[index].product_id = product.id.toString();
-    form.line_items[index].description = product.name;
-    form.line_items[index].unit_price = product.price;
-    productSearchQueries.value[index] = '';
-    productSearchFocused.value[index] = false;
-    calculateItemTotal(index);
-};
-
-// Select custom item (no product)
-const selectCustomItem = (index: number) => {
-    form.line_items[index].product_id = null;
-    form.line_items[index].description = '';
-    form.line_items[index].unit_price = 0;
-    form.line_items[index].total = 0;
-    form.line_items[index].serial_number_ids = [];
-    productSearchQueries.value[index] = '';
-    productSearchFocused.value[index] = false;
-};
-
-// Clear product selection
-const clearProduct = (index: number) => {
-    form.line_items[index].product_id = null;
-    form.line_items[index].description = '';
-    form.line_items[index].unit_price = 0;
-    form.line_items[index].total = 0;
-    form.line_items[index].serial_number_ids = [];
-    productSearchQueries.value[index] = '';
-};
-
-// Legacy function for backward compatibility (if still used elsewhere)
-const selectProduct = (index: number, event: Event) => {
-    const target = event.target as HTMLSelectElement;
-    const productId = target.value;
-
-    // Ensure serial_number_ids is initialized
-    if (!form.line_items[index].serial_number_ids) {
-        form.line_items[index].serial_number_ids = [];
-    }
-
-    if (productId) {
-        const product = props.products.find(p => p.id === parseInt(productId));
-        if (product) {
-            form.line_items[index].product_id = productId;
-            form.line_items[index].description = product.name;
-            form.line_items[index].unit_price = product.price;
-            calculateItemTotal(index);
-        }
-    } else {
-        form.line_items[index].product_id = null;
-        form.line_items[index].description = '';
-        form.line_items[index].unit_price = 0;
-        form.line_items[index].total = 0;
-        form.line_items[index].serial_number_ids = [];
-    }
-};
-
-const calculateItemTotal = (index: number) => {
-    const item = form.line_items[index];
+const calculateLineTotalValue = (item: LineItem) => {
     const quantity = item.quantity || 0;
     const unitPrice = item.unit_price || 0;
     const discountAmount = item.discount_amount || 0;
@@ -822,28 +752,90 @@ const calculateItemTotal = (index: number) => {
     
     const subtotal = quantity * unitPrice;
     
-    // Apply discount: percentage takes precedence over amount
     let finalDiscount = discountAmount;
     if (discountPercentage > 0) {
         finalDiscount = subtotal * (discountPercentage / 100);
     }
     
-    item.total = Math.max(0, subtotal - finalDiscount);
+    return Math.max(0, subtotal - finalDiscount);
 };
 
-const watchLineItemDiscount = (index: number) => {
+// Product suggestions based on description text
+const productSuggestions = (index: number) => {
+    const query = form.line_items[index]?.description?.toLowerCase() || '';
+    if (query.length < 2) return [];
+    return props.products.filter(product => {
+        const nameMatch = product.name?.toLowerCase().includes(query);
+        const skuMatch = product.sku?.toLowerCase().includes(query);
+        return nameMatch || skuMatch;
+    }).slice(0, 8);
+};
+
+const handleDescriptionInput = (index: number) => {
+    showProductSuggestions.value[index] = true;
+};
+
+const handleDescriptionBlur = (index: number) => {
+    setTimeout(() => {
+        showProductSuggestions.value[index] = false;
+    }, 200);
+};
+
+const selectProductSuggestion = (index: number, product: Product) => {
     const item = form.line_items[index];
     if (!item) return;
-    
-    // Clear one discount field when the other is filled
-    if (item.discount_amount && item.discount_amount > 0) {
+    item.product_id = product.id.toString();
+    item.description = product.name;
+    item.unit_price = product.price;
+    if (!item.serial_number_ids) {
+        item.serial_number_ids = [];
+    }
+    showProductSuggestions.value[index] = false;
+};
+
+const getProductName = (productId: string | null) => {
+    if (!productId) return '';
+    const product = props.products.find(p => p.id === parseInt(productId));
+    return product ? product.name : '';
+};
+
+const unlinkProduct = (index: number) => {
+    const item = form.line_items[index];
+    if (item) {
+        item.product_id = null;
+        item.serial_number_ids = [];
+    }
+};
+
+const getDiscountValue = (index: number) => {
+    const item = form.line_items[index];
+    if (!item) return 0;
+    const type = discountTypes.value[index] || 'amount';
+    return type === 'percentage' ? (item.discount_percentage || 0) : (item.discount_amount || 0);
+};
+
+const setDiscountValue = (index: number, event: Event) => {
+    const item = form.line_items[index];
+    if (!item) return;
+    const value = parseFloat((event.target as HTMLInputElement).value) || 0;
+    const type = discountTypes.value[index] || 'amount';
+    if (type === 'percentage') {
+        item.discount_percentage = value;
+        item.discount_amount = 0;
+    } else {
+        item.discount_amount = value;
         item.discount_percentage = 0;
     }
-    if (item.discount_percentage && item.discount_percentage > 0) {
+};
+
+const handleDiscountTypeChange = (index: number, event: Event) => {
+    const newType = (event.target as HTMLSelectElement).value as 'amount' | 'percentage';
+    discountTypes.value[index] = newType;
+    const item = form.line_items[index];
+    if (item) {
         item.discount_amount = 0;
+        item.discount_percentage = 0;
     }
-    
-    calculateItemTotal(index);
 };
 
 const formatCurrency = (amount: number) => {
@@ -890,9 +882,22 @@ const discountAmount = computed(() => {
 });
 
 const taxAmount = computed(() => {
-    // Subtotal already has discounts applied, so calculate tax directly on it
-    // Round UP to 2 decimal places
-    return Math.ceil((subtotal.value * (form.tax_rate / 100)) * 100) / 100;
+    return form.line_items.reduce((sum: number, item: any) => {
+        const qty = Number(item.quantity) || 0;
+        const price = Number(item.unit_price) || 0;
+        let discAmt = Number(item.discount_amount) || 0;
+        const discPct = Number(item.discount_percentage) || 0;
+        let lineSubtotal = qty * price;
+        if (discPct > 0) {
+            discAmt = lineSubtotal * (discPct / 100);
+        }
+        const lineTotal = Math.max(0, lineSubtotal - discAmt);
+        const taxRate = props.taxRates.find(tr => tr.id === item.tax_rate_id);
+        if (taxRate) {
+            return sum + Math.ceil(lineTotal * (taxRate.rate / 100) * 100) / 100;
+        }
+        return sum;
+    }, 0);
 });
 
 const total = computed(() => {

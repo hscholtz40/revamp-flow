@@ -25,6 +25,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'user_type',
+        'hourly_rate',
         'smtp_host',
         'smtp_port',
         'smtp_username',
@@ -57,6 +59,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'smtp_port' => 'integer',
+            'hourly_rate' => 'decimal:2',
         ];
     }
 
@@ -83,6 +86,16 @@ class User extends Authenticatable
     public function auditLogs(): HasMany
     {
         return $this->hasMany(AuditLog::class);
+    }
+
+    public function assignedJobcards(): HasMany
+    {
+        return $this->hasMany(Jobcard::class, 'assigned_to_user_id');
+    }
+
+    public function teams(): BelongsToMany
+    {
+        return $this->belongsToMany(Team::class)->withTimestamps();
     }
 
     public function hasModulePermission(string $module, string $ability): bool
@@ -114,6 +127,21 @@ class User extends Authenticatable
         return $this->groups()
             ->where('is_administrator', true)
             ->exists();
+    }
+
+    public function isLimitedUser(): bool
+    {
+        return $this->user_type === 'limited';
+    }
+
+    public function isStandardUser(): bool
+    {
+        return $this->user_type === 'standard' || $this->user_type === null;
+    }
+
+    public function isInfoUser(): bool
+    {
+        return $this->user_type === 'info';
     }
 
     public function hasAccessToCompany(int $companyId): bool

@@ -47,16 +47,24 @@ class TaxRateController extends Controller
             'rate' => ['required', 'numeric', 'min:0', 'max:100'],
             'description' => ['nullable', 'string'],
             'is_active' => ['boolean'],
-            'is_default' => ['boolean'],
+            'is_default_sales' => ['boolean'],
+            'is_default_purchasing' => ['boolean'],
         ]);
 
         $validated['company_id'] = $currentCompany->id;
         
-        // If setting as default, unset other defaults for this company
-        if ($validated['is_default'] ?? false) {
+        // If setting as default sales, unset other default sales for this company
+        if ($validated['is_default_sales'] ?? false) {
             TaxRate::where('company_id', $currentCompany->id)
-                ->where('is_default', true)
-                ->update(['is_default' => false]);
+                ->where('is_default_sales', true)
+                ->update(['is_default_sales' => false]);
+        }
+        
+        // If setting as default purchasing, unset other default purchasing for this company
+        if ($validated['is_default_purchasing'] ?? false) {
+            TaxRate::where('company_id', $currentCompany->id)
+                ->where('is_default_purchasing', true)
+                ->update(['is_default_purchasing' => false]);
         }
         
         TaxRate::create($validated);
@@ -114,15 +122,24 @@ class TaxRateController extends Controller
             'rate' => ['required', 'numeric', 'min:0', 'max:100'],
             'description' => ['nullable', 'string'],
             'is_active' => ['boolean'],
-            'is_default' => ['boolean'],
+            'is_default_sales' => ['boolean'],
+            'is_default_purchasing' => ['boolean'],
         ]);
 
-        // If setting as default, unset other defaults for this company
-        if ($validated['is_default'] ?? false) {
+        // If setting as default sales, unset other default sales for this company
+        if ($validated['is_default_sales'] ?? false) {
             TaxRate::where('company_id', $currentCompany->id)
-                ->where('is_default', true)
+                ->where('is_default_sales', true)
                 ->where('id', '!=', $taxRate->id)
-                ->update(['is_default' => false]);
+                ->update(['is_default_sales' => false]);
+        }
+        
+        // If setting as default purchasing, unset other default purchasing for this company
+        if ($validated['is_default_purchasing'] ?? false) {
+            TaxRate::where('company_id', $currentCompany->id)
+                ->where('is_default_purchasing', true)
+                ->where('id', '!=', $taxRate->id)
+                ->update(['is_default_purchasing' => false]);
         }
         
         $taxRate->update($validated);
@@ -142,22 +159,15 @@ class TaxRateController extends Controller
             abort(403, 'Unauthorized access to tax rate.');
         }
 
-        // Check if tax rate is being used in invoices, quotes, or jobcards
-        $usedInInvoices = \App\Models\Invoice::where('company_id', $currentCompany->id)
-            ->where('tax_rate', $taxRate->rate)
-            ->exists();
-        
-        $usedInQuotes = \App\Models\Quote::where('company_id', $currentCompany->id)
-            ->where('tax_rate', $taxRate->rate)
-            ->exists();
-        
-        $usedInJobcards = \App\Models\Jobcard::where('company_id', $currentCompany->id)
-            ->where('tax_rate', $taxRate->rate)
-            ->exists();
+        // Check if tax rate is being used in any line items
+        $usedInInvoiceItems = \App\Models\InvoiceLineItem::where('tax_rate_id', $taxRate->id)->exists();
+        $usedInQuoteItems = \App\Models\QuoteLineItem::where('tax_rate_id', $taxRate->id)->exists();
+        $usedInJobcardItems = \App\Models\JobcardLineItem::where('tax_rate_id', $taxRate->id)->exists();
+        $usedInPOItems = \App\Models\PurchaseOrderItem::where('tax_rate_id', $taxRate->id)->exists();
 
-        if ($usedInInvoices || $usedInQuotes || $usedInJobcards) {
+        if ($usedInInvoiceItems || $usedInQuoteItems || $usedInJobcardItems || $usedInPOItems) {
             return redirect()->route('administration.tax-rates.index')
-                ->with('error', 'Cannot delete tax rate that is being used in invoices, quotes, or jobcards.');
+                ->with('error', 'Cannot delete tax rate that is being used in line items.');
         }
 
         $taxRate->delete();

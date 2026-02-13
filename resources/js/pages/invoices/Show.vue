@@ -152,17 +152,21 @@
                                 <table class="w-full">
                                     <thead class="bg-gray-50">
                                         <tr>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-2/5">Description</th>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit Price</th>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Discount</th>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                                            <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Qty</th>
+                                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Price</th>
+                                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Discount</th>
+                                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">Tax</th>
+                                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Total</th>
                                         </tr>
                                     </thead>
                                     <tbody class="bg-white divide-y divide-gray-200">
                                         <template v-for="item in props.invoice.line_items" :key="item.id">
                                             <tr>
-                                                <td class="px-4 py-4 text-sm text-gray-900">
+                                                <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900 text-center">
+                                                    {{ item.quantity }}
+                                                </td>
+                                                <td class="px-3 py-3 text-sm text-gray-900">
                                                     <div>
                                                         <template v-if="item.product && item.product.id">
                                                             <Link
@@ -184,38 +188,34 @@
                                                             <span>{{ item.description }}</span>
                                                         </template>
                                                     </div>
-                                                    <div v-if="item.serialNumbers && item.serialNumbers.length > 0" class="mt-2">
-                                                        <div class="text-xs font-medium text-gray-600 mb-1">Serial Numbers:</div>
+                                                    <div v-if="item.serialNumbers && item.serialNumbers.length > 0" class="mt-1">
                                                         <div class="flex flex-wrap gap-1">
                                                             <span
                                                                 v-for="serial in item.serialNumbers"
                                                                 :key="serial.id"
-                                                                class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800"
+                                                                class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700"
                                                             >
                                                                 {{ serial.serial_number }}
                                                             </span>
                                                         </div>
                                                     </div>
-                                            </td>
-                                            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                {{ item.quantity }}
-                                            </td>
-                                            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                {{ formatCurrency(item.unit_price) }}
-                                            </td>
-                                            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                <span v-if="item.discount_percentage && item.discount_percentage > 0" class="text-red-600">
-                                                    {{ item.discount_percentage }}%
-                                                </span>
-                                                <span v-else-if="item.discount_amount && item.discount_amount > 0" class="text-red-600">
-                                                    {{ formatCurrency(item.discount_amount) }}
-                                                </span>
-                                                <span v-else class="text-gray-400">—</span>
-                                            </td>
-                                            <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                                {{ formatCurrency(item.total) }}
-                                            </td>
-                                        </tr>
+                                                </td>
+                                                <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900 text-right">
+                                                    {{ formatCurrency(item.unit_price) }}
+                                                </td>
+                                                <td class="px-3 py-3 whitespace-nowrap text-sm text-right">
+                                                    <span v-if="item.discount_percentage && item.discount_percentage > 0" class="text-red-600">{{ item.discount_percentage }}%</span>
+                                                    <span v-else-if="item.discount_amount && item.discount_amount > 0" class="text-red-600">{{ formatCurrency(item.discount_amount) }}</span>
+                                                    <span v-else class="text-gray-400">&mdash;</span>
+                                                </td>
+                                                <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900">
+                                                    <span v-if="item.tax_rate" class="inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-700">{{ item.tax_rate.name }} ({{ item.tax_rate.rate }}%)</span>
+                                                    <span v-else class="text-gray-400">&mdash;</span>
+                                                </td>
+                                                <td class="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900 text-right">
+                                                    {{ formatCurrency(item.total) }}
+                                                </td>
+                                            </tr>
                                         </template>
                                     </tbody>
                                 </table>
@@ -297,7 +297,7 @@
                                     <span class="font-medium text-red-600">-{{ formatCurrency(props.invoice.discount_amount) }}</span>
                                 </div>
                                 <div class="flex justify-between">
-                                    <span class="text-gray-600">Tax ({{ props.invoice.tax_rate }}%):</span>
+                                    <span class="text-gray-600">Tax:</span>
                                     <span class="font-medium">{{ formatCurrency(props.invoice.tax_amount) }}</span>
                                 </div>
                                 <div class="flex justify-between text-lg font-semibold border-t pt-2">

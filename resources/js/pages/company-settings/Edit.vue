@@ -35,6 +35,10 @@ interface Company {
     smtp_from_email: string | null;
     smtp_from_name: string | null;
     whatsapp_business_number: string | null;
+    bank_name: string | null;
+    bank_account_name: string | null;
+    bank_account_number: string | null;
+    bank_sort_code: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -140,6 +144,10 @@ const form = useForm({
     smtp_from_email: '',
     smtp_from_name: '',
     whatsapp_business_number: '',
+    bank_name: '',
+    bank_account_name: '',
+    bank_account_number: '',
+    bank_sort_code: '',
 });
 
 // Initialize form with company data
@@ -171,6 +179,10 @@ onMounted(() => {
     form.smtp_from_email = props.company.smtp_from_email || '';
     form.smtp_from_name = props.company.smtp_from_name || '';
     form.whatsapp_business_number = props.company.whatsapp_business_number || '';
+    form.bank_name = props.company.bank_name || '';
+    form.bank_account_name = props.company.bank_account_name || '';
+    form.bank_account_number = props.company.bank_account_number || '';
+    form.bank_sort_code = props.company.bank_sort_code || '';
 
 });
 
@@ -227,6 +239,10 @@ function submit() {
         smtp_from_email: form.smtp_from_email,
         smtp_from_name: form.smtp_from_name,
         whatsapp_business_number: form.whatsapp_business_number,
+        bank_name: form.bank_name,
+        bank_account_name: form.bank_account_name,
+        bank_account_number: form.bank_account_number,
+        bank_sort_code: form.bank_sort_code,
     });
     
     formWithoutLogo.put(companySettings.update(props.company.id).url, { 
@@ -561,6 +577,57 @@ function submitReminderSettings() {
                                     class="w-full rounded border px-3 py-2"
                                 />
                                 <div v-if="form.errors.vat_number" class="mt-1 text-sm text-red-600">{{ form.errors.vat_number }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Banking Details -->
+                    <div class="rounded-lg border bg-white p-6">
+                        <h2 class="mb-4 text-lg font-semibold text-gray-900">Banking Details</h2>
+                        <p class="mb-4 text-sm text-gray-600">These details will appear on your PDF documents (invoices, quotes, jobcards).</p>
+                        <div class="grid gap-4 md:grid-cols-2">
+                            <div>
+                                <label class="mb-1 block text-sm font-medium">Bank Name</label>
+                                <input
+                                    v-model="form.bank_name"
+                                    type="text"
+                                    class="w-full rounded border px-3 py-2"
+                                    placeholder="e.g. FNB, Standard Bank, ABSA"
+                                />
+                                <div v-if="form.errors.bank_name" class="mt-1 text-sm text-red-600">{{ form.errors.bank_name }}</div>
+                            </div>
+
+                            <div>
+                                <label class="mb-1 block text-sm font-medium">Account Name</label>
+                                <input
+                                    v-model="form.bank_account_name"
+                                    type="text"
+                                    class="w-full rounded border px-3 py-2"
+                                    placeholder="Name on the account"
+                                />
+                                <div v-if="form.errors.bank_account_name" class="mt-1 text-sm text-red-600">{{ form.errors.bank_account_name }}</div>
+                            </div>
+
+                            <div>
+                                <label class="mb-1 block text-sm font-medium">Account Number</label>
+                                <input
+                                    v-model="form.bank_account_number"
+                                    type="text"
+                                    class="w-full rounded border px-3 py-2"
+                                    placeholder="Bank account number"
+                                />
+                                <div v-if="form.errors.bank_account_number" class="mt-1 text-sm text-red-600">{{ form.errors.bank_account_number }}</div>
+                            </div>
+
+                            <div>
+                                <label class="mb-1 block text-sm font-medium">Branch Code</label>
+                                <input
+                                    v-model="form.bank_sort_code"
+                                    type="text"
+                                    class="w-full rounded border px-3 py-2"
+                                    placeholder="e.g. 250655"
+                                />
+                                <div v-if="form.errors.bank_sort_code" class="mt-1 text-sm text-red-600">{{ form.errors.bank_sort_code }}</div>
                             </div>
                         </div>
                     </div>

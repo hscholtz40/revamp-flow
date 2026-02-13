@@ -23,6 +23,8 @@ interface Props {
     supplier_id?: number;
     suppliers?: Supplier[];
     products?: Product[];
+    taxRates?: { id: number; name: string; rate: number; is_default_purchasing: boolean }[];
+    defaultPurchasingTaxRateId?: number | null;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -40,6 +42,7 @@ interface LineItem {
     unit_cost: number;
     description: string;
     total: number;
+    tax_rate_id?: number | null;
 }
 
 const form = useForm({
@@ -58,6 +61,7 @@ function addLineItem() {
         unit_cost: 0,
         description: '',
         total: 0,
+        tax_rate_id: props.defaultPurchasingTaxRateId || null,
     });
 }
 
@@ -172,6 +176,21 @@ const subtotal = computed(() => {
     return form.items.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
 });
 
+const taxAmount = computed(() => {
+    return form.items.reduce((sum: number, item: any) => {
+        const qty = Number(item.quantity) || 0;
+        const cost = Number(item.unit_cost) || 0;
+        const lineTotal = qty * cost;
+        const taxRate = (props.taxRates || []).find(tr => tr.id === item.tax_rate_id);
+        if (taxRate) {
+            return sum + Math.ceil(lineTotal * (taxRate.rate / 100) * 100) / 100;
+        }
+        return sum;
+    }, 0);
+});
+
+const total = computed(() => subtotal.value + taxAmount.value);
+
 function submit() {
     form.post(purchaseOrders.store().url);
 }
@@ -277,7 +296,7 @@ function submit() {
                             :key="index"
                             class="rounded-lg border border-gray-200 p-4"
                         >
-                            <div class="grid gap-4 md:grid-cols-5">
+                            <div class="grid gap-4 md:grid-cols-6">
                                 <div class="md:col-span-2">
                                     <label class="mb-1 block text-sm font-medium text-gray-700">
                                         Product
@@ -351,6 +370,19 @@ function submit() {
                                     />
                                 </div>
 
+                                <div>
+                                    <label class="mb-1 block text-xs font-medium text-gray-500">Tax Rate</label>
+                                    <select
+                                        v-model="item.tax_rate_id"
+                                        class="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    >
+                                        <option :value="null">None</option>
+                                        <option v-for="tr in (props.taxRates || [])" :key="tr.id" :value="tr.id">
+                                            {{ tr.name }} ({{ tr.rate }}%)
+                                        </option>
+                                    </select>
+                                </div>
+
                                 <div class="flex items-end">
                                     <button
                                         type="button"
@@ -381,10 +413,18 @@ function submit() {
 
                     <div v-if="form.items.length > 0" class="mt-6 border-t pt-4">
                         <div class="flex justify-end">
-                            <div class="text-right">
-                                <div class="text-sm text-gray-500">Subtotal</div>
-                                <div class="text-xl font-bold text-gray-900">
-                                    R{{ subtotal.toLocaleString('en-ZA', { minimumFractionDigits: 2 }) }}
+                            <div class="w-64 space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm text-gray-600">Subtotal</span>
+                                    <span class="text-sm font-medium">R{{ subtotal.toLocaleString('en-ZA', { minimumFractionDigits: 2 }) }}</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm text-gray-600">Tax</span>
+                                    <span class="text-sm font-medium">R{{ taxAmount.toFixed(2) }}</span>
+                                </div>
+                                <div class="flex items-center justify-between border-t pt-2">
+                                    <span class="text-base font-semibold">Total</span>
+                                    <span class="text-base font-bold text-green-600">R{{ total.toFixed(2) }}</span>
                                 </div>
                             </div>
                         </div>

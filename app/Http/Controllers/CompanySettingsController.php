@@ -75,6 +75,10 @@ class CompanySettingsController extends Controller
             'smtp_from_email' => ['nullable', 'email', 'max:255'],
             'smtp_from_name' => ['nullable', 'string', 'max:255'],
             'whatsapp_business_number' => ['nullable', 'string', 'max:20'],
+            'bank_name' => ['nullable', 'string', 'max:255'],
+            'bank_account_name' => ['nullable', 'string', 'max:255'],
+            'bank_account_number' => ['nullable', 'string', 'max:255'],
+            'bank_sort_code' => ['nullable', 'string', 'max:50'],
         ]);
 
         if ($request->hasFile('logo')) {
@@ -203,6 +207,10 @@ class CompanySettingsController extends Controller
             'smtp_from_email' => ['nullable', 'email', 'max:255'],
             'smtp_from_name' => ['nullable', 'string', 'max:255'],
             'whatsapp_business_number' => ['nullable', 'string', 'max:20'],
+            'bank_name' => ['nullable', 'string', 'max:255'],
+            'bank_account_name' => ['nullable', 'string', 'max:255'],
+            'bank_account_number' => ['nullable', 'string', 'max:255'],
+            'bank_sort_code' => ['nullable', 'string', 'max:50'],
         ]);
 
         if ($request->hasFile('logo')) {

@@ -19,6 +19,8 @@ class QuoteLineItem extends Model
         'discount_amount',
         'discount_percentage',
         'total',
+        'tax_rate_id',
+        'tax_amount',
         'sort_order',
     ];
 
@@ -28,6 +30,7 @@ class QuoteLineItem extends Model
         'discount_amount' => 'decimal:2',
         'discount_percentage' => 'decimal:2',
         'total' => 'decimal:2',
+        'tax_amount' => 'decimal:2',
         'sort_order' => 'integer',
     ];
 
@@ -44,6 +47,11 @@ class QuoteLineItem extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function taxRate(): BelongsTo
+    {
+        return $this->belongsTo(TaxRate::class);
     }
 
     /**
@@ -64,6 +72,13 @@ class QuoteLineItem extends Model
         }
         
         $this->total = max(0, $subtotal - $discountAmount);
+
+        // Calculate tax amount based on associated tax rate
+        if ($this->tax_rate_id && $this->taxRate) {
+            $this->tax_amount = ceil(($this->total * ($this->taxRate->rate / 100)) * 100) / 100;
+        } else {
+            $this->tax_amount = 0;
+        }
     }
 
     /**

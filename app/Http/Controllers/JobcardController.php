@@ -7,6 +7,9 @@ use App\Models\Customer;
 use App\Models\Jobcard;
 use App\Models\JobcardLineItem;
 use App\Models\Product;
+use App\Models\TaxRate;
+use App\Models\Team;
+use App\Models\User;
 use App\Services\ReminderService;
 use App\Services\StockService;
 use Illuminate\Http\RedirectResponse;
@@ -27,8 +30,19 @@ class JobcardController extends Controller
     {
         $currentCompany = auth()->user()->getCurrentCompany();
         
-        $query = Jobcard::with(['customer'])
+        $query = Jobcard::with(['customer', 'assignedUser', 'assignedTeam'])
             ->where('company_id', $currentCompany->id);
+
+        // Limited users can only see jobcards assigned to them or their teams
+        if (auth()->user()->isLimitedUser()) {
+            $teamIds = auth()->user()->teams()->pluck('teams.id');
+            $query->where(function ($q) use ($teamIds) {
+                $q->where('assigned_to_user_id', auth()->id());
+                if ($teamIds->isNotEmpty()) {
+                    $q->orWhereIn('assigned_to_team_id', $teamIds);
+                }
+            });
+        }
 
         // Apply filters
         if ($request->filled('status')) {
@@ -37,6 +51,14 @@ class JobcardController extends Controller
 
         if ($request->filled('customer_id')) {
             $query->where('customer_id', $request->customer_id);
+        }
+
+        if ($request->filled('assigned_to_user_id')) {
+            $query->where('assigned_to_user_id', $request->assigned_to_user_id);
+        }
+
+        if ($request->filled('assigned_to_team_id')) {
+            $query->where('assigned_to_team_id', $request->assigned_to_team_id);
         }
 
         if ($request->filled('search')) {
@@ -52,13 +74,21 @@ class JobcardController extends Controller
 
         $jobcards = $query->orderByDesc('created_at')->paginate(15);
         $customers = Customer::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name']);
+        $users = User::whereHas('companies', function ($q) use ($currentCompany) {
+            $q->where('company_id', $currentCompany->id);
+        })->orWhereDoesntHave('companies')->orderBy('name')->get(['id', 'name']);
+        $teams = Team::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('jobcards/Index', [
             'jobcards' => $jobcards,
             'customers' => $customers,
+            'users' => $users,
+            'teams' => $teams,
             'filters' => [
                 'status' => $request->input('status', ''),
                 'customer_id' => $request->input('customer_id', ''),
+                'assigned_to_user_id' => $request->input('assigned_to_user_id', ''),
+                'assigned_to_team_id' => $request->input('assigned_to_team_id', ''),
                 'search' => $request->input('search', ''),
             ],
             'currentCompany' => $currentCompany,
@@ -77,10 +107,20 @@ class JobcardController extends Controller
             ->where('is_active', true)
             ->orderBy('name')
             ->get(['id', 'name', 'price', 'type']);
+        $users = User::whereHas('companies', function ($q) use ($currentCompany) {
+            $q->where('company_id', $currentCompany->id);
+        })->orWhereDoesntHave('companies')->orderBy('name')->get(['id', 'name']);
+        $teams = Team::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name']);
+        $taxRates = TaxRate::where('company_id', $currentCompany->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'rate', 'is_default_sales']);
+        $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
 
         return Inertia::render('jobcards/Create', [
             'customers' => $customers,
             'products' => $products,
+            'users' => $users,
+            'teams' => $teams,
+            'taxRates' => $taxRates,
+            'defaultSalesTaxRateId' => $defaultSalesTaxRate?->id,
             'currentCompany' => $currentCompany,
             'defaultTerms' => $currentCompany->default_jobcard_terms,
         ]);
@@ -95,6 +135,8 @@ class JobcardController extends Controller
         
         $validated = $request->validate([
             'customer_id' => ['required', 'exists:customers,id'],
+            'assigned_to_user_id' => ['nullable', 'exists:users,id'],
+            'assigned_to_team_id' => ['nullable', 'exists:teams,id'],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'status' => ['required', 'in:draft,pending,in_progress,completed,cancelled'],
@@ -110,11 +152,14 @@ class JobcardController extends Controller
             'line_items.*.description' => ['required', 'string', 'max:255'],
             'line_items.*.quantity' => ['required', 'integer', 'min:1'],
             'line_items.*.unit_price' => ['required', 'numeric', 'min:0'],
+            'line_items.*.discount_amount' => ['nullable', 'numeric', 'min:0'],
+            'line_items.*.discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'line_items.*.tax_rate_id' => ['nullable', 'exists:tax_rates,id'],
         ]);
 
         $validated['company_id'] = $currentCompany->id;
         $validated['job_number'] = Jobcard::generateJobNumber();
-        $validated['tax_rate'] = $validated['tax_rate'] ?? 15;
+        $validated['tax_rate'] = $validated['tax_rate'] ?? 0;
 
         $jobcard = Jobcard::create($validated);
 
@@ -128,6 +173,7 @@ class JobcardController extends Controller
                 'unit_price' => $lineItemData['unit_price'],
                 'discount_amount' => $lineItemData['discount_amount'] ?? 0,
                 'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
+                'tax_rate_id' => $lineItemData['tax_rate_id'] ?? null,
                 'sort_order' => $index,
             ]);
             $lineItem->calculateTotal();
@@ -183,7 +229,17 @@ class JobcardController extends Controller
      */
     public function show(Jobcard $jobcard): Response
     {
-        $jobcard->load(['customer', 'lineItems.product', 'invoice', 'timeEntries.user']);
+        // Limited users can only view jobcards assigned to them or their teams
+        if (auth()->user()->isLimitedUser()) {
+            $teamIds = auth()->user()->teams()->pluck('teams.id')->toArray();
+            $isAssignedToUser = $jobcard->assigned_to_user_id === auth()->id();
+            $isAssignedToTeam = $jobcard->assigned_to_team_id && in_array($jobcard->assigned_to_team_id, $teamIds);
+            if (!$isAssignedToUser && !$isAssignedToTeam) {
+                abort(403, 'You do not have access to this jobcard.');
+            }
+        }
+
+        $jobcard->load(['customer', 'assignedUser', 'assignedTeam', 'lineItems.product', 'lineItems.taxRate', 'invoice', 'timeEntries.user']);
 
         $currentCompany = auth()->user()->getCurrentCompany();
         
@@ -233,12 +289,22 @@ class JobcardController extends Controller
             ->where('is_active', true)
             ->orderBy('name')
             ->get(['id', 'name', 'price', 'type']);
+        $users = User::whereHas('companies', function ($q) use ($currentCompany) {
+            $q->where('company_id', $currentCompany->id);
+        })->orWhereDoesntHave('companies')->orderBy('name')->get(['id', 'name']);
+        $teams = Team::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name']);
+        $taxRates = TaxRate::where('company_id', $currentCompany->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'rate', 'is_default_sales']);
+        $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
         $jobcard->load(['lineItems']);
 
         return Inertia::render('jobcards/Edit', [
             'jobcard' => $jobcard,
             'customers' => $customers,
             'products' => $products,
+            'users' => $users,
+            'teams' => $teams,
+            'taxRates' => $taxRates,
+            'defaultSalesTaxRateId' => $defaultSalesTaxRate?->id,
             'currentCompany' => $currentCompany,
             'canEditCompleted' => auth()->user()->canEditCompletedJobcards(),
         ]);
@@ -251,6 +317,8 @@ class JobcardController extends Controller
     {
         $validated = $request->validate([
             'customer_id' => ['required', 'exists:customers,id'],
+            'assigned_to_user_id' => ['nullable', 'exists:users,id'],
+            'assigned_to_team_id' => ['nullable', 'exists:teams,id'],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'status' => ['required', 'in:draft,pending,in_progress,completed,cancelled'],
@@ -268,6 +336,9 @@ class JobcardController extends Controller
             'line_items.*.description' => ['required', 'string', 'max:255'],
             'line_items.*.quantity' => ['required', 'integer', 'min:1'],
             'line_items.*.unit_price' => ['required', 'numeric', 'min:0'],
+            'line_items.*.discount_amount' => ['nullable', 'numeric', 'min:0'],
+            'line_items.*.discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'line_items.*.tax_rate_id' => ['nullable', 'exists:tax_rates,id'],
         ]);
 
         $validated['tax_rate'] = $validated['tax_rate'] ?? 0;
@@ -287,6 +358,7 @@ class JobcardController extends Controller
                     'unit_price' => $lineItemData['unit_price'],
                     'discount_amount' => $lineItemData['discount_amount'] ?? 0,
                     'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
+                    'tax_rate_id' => $lineItemData['tax_rate_id'] ?? null,
                     'sort_order' => $index,
                 ]);
                 $lineItem->calculateTotal();
@@ -301,6 +373,7 @@ class JobcardController extends Controller
                     'unit_price' => $lineItemData['unit_price'],
                     'discount_amount' => $lineItemData['discount_amount'] ?? 0,
                     'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
+                    'tax_rate_id' => $lineItemData['tax_rate_id'] ?? null,
                     'sort_order' => $index,
                 ]);
                 $lineItem->calculateTotal();
@@ -324,6 +397,16 @@ class JobcardController extends Controller
      */
     public function updateStatus(Request $request, Jobcard $jobcard): RedirectResponse
     {
+        // Limited users can only update status on jobcards assigned to them or their teams
+        if (auth()->user()->isLimitedUser()) {
+            $teamIds = auth()->user()->teams()->pluck('teams.id')->toArray();
+            $isAssignedToUser = $jobcard->assigned_to_user_id === auth()->id();
+            $isAssignedToTeam = $jobcard->assigned_to_team_id && in_array($jobcard->assigned_to_team_id, $teamIds);
+            if (!$isAssignedToUser && !$isAssignedToTeam) {
+                abort(403, 'You do not have access to this jobcard.');
+            }
+        }
+
         $request->validate([
             'status' => 'required|in:draft,pending,in_progress,completed,cancelled',
         ]);
@@ -395,7 +478,7 @@ class JobcardController extends Controller
             abort(403, 'Unauthorized access to jobcard.');
         }
 
-        $jobcard->load(['customer', 'lineItems.product', 'company']);
+        $jobcard->load(['customer', 'lineItems.product', 'lineItems.taxRate', 'company']);
         $templateId = $request->get('template_id');
 
         $pdfService = new \App\Services\PdfGenerationService();
@@ -456,7 +539,7 @@ class JobcardController extends Controller
                 'to_email' => $validated['email'],
             ]);
 
-            $jobcard->load(['customer', 'lineItems.product', 'company']);
+            $jobcard->load(['customer', 'lineItems.product', 'lineItems.taxRate', 'company']);
 
             $subject = $validated['subject'] ?? "Jobcard #{$jobcard->job_number} - {$jobcard->title}";
             $fromEmail = $user->smtp_from_email ?? $user->email;

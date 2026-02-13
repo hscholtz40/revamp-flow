@@ -11,7 +11,8 @@ interface TaxRate {
     rate: number;
     description: string | null;
     is_active: boolean;
-    is_default: boolean;
+    is_default_sales: boolean;
+    is_default_purchasing: boolean;
     created_at: string;
     updated_at: string;
 }
@@ -28,7 +29,8 @@ const form = useForm({
     rate: props.taxRate.rate,
     description: props.taxRate.description || '',
     is_active: props.taxRate.is_active,
-    is_default: props.taxRate.is_default,
+    is_default_sales: props.taxRate.is_default_sales,
+    is_default_purchasing: props.taxRate.is_default_purchasing,
 });
 
 function submit() {
@@ -158,17 +160,30 @@ function submit() {
                                 </label>
                             </div>
 
-                            <!-- Default Status -->
+                            <!-- Default Sales -->
                             <div>
                                 <label class="flex items-center gap-2">
                                     <input
-                                        v-model="form.is_default"
+                                        v-model="form.is_default_sales"
                                         type="checkbox"
                                         class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                     />
-                                    <span class="text-sm font-medium text-gray-700">Set as Default Tax Rate</span>
+                                    <span class="text-sm font-medium text-gray-700">Default Tax Rate for Sales</span>
                                 </label>
-                                <p class="mt-1 text-sm text-gray-500">This tax rate will be used as the default when syncing invoices and quotes to Xero</p>
+                                <p class="mt-1 text-sm text-gray-500">Used as default for invoices, quotes, and jobcards</p>
+                            </div>
+
+                            <!-- Default Purchasing -->
+                            <div>
+                                <label class="flex items-center gap-2">
+                                    <input
+                                        v-model="form.is_default_purchasing"
+                                        type="checkbox"
+                                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <span class="text-sm font-medium text-gray-700">Default Tax Rate for Purchasing</span>
+                                </label>
+                                <p class="mt-1 text-sm text-gray-500">Used as default for purchase orders</p>
                             </div>
                         </div>
                     </div>

@@ -7,6 +7,7 @@ use App\Models\Customer;
 use App\Models\Quote;
 use App\Models\QuoteLineItem;
 use App\Models\Product;
+use App\Models\TaxRate;
 use App\Models\Jobcard;
 use App\Services\ReminderService;
 use Illuminate\Http\RedirectResponse;
@@ -77,11 +78,16 @@ class QuotesController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'price', 'type']);
 
+        $taxRates = TaxRate::where('company_id', $currentCompany->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'rate', 'is_default_sales']);
+        $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
+
         return Inertia::render('quotes/Create', [
             'customers' => $customers,
             'products' => $products,
             'currentCompany' => $currentCompany,
             'defaultTerms' => $currentCompany->default_quote_terms,
+            'taxRates' => $taxRates,
+            'defaultSalesTaxRateId' => $defaultSalesTaxRate?->id,
         ]);
     }
 
@@ -107,7 +113,10 @@ class QuotesController extends Controller
             'line_items.*.description' => ['required', 'string', 'max:255'],
             'line_items.*.quantity' => ['required', 'integer', 'min:1'],
             'line_items.*.unit_price' => ['required', 'numeric', 'min:0'],
+            'line_items.*.discount_amount' => ['nullable', 'numeric', 'min:0'],
+            'line_items.*.discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'line_items.*.product_id' => ['nullable', 'exists:products,id'],
+            'line_items.*.tax_rate_id' => ['nullable', 'exists:tax_rates,id'],
         ]);
 
         // Create the quote
@@ -119,7 +128,7 @@ class QuotesController extends Controller
             'description' => $validated['description'],
             'status' => $validated['status'],
             'expiry_date' => $validated['expiry_date'],
-            'tax_rate' => $validated['tax_rate'] ?? 15,
+            'tax_rate' => $validated['tax_rate'] ?? 0,
             'discount_amount' => $validated['discount_amount'] ?? 0,
             'discount_percentage' => $validated['discount_percentage'] ?? 0,
             'notes' => $validated['notes'],
@@ -136,6 +145,7 @@ class QuotesController extends Controller
                 'unit_price' => $lineItemData['unit_price'],
                 'discount_amount' => $lineItemData['discount_amount'] ?? 0,
                 'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
+                'tax_rate_id' => $lineItemData['tax_rate_id'] ?? null,
                 'sort_order' => $index,
             ]);
             $lineItem->calculateTotal();
@@ -168,7 +178,7 @@ class QuotesController extends Controller
      */
     public function show(Quote $quote): Response
     {
-        $quote->load(['customer', 'lineItems.product', 'company', 'invoice']);
+        $quote->load(['customer', 'lineItems.product', 'lineItems.taxRate', 'company', 'invoice']);
         
         // Ensure totals are calculated
         $quote->calculateTotals();
@@ -210,11 +220,16 @@ class QuotesController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'price', 'type']);
 
+        $taxRates = TaxRate::where('company_id', $currentCompany->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'rate', 'is_default_sales']);
+        $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
+
         return Inertia::render('quotes/Edit', [
             'quote' => $quote,
             'customers' => $customers,
             'products' => $products,
             'currentCompany' => $currentCompany,
+            'taxRates' => $taxRates,
+            'defaultSalesTaxRateId' => $defaultSalesTaxRate?->id,
             'canEditCompleted' => auth()->user()->hasModulePermission('quotes', 'edit_completed'),
         ]);
     }
@@ -239,7 +254,10 @@ class QuotesController extends Controller
             'line_items.*.description' => ['required', 'string', 'max:255'],
             'line_items.*.quantity' => ['required', 'integer', 'min:1'],
             'line_items.*.unit_price' => ['required', 'numeric', 'min:0'],
+            'line_items.*.discount_amount' => ['nullable', 'numeric', 'min:0'],
+            'line_items.*.discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'line_items.*.product_id' => ['nullable', 'exists:products,id'],
+            'line_items.*.tax_rate_id' => ['nullable', 'exists:tax_rates,id'],
         ]);
 
         // Check if user can edit completed quotes (accepted status)
@@ -259,7 +277,7 @@ class QuotesController extends Controller
             'description' => $validated['description'],
             'status' => $validated['status'],
             'expiry_date' => $validated['expiry_date'],
-            'tax_rate' => $validated['tax_rate'] ?? 15,
+            'tax_rate' => $validated['tax_rate'] ?? 0,
             'discount_amount' => $validated['discount_amount'] ?? 0,
             'discount_percentage' => $validated['discount_percentage'] ?? 0,
             'notes' => $validated['notes'],
@@ -279,6 +297,7 @@ class QuotesController extends Controller
                 'unit_price' => $lineItemData['unit_price'],
                 'discount_amount' => $lineItemData['discount_amount'] ?? 0,
                 'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
+                'tax_rate_id' => $lineItemData['tax_rate_id'] ?? null,
                 'sort_order' => $index,
             ]);
             $lineItem->calculateTotal();
@@ -371,7 +390,7 @@ class QuotesController extends Controller
      */
     public function downloadPDF(Request $request, Quote $quote)
     {
-        $quote->load(['customer', 'lineItems.product', 'company']);
+        $quote->load(['customer', 'lineItems.product', 'lineItems.taxRate', 'company']);
         
         // Update status to sent when PDF is downloaded
         if ($quote->status === 'draft') {
@@ -403,7 +422,7 @@ class QuotesController extends Controller
             'type' => ['nullable', 'in:quotation,proforma-invoice'],
         ]);
 
-        $quote->load(['customer', 'lineItems.product', 'company']);
+        $quote->load(['customer', 'lineItems.product', 'lineItems.taxRate', 'company']);
         
         // Get user's SMTP settings
         $user = auth()->user();

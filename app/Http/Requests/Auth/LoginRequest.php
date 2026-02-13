@@ -52,6 +52,15 @@ class LoginRequest extends FormRequest
             ]);
         }
 
+        // Info users cannot log in - they are for reference only
+        if ($user->isInfoUser()) {
+            RateLimiter::hit($this->throttleKey());
+
+            throw ValidationException::withMessages([
+                'email' => 'This account is for informational purposes only and cannot be used to log in.',
+            ]);
+        }
+
         RateLimiter::clear($this->throttleKey());
 
         return $user;

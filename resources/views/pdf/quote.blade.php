@@ -22,12 +22,26 @@
             margin-bottom: 10px;
         }
         
+        .header-row {
+            display: table;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        
+        .header-logo {
+            display: table-cell;
+            width: 50%;
+            vertical-align: middle;
+        }
+        
         .document-title {
-            text-align: center;
+            display: table-cell;
+            width: 50%;
+            text-align: right;
+            vertical-align: middle;
             font-size: 28px;
             font-weight: bold;
             color: #000;
-            margin: 20px 0;
             text-transform: uppercase;
         }
         
@@ -273,15 +287,21 @@
 <body>
     <div class="page-header">Page 1 of 1</div>
     
-    <div class="document-title">Quote</div>
-    
-    <div class="company-section">
-        <div class="company-left">
+    <div class="header-row">
+        <div class="header-logo">
             @if($company->getLogoPathForPdf())
                 <img src="{{ $company->getLogoPathForPdf() }}" alt="Company Logo" class="company-logo">
             @endif
+        </div>
+        <div class="document-title">Quote</div>
+    </div>
+    
+    <div class="company-section">
+        <div class="company-left">
             <div class="company-name">{{ $company->name ?? 'COMPANY NAME' }}</div>
-            <div class="company-tagline">{{ $company->tagline ?? 'BUSINESS DESCRIPTION' }}</div>
+            @if($company->tagline)
+                <div class="company-tagline">{{ $company->tagline }}</div>
+            @endif
             
             <div class="company-details">
                 <p><strong>{{ $company->legal_name ?? $company->name }}</strong></p>
@@ -314,7 +334,7 @@
                     <p>Acc No: {{ $company->bank_account_number }}</p>
                 @endif
                 @if($company->bank_sort_code)
-                    <p>Sort Code: {{ $company->bank_sort_code }}</p>
+                    <p>Branch Code: {{ $company->bank_sort_code }}</p>
                 @endif
             </div>
         </div>
@@ -372,7 +392,7 @@
                 <th>Item Description</th>
                 <th class="text-right">QTY</th>
                 <th class="text-right">Price (Ex)</th>
-                <th class="text-right">Disc %</th>
+                <th class="text-right">Discount</th>
                 <th class="text-right">Tax</th>
                 <th class="text-right">Total (Incl)</th>
             </tr>
@@ -384,8 +404,23 @@
                     <td>{{ $item->description ?? 'Item Description' }}</td>
                     <td class="text-right">{{ number_format($item->quantity ?? 0, 2) }}</td>
                     <td class="text-right">R{{ number_format($item->unit_price ?? 0, 2) }}</td>
-                    <td class="text-right">{{ $item->discount_percentage ?? 0 }}%</td>
-                    <td class="text-right">R{{ number_format(($item->total ?? 0) - ($item->total ?? 0) / (1 + ($quote->tax_rate ?? 0) / 100), 2) }}</td>
+                    <td class="text-right">
+                        @if(($item->discount_percentage ?? 0) > 0)
+                            {{ number_format($item->discount_percentage, 2) }}%
+                        @elseif(($item->discount_amount ?? 0) > 0)
+                            R{{ number_format($item->discount_amount, 2) }}
+                        @else
+                            —
+                        @endif
+                    </td>
+                    <td class="text-right">
+                        @if($item->taxRate)
+                            R{{ number_format($item->tax_amount ?? 0, 2) }}
+                            <div style="font-size: 9px; color: #666;">{{ $item->taxRate->name }} ({{ $item->taxRate->rate }}%)</div>
+                        @else
+                            —
+                        @endif
+                    </td>
                     <td class="text-right">R{{ number_format($item->total ?? 0, 2) }}</td>
                 </tr>
             @endforeach
@@ -394,31 +429,23 @@
     
     <div class="totals-section">
         <div class="total-row">
-            <span>Total (Excl):</span>
+            <span>Subtotal:</span>
             <span>R{{ number_format($quote->subtotal ?? 0, 2) }}</span>
         </div>
+        @if(($quote->tax_amount ?? 0) > 0)
         <div class="total-row">
             <span>Tax:</span>
-            <span>R{{ number_format($quote->tax_amount ?? 0, 2) }}</span>
+            <span>R{{ number_format($quote->tax_amount, 2) }}</span>
         </div>
-        <div class="total-row">
-            <span>Total (Incl):</span>
-            <span>R{{ number_format($quote->total ?? 0, 2) }}</span>
-        </div>
+        @endif
+        @if(($quote->discount_amount ?? 0) > 0)
         <div class="total-row">
             <span>Discount:</span>
-            <span>R{{ number_format($quote->discount_amount ?? 0, 2) }}</span>
+            <span>-R{{ number_format($quote->discount_amount, 2) }}</span>
         </div>
-        <div class="total-row">
-            <span>Rounding:</span>
-            <span>R0.00</span>
-        </div>
-        <div class="total-row">
-            <span>Less: Excess:</span>
-            <span>R0.00</span>
-        </div>
+        @endif
         <div class="total-row final">
-            <span>Total (Incl):</span>
+            <span>Total:</span>
             <span>R{{ number_format($quote->total ?? 0, 2) }}</span>
         </div>
     </div>

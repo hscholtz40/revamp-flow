@@ -41,6 +41,10 @@ class Company extends Model
         'smtp_from_name',
         'whatsapp_business_number',
         'visible_modules',
+        'bank_name',
+        'bank_account_name',
+        'bank_account_number',
+        'bank_sort_code',
     ];
 
     protected $casts = [
@@ -66,14 +70,26 @@ class Company extends Model
     }
 
     /**
-     * Get the logo file path for PDF generation
+     * Get the logo as a base64 data URI for PDF generation.
+     * DomPDF cannot fetch images from URLs, so we convert to inline base64.
      */
     public function getLogoPathForPdf()
     {
-        if ($this->logo_path && file_exists(storage_path('app/public/' . $this->logo_path))) {
-            return asset('storage/' . $this->logo_path);
+        if (!$this->logo_path) {
+            return null;
         }
-        return null;
+
+        $fullPath = storage_path('app/public/' . $this->logo_path);
+
+        if (!file_exists($fullPath)) {
+            return null;
+        }
+
+        $imageData = file_get_contents($fullPath);
+        $imageInfo = getimagesize($fullPath);
+        $mimeType = $imageInfo['mime'] ?? 'image/png';
+
+        return 'data:' . $mimeType . ';base64,' . base64_encode($imageData);
     }
 
     /**

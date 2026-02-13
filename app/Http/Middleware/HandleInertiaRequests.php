@@ -73,6 +73,7 @@ class HandleInertiaRequests extends Middleware
                     'abilities' => null,
                 ],
                 'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
+            'isLicensingInstance' => config('app.is_licensing_instance'),
             ];
         }
         
@@ -90,6 +91,8 @@ class HandleInertiaRequests extends Middleware
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
+                    'user_type' => $user->user_type ?? 'standard',
+                    'hourly_rate' => $user->hourly_rate,
                     'avatar' => null, // Can be added later if needed
                     'email_verified_at' => $user->email_verified_at?->toIso8601String(),
                     'created_at' => $user->created_at?->toIso8601String(),
@@ -155,6 +158,7 @@ class HandleInertiaRequests extends Middleware
                 'abilities' => $this->getUserAbilities($isInstalled, $user, $isInstallerRoute) ?? $parentAuth['abilities'] ?? null,
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
+            'isLicensingInstance' => config('app.is_licensing_instance'),
         ];
     }
 

@@ -14,14 +14,14 @@
             <!-- Header -->
             <div class="flex items-center justify-between gap-3 mb-6">
                 <h1 class="text-2xl font-bold text-gray-900">Jobcards</h1>
-                <Link :href="jobcards.create().url" class="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">
+                <Link v-if="!isLimitedUser" :href="jobcards.create().url" class="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">
                     New Jobcard
                 </Link>
             </div>
 
             <!-- Filters -->
             <div class="bg-white rounded-lg border p-4 mb-6">
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-6 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Search</label>
                         <input
@@ -48,6 +48,24 @@
                             <option value="">All Customers</option>
                             <option v-for="customer in props.customers" :key="customer.id" :value="customer.id">
                                 {{ customer.name }}
+                            </option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Assigned User</label>
+                        <select v-model="assignedToUserId" class="w-full rounded border px-3 py-2">
+                            <option value="">All Users</option>
+                            <option v-for="user in props.users" :key="user.id" :value="user.id">
+                                {{ user.name }}
+                            </option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Assigned Team</label>
+                        <select v-model="assignedToTeamId" class="w-full rounded border px-3 py-2">
+                            <option value="">All Teams</option>
+                            <option v-for="team in props.teams" :key="team.id" :value="team.id">
+                                {{ team.name }}
                             </option>
                         </select>
                     </div>
@@ -78,12 +96,15 @@
                                     Customer
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Assigned To
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Status
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Due Date
                                 </th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                <th v-if="!isLimitedUser" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Total
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -103,6 +124,22 @@
                                     <div class="text-sm text-gray-900">{{ jobcard.customer.name }}</div>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
+                                    <div v-if="jobcard.assigned_user" class="flex items-center gap-1.5">
+                                        <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-medium text-blue-700">
+                                            {{ jobcard.assigned_user.name.charAt(0).toUpperCase() }}
+                                        </span>
+                                        <span class="text-sm text-gray-900">{{ jobcard.assigned_user.name }}</span>
+                                    </div>
+                                    <div v-else-if="jobcard.assigned_team" class="flex items-center gap-1.5">
+                                        <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-purple-100 text-xs font-medium text-purple-700">
+                                            {{ jobcard.assigned_team.name.charAt(0).toUpperCase() }}
+                                        </span>
+                                        <span class="text-sm text-gray-900">{{ jobcard.assigned_team.name }}</span>
+                                        <span class="text-xs text-gray-400">(Team)</span>
+                                    </div>
+                                    <span v-else class="text-sm text-gray-400">Unassigned</span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
                                     <span
                                         :class="getStatusBadgeClass(jobcard.status)"
                                         class="inline-flex px-2 py-1 text-xs font-semibold rounded-full"
@@ -113,7 +150,7 @@
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     {{ jobcard.due_date ? formatDate(jobcard.due_date) : '-' }}
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <td v-if="!isLimitedUser" class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     {{ jobcard.formatted_total || 'R0.00' }}
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -124,34 +161,36 @@
                                         >
                                             View
                                         </Link>
-                                        <Link
-                                            v-if="canEditJobcard(jobcard)"
-                                            :href="jobcards.edit(jobcard.id).url"
-                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                                        >
-                                            Edit
-                                        </Link>
-                                        <span
-                                            v-else
-                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-gray-500 bg-gray-100 cursor-not-allowed"
-                                            title="Cannot edit completed jobcards without permission"
-                                        >
-                                            Edit
-                                        </span>
-                                        <button
-                                            v-if="canDeleteJobcard(jobcard)"
-                                            @click="deleteJobcard(jobcard)"
-                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                                        >
-                                            Delete
-                                        </button>
-                                        <span
-                                            v-else
-                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-gray-500 bg-gray-100 cursor-not-allowed"
-                                            title="Cannot delete completed jobcards without permission"
-                                        >
-                                            Delete
-                                        </span>
+                                        <template v-if="!isLimitedUser">
+                                            <Link
+                                                v-if="canEditJobcard(jobcard)"
+                                                :href="jobcards.edit(jobcard.id).url"
+                                                class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                            >
+                                                Edit
+                                            </Link>
+                                            <span
+                                                v-else
+                                                class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-gray-500 bg-gray-100 cursor-not-allowed"
+                                                title="Cannot edit completed jobcards without permission"
+                                            >
+                                                Edit
+                                            </span>
+                                            <button
+                                                v-if="canDeleteJobcard(jobcard)"
+                                                @click="deleteJobcard(jobcard)"
+                                                class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                                            >
+                                                Delete
+                                            </button>
+                                            <span
+                                                v-else
+                                                class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-gray-500 bg-gray-100 cursor-not-allowed"
+                                                title="Cannot delete completed jobcards without permission"
+                                            >
+                                                Delete
+                                            </span>
+                                        </template>
                                     </div>
                                 </td>
                             </tr>
@@ -189,9 +228,22 @@
 
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
-import { Head, Link, router } from '@inertiajs/vue3';
-import { ref, watch, nextTick } from 'vue';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { ref, computed, watch, nextTick } from 'vue';
 import jobcards from '@/routes/jobcards';
+
+const page = usePage();
+const isLimitedUser = computed(() => (page.props.auth as any)?.user?.user_type === 'limited');
+
+interface AppUser {
+    id: number;
+    name: string;
+}
+
+interface TeamOption {
+    id: number;
+    name: string;
+}
 
 interface Jobcard {
     id: number;
@@ -204,6 +256,8 @@ interface Jobcard {
         id: number;
         name: string;
     };
+    assigned_user: AppUser | null;
+    assigned_team: TeamOption | null;
 }
 
 interface Customer {
@@ -220,9 +274,13 @@ interface Props {
         total: number;
     };
     customers: Customer[];
+    users: AppUser[];
+    teams: TeamOption[];
     filters: {
         status?: string;
         customer_id?: string;
+        assigned_to_user_id?: string;
+        assigned_to_team_id?: string;
         search?: string;
     };
     currentCompany: {
@@ -237,6 +295,8 @@ const props = defineProps<Props>();
 const search = ref(props.filters?.search || '');
 const status = ref(props.filters?.status || '');
 const customerId = ref(props.filters?.customer_id || '');
+const assignedToUserId = ref(props.filters?.assigned_to_user_id || '');
+const assignedToTeamId = ref(props.filters?.assigned_to_team_id || '');
 
 // Flag to prevent watch from running during initial setup
 let isInitialized = false;
@@ -250,6 +310,8 @@ const clearFilters = () => {
     search.value = '';
     status.value = '';
     customerId.value = '';
+    assignedToUserId.value = '';
+    assignedToTeamId.value = '';
     
     // Navigate to clean URL without filters
     router.get(jobcards.index().url, {}, {
@@ -314,7 +376,7 @@ const formatDate = (date: string) => {
 };
 
 // Watch for filter changes and update URL
-watch([search, status, customerId], () => {
+watch([search, status, customerId, assignedToUserId, assignedToTeamId], () => {
     // Skip if component is not fully initialized
     if (!isInitialized || !props.filters) return;
     
@@ -323,6 +385,8 @@ watch([search, status, customerId], () => {
     if (search.value && search.value.trim()) params.search = search.value.trim();
     if (status.value && status.value.trim()) params.status = status.value.trim();
     if (customerId.value && customerId.value.trim()) params.customer_id = customerId.value.trim();
+    if (assignedToUserId.value && assignedToUserId.value.trim()) params.assigned_to_user_id = assignedToUserId.value.trim();
+    if (assignedToTeamId.value && assignedToTeamId.value.trim()) params.assigned_to_team_id = assignedToTeamId.value.trim();
     
     router.get(jobcards.index().url, params, {
         preserveState: true,
