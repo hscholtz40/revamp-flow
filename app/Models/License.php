@@ -16,6 +16,8 @@ class License extends Model
         'customer_id',
         'license_key',
         'url',
+        'version',
+        'deployed_at',
         'limited_users',
         'standard_users',
         'status',
@@ -26,6 +28,7 @@ class License extends Model
     protected $casts = [
         'limited_users' => 'integer',
         'standard_users' => 'integer',
+        'deployed_at' => 'datetime',
         'expires_at' => 'datetime',
     ];
 

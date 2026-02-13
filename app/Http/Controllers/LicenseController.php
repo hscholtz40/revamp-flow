@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\Customer;
 use App\Models\License;
+use App\Services\CpanelService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -173,6 +175,222 @@ class LicenseController extends Controller
 
         return redirect()->route('licenses.index')
             ->with('success', 'License deleted successfully.');
+    }
+
+    /**
+     * Deploy a license instance to cPanel.
+     */
+    public function deploy(Request $request, License $license): RedirectResponse
+    {
+        $this->authorizeCompany($license);
+
+        $request->validate([
+            'zip_file' => ['required', 'file', 'mimes:zip', 'max:512000'], // max 500MB
+        ]);
+
+        if (!$license->url) {
+            return redirect()->back()
+                ->withErrors(['message' => 'License must have a URL set before deploying.']);
+        }
+
+        if ($license->deployed_at) {
+            return redirect()->back()
+                ->withErrors(['message' => 'This license has already been deployed. Use Upgrade to update the instance.']);
+        }
+
+        $cpanel = new CpanelService();
+
+        if (!$cpanel->isConfigured()) {
+            return redirect()->back()
+                ->withErrors(['message' => 'cPanel integration is not configured. Please set the CPANEL_* environment variables.']);
+        }
+
+        // Extract subdomain from the URL
+        $parsedUrl = parse_url($license->url);
+        $host = $parsedUrl['host'] ?? '';
+        $subdomain = explode('.', $host)[0] ?? '';
+
+        if (empty($subdomain)) {
+            return redirect()->back()
+                ->withErrors(['message' => 'Could not determine subdomain from the license URL.']);
+        }
+
+        // Store the uploaded file temporarily
+        $zipFile = $request->file('zip_file');
+        $zipPath = $zipFile->store('temp', 'local');
+        $fullZipPath = storage_path('app/private/' . $zipPath);
+
+        try {
+            $result = $cpanel->deploy($subdomain, $fullZipPath, $license->url);
+
+            // Clean up temp file
+            if (file_exists($fullZipPath)) {
+                unlink($fullZipPath);
+            }
+
+            if ($result['success']) {
+                $license->update(['deployed_at' => now()]);
+
+                Log::info('License deployed successfully', [
+                    'license_id' => $license->id,
+                    'subdomain' => $subdomain,
+                ]);
+
+                return redirect()->route('licenses.show', $license)
+                    ->with('success', 'Instance deployed successfully to ' . $license->url);
+            }
+
+            Log::error('License deployment failed', [
+                'license_id' => $license->id,
+                'result' => $result,
+            ]);
+
+            return redirect()->back()
+                ->withErrors(['message' => 'Deployment failed: ' . $result['message']]);
+
+        } catch (\Exception $e) {
+            // Clean up temp file on failure
+            if (file_exists($fullZipPath)) {
+                unlink($fullZipPath);
+            }
+
+            Log::error('License deployment exception', [
+                'license_id' => $license->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return redirect()->back()
+                ->withErrors(['message' => 'Deployment failed: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Upgrade a license instance on cPanel.
+     */
+    public function upgrade(Request $request, License $license): RedirectResponse
+    {
+        $this->authorizeCompany($license);
+
+        $request->validate([
+            'zip_file' => ['required', 'file', 'mimes:zip', 'max:512000'], // max 500MB
+        ]);
+
+        if (!$license->url) {
+            return redirect()->back()
+                ->withErrors(['message' => 'License must have a URL set before upgrading.']);
+        }
+
+        $cpanel = new CpanelService();
+
+        if (!$cpanel->isConfigured()) {
+            return redirect()->back()
+                ->withErrors(['message' => 'cPanel integration is not configured. Please set the CPANEL_* environment variables.']);
+        }
+
+        // Extract subdomain from the URL
+        $parsedUrl = parse_url($license->url);
+        $host = $parsedUrl['host'] ?? '';
+        $subdomain = explode('.', $host)[0] ?? '';
+
+        if (empty($subdomain)) {
+            return redirect()->back()
+                ->withErrors(['message' => 'Could not determine subdomain from the license URL.']);
+        }
+
+        // Store the uploaded file temporarily
+        $zipFile = $request->file('zip_file');
+        $zipPath = $zipFile->store('temp', 'local');
+        $fullZipPath = storage_path('app/private/' . $zipPath);
+
+        try {
+            $result = $cpanel->upgrade($subdomain, $fullZipPath);
+
+            // Clean up temp file
+            if (file_exists($fullZipPath)) {
+                unlink($fullZipPath);
+            }
+
+            if ($result['success']) {
+                Log::info('License upgraded successfully', [
+                    'license_id' => $license->id,
+                    'subdomain' => $subdomain,
+                ]);
+
+                return redirect()->route('licenses.show', $license)
+                    ->with('success', 'Instance upgraded successfully at ' . $license->url);
+            }
+
+            Log::error('License upgrade failed', [
+                'license_id' => $license->id,
+                'result' => $result,
+            ]);
+
+            return redirect()->back()
+                ->withErrors(['message' => 'Upgrade failed: ' . $result['message']]);
+
+        } catch (\Exception $e) {
+            // Clean up temp file on failure
+            if (file_exists($fullZipPath)) {
+                unlink($fullZipPath);
+            }
+
+            Log::error('License upgrade exception', [
+                'license_id' => $license->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return redirect()->back()
+                ->withErrors(['message' => 'Upgrade failed: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Force SSL on the license's subdomain in cPanel.
+     */
+    public function forceSSL(License $license): RedirectResponse
+    {
+        $this->authorizeCompany($license);
+
+        if (!$license->url) {
+            return redirect()->back()
+                ->withErrors(['message' => 'License must have a URL set before enabling SSL.']);
+        }
+
+        $cpanel = new CpanelService();
+
+        if (!$cpanel->isConfigured()) {
+            return redirect()->back()
+                ->withErrors(['message' => 'cPanel integration is not configured. Please set the CPANEL_* environment variables.']);
+        }
+
+        $parsedUrl = parse_url($license->url);
+        $host = $parsedUrl['host'] ?? '';
+
+        if (empty($host)) {
+            return redirect()->back()
+                ->withErrors(['message' => 'Could not determine domain from the license URL.']);
+        }
+
+        try {
+            $result = $cpanel->forceSSL($host);
+
+            if ($result['success']) {
+                return redirect()->route('licenses.show', $license)
+                    ->with('success', 'AutoSSL requested and HTTPS redirect enabled for ' . $host);
+            }
+
+            return redirect()->back()
+                ->withErrors(['message' => 'Force SSL failed: ' . $result['message']]);
+
+        } catch (\Exception $e) {
+            Log::error('Force SSL exception', [
+                'license_id' => $license->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return redirect()->back()
+                ->withErrors(['message' => 'Force SSL failed: ' . $e->getMessage()]);
+        }
     }
 
     /**

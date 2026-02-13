@@ -35,4 +35,13 @@ return [
         ],
     ],
 
+    'cpanel' => [
+        'host' => env('CPANEL_HOST'),
+        'port' => env('CPANEL_PORT', 2083),
+        'username' => env('CPANEL_USERNAME'),
+        'api_token' => env('CPANEL_API_TOKEN'),
+        'domain' => env('CPANEL_DOMAIN'),
+        'home_dir' => env('CPANEL_HOME_DIR', '/home'),
+    ],
+
 ];

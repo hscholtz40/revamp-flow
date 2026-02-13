@@ -11,4 +11,7 @@ Route::middleware(['auth', 'verified', 'licensing'])->group(function () {
     Route::get('/licenses/{license}/edit', [LicenseController::class, 'edit'])->name('licenses.edit');
     Route::put('/licenses/{license}', [LicenseController::class, 'update'])->name('licenses.update');
     Route::delete('/licenses/{license}', [LicenseController::class, 'destroy'])->name('licenses.destroy');
+    Route::post('/licenses/{license}/deploy', [LicenseController::class, 'deploy'])->name('licenses.deploy');
+    Route::post('/licenses/{license}/upgrade', [LicenseController::class, 'upgrade'])->name('licenses.upgrade');
+    Route::post('/licenses/{license}/force-ssl', [LicenseController::class, 'forceSSL'])->name('licenses.forceSSL');
 });
