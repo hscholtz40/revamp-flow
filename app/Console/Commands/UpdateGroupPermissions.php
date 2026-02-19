@@ -38,7 +38,7 @@ class UpdateGroupPermissions extends Command
         }
         
         // Define modules and their permissions
-        $modules = ['customers', 'users', 'groups', 'contacts', 'products', 'suppliers', 'stock-movements', 'purchase-orders'];
+        $modules = ['customers', 'users', 'groups', 'contacts', 'products', 'suppliers', 'stock-movements', 'purchase-orders', 'jobcards', 'quotes', 'invoices', 'credit-notes', 'reports', 'timesheet'];
         
         foreach ($groups as $group) {
             $this->info('Updating permissions for group: ' . $group->name);

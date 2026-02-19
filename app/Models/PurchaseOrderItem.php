@@ -18,6 +18,7 @@ class PurchaseOrderItem extends Model
         'total',
         'tax_rate_id',
         'tax_amount',
+        'account_id',
         'quantity_received',
         'description',
         'product_batch_id',
@@ -52,6 +53,11 @@ class PurchaseOrderItem extends Model
     public function taxRate(): BelongsTo
     {
         return $this->belongsTo(TaxRate::class);
+    }
+
+    public function account(): BelongsTo
+    {
+        return $this->belongsTo(ChartOfAccount::class, 'account_id');
     }
 
     /**

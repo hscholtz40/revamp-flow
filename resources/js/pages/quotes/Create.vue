@@ -207,12 +207,13 @@
                     </div>
 
                     <!-- Table Header -->
-                    <div class="hidden md:grid md:grid-cols-[3.5rem_1fr_6.5rem_9rem_8rem_5.5rem_2rem] gap-2 px-3 pb-2 text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
+                    <div class="hidden md:grid md:grid-cols-[3.5rem_1fr_6.5rem_9rem_8rem_5.5rem_8rem_2rem] gap-2 px-3 pb-2 text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
                         <div>Qty</div>
                         <div>Description</div>
                         <div>Price</div>
                         <div>Discount</div>
                         <div>Tax</div>
+                        <div>Account</div>
                         <div class="text-right">Total</div>
                         <div></div>
                     </div>
@@ -494,6 +495,7 @@ interface LineItem {
     discount_amount?: number;
     discount_percentage?: number;
     tax_rate_id?: number | null;
+    account_id?: number | null;
     total: number;
 }
 
@@ -504,6 +506,8 @@ const props = defineProps<{
     defaultTerms?: string;
     taxRates: { id: number; name: string; rate: number; is_default_sales: boolean }[];
     defaultSalesTaxRateId: number | null;
+    chartOfAccounts: { id: number; account_code: string; account_name: string; account_type: string; is_default_sales: boolean }[];
+    defaultSalesAccountId: number | null;
 }>();
 
 const showProductSuggestions = ref<Record<number, boolean>>({});
@@ -555,6 +559,7 @@ const form = useForm({
             discount_amount: 0,
             discount_percentage: 0,
             tax_rate_id: props.defaultSalesTaxRateId || null,
+            account_id: props.defaultSalesAccountId || null,
             total: 0,
         }
     ] as LineItem[],
@@ -569,6 +574,7 @@ const addLineItem = () => {
         discount_amount: 0,
         discount_percentage: 0,
         tax_rate_id: props.defaultSalesTaxRateId || null,
+        account_id: props.defaultSalesAccountId || null,
         total: 0,
     });
 };

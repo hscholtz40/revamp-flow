@@ -20,6 +20,8 @@ class TaxRate extends Model
         'is_active',
         'is_default_sales',
         'is_default_purchasing',
+        'xero_updated_at',
+        'xero_created_at',
     ];
 
     protected $casts = [
@@ -27,6 +29,8 @@ class TaxRate extends Model
         'is_active' => 'boolean',
         'is_default_sales' => 'boolean',
         'is_default_purchasing' => 'boolean',
+        'xero_updated_at' => 'datetime',
+        'xero_created_at' => 'datetime',
     ];
 
     /**

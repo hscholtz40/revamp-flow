@@ -137,20 +137,22 @@
                         <div v-if="form.client_id && form.client_secret" class="bg-blue-50 border border-blue-200 rounded-lg p-4">
                             <div class="flex items-center justify-between">
                                 <div>
-                                    <h4 class="text-sm font-medium text-blue-900">Authorization Required</h4>
-                                    <p class="text-sm text-blue-700 mt-1">
+                                    <h4 class="text-sm font-medium text-blue-900">
+                                        {{ settings.tenant_name ? 'Xero Connection' : 'Authorization Required' }}
+                                    </h4>
+                                    <p v-if="!settings.tenant_name && !availableTenants.length" class="text-sm text-blue-700 mt-1">
                                         Click "Authorize with Xero" to connect your Xero account.
                                     </p>
                                 </div>
                                 <button
-                                    v-if="!settings.tenant_name"
+                                    v-if="!settings.tenant_name && !availableTenants.length"
                                     type="button"
                                     @click="authorize"
                                     class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
                                 >
                                     Authorize with Xero
                                 </button>
-                                <div v-else class="text-right">
+                                <div v-else-if="settings.tenant_name && !changingTenant" class="text-right">
                                     <p class="text-sm font-medium text-green-700">Connected</p>
                                     <p class="text-xs text-green-600">{{ settings.tenant_name }}</p>
                                     <button
@@ -163,10 +165,57 @@
                                     </button>
                                 </div>
                             </div>
+
+                            <!-- Tenant Selection (shown after auth when multiple tenants, or when changing) -->
+                            <div v-if="availableTenants.length > 0 && (!settings.tenant_name || changingTenant)" class="mt-4 border-t border-blue-200 pt-4">
+                                <h4 class="text-sm font-medium text-blue-900 mb-2">Select Xero Organisation</h4>
+                                <p class="text-sm text-blue-700 mb-3">
+                                    Choose the Xero organisation to connect with this company.
+                                </p>
+                                <div class="flex items-center gap-3">
+                                    <select
+                                        v-model="selectedTenantId"
+                                        class="flex-1 rounded border border-blue-300 px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+                                    >
+                                        <option value="" disabled>Select an organisation...</option>
+                                        <option
+                                            v-for="tenant in availableTenants"
+                                            :key="tenant.tenantId"
+                                            :value="tenant.tenantId"
+                                        >
+                                            {{ tenant.tenantName }}
+                                        </option>
+                                    </select>
+                                    <button
+                                        type="button"
+                                        @click="selectTenant"
+                                        :disabled="!selectedTenantId"
+                                        class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50 text-sm"
+                                    >
+                                        Connect
+                                    </button>
+                                    <button
+                                        v-if="changingTenant"
+                                        type="button"
+                                        @click="changingTenant = false; availableTenants = []"
+                                        class="text-gray-600 hover:text-gray-800 px-3 py-2 text-sm"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
                         </div>
 
-                        <!-- Disconnect Button -->
-                        <div v-if="settings.tenant_name" class="flex justify-end">
+                        <!-- Connected Actions -->
+                        <div v-if="settings.tenant_name" class="flex items-center justify-between">
+                            <button
+                                type="button"
+                                @click="fetchTenants"
+                                :disabled="fetchingTenants"
+                                class="text-blue-600 hover:text-blue-800 text-sm"
+                            >
+                                {{ fetchingTenants ? 'Loading...' : 'Change Organisation' }}
+                            </button>
                             <button
                                 type="button"
                                 @click="disconnect"
@@ -261,6 +310,64 @@
                                     <span class="ml-2 text-sm text-gray-700">Sync to Xero (including payments)</span>
                                 </label>
                                 <p class="text-xs text-gray-500 ml-6">Payments will be automatically synced when invoices are synced to Xero</p>
+                                <label class="flex items-center">
+                                    <input
+                                        v-model="form.sync_invoices_from_xero"
+                                        type="checkbox"
+                                        class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                    />
+                                    <span class="ml-2 text-sm text-gray-700">Sync from Xero</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Credit Notes -->
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-3">
+                                <h4 class="font-medium text-gray-900">Credit Notes</h4>
+                            </div>
+                            <div class="space-y-2 ml-6">
+                                <label class="flex items-center">
+                                    <input
+                                        v-model="form.sync_credit_notes_to_xero"
+                                        type="checkbox"
+                                        class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                    />
+                                    <span class="ml-2 text-sm text-gray-700">Sync to Xero</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input
+                                        v-model="form.sync_credit_notes_from_xero"
+                                        type="checkbox"
+                                        class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                    />
+                                    <span class="ml-2 text-sm text-gray-700">Sync from Xero</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Purchase Orders -->
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-3">
+                                <h4 class="font-medium text-gray-900">Purchase Orders</h4>
+                            </div>
+                            <div class="space-y-2 ml-6">
+                                <label class="flex items-center">
+                                    <input
+                                        v-model="form.sync_purchase_orders_to_xero"
+                                        type="checkbox"
+                                        class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                    />
+                                    <span class="ml-2 text-sm text-gray-700">Sync to Xero</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input
+                                        v-model="form.sync_purchase_orders_from_xero"
+                                        type="checkbox"
+                                        class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                    />
+                                    <span class="ml-2 text-sm text-gray-700">Sync from Xero</span>
+                                </label>
                             </div>
                         </div>
 
@@ -426,6 +533,22 @@
                     >
                         {{ syncing === 'invoices' ? 'Syncing...' : 'Sync Invoices to Xero' }}
                     </button>
+                    <button
+                        v-if="form.sync_credit_notes_to_xero"
+                        @click="syncCreditNotes"
+                        :disabled="syncing"
+                        class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
+                    >
+                        {{ syncing === 'credit-notes' ? 'Syncing...' : 'Sync Credit Notes to Xero' }}
+                    </button>
+                    <button
+                        v-if="form.sync_purchase_orders_to_xero"
+                        @click="syncPurchaseOrders"
+                        :disabled="syncing"
+                        class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
+                    >
+                        {{ syncing === 'purchase-orders' ? 'Syncing...' : 'Sync Purchase Orders to Xero' }}
+                    </button>
                 </div>
 
                 <!-- Initial Sync from Xero -->
@@ -468,6 +591,30 @@
                             {{ syncing === 'quotes-from-xero' ? 'Importing...' : 'Import Quotes from Xero' }}
                         </button>
                         <button
+                            v-if="form.sync_invoices_from_xero"
+                            @click="syncInvoicesFromXero"
+                            :disabled="syncing"
+                            class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+                        >
+                            {{ syncing === 'invoices-from-xero' ? 'Importing...' : 'Import Invoices from Xero' }}
+                        </button>
+                        <button
+                            v-if="form.sync_credit_notes_from_xero"
+                            @click="syncCreditNotesFromXero"
+                            :disabled="syncing"
+                            class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+                        >
+                            {{ syncing === 'credit-notes-from-xero' ? 'Importing...' : 'Import Credit Notes from Xero' }}
+                        </button>
+                        <button
+                            v-if="form.sync_purchase_orders_from_xero"
+                            @click="syncPurchaseOrdersFromXero"
+                            :disabled="syncing"
+                            class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+                        >
+                            {{ syncing === 'purchase-orders-from-xero' ? 'Importing...' : 'Import Purchase Orders from Xero' }}
+                        </button>
+                        <button
                             v-if="form.sync_tax_rates_from_xero"
                             @click="syncTaxRatesFromXero"
                             :disabled="syncing"
@@ -503,12 +650,19 @@ import { ref, computed, watch } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 import AppLayout from '@/layouts/AppLayout.vue';
 
+interface XeroTenant {
+    tenantId: string;
+    tenantName: string;
+    tenantType: string;
+}
+
 interface Props {
     settings: {
         id: number;
         is_enabled: boolean;
         client_id: string | null;
         client_secret: string | null;
+        tenant_id: string | null;
         tenant_name: string | null;
         refresh_token: string | null;
         needs_reauthorization: boolean;
@@ -520,6 +674,11 @@ interface Props {
         sync_products_to_xero: boolean;
         sync_products_from_xero: boolean;
         sync_invoices_to_xero: boolean;
+        sync_invoices_from_xero: boolean;
+        sync_credit_notes_to_xero: boolean;
+        sync_credit_notes_from_xero: boolean;
+        sync_purchase_orders_to_xero: boolean;
+        sync_purchase_orders_from_xero: boolean;
         sync_suppliers_to_xero: boolean;
         sync_suppliers_from_xero: boolean;
         sync_quotes_to_xero: boolean;
@@ -540,11 +699,16 @@ interface Props {
         name: string;
         is_default: boolean;
     }>;
+    xeroTenants: XeroTenant[];
 }
 
 const props = defineProps<Props>();
 
 const syncing = ref<string | null>(null);
+const availableTenants = ref<XeroTenant[]>(props.xeroTenants || []);
+const selectedTenantId = ref<string>(props.settings.tenant_id || '');
+const changingTenant = ref(false);
+const fetchingTenants = ref(false);
 
 const form = useForm({
     is_enabled: props.settings.is_enabled,
@@ -558,6 +722,11 @@ const form = useForm({
     sync_products_to_xero: props.settings.sync_products_to_xero,
     sync_products_from_xero: props.settings.sync_products_from_xero,
     sync_invoices_to_xero: props.settings.sync_invoices_to_xero,
+    sync_invoices_from_xero: props.settings.sync_invoices_from_xero,
+    sync_credit_notes_to_xero: props.settings.sync_credit_notes_to_xero,
+    sync_credit_notes_from_xero: props.settings.sync_credit_notes_from_xero,
+    sync_purchase_orders_to_xero: props.settings.sync_purchase_orders_to_xero,
+    sync_purchase_orders_from_xero: props.settings.sync_purchase_orders_from_xero,
     sync_suppliers_to_xero: props.settings.sync_suppliers_to_xero,
     sync_suppliers_from_xero: props.settings.sync_suppliers_from_xero,
     sync_quotes_to_xero: props.settings.sync_quotes_to_xero,
@@ -580,6 +749,11 @@ watch(() => props.settings, (newSettings) => {
     form.sync_products_to_xero = newSettings.sync_products_to_xero;
     form.sync_products_from_xero = newSettings.sync_products_from_xero;
     form.sync_invoices_to_xero = newSettings.sync_invoices_to_xero;
+    form.sync_invoices_from_xero = newSettings.sync_invoices_from_xero;
+    form.sync_credit_notes_to_xero = newSettings.sync_credit_notes_to_xero;
+    form.sync_credit_notes_from_xero = newSettings.sync_credit_notes_from_xero;
+    form.sync_purchase_orders_to_xero = newSettings.sync_purchase_orders_to_xero;
+    form.sync_purchase_orders_from_xero = newSettings.sync_purchase_orders_from_xero;
     form.sync_suppliers_to_xero = newSettings.sync_suppliers_to_xero;
     form.sync_suppliers_from_xero = newSettings.sync_suppliers_from_xero;
     form.sync_quotes_to_xero = newSettings.sync_quotes_to_xero;
@@ -614,6 +788,41 @@ const disconnect = () => {
         form.delete('/xero/disconnect');
     }
 };
+
+const selectedTenant = computed(() =>
+    availableTenants.value.find(t => t.tenantId === selectedTenantId.value)
+);
+
+const selectTenant = () => {
+    if (!selectedTenant.value) return;
+    const tenantForm = useForm({
+        tenant_id: selectedTenant.value.tenantId,
+        tenant_name: selectedTenant.value.tenantName,
+    });
+    tenantForm.post('/xero/select-tenant', {
+        onSuccess: () => {
+            availableTenants.value = [];
+            changingTenant.value = false;
+        },
+    });
+};
+
+const fetchTenants = () => {
+    fetchingTenants.value = true;
+    changingTenant.value = true;
+    const fetchForm = useForm({});
+    fetchForm.post('/xero/fetch-tenants', {
+        onFinish: () => {
+            fetchingTenants.value = false;
+        },
+    });
+};
+
+watch(() => props.xeroTenants, (newTenants) => {
+    if (newTenants && newTenants.length) {
+        availableTenants.value = newTenants;
+    }
+}, { immediate: false });
 
 const syncCustomers = () => {
     syncing.value = 'customers';
@@ -756,15 +965,52 @@ const syncInvoices = () => {
     
     const syncForm = useForm({});
     syncForm.post('/xero/sync/invoices', {
-        onSuccess: () => {
-            syncing.value = null;
-        },
-        onError: () => {
-            syncing.value = null;
-        },
-        onFinish: () => {
-            syncing.value = null;
-        }
+        onFinish: () => { syncing.value = null; }
+    });
+};
+
+const syncInvoicesFromXero = () => {
+    syncing.value = 'invoices-from-xero';
+    
+    const syncForm = useForm({});
+    syncForm.post('/xero/sync/invoices-from-xero', {
+        onFinish: () => { syncing.value = null; }
+    });
+};
+
+const syncCreditNotes = () => {
+    syncing.value = 'credit-notes';
+    
+    const syncForm = useForm({});
+    syncForm.post('/xero/sync/credit-notes', {
+        onFinish: () => { syncing.value = null; }
+    });
+};
+
+const syncCreditNotesFromXero = () => {
+    syncing.value = 'credit-notes-from-xero';
+    
+    const syncForm = useForm({});
+    syncForm.post('/xero/sync/credit-notes-from-xero', {
+        onFinish: () => { syncing.value = null; }
+    });
+};
+
+const syncPurchaseOrders = () => {
+    syncing.value = 'purchase-orders';
+    
+    const syncForm = useForm({});
+    syncForm.post('/xero/sync/purchase-orders', {
+        onFinish: () => { syncing.value = null; }
+    });
+};
+
+const syncPurchaseOrdersFromXero = () => {
+    syncing.value = 'purchase-orders-from-xero';
+    
+    const syncForm = useForm({});
+    syncForm.post('/xero/sync/purchase-orders-from-xero', {
+        onFinish: () => { syncing.value = null; }
     });
 };
 

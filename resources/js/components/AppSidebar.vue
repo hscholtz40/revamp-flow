@@ -27,7 +27,7 @@ import groups from '@/routes/groups';
 import administration from '@/routes/administration';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, Users, Settings, UserCheck, Package, Building2, ClipboardList, FileText, Receipt, Warehouse, ArrowUpDown, ShoppingCart, Clock, BarChart3, KeyRound } from 'lucide-vue-next';
+import { BookOpen, Folder, LayoutGrid, Users, Settings, UserCheck, Package, Building2, ClipboardList, FileText, Receipt, Warehouse, ArrowUpDown, ShoppingCart, Clock, BarChart3, KeyRound, CreditCard } from 'lucide-vue-next';
 import licenses from '@/routes/licenses';
 import AppLogo from './AppLogo.vue';
 import { computed } from 'vue';
@@ -95,6 +95,11 @@ const mainNavItems: NavItem[] = [
         icon: Receipt,
     },
     {
+        title: 'Credit Notes',
+        href: '/credit-notes',
+        icon: CreditCard,
+    },
+    {
         title: 'Reports',
         href: reports.index().url,
         icon: BarChart3,
@@ -129,6 +134,7 @@ const moduleKeyMap: Record<string, string> = {
     'Jobcards': 'jobcards',
     'Quotes': 'quotes',
     'Invoices': 'invoices',
+    'Credit Notes': 'credit-notes',
     'Reports': 'reports',
     'Timesheet': 'timesheet',
 };
@@ -198,6 +204,9 @@ const filteredNavItems = computed(() => {
         }
         if (item.title === 'Groups') {
             return page.props.auth?.abilities?.groups?.list;
+        }
+        if (item.title === 'Credit Notes') {
+            return page.props.auth?.abilities?.['credit-notes']?.list;
         }
         if (item.title === 'Reports') {
             return page.props.auth?.abilities?.reports?.list;

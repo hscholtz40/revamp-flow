@@ -12,6 +12,8 @@ interface ChartOfAccount {
     parent_account_id: number | null;
     description: string | null;
     is_active: boolean;
+    is_default_sales: boolean;
+    is_default_purchasing: boolean;
     sort_order: number;
 }
 
@@ -35,6 +37,8 @@ const form = useForm({
     parent_account_id: props.account.parent_account_id,
     description: props.account.description || '',
     is_active: props.account.is_active,
+    is_default_sales: props.account.is_default_sales,
+    is_default_purchasing: props.account.is_default_purchasing,
     sort_order: props.account.sort_order,
 });
 
@@ -200,6 +204,32 @@ function submit() {
                                     />
                                     <span class="text-sm font-medium text-gray-700">Active (available for selection)</span>
                                 </label>
+                            </div>
+
+                            <!-- Default Sales -->
+                            <div>
+                                <label class="flex items-center gap-2">
+                                    <input
+                                        v-model="form.is_default_sales"
+                                        type="checkbox"
+                                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <span class="text-sm font-medium text-gray-700">Default Account for Sales</span>
+                                </label>
+                                <p class="mt-1 text-sm text-gray-500">Used as default for invoices, quotes, jobcards, and credit notes</p>
+                            </div>
+
+                            <!-- Default Purchasing -->
+                            <div>
+                                <label class="flex items-center gap-2">
+                                    <input
+                                        v-model="form.is_default_purchasing"
+                                        type="checkbox"
+                                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <span class="text-sm font-medium text-gray-700">Default Account for Purchasing</span>
+                                </label>
+                                <p class="mt-1 text-sm text-gray-500">Used as default for purchase orders</p>
                             </div>
                         </div>
                     </div>

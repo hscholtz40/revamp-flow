@@ -215,12 +215,13 @@
                     </div>
 
                     <!-- Table Header -->
-                    <div class="hidden md:grid md:grid-cols-[3.5rem_1fr_6.5rem_9rem_8rem_5.5rem_2rem] gap-2 px-3 pb-2 text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
+                    <div class="hidden md:grid md:grid-cols-[3.5rem_1fr_6.5rem_9rem_8rem_8rem_5.5rem_2rem] gap-2 px-3 pb-2 text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
                         <div>Qty</div>
                         <div>Description</div>
                         <div>Price</div>
                         <div>Discount</div>
                         <div>Tax</div>
+                        <div>Account</div>
                         <div class="text-right">Total</div>
                         <div></div>
                     </div>
@@ -231,7 +232,7 @@
                             :key="index"
                             class="py-3 px-1"
                         >
-                            <div class="grid grid-cols-1 md:grid-cols-[3.5rem_1fr_6.5rem_9rem_8rem_5.5rem_2rem] gap-2 items-start">
+                            <div class="grid grid-cols-1 md:grid-cols-[3.5rem_1fr_6.5rem_9rem_8rem_8rem_5.5rem_2rem] gap-2 items-start">
                                 <!-- Qty -->
                                 <div>
                                     <label class="block text-xs text-gray-500 mb-1 md:hidden">Qty</label>
@@ -341,6 +342,20 @@
                                         <option :value="null">None</option>
                                         <option v-for="tr in props.taxRates" :key="tr.id" :value="tr.id">
                                             {{ tr.name }} ({{ tr.rate }}%)
+                                        </option>
+                                    </select>
+                                </div>
+
+                                <!-- Account -->
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1 md:hidden">Account</label>
+                                    <select
+                                        v-model="item.account_id"
+                                        class="w-full rounded border border-gray-300 px-1 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                    >
+                                        <option :value="null">None</option>
+                                        <option v-for="acc in props.chartOfAccounts" :key="acc.id" :value="acc.id">
+                                            {{ acc.account_code }} - {{ acc.account_name }}
                                         </option>
                                     </select>
                                 </div>
@@ -552,6 +567,7 @@ interface LineItem {
     total: number;
     serial_number_ids?: number[];
     tax_rate_id?: number | null;
+    account_id?: number | null;
 }
 
 interface Props {
@@ -564,6 +580,8 @@ interface Props {
     currentUser: User;
     taxRates: { id: number; name: string; rate: number; is_default_sales: boolean }[];
     defaultSalesTaxRateId: number | null;
+    chartOfAccounts: { id: number; account_code: string; account_name: string; account_type: string; is_default_sales: boolean }[];
+    defaultSalesAccountId: number | null;
 }
 
 const props = defineProps<Props>();
@@ -607,6 +625,7 @@ const form = useForm({
             total: 0,
             serial_number_ids: [],
             tax_rate_id: props.defaultSalesTaxRateId || null,
+            account_id: props.defaultSalesAccountId || null,
         },
     ] as LineItem[],
 });
@@ -734,6 +753,7 @@ const addLineItem = () => {
         total: 0,
         serial_number_ids: [] as number[],
         tax_rate_id: props.defaultSalesTaxRateId || null,
+        account_id: props.defaultSalesAccountId || null,
     });
     discountTypes.value[newIndex] = 'amount';
 };

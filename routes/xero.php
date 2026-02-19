@@ -17,6 +17,10 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
         ->name('xero.callback');
     Route::delete('/xero/disconnect', [XeroSettingsController::class, 'disconnect'])
         ->name('xero.disconnect');
+    Route::post('/xero/select-tenant', [XeroSettingsController::class, 'selectTenant'])
+        ->name('xero.select-tenant');
+    Route::post('/xero/fetch-tenants', [XeroSettingsController::class, 'fetchTenants'])
+        ->name('xero.fetch-tenants');
     Route::post('/xero/switch-company', [XeroSettingsController::class, 'switchCompany'])
         ->name('xero.switch-company');
     
@@ -118,6 +122,26 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
         
         return redirect()->back()->with('success', "Successfully synced {$successCount} invoices to Xero" . ($skippedCount > 0 ? " ({$skippedCount} skipped)" : '') . ".");
     })->name('xero.sync.invoices');
+    
+    Route::post('/xero/sync/invoices-from-xero', function () {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        $xeroService = new \App\Services\XeroService($currentCompany);
+        $results = $xeroService->syncInvoicesFromXero();
+        
+        if (isset($results['skipped']) && $results['skipped']) {
+            return redirect()->back()->with('info', $results['message']);
+        }
+        
+        $createdCount = collect($results)->where('status', 'created')->count();
+        $updatedCount = collect($results)->where('status', 'updated')->count();
+        $errorCount = collect($results)->where('status', 'error')->count();
+        
+        if ($errorCount > 0) {
+            return redirect()->back()->with('warning', "Imported {$createdCount} invoices, updated {$updatedCount} invoices, {$errorCount} failed. Check logs for details.");
+        }
+        
+        return redirect()->back()->with('success', "Successfully imported {$createdCount} invoices and updated {$updatedCount} invoices from Xero.");
+    })->name('xero.sync.invoices-from-xero');
     
     Route::post('/xero/sync/suppliers', function () {
         $currentCompany = auth()->user()->getCurrentCompany();
@@ -256,24 +280,112 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
         
         return redirect()->back()->with('success', "Successfully imported {$createdCount} accounts and updated {$updatedCount} accounts from Xero.");
     })->name('xero.sync.chart-of-accounts-from-xero');
+    
+    Route::post('/xero/sync/credit-notes', function () {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        $xeroService = new \App\Services\XeroService($currentCompany);
+        $results = $xeroService->syncCreditNotesToXero($currentCompany);
+        
+        if (isset($results['skipped']) && $results['skipped']) {
+            return redirect()->back()->with('info', $results['message']);
+        }
+        
+        $collection = collect($results);
+        $successCount = $collection->where('status', 'success')->count();
+        $updatedFromXeroCount = $collection->where('status', 'updated_from_xero')->count();
+        $errorCount = $collection->where('status', 'error')->count();
+        
+        $message = "Synced {$successCount} credit notes to Xero";
+        if ($updatedFromXeroCount > 0) {
+            $message .= ", {$updatedFromXeroCount} updated from Xero";
+        }
+        
+        if ($errorCount > 0) {
+            return redirect()->back()->with('warning', "{$message}, {$errorCount} failed. Check logs for details.");
+        }
+        
+        return redirect()->back()->with('success', "{$message}.");
+    })->name('xero.sync.credit-notes');
+    
+    Route::post('/xero/sync/credit-notes-from-xero', function () {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        $xeroService = new \App\Services\XeroService($currentCompany);
+        $results = $xeroService->syncCreditNotesFromXero($currentCompany);
+        
+        if (isset($results['skipped']) && $results['skipped']) {
+            return redirect()->back()->with('info', $results['message']);
+        }
+        
+        $createdCount = collect($results)->where('status', 'created')->count();
+        $updatedCount = collect($results)->where('status', 'updated')->count();
+        $errorCount = collect($results)->where('status', 'error')->count();
+        
+        if ($errorCount > 0) {
+            return redirect()->back()->with('warning', "Imported {$createdCount} credit notes, updated {$updatedCount} credit notes, {$errorCount} failed. Check logs for details.");
+        }
+        
+        return redirect()->back()->with('success', "Successfully imported {$createdCount} credit notes and updated {$updatedCount} credit notes from Xero.");
+    })->name('xero.sync.credit-notes-from-xero');
+    
+    Route::post('/xero/sync/purchase-orders', function () {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        $xeroService = new \App\Services\XeroService($currentCompany);
+        $results = $xeroService->syncPurchaseOrdersToXero($currentCompany);
+        
+        if (isset($results['skipped']) && $results['skipped']) {
+            return redirect()->back()->with('info', $results['message']);
+        }
+        
+        $successCount = collect($results)->where('status', 'success')->count();
+        $errorCount = collect($results)->where('status', 'error')->count();
+        
+        if ($errorCount > 0) {
+            return redirect()->back()->with('warning', "Synced {$successCount} purchase orders successfully, {$errorCount} failed. Check logs for details.");
+        }
+        
+        return redirect()->back()->with('success', "Successfully synced {$successCount} purchase orders to Xero.");
+    })->name('xero.sync.purchase-orders');
+    
+    Route::post('/xero/sync/purchase-orders-from-xero', function () {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        $xeroService = new \App\Services\XeroService($currentCompany);
+        $results = $xeroService->syncPurchaseOrdersFromXero($currentCompany);
+        
+        if (isset($results['skipped']) && $results['skipped']) {
+            return redirect()->back()->with('info', $results['message']);
+        }
+        
+        $createdCount = collect($results)->where('status', 'created')->count();
+        $updatedCount = collect($results)->where('status', 'updated')->count();
+        $errorCount = collect($results)->where('status', 'error')->count();
+        
+        if ($errorCount > 0) {
+            return redirect()->back()->with('warning', "Imported {$createdCount} purchase orders, updated {$updatedCount} purchase orders, {$errorCount} failed. Check logs for details.");
+        }
+        
+        return redirect()->back()->with('success', "Successfully imported {$createdCount} purchase orders and updated {$updatedCount} purchase orders from Xero.");
+    })->name('xero.sync.purchase-orders-from-xero');
 });
 
 // Xero Webhook Route (outside auth middleware - webhooks don't use authentication)
 Route::post('/xero/webhook', function (\Illuminate\Http\Request $request) {
-    // For webhooks, we need to determine the company based on the tenant_id in the webhook data
     $tenantId = $request->input('tenantId') ?? $request->input('tenant_id');
+    $events = $request->input('events', $request->all());
+    $xeroService = null;
+
     if ($tenantId) {
         $settings = \App\Models\XeroSettings::where('tenant_id', $tenantId)->first();
         if ($settings) {
-            $company = $settings->company;
-            $xeroService = new \App\Services\XeroService($company);
-            $xeroService->handleInvoiceWebhook($request->all());
-            return response()->json(['status' => 'success']);
+            $xeroService = new \App\Services\XeroService($settings->company);
         }
     }
-    
-    // Fallback to default behavior if no matching company found
-    $xeroService = app(\App\Services\XeroService::class);
-    $xeroService->handleInvoiceWebhook($request->all());
+
+    if (!$xeroService) {
+        $xeroService = app(\App\Services\XeroService::class);
+    }
+
+    $xeroService->handleInvoiceWebhook(is_array($events) ? $events : [$events]);
+    $xeroService->handleCreditNoteWebhook(is_array($events) ? $events : [$events]);
+
     return response()->json(['status' => 'success']);
 })->name('xero.webhook');

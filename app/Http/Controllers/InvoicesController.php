@@ -9,6 +9,7 @@ use App\Models\InvoiceLineItem;
 use App\Models\Product;
 use App\Models\Quote;
 use App\Models\Jobcard;
+use App\Models\ChartOfAccount;
 use App\Models\TaxRate;
 use App\Models\User;
 use App\Services\ReminderService;
@@ -31,7 +32,7 @@ class InvoicesController extends Controller
     {
         $currentCompany = auth()->user()->getCurrentCompany();
         
-        $query = Invoice::with(['customer'])
+        $query = Invoice::with(['customer', 'payments', 'creditNotes'])
             ->where('company_id', $currentCompany->id);
 
         // Hide paid invoices by default unless explicitly requested
@@ -123,6 +124,8 @@ class InvoicesController extends Controller
 
         $taxRates = TaxRate::where('company_id', $currentCompany->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'rate', 'is_default_sales']);
         $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
+        $chartOfAccounts = ChartOfAccount::where('company_id', $currentCompany->id)->where('is_active', true)->ordered()->get(['id', 'account_code', 'account_name', 'account_type', 'is_default_sales']);
+        $defaultSalesAccount = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id);
 
         return Inertia::render('invoices/Create', [
             'customers' => $customers,
@@ -134,6 +137,8 @@ class InvoicesController extends Controller
             'currentCompany' => $currentCompany,
             'taxRates' => $taxRates,
             'defaultSalesTaxRateId' => $defaultSalesTaxRate?->id,
+            'chartOfAccounts' => $chartOfAccounts,
+            'defaultSalesAccountId' => $defaultSalesAccount?->id,
         ]);
     }
 
@@ -164,6 +169,7 @@ class InvoicesController extends Controller
             'line_items.*.discount_amount' => 'nullable|numeric|min:0',
             'line_items.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
             'line_items.*.tax_rate_id' => 'nullable|exists:tax_rates,id',
+            'line_items.*.account_id' => 'nullable|exists:chart_of_accounts,id',
             'line_items.*.serial_number_ids' => 'nullable|array',
             'line_items.*.serial_number_ids.*' => 'exists:product_serial_numbers,id',
         ]);
@@ -228,6 +234,7 @@ class InvoicesController extends Controller
                 'total' => $total,
                 'tax_rate_id' => $taxRateId,
                 'tax_amount' => $lineTaxAmount,
+                'account_id' => $lineItemData['account_id'] ?? null,
                 'sort_order' => $index,
                 'serial_number_ids' => $lineItemData['serial_number_ids'] ?? null,
             ]);
@@ -312,14 +319,14 @@ class InvoicesController extends Controller
             abort(403, 'You do not have access to this invoice.');
         }
 
-        $invoice->load(['customer', 'salesperson', 'lineItems.product', 'lineItems.taxRate', 'company', 'source', 'payments']);
+        $invoice->load(['customer', 'salesperson', 'lineItems.product', 'lineItems.taxRate', 'company', 'source', 'payments', 'creditNotes']);
         
         // Ensure totals are calculated
         $invoice->calculateTotals();
         $invoice->refresh();
         
         // Reload relationships after refresh (refresh clears loaded relationships)
-        $invoice->load(['customer', 'salesperson', 'lineItems.product', 'lineItems.taxRate', 'company', 'source', 'payments']);
+        $invoice->load(['customer', 'salesperson', 'lineItems.product', 'lineItems.taxRate', 'company', 'source', 'payments', 'creditNotes']);
         
         // Load serial numbers for line items that have serial_number_ids
         // Do this after refresh to ensure we have the latest data
@@ -332,14 +339,6 @@ class InvoicesController extends Controller
         
         // Convert invoice to array first
         $invoiceData = $invoice->toArray();
-        
-        // Explicitly verify and set total_paid and remaining_balance to ensure they're correct
-        $totalPaid = $invoice->payments->sum('amount');
-        $total = (float) ($invoice->total ?? 0);
-        $remainingBalance = max(0, $total - $totalPaid);
-        
-        $invoiceData['total_paid'] = $totalPaid;
-        $invoiceData['remaining_balance'] = $remainingBalance;
         
         // Then manually add serial numbers to each line item in the array
         if (isset($invoiceData['line_items']) && is_array($invoiceData['line_items'])) {
@@ -438,6 +437,8 @@ class InvoicesController extends Controller
 
         $taxRates = TaxRate::where('company_id', $currentCompany->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'rate', 'is_default_sales']);
         $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
+        $chartOfAccounts = ChartOfAccount::where('company_id', $currentCompany->id)->where('is_active', true)->ordered()->get(['id', 'account_code', 'account_name', 'account_type', 'is_default_sales']);
+        $defaultSalesAccount = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id);
 
         return Inertia::render('invoices/Edit', [
             'invoice' => $invoiceData,
@@ -446,6 +447,8 @@ class InvoicesController extends Controller
             'users' => $users,
             'taxRates' => $taxRates,
             'defaultSalesTaxRateId' => $defaultSalesTaxRate?->id,
+            'chartOfAccounts' => $chartOfAccounts,
+            'defaultSalesAccountId' => $defaultSalesAccount?->id,
             'canEditSalesperson' => auth()->user()->canEditSalesperson('invoices'),
             'canEditCompleted' => auth()->user()->hasModulePermission('invoices', 'edit_completed'),
         ]);
@@ -476,6 +479,7 @@ class InvoicesController extends Controller
             'line_items.*.discount_amount' => 'nullable|numeric|min:0',
             'line_items.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
             'line_items.*.tax_rate_id' => 'nullable|exists:tax_rates,id',
+            'line_items.*.account_id' => 'nullable|exists:chart_of_accounts,id',
             'line_items.*.serial_number_ids' => 'nullable|array',
             'line_items.*.serial_number_ids.*' => 'exists:product_serial_numbers,id',
         ]);
@@ -607,6 +611,7 @@ class InvoicesController extends Controller
                 'total' => $total,
                 'tax_rate_id' => $taxRateId,
                 'tax_amount' => $lineTaxAmount,
+                'account_id' => $lineItemData['account_id'] ?? null,
                 'sort_order' => $index,
                 'serial_number_ids' => $lineItemData['serial_number_ids'] ?? null,
             ]);
@@ -964,6 +969,7 @@ class InvoicesController extends Controller
                 'total' => $quoteLineItem->total,
                 'tax_rate_id' => $quoteLineItem->tax_rate_id,
                 'tax_amount' => $quoteLineItem->tax_amount,
+                'account_id' => $quoteLineItem->account_id,
                 'sort_order' => $quoteLineItem->sort_order,
             ]);
         }
@@ -1012,6 +1018,7 @@ class InvoicesController extends Controller
                 'total' => $jobcardLineItem->total,
                 'tax_rate_id' => $jobcardLineItem->tax_rate_id,
                 'tax_amount' => $jobcardLineItem->tax_amount,
+                'account_id' => $jobcardLineItem->account_id,
                 'sort_order' => $jobcardLineItem->sort_order,
             ]);
         }

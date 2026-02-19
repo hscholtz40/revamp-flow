@@ -20,12 +20,20 @@ class ChartOfAccount extends Model
         'parent_account_id',
         'description',
         'is_active',
+        'is_default_sales',
+        'is_default_purchasing',
         'sort_order',
+        'xero_updated_at',
+        'xero_created_at',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'is_default_sales' => 'boolean',
+        'is_default_purchasing' => 'boolean',
         'sort_order' => 'integer',
+        'xero_updated_at' => 'datetime',
+        'xero_created_at' => 'datetime',
     ];
 
     /**
@@ -66,5 +74,31 @@ class ChartOfAccount extends Model
     public function scopeOrdered($query)
     {
         return $query->orderBy('sort_order')->orderBy('account_code');
+    }
+
+    public function scopeDefaultSales($query)
+    {
+        return $query->where('is_default_sales', true);
+    }
+
+    public function scopeDefaultPurchasing($query)
+    {
+        return $query->where('is_default_purchasing', true);
+    }
+
+    public static function getDefaultSalesForCompany(int $companyId): ?self
+    {
+        return static::where('company_id', $companyId)
+            ->where('is_default_sales', true)
+            ->where('is_active', true)
+            ->first();
+    }
+
+    public static function getDefaultPurchasingForCompany(int $companyId): ?self
+    {
+        return static::where('company_id', $companyId)
+            ->where('is_default_purchasing', true)
+            ->where('is_active', true)
+            ->first();
     }
 }

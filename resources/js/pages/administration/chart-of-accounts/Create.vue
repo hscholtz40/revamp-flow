@@ -23,6 +23,8 @@ const form = useForm({
     parent_account_id: null as number | null,
     description: '',
     is_active: true,
+    is_default_sales: false,
+    is_default_purchasing: false,
     sort_order: 0,
 });
 
@@ -193,6 +195,32 @@ function submit() {
                                     />
                                     <span class="text-sm font-medium text-gray-700">Active (available for selection)</span>
                                 </label>
+                            </div>
+
+                            <!-- Default Sales -->
+                            <div>
+                                <label class="flex items-center gap-2">
+                                    <input
+                                        v-model="form.is_default_sales"
+                                        type="checkbox"
+                                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <span class="text-sm font-medium text-gray-700">Default Account for Sales</span>
+                                </label>
+                                <p class="mt-1 text-sm text-gray-500">Used as default for invoices, quotes, jobcards, and credit notes</p>
+                            </div>
+
+                            <!-- Default Purchasing -->
+                            <div>
+                                <label class="flex items-center gap-2">
+                                    <input
+                                        v-model="form.is_default_purchasing"
+                                        type="checkbox"
+                                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <span class="text-sm font-medium text-gray-700">Default Account for Purchasing</span>
+                                </label>
+                                <p class="mt-1 text-sm text-gray-500">Used as default for purchase orders</p>
                             </div>
                         </div>
                     </div>

@@ -34,6 +34,8 @@ class Invoice extends Model
         'terms',
         'source_type',
         'source_id',
+        'xero_updated_at',
+        'xero_created_at',
     ];
 
     protected $casts = [
@@ -43,10 +45,13 @@ class Invoice extends Model
         'tax_rate' => 'decimal:2',
         'tax_amount' => 'decimal:2',
         'total' => 'decimal:2',
+        'xero_updated_at' => 'datetime',
+        'xero_created_at' => 'datetime',
     ];
 
     protected $appends = [
         'total_paid',
+        'total_credited',
         'remaining_balance',
     ];
 
@@ -88,6 +93,14 @@ class Invoice extends Model
     public function payments(): HasMany
     {
         return $this->hasMany(Payment::class)->orderBy('payment_date', 'desc');
+    }
+
+    /**
+     * Get the credit notes for this invoice.
+     */
+    public function creditNotes(): HasMany
+    {
+        return $this->hasMany(CreditNote::class)->orderBy('credit_note_date', 'desc');
     }
 
     /**
@@ -223,7 +236,6 @@ class Invoice extends Model
      */
     public function getTotalPaidAttribute(): float
     {
-        // Use loaded relationship if available, otherwise query
         if ($this->relationLoaded('payments')) {
             return $this->payments->sum('amount');
         }
@@ -231,28 +243,54 @@ class Invoice extends Model
     }
 
     /**
-     * Get the remaining balance for this invoice.
+     * Get the total credit notes applied to this invoice.
      */
-    public function getRemainingBalanceAttribute(): float
+    public function getTotalCreditedAttribute(): float
     {
-        // Calculate total paid directly to avoid accessor recursion issues
-        $totalPaid = 0;
-        if ($this->relationLoaded('payments')) {
-            $totalPaid = $this->payments->sum('amount');
-        } else {
-            $totalPaid = $this->payments()->sum('amount');
+        if ($this->relationLoaded('creditNotes')) {
+            return (float) $this->creditNotes
+                ->where('status', '!=', 'voided')
+                ->sum(fn ($cn) => (float) $cn->total);
         }
-        
-        $total = (float) ($this->total ?? 0);
-        return max(0, $total - $totalPaid);
+        return (float) $this->creditNotes()
+            ->where('status', '!=', 'voided')
+            ->sum('total');
     }
 
     /**
-     * Check if the invoice is fully paid.
+     * Get the remaining balance for this invoice (total minus payments minus credit notes).
+     */
+    public function getRemainingBalanceAttribute(): float
+    {
+        if ($this->relationLoaded('payments')) {
+            $totalPaid = (float) $this->payments->sum(fn ($p) => (float) $p->amount);
+        } else {
+            $totalPaid = (float) $this->payments()->sum('amount');
+        }
+
+        if ($this->relationLoaded('creditNotes')) {
+            $totalCredited = (float) $this->creditNotes
+                ->where('status', '!=', 'voided')
+                ->sum(fn ($cn) => (float) $cn->total);
+        } else {
+            $totalCredited = (float) $this->creditNotes()
+                ->where('status', '!=', 'voided')
+                ->sum('total');
+        }
+
+        $total = (float) ($this->total ?? 0);
+        return max(0, round($total - $totalPaid - $totalCredited, 2));
+    }
+
+    /**
+     * Check if the invoice is fully paid (including credit notes).
      */
     public function isFullyPaid(): bool
     {
-        $totalPaid = $this->payments()->sum('amount');
-        return ($this->total - $totalPaid) <= 0;
+        $totalPaid = (float) $this->payments()->sum('amount');
+        $totalCredited = (float) $this->creditNotes()
+            ->where('status', '!=', 'voided')
+            ->sum('total');
+        return ((float) $this->total - $totalPaid - $totalCredited) <= 0.01;
     }
 }

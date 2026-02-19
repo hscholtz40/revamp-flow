@@ -238,7 +238,7 @@
                         <div
                             v-for="(item, index) in form.line_items"
                             :key="index"
-                            class="grid grid-cols-1 md:grid-cols-[3.5rem_1fr_6.5rem_9rem_8rem_5.5rem_2rem] gap-2 items-start py-3 px-1"
+                            class="grid grid-cols-1 md:grid-cols-[3.5rem_1fr_6.5rem_9rem_8rem_5.5rem_8rem_2rem] gap-2 items-start py-3 px-1"
                         >
                             <!-- Qty -->
                             <div>
@@ -352,6 +352,20 @@
                                     </option>
                                 </select>
                             </div>
+
+                                <!-- Account -->
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1 md:hidden">Account</label>
+                                    <select
+                                        v-model="item.account_id"
+                                        class="w-full rounded border border-gray-300 px-1 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                    >
+                                        <option :value="null">None</option>
+                                        <option v-for="acc in props.chartOfAccounts" :key="acc.id" :value="acc.id">
+                                            {{ acc.account_code }} - {{ acc.account_name }}
+                                        </option>
+                                    </select>
+                                </div>
 
                             <!-- Total -->
                             <div>
@@ -513,6 +527,7 @@ interface LineItem {
     discount_amount?: number;
     discount_percentage?: number;
     tax_rate_id?: number | null;
+    account_id?: number | null;
     total: number;
 }
 
@@ -597,6 +612,7 @@ const form = useForm({
         discount_amount: (item as any).discount_amount || 0,
         discount_percentage: (item as any).discount_percentage || 0,
         tax_rate_id: (item as any).tax_rate_id || null,
+        account_id: (item as any).account_id ?? props.defaultSalesAccountId ?? null,
         total: item.total,
     })) as LineItem[],
 });
@@ -619,6 +635,7 @@ const addLineItem = () => {
         discount_amount: 0,
         discount_percentage: 0,
         tax_rate_id: props.defaultSalesTaxRateId || null,
+        account_id: props.defaultSalesAccountId || null,
         total: 0,
     });
 };

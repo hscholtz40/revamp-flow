@@ -8,6 +8,7 @@ export const modules = [
     { key: 'jobcards', label: 'Jobcards' },
     { key: 'quotes', label: 'Quotes' },
     { key: 'invoices', label: 'Invoices' },
+    { key: 'credit-notes', label: 'Credit Notes' },
     { key: 'reports', label: 'Reports' },
     { key: 'timesheet', label: 'Timesheet' },
 ] as const

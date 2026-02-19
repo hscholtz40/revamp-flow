@@ -21,6 +21,7 @@ class InvoiceLineItem extends Model
         'total',
         'tax_rate_id',
         'tax_amount',
+        'account_id',
         'sort_order',
         'serial_number_ids',
     ];
@@ -55,6 +56,11 @@ class InvoiceLineItem extends Model
     public function taxRate(): BelongsTo
     {
         return $this->belongsTo(TaxRate::class);
+    }
+
+    public function account(): BelongsTo
+    {
+        return $this->belongsTo(ChartOfAccount::class, 'account_id');
     }
 
     /**

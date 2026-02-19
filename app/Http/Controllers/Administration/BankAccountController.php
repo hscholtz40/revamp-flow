@@ -151,16 +151,6 @@ class BankAccountController extends Controller
             abort(403, 'Unauthorized access to bank account.');
         }
 
-        // Check if bank account is being used in payments
-        $usedInPayments = \App\Models\Payment::where('company_id', $currentCompany->id)
-            ->where('bank_account_id', $bankAccount->id)
-            ->exists();
-
-        if ($usedInPayments) {
-            return redirect()->route('administration.bank-accounts.index')
-                ->with('error', 'Cannot delete bank account that is being used in payments.');
-        }
-
         $bankAccount->delete();
 
         return redirect()->route('administration.bank-accounts.index')

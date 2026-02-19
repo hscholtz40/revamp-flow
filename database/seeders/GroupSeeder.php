@@ -31,7 +31,7 @@ class GroupSeeder extends Seeder
             ]),
         ];
 
-        $modules = ['customers', 'users', 'groups', 'contacts', 'products', 'suppliers', 'stock-movements', 'purchase-orders', 'jobcards', 'quotes', 'invoices'];
+        $modules = ['customers', 'users', 'groups', 'contacts', 'products', 'suppliers', 'stock-movements', 'purchase-orders', 'jobcards', 'quotes', 'invoices', 'credit-notes'];
         
         // Add permissions for all groups
         foreach ($groups as $groupName => $group) {
@@ -45,7 +45,7 @@ class GroupSeeder extends Seeder
                 ];
                 
         // Add special permission for editing completed items
-        if (in_array($module, ['jobcards', 'invoices', 'quotes'])) {
+        if (in_array($module, ['jobcards', 'invoices', 'quotes', 'credit-notes'])) {
             $permissions['can_edit_completed'] = in_array($groupName, ['Admin', 'Manager']);
         }
                 

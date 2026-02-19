@@ -45,7 +45,8 @@ class XeroSettingsController extends Controller
         return Inertia::render('administration/XeroSettings', [
             'settings' => $settings,
             'currentCompany' => $currentCompany,
-            'availableCompanies' => $availableCompanies
+            'availableCompanies' => $availableCompanies,
+            'xeroTenants' => session('xero_tenants', []),
         ]);
     }
 
@@ -63,6 +64,11 @@ class XeroSettingsController extends Controller
             'sync_products_to_xero' => 'boolean',
             'sync_products_from_xero' => 'boolean',
             'sync_invoices_to_xero' => 'boolean',
+            'sync_invoices_from_xero' => 'boolean',
+            'sync_credit_notes_to_xero' => 'boolean',
+            'sync_credit_notes_from_xero' => 'boolean',
+            'sync_purchase_orders_to_xero' => 'boolean',
+            'sync_purchase_orders_from_xero' => 'boolean',
             'sync_suppliers_to_xero' => 'boolean',
             'sync_suppliers_from_xero' => 'boolean',
             'sync_quotes_to_xero' => 'boolean',
@@ -86,6 +92,11 @@ class XeroSettingsController extends Controller
             'sync_products_to_xero' => $request->boolean('sync_products_to_xero'),
             'sync_products_from_xero' => $request->boolean('sync_products_from_xero'),
             'sync_invoices_to_xero' => $request->boolean('sync_invoices_to_xero'),
+            'sync_invoices_from_xero' => $request->boolean('sync_invoices_from_xero'),
+            'sync_credit_notes_to_xero' => $request->boolean('sync_credit_notes_to_xero'),
+            'sync_credit_notes_from_xero' => $request->boolean('sync_credit_notes_from_xero'),
+            'sync_purchase_orders_to_xero' => $request->boolean('sync_purchase_orders_to_xero'),
+            'sync_purchase_orders_from_xero' => $request->boolean('sync_purchase_orders_from_xero'),
             'sync_suppliers_to_xero' => $request->boolean('sync_suppliers_to_xero'),
             'sync_suppliers_from_xero' => $request->boolean('sync_suppliers_from_xero'),
             'sync_quotes_to_xero' => $request->boolean('sync_quotes_to_xero'),
@@ -93,8 +104,6 @@ class XeroSettingsController extends Controller
             'sync_tax_rates_from_xero' => $request->boolean('sync_tax_rates_from_xero'),
             'sync_bank_accounts_from_xero' => $request->boolean('sync_bank_accounts_from_xero'),
             'sync_chart_of_accounts_from_xero' => $request->boolean('sync_chart_of_accounts_from_xero'),
-            // Automatically enable payment sync when invoice sync is enabled
-            'sync_invoices_from_xero' => $request->boolean('sync_invoices') && $request->boolean('sync_invoices_to_xero'),
         ]);
 
         return redirect()->back()->with('success', 'Xero settings updated successfully.');
@@ -124,39 +133,41 @@ class XeroSettingsController extends Controller
         $settings = XeroSettings::getCurrent();
         
         try {
-            // Exchange authorization code for tokens
             $tokens = $this->exchangeCodeForTokens($request->code, $settings);
-            
-            // Get tenant information
-            $tenant = $this->getTenantInfo($tokens['access_token']);
-            
+            $tenants = $this->getAvailableTenants($tokens['access_token']);
+
             $updateData = [
                 'access_token' => $tokens['access_token'],
                 'token_expires_at' => now()->addSeconds($tokens['expires_in'] ?? 3600),
-                'tenant_id' => $tenant['tenantId'],
-                'tenant_name' => $tenant['tenantName'],
             ];
-            
-            // Only update refresh_token if it exists in the response
+
             if (isset($tokens['refresh_token'])) {
                 $updateData['refresh_token'] = $tokens['refresh_token'];
-                \Log::info('Refresh token received from Xero');
-            } else {
-                \Log::warning('No refresh token received from Xero - this may cause issues when access token expires');
             }
-            
+
+            if (count($tenants) === 1) {
+                $updateData['tenant_id'] = $tenants[0]['tenantId'];
+                $updateData['tenant_name'] = $tenants[0]['tenantName'];
+                $settings->update($updateData);
+
+                \Log::info('Xero authorization successful (single tenant)', [
+                    'tenant_id' => $tenants[0]['tenantId'],
+                    'tenant_name' => $tenants[0]['tenantName'],
+                ]);
+
+                return redirect('/administration/xero-settings')
+                    ->with('success', 'Xero integration authorized successfully!');
+            }
+
             $settings->update($updateData);
 
-            \Log::info('Xero authorization successful', [
-                'tenant_id' => $tenant['tenantId'],
-                'tenant_name' => $tenant['tenantName'],
-                'settings_id' => $settings->id,
-                'has_refresh_token' => isset($tokens['refresh_token']),
-                'token_expires_at' => $updateData['token_expires_at']
+            \Log::info('Xero authorization successful - awaiting tenant selection', [
+                'available_tenants' => count($tenants),
             ]);
 
             return redirect('/administration/xero-settings')
-                ->with('success', 'Xero integration authorized successfully!');
+                ->with('success', 'Xero authorized! Please select an organisation below.')
+                ->with('xero_tenants', $tenants);
                 
         } catch (\Exception $e) {
             \Log::error('Xero authorization failed', [
@@ -166,6 +177,54 @@ class XeroSettingsController extends Controller
             
             return redirect('/administration/xero-settings')
                 ->withErrors(['message' => 'Failed to authorize with Xero: ' . $e->getMessage()]);
+        }
+    }
+
+    public function selectTenant(Request $request)
+    {
+        $request->validate([
+            'tenant_id' => 'required|string',
+            'tenant_name' => 'required|string',
+        ]);
+
+        $settings = XeroSettings::getCurrent();
+
+        if (!$settings->access_token) {
+            return redirect()->back()->withErrors(['message' => 'Please authorize with Xero first.']);
+        }
+
+        $settings->update([
+            'tenant_id' => $request->tenant_id,
+            'tenant_name' => $request->tenant_name,
+        ]);
+
+        \Log::info('Xero tenant selected', [
+            'tenant_id' => $request->tenant_id,
+            'tenant_name' => $request->tenant_name,
+        ]);
+
+        return redirect()->back()->with('success', "Connected to {$request->tenant_name}.");
+    }
+
+    public function fetchTenants()
+    {
+        $settings = XeroSettings::getCurrent();
+
+        if (!$settings->access_token) {
+            return redirect()->back()->withErrors(['message' => 'Please authorize with Xero first.']);
+        }
+
+        try {
+            if ($settings->isTokenExpired() && $settings->refresh_token) {
+                $xeroService = new \App\Services\XeroService(auth()->user()->getCurrentCompany());
+                $xeroService->refreshTokenIfNeeded();
+                $settings->refresh();
+            }
+
+            $tenants = $this->getAvailableTenants($settings->access_token);
+            return redirect()->back()->with('xero_tenants', $tenants);
+        } catch (\Exception $e) {
+            return redirect()->back()->withErrors(['message' => 'Failed to fetch tenants: ' . $e->getMessage()]);
         }
     }
 
@@ -249,7 +308,7 @@ class XeroSettingsController extends Controller
         return $tokens;
     }
 
-    private function getTenantInfo($accessToken)
+    private function getAvailableTenants($accessToken): array
     {
         $response = \Http::withHeaders([
             'Authorization' => 'Bearer ' . $accessToken,
@@ -261,6 +320,11 @@ class XeroSettingsController extends Controller
         }
 
         $connections = $response->json();
-        return $connections[0]; // Return first connection
+
+        if (empty($connections)) {
+            throw new \Exception('No Xero organisations found for this account.');
+        }
+
+        return $connections;
     }
 }

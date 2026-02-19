@@ -58,10 +58,25 @@ class ChartOfAccountController extends Controller
             'parent_account_id' => ['nullable', 'exists:chart_of_accounts,id'],
             'description' => ['nullable', 'string'],
             'is_active' => ['boolean'],
+            'is_default_sales' => ['boolean'],
+            'is_default_purchasing' => ['boolean'],
             'sort_order' => ['integer', 'min:0'],
         ]);
 
         $validated['company_id'] = $currentCompany->id;
+
+        if ($validated['is_default_sales'] ?? false) {
+            ChartOfAccount::where('company_id', $currentCompany->id)
+                ->where('is_default_sales', true)
+                ->update(['is_default_sales' => false]);
+        }
+
+        if ($validated['is_default_purchasing'] ?? false) {
+            ChartOfAccount::where('company_id', $currentCompany->id)
+                ->where('is_default_purchasing', true)
+                ->update(['is_default_purchasing' => false]);
+        }
+
         ChartOfAccount::create($validated);
 
         return redirect()->route('administration.chart-of-accounts.index')
@@ -128,6 +143,8 @@ class ChartOfAccountController extends Controller
             'parent_account_id' => ['nullable', 'exists:chart_of_accounts,id'],
             'description' => ['nullable', 'string'],
             'is_active' => ['boolean'],
+            'is_default_sales' => ['boolean'],
+            'is_default_purchasing' => ['boolean'],
             'sort_order' => ['integer', 'min:0'],
         ]);
 
@@ -135,6 +152,20 @@ class ChartOfAccountController extends Controller
         if ($validated['parent_account_id'] == $chartOfAccount->id) {
             return redirect()->back()
                 ->withErrors(['parent_account_id' => 'An account cannot be its own parent.']);
+        }
+
+        if ($validated['is_default_sales'] ?? false) {
+            ChartOfAccount::where('company_id', $currentCompany->id)
+                ->where('is_default_sales', true)
+                ->where('id', '!=', $chartOfAccount->id)
+                ->update(['is_default_sales' => false]);
+        }
+
+        if ($validated['is_default_purchasing'] ?? false) {
+            ChartOfAccount::where('company_id', $currentCompany->id)
+                ->where('is_default_purchasing', true)
+                ->where('id', '!=', $chartOfAccount->id)
+                ->update(['is_default_purchasing' => false]);
         }
 
         $chartOfAccount->update($validated);

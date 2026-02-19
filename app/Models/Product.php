@@ -42,6 +42,8 @@ class Product extends Model
         'valuation_method',
         'track_batches',
         'track_serial_numbers',
+        'xero_updated_at',
+        'xero_created_at',
     ];
 
     protected $casts = [
@@ -54,6 +56,8 @@ class Product extends Model
         'tags' => 'array',
         'track_batches' => 'boolean',
         'track_serial_numbers' => 'boolean',
+        'xero_updated_at' => 'datetime',
+        'xero_created_at' => 'datetime',
     ];
 
     /**

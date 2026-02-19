@@ -21,6 +21,7 @@ class JobcardLineItem extends Model
         'total',
         'tax_rate_id',
         'tax_amount',
+        'account_id',
         'sort_order',
     ];
 
@@ -52,6 +53,11 @@ class JobcardLineItem extends Model
     public function taxRate(): BelongsTo
     {
         return $this->belongsTo(TaxRate::class);
+    }
+
+    public function account(): BelongsTo
+    {
+        return $this->belongsTo(ChartOfAccount::class, 'account_id');
     }
 
     /**

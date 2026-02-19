@@ -24,6 +24,13 @@ class Customer extends Model
         'account_code',
         'notes',
         'xero_contact_id',
+        'xero_updated_at',
+        'xero_created_at',
+    ];
+
+    protected $casts = [
+        'xero_updated_at' => 'datetime',
+        'xero_created_at' => 'datetime',
     ];
 
     public function company(): BelongsTo

@@ -82,6 +82,13 @@
                             Add Payment
                         </button>
                         <Link
+                            v-if="canCreateCreditNote"
+                            :href="`/credit-notes/create?invoice_id=${props.invoice.id}&customer_id=${props.invoice.customer?.id}`"
+                            class="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                        >
+                            Create Credit Note
+                        </Link>
+                        <Link
                             v-if="canEditInvoice"
                             :href="invoices.edit(props.invoice.id).url"
                             class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
@@ -308,6 +315,34 @@
                         </div>
                     </div>
 
+                    <!-- Credit Notes -->
+                    <div v-if="props.invoice.credit_notes && props.invoice.credit_notes.length > 0" class="rounded-lg bg-white border border-gray-200 shadow-sm">
+                        <div class="border-b border-gray-200 bg-orange-50 px-6 py-4">
+                            <h2 class="text-lg font-semibold text-gray-900">Credit Notes</h2>
+                            <p class="text-sm text-gray-600">Credit notes linked to this invoice</p>
+                        </div>
+                        <div class="p-6">
+                            <div class="space-y-2">
+                                <div
+                                    v-for="cn in props.invoice.credit_notes"
+                                    :key="cn.id"
+                                    class="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg"
+                                >
+                                    <div>
+                                        <Link :href="`/credit-notes/${cn.id}`" class="text-sm font-medium text-blue-600 hover:text-blue-900">
+                                            {{ cn.credit_note_number }}
+                                        </Link>
+                                        <p class="text-xs text-gray-500">{{ new Date(cn.credit_note_date).toLocaleDateString('en-ZA') }}</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <span class="text-sm font-medium text-orange-600">-{{ formatCurrency(cn.total) }}</span>
+                                        <p class="text-xs text-gray-500 capitalize">{{ cn.status }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Payments -->
                     <div class="rounded-lg bg-white border border-gray-200 shadow-sm">
                         <div class="border-b border-gray-200 bg-gray-50 px-6 py-4">
@@ -324,6 +359,10 @@
                                 <div class="flex justify-between">
                                     <span class="text-sm font-medium text-gray-700">Total Paid:</span>
                                     <span class="text-sm font-medium text-green-600">{{ formatCurrency(props.invoice.total_paid || 0) }}</span>
+                                </div>
+                                <div v-if="(props.invoice.total_credited || 0) > 0" class="flex justify-between">
+                                    <span class="text-sm font-medium text-gray-700">Credit Notes Applied:</span>
+                                    <span class="text-sm font-medium text-orange-600">-{{ formatCurrency(props.invoice.total_credited || 0) }}</span>
                                 </div>
                                 <div class="flex justify-between border-t pt-2">
                                     <span class="text-sm font-semibold text-gray-900">Remaining Balance:</span>
@@ -627,7 +666,7 @@
 </template>
 
 <script setup lang="ts">
-import { Head, Link, useForm, router } from '@inertiajs/vue3';
+import { Head, Link, useForm, router, usePage } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import invoices from '@/routes/invoices';
@@ -635,6 +674,9 @@ import quotes from '@/routes/quotes';
 import jobcards from '@/routes/jobcards';
 import products from '@/routes/products';
 import customers from '@/routes/customers';
+
+const page = usePage();
+const canCreateCreditNote = computed(() => !!(page.props.auth as any)?.abilities?.['credit-notes']?.create);
 
 interface SerialNumber {
     id: number;
@@ -694,6 +736,7 @@ interface Invoice {
     tax_amount: number;
     total: number;
     total_paid?: number;
+    total_credited?: number;
     remaining_balance?: number;
     notes?: string;
     terms?: string;

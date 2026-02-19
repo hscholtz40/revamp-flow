@@ -30,6 +30,8 @@ class Quote extends Model
         'total',
         'notes',
         'terms_conditions',
+        'xero_updated_at',
+        'xero_created_at',
     ];
 
     protected $casts = [
@@ -38,6 +40,8 @@ class Quote extends Model
         'tax_rate' => 'decimal:2',
         'tax_amount' => 'decimal:2',
         'total' => 'decimal:2',
+        'xero_updated_at' => 'datetime',
+        'xero_created_at' => 'datetime',
     ];
 
     protected $appends = [

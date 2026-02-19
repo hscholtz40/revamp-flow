@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
+use App\Models\ChartOfAccount;
 use App\Models\Supplier;
 use App\Models\TaxRate;
 use App\Services\StockService;

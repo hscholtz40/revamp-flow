@@ -25,10 +25,14 @@ class Supplier extends Model
         'vat_number',
         'notes',
         'is_active',
+        'xero_updated_at',
+        'xero_created_at',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'xero_updated_at' => 'datetime',
+        'xero_created_at' => 'datetime',
     ];
 
     /**

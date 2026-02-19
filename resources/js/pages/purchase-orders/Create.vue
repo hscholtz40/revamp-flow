@@ -25,11 +25,15 @@ interface Props {
     products?: Product[];
     taxRates?: { id: number; name: string; rate: number; is_default_purchasing: boolean }[];
     defaultPurchasingTaxRateId?: number | null;
+    chartOfAccounts: { id: number; account_code: string; account_name: string; account_type: string }[];
+    defaultPurchasingAccountId: number | null;
 }
 
 const props = withDefaults(defineProps<Props>(), {
     suppliers: () => [],
     products: () => [],
+    chartOfAccounts: () => [],
+    defaultPurchasingAccountId: null,
 });
 
 // Track product search queries for each line item
@@ -43,6 +47,7 @@ interface LineItem {
     description: string;
     total: number;
     tax_rate_id?: number | null;
+    account_id?: number | null;
 }
 
 const form = useForm({
@@ -62,6 +67,7 @@ function addLineItem() {
         description: '',
         total: 0,
         tax_rate_id: props.defaultPurchasingTaxRateId || null,
+        account_id: props.defaultPurchasingAccountId || null,
     });
 }
 
@@ -296,7 +302,7 @@ function submit() {
                             :key="index"
                             class="rounded-lg border border-gray-200 p-4"
                         >
-                            <div class="grid gap-4 md:grid-cols-6">
+                            <div class="grid gap-4 md:grid-cols-7">
                                 <div class="md:col-span-2">
                                     <label class="mb-1 block text-sm font-medium text-gray-700">
                                         Product

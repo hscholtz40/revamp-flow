@@ -14,17 +14,20 @@ class PurchaseOrder extends Model
     protected $fillable = [
         'company_id',
         'supplier_id',
+        'xero_purchase_order_id',
         'po_number',
         'order_date',
         'expected_delivery_date',
         'received_date',
-        'status', // 'draft', 'sent', 'received', 'cancelled'
+        'status',
         'subtotal',
         'tax_amount',
         'total',
         'notes',
         'terms',
         'user_id',
+        'xero_updated_at',
+        'xero_created_at',
     ];
 
     protected $casts = [
@@ -34,6 +37,8 @@ class PurchaseOrder extends Model
         'subtotal' => 'decimal:2',
         'tax_amount' => 'decimal:2',
         'total' => 'decimal:2',
+        'xero_updated_at' => 'datetime',
+        'xero_created_at' => 'datetime',
     ];
 
     /**

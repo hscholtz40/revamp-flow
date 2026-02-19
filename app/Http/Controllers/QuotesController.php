@@ -8,6 +8,7 @@ use App\Models\Quote;
 use App\Models\QuoteLineItem;
 use App\Models\Product;
 use App\Models\TaxRate;
+use App\Models\ChartOfAccount;
 use App\Models\Jobcard;
 use App\Services\ReminderService;
 use Illuminate\Http\RedirectResponse;
@@ -80,6 +81,8 @@ class QuotesController extends Controller
 
         $taxRates = TaxRate::where('company_id', $currentCompany->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'rate', 'is_default_sales']);
         $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
+        $chartOfAccounts = ChartOfAccount::where('company_id', $currentCompany->id)->where('is_active', true)->ordered()->get(['id', 'account_code', 'account_name', 'account_type', 'is_default_sales']);
+        $defaultSalesAccount = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id);
 
         return Inertia::render('quotes/Create', [
             'customers' => $customers,
@@ -88,6 +91,8 @@ class QuotesController extends Controller
             'defaultTerms' => $currentCompany->default_quote_terms,
             'taxRates' => $taxRates,
             'defaultSalesTaxRateId' => $defaultSalesTaxRate?->id,
+            'chartOfAccounts' => $chartOfAccounts,
+            'defaultSalesAccountId' => $defaultSalesAccount?->id,
         ]);
     }
 
@@ -117,6 +122,7 @@ class QuotesController extends Controller
             'line_items.*.discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'line_items.*.product_id' => ['nullable', 'exists:products,id'],
             'line_items.*.tax_rate_id' => ['nullable', 'exists:tax_rates,id'],
+            'line_items.*.account_id' => ['nullable', 'exists:chart_of_accounts,id'],
         ]);
 
         // Create the quote
@@ -222,6 +228,8 @@ class QuotesController extends Controller
 
         $taxRates = TaxRate::where('company_id', $currentCompany->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'rate', 'is_default_sales']);
         $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
+        $chartOfAccounts = ChartOfAccount::where('company_id', $currentCompany->id)->where('is_active', true)->ordered()->get(['id', 'account_code', 'account_name', 'account_type', 'is_default_sales']);
+        $defaultSalesAccount = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id);
 
         return Inertia::render('quotes/Edit', [
             'quote' => $quote,
@@ -230,6 +238,8 @@ class QuotesController extends Controller
             'currentCompany' => $currentCompany,
             'taxRates' => $taxRates,
             'defaultSalesTaxRateId' => $defaultSalesTaxRate?->id,
+            'chartOfAccounts' => $chartOfAccounts,
+            'defaultSalesAccountId' => $defaultSalesAccount?->id,
             'canEditCompleted' => auth()->user()->hasModulePermission('quotes', 'edit_completed'),
         ]);
     }
@@ -258,6 +268,7 @@ class QuotesController extends Controller
             'line_items.*.discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'line_items.*.product_id' => ['nullable', 'exists:products,id'],
             'line_items.*.tax_rate_id' => ['nullable', 'exists:tax_rates,id'],
+            'line_items.*.account_id' => ['nullable', 'exists:chart_of_accounts,id'],
         ]);
 
         // Check if user can edit completed quotes (accepted status)
@@ -298,6 +309,7 @@ class QuotesController extends Controller
                 'discount_amount' => $lineItemData['discount_amount'] ?? 0,
                 'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
                 'tax_rate_id' => $lineItemData['tax_rate_id'] ?? null,
+                'account_id' => $lineItemData['account_id'] ?? null,
                 'sort_order' => $index,
             ]);
             $lineItem->calculateTotal();

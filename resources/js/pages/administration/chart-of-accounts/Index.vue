@@ -13,6 +13,8 @@ interface ChartOfAccount {
     parent_account?: ChartOfAccount | null;
     description: string | null;
     is_active: boolean;
+    is_default_sales: boolean;
+    is_default_purchasing: boolean;
     sort_order: number;
     created_at: string;
     updated_at: string;
@@ -102,7 +104,11 @@ function getAccountTypeColor(type: string): string {
                                 <div class="flex items-center">
                                     <BookOpen class="mr-2 h-5 w-5 text-gray-400" />
                                     <div>
-                                        <div class="font-medium text-gray-900">{{ account.account_name }}</div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="font-medium text-gray-900">{{ account.account_name }}</span>
+                                            <span v-if="account.is_default_sales" class="inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">Default Sales</span>
+                                            <span v-if="account.is_default_purchasing" class="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">Default Purchasing</span>
+                                        </div>
                                         <div v-if="account.description" class="text-sm text-gray-500 line-clamp-1">
                                             {{ account.description }}
                                         </div>

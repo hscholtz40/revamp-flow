@@ -8,6 +8,7 @@ use App\Models\Jobcard;
 use App\Models\JobcardLineItem;
 use App\Models\Product;
 use App\Models\TaxRate;
+use App\Models\ChartOfAccount;
 use App\Models\Team;
 use App\Models\User;
 use App\Services\ReminderService;
@@ -113,6 +114,8 @@ class JobcardController extends Controller
         $teams = Team::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name']);
         $taxRates = TaxRate::where('company_id', $currentCompany->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'rate', 'is_default_sales']);
         $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
+        $chartOfAccounts = ChartOfAccount::where('company_id', $currentCompany->id)->where('is_active', true)->ordered()->get(['id', 'account_code', 'account_name', 'account_type', 'is_default_sales']);
+        $defaultSalesAccount = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id);
 
         return Inertia::render('jobcards/Create', [
             'customers' => $customers,
@@ -121,6 +124,8 @@ class JobcardController extends Controller
             'teams' => $teams,
             'taxRates' => $taxRates,
             'defaultSalesTaxRateId' => $defaultSalesTaxRate?->id,
+            'chartOfAccounts' => $chartOfAccounts,
+            'defaultSalesAccountId' => $defaultSalesAccount?->id,
             'currentCompany' => $currentCompany,
             'defaultTerms' => $currentCompany->default_jobcard_terms,
         ]);
@@ -295,6 +300,8 @@ class JobcardController extends Controller
         $teams = Team::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name']);
         $taxRates = TaxRate::where('company_id', $currentCompany->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'rate', 'is_default_sales']);
         $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
+        $chartOfAccounts = ChartOfAccount::where('company_id', $currentCompany->id)->where('is_active', true)->ordered()->get(['id', 'account_code', 'account_name', 'account_type', 'is_default_sales']);
+        $defaultSalesAccount = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id);
         $jobcard->load(['lineItems']);
 
         return Inertia::render('jobcards/Edit', [
@@ -305,6 +312,8 @@ class JobcardController extends Controller
             'teams' => $teams,
             'taxRates' => $taxRates,
             'defaultSalesTaxRateId' => $defaultSalesTaxRate?->id,
+            'chartOfAccounts' => $chartOfAccounts,
+            'defaultSalesAccountId' => $defaultSalesAccount?->id,
             'currentCompany' => $currentCompany,
             'canEditCompleted' => auth()->user()->canEditCompletedJobcards(),
         ]);
@@ -339,6 +348,7 @@ class JobcardController extends Controller
             'line_items.*.discount_amount' => ['nullable', 'numeric', 'min:0'],
             'line_items.*.discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'line_items.*.tax_rate_id' => ['nullable', 'exists:tax_rates,id'],
+            'line_items.*.account_id' => ['nullable', 'exists:chart_of_accounts,id'],
         ]);
 
         $validated['tax_rate'] = $validated['tax_rate'] ?? 0;
@@ -359,6 +369,7 @@ class JobcardController extends Controller
                     'discount_amount' => $lineItemData['discount_amount'] ?? 0,
                     'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
                     'tax_rate_id' => $lineItemData['tax_rate_id'] ?? null,
+                    'account_id' => $lineItemData['account_id'] ?? null,
                     'sort_order' => $index,
                 ]);
                 $lineItem->calculateTotal();
@@ -374,6 +385,7 @@ class JobcardController extends Controller
                     'discount_amount' => $lineItemData['discount_amount'] ?? 0,
                     'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
                     'tax_rate_id' => $lineItemData['tax_rate_id'] ?? null,
+                    'account_id' => $lineItemData['account_id'] ?? null,
                     'sort_order' => $index,
                 ]);
                 $lineItem->calculateTotal();

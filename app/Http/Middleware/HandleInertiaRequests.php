@@ -250,6 +250,13 @@ class HandleInertiaRequests extends Middleware
                     'edit' => $user->hasModulePermission('invoices', 'edit'),
                     'delete' => $user->hasModulePermission('invoices', 'delete'),
                 ],
+                'credit-notes' => [
+                    'list' => $user->hasModulePermission('credit-notes', 'list'),
+                    'view' => $user->hasModulePermission('credit-notes', 'view'),
+                    'create' => $user->hasModulePermission('credit-notes', 'create'),
+                    'edit' => $user->hasModulePermission('credit-notes', 'edit'),
+                    'delete' => $user->hasModulePermission('credit-notes', 'delete'),
+                ],
                 'reports' => [
                     'list' => $user->hasModulePermission('reports', 'list'),
                     'view' => $user->hasModulePermission('reports', 'view'),

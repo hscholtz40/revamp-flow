@@ -24,6 +24,7 @@ require __DIR__.'/categories.php';
 require __DIR__.'/jobcards.php';
 require __DIR__.'/quotes.php';
 require __DIR__.'/invoices.php';
+require __DIR__.'/credit-notes.php';
 require __DIR__.'/users.php';
 require __DIR__.'/groups.php';
 require __DIR__.'/administration.php';

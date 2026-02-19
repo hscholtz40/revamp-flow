@@ -23,12 +23,16 @@ class BankAccount extends Model
         'notes',
         'is_active',
         'is_default',
+        'xero_updated_at',
+        'xero_created_at',
     ];
 
     protected $casts = [
         'opening_balance' => 'decimal:2',
         'is_active' => 'boolean',
         'is_default' => 'boolean',
+        'xero_updated_at' => 'datetime',
+        'xero_created_at' => 'datetime',
     ];
 
     /**
