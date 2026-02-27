@@ -1359,25 +1359,6 @@ class XeroService
                             continue;
                         }
 
-                        // List responses can sometimes omit full line item payload; fetch full invoice when needed.
-                        if (
-                            isset($xeroInvoice['InvoiceID']) &&
-                            (
-                                !isset($xeroInvoice['LineItems']) ||
-                                !is_array($xeroInvoice['LineItems']) ||
-                                count($xeroInvoice['LineItems']) === 0
-                            )
-                        ) {
-                            $fullInvoice = $this->getXeroInvoice($xeroInvoice['InvoiceID']);
-                            if (is_array($fullInvoice)) {
-                                // Re-check type from the full payload for safety.
-                                if (($fullInvoice['Type'] ?? null) !== 'ACCREC') {
-                                    continue;
-                                }
-                                $xeroInvoice = $fullInvoice;
-                            }
-                        }
-
                         // Skip if invoice doesn't have required fields
                         if (empty($xeroInvoice['InvoiceNumber']) && empty($xeroInvoice['Reference'])) {
                             continue;
