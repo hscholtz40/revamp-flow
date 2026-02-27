@@ -1306,11 +1306,21 @@ class XeroService
 
         try {
             $hasAnyLocalInvoices = Invoice::where('company_id', $currentCompany->id)->exists();
+            $fullSyncCompletedKey = "xero_invoice_full_sync_completed_company_{$currentCompany->id}";
+            $cursorKey = "xero_invoice_import_cursor_company_{$currentCompany->id}";
+            $isInitialInvoiceImport = !$hasAnyLocalInvoices;
+            $isBackfillMode = $isInitialInvoiceImport || !Cache::get($fullSyncCompletedKey, false);
+            $cursor = Cache::get($cursorKey, ['page' => 1]);
+
             $lastSync = Invoice::where('company_id', $currentCompany->id)
                 ->whereNotNull('xero_updated_at')->max('xero_updated_at');
-            $ifModifiedSince = $this->buildIfModifiedSinceHeader($lastSync);
+            // During backfill mode we intentionally avoid If-Modified-Since so older pages are not skipped.
+            $ifModifiedSince = $isBackfillMode ? [] : $this->buildIfModifiedSinceHeader($lastSync);
 
-            $page = 1;
+            $page = (int) ($isBackfillMode ? ($cursor['page'] ?? 1) : 1);
+            if ($page < 1) {
+                $page = 1;
+            }
             $pageSize = max(1, min((int) config('services.xero.invoice_import_page_size', 50), 100));
             $maxPagesPerRun = max(1, (int) config('services.xero.invoice_import_max_pages_per_run', 5));
             $maxInvoicesPerRun = max(1, (int) config('services.xero.invoice_import_max_invoices_per_run', 250));
@@ -1322,10 +1332,11 @@ class XeroService
             $startedAt = microtime(true);
             $stopReason = null;
             $hasMorePages = false;
-            $isInitialInvoiceImport = !$hasAnyLocalInvoices;
 
             Log::info('Starting paginated invoice import from Xero with throttling', [
                 'company_id' => $currentCompany->id,
+                'mode' => $isBackfillMode ? 'backfill' : 'incremental',
+                'start_page' => $page,
                 'page_size' => $pageSize,
                 'max_pages_per_run' => $maxPagesPerRun,
                 'max_invoices_per_run' => $maxInvoicesPerRun,
@@ -1529,6 +1540,9 @@ class XeroService
                 }
 
                 $page++;
+                if ($isBackfillMode) {
+                    Cache::put($cursorKey, ['page' => $page], now()->addDays(7));
+                }
                 
                 // Add delay before fetching next page to avoid rate limiting
                 if ($hasMorePages && !$stopReason && $pageDelayMs > 0) {
@@ -1536,8 +1550,14 @@ class XeroService
                 }
             } while ($hasMorePages && !$stopReason);
 
+            if ($isBackfillMode && !$hasMorePages && !$stopReason) {
+                Cache::put($fullSyncCompletedKey, true, now()->addDays(365));
+                Cache::forget($cursorKey);
+            }
+
             Log::info('Finished processing all invoices from Xero', [
                 'company_id' => $currentCompany->id,
+                'mode' => $isBackfillMode ? 'backfill' : 'incremental',
                 'total_invoices_processed' => $totalProcessed,
                 'pages_processed' => $pagesProcessed,
                 'processed_this_run' => $processedThisRun,
