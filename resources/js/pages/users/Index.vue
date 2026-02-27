@@ -9,6 +9,7 @@ interface User { id: number; name: string; email: string; user_type: 'standard' 
 const props = defineProps<{
     users: { data: User[] };
     filters: { search?: string };
+    licenseComplianceWarning?: string | null;
 }>();
 
 const search = ref(props.filters?.search ?? '');
@@ -26,6 +27,14 @@ watch(search, (value) => {
     <Head title="Users" />
 
     <AppLayout :breadcrumbs="[{ title: 'Users', href: users.index().url }]">
+        <div v-if="props.licenseComplianceWarning" class="mx-4 mt-4 rounded border border-amber-300 bg-amber-50 px-4 py-3 text-amber-900">
+            {{ props.licenseComplianceWarning }}
+        </div>
+
+        <div v-if="$page.props.flash?.error" class="mx-4 mt-4 rounded border border-red-300 bg-red-50 px-4 py-3 text-red-700">
+            {{ $page.props.flash.error }}
+        </div>
+
         <div class="flex items-center justify-between gap-3 p-4">
             <input v-model="search" type="search" placeholder="Search users..." class="w-full max-w-sm rounded border px-3 py-2" />
             <Link :href="users.create().url" class="rounded bg-blue-600 px-3 py-2 text-white">New User</Link>

@@ -42,7 +42,31 @@ class EnsureLicenseIsValid
         $validation = $this->licenseService->validate();
 
         if ($validation['valid']) {
-            return $next($request);
+            $limitRestrictionMessage = $this->licenseService->getUserLimitRestrictionMessage();
+            if (!$limitRestrictionMessage) {
+                return $next($request);
+            }
+
+            if ($request->routeIs(
+                'users.*',
+                'logout',
+                'administration.license',
+                'administration.license.update',
+                'install.*',
+                'verification.*',
+                'password.*',
+                'login',
+            )) {
+                return $next($request);
+            }
+
+            if (!$request->user()?->isAdministrator()) {
+                abort(403, $limitRestrictionMessage . ' Please contact your administrator.');
+            }
+
+            return redirect()
+                ->route('users.index')
+                ->with('error', $limitRestrictionMessage);
         }
 
         return redirect()

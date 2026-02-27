@@ -38,6 +38,7 @@ class UsersController extends Controller
             'filters' => [
                 'search' => $request->string('search')->toString(),
             ],
+            'licenseComplianceWarning' => $this->licenseService->getUserLimitRestrictionMessage(),
         ]);
     }
 

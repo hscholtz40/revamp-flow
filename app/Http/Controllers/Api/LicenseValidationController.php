@@ -71,6 +71,45 @@ class LicenseValidationController extends Controller
     }
 
     /**
+     * Report the current instance version to the licensing server.
+     */
+    public function reportVersion(Request $request): JsonResponse
+    {
+        $request->validate([
+            'license_key' => ['required', 'string'],
+            'url' => ['required', 'string', 'max:255'],
+            'version' => ['required', 'string', 'max:64'],
+        ]);
+
+        $license = License::query()
+            ->where('license_key', $request->input('license_key'))
+            ->first();
+
+        if (!$license) {
+            return response()->json([
+                'valid' => false,
+                'message' => 'License key not found.',
+            ], 404);
+        }
+
+        if (!$this->urlsMatch((string) $request->input('url'), (string) $license->url)) {
+            return response()->json([
+                'valid' => false,
+                'message' => 'License URL does not match this instance URL.',
+            ], 200);
+        }
+
+        $license->version = (string) $request->input('version');
+        $license->save();
+
+        return response()->json([
+            'valid' => true,
+            'message' => 'Version reported successfully.',
+            'license' => $this->formatLicense($license),
+        ], 200);
+    }
+
+    /**
      * Format license data for the API response.
      */
     private function formatLicense(License $license): array

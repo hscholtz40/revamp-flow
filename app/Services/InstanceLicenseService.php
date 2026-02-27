@@ -3,8 +3,10 @@
 namespace App\Services;
 
 use App\Models\InstanceLicense;
+use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Http\Client\Response as HttpResponse;
 use Illuminate\Support\Str;
 
 class InstanceLicenseService
@@ -57,11 +59,14 @@ class InstanceLicenseService
 
         try {
             $response = Http::acceptJson()
-                ->timeout((int) config('app.license_validation_timeout'))
-                ->post($serverUrl . '/api/licenses/validate', [
-                    'license_key' => $settings->license_key,
-                    'url' => $localUrl,
-                ]);
+                ->timeout((int) config('app.license_validation_timeout'));
+
+            $payload = [
+                'license_key' => $settings->license_key,
+                'url' => $localUrl,
+            ];
+
+            $response = $this->signedLicenseApiPost($response, $serverUrl . '/api/licenses/validate', $payload, $settings->license_key);
 
             if (!$response->ok()) {
                 $result = [
@@ -99,6 +104,10 @@ class InstanceLicenseService
 
             $this->persistValidationResult($settings, $result);
             Cache::put($cacheKey, $result, now()->addMinutes(5));
+
+            if ($valid) {
+                $this->reportCurrentVersion($settings->license_key, $localUrl);
+            }
 
             return $result;
         } catch (\Throwable $e) {
@@ -150,6 +159,69 @@ class InstanceLicenseService
         ];
     }
 
+    /**
+     * @return array<string,array{active:int,licensed:int}>
+     */
+    public function getUserLimitOverages(bool $forceRefresh = false): array
+    {
+        if (config('app.is_licensing_instance')) {
+            return [];
+        }
+
+        $limits = $this->getUserLimits($forceRefresh);
+        if (!$limits) {
+            return [];
+        }
+
+        $activeStandardUsers = User::query()
+            ->where(function ($query) {
+                $query->where('user_type', 'standard')->orWhereNull('user_type');
+            })
+            ->count();
+
+        $activeLimitedUsers = User::query()
+            ->where('user_type', 'limited')
+            ->count();
+
+        $overages = [];
+
+        if ($activeStandardUsers > $limits['standard_users']) {
+            $overages['standard'] = [
+                'active' => $activeStandardUsers,
+                'licensed' => $limits['standard_users'],
+            ];
+        }
+
+        if ($activeLimitedUsers > $limits['limited_users']) {
+            $overages['limited'] = [
+                'active' => $activeLimitedUsers,
+                'licensed' => $limits['limited_users'],
+            ];
+        }
+
+        return $overages;
+    }
+
+    public function getUserLimitRestrictionMessage(bool $forceRefresh = false): ?string
+    {
+        $overages = $this->getUserLimitOverages($forceRefresh);
+        if (empty($overages)) {
+            return null;
+        }
+
+        $parts = [];
+        if (isset($overages['standard'])) {
+            $parts[] = "Standard users: {$overages['standard']['active']} active, {$overages['standard']['licensed']} licensed";
+        }
+
+        if (isset($overages['limited'])) {
+            $parts[] = "Limited users: {$overages['limited']['active']} active, {$overages['limited']['licensed']} licensed";
+        }
+
+        return 'User allocation exceeds the licensed limits (' . implode('; ', $parts) . '). '
+            . 'Access is restricted to User Management until user types are updated to comply with your license.';
+    }
+
     private function persistValidationResult(InstanceLicense $settings, array $result): void
     {
         $licenseData = $result['license'];
@@ -162,9 +234,58 @@ class InstanceLicenseService
         $settings->save();
     }
 
+    private function reportCurrentVersion(string $licenseKey, string $localUrl): void
+    {
+        $appVersion = (string) config('app.version', '1.0.0');
+        $cacheKey = 'instance-license-version-reported:' . sha1($licenseKey . '|' . $appVersion . '|' . $localUrl);
+
+        if (Cache::get($cacheKey)) {
+            return;
+        }
+
+        $serverUrl = rtrim((string) config('app.license_server_url'), '/');
+
+        try {
+            $response = Http::acceptJson()
+                ->timeout((int) config('app.license_validation_timeout'));
+
+            $payload = [
+                'license_key' => $licenseKey,
+                'url' => $localUrl,
+                'version' => $appVersion,
+            ];
+
+            $reportResponse = $this->signedLicenseApiPost($response, $serverUrl . '/api/licenses/report-version', $payload, $licenseKey);
+
+            if ($reportResponse->ok()) {
+                Cache::put($cacheKey, true, now()->addHours(12));
+            }
+        } catch (\Throwable $e) {
+            // Best effort only: validation should not fail because version reporting failed.
+        }
+    }
+
     private function cacheKey(?string $licenseKey): string
     {
         return 'instance-license-validation:' . sha1(($licenseKey ?? '') . '|' . (string) config('app.url'));
+    }
+
+    private function signedLicenseApiPost($client, string $url, array $payload, string $licenseKey): HttpResponse
+    {
+        $body = json_encode($payload, JSON_UNESCAPED_SLASHES);
+        $timestamp = (string) now()->timestamp;
+        $path = parse_url($url, PHP_URL_PATH) ?: '/';
+        $payloadHash = hash('sha256', $body ?: '');
+        $toSign = $timestamp . '|POST|' . ltrim($path, '/') . '|' . $payloadHash;
+        $signature = hash_hmac('sha256', $toSign, $licenseKey);
+
+        return $client
+            ->withHeaders([
+                'X-License-Timestamp' => $timestamp,
+                'X-License-Signature' => $signature,
+            ])
+            ->asJson()
+            ->post($url, $payload);
     }
 
     private function urlsMatch(string $localUrl, string $licenseUrl): bool
