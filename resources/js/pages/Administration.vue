@@ -8,7 +8,7 @@ import groups from '@/routes/groups';
 import companySettings from '@/routes/company-settings';
 import smsSettings from '@/routes/sms-settings';
 import whatsappSettings from '@/routes/whatsapp-settings';
-import { Users, UsersRound, Shield, Building2, UserCheck, Package, Tag, MessageSquare, Zap, FileText, ClipboardList, Database, Percent, BookOpen, CreditCard, ArrowUpCircle, Eye } from 'lucide-vue-next';
+import { Users, UsersRound, Shield, Building2, UserCheck, Package, Tag, MessageSquare, Zap, FileText, ClipboardList, Database, Percent, BookOpen, CreditCard, ArrowUpCircle, Eye, KeyRound } from 'lucide-vue-next';
 import auditLogs from '@/routes/audit-logs';
 import backups from '@/routes/backups/index';
 import { ref } from 'vue';
@@ -354,6 +354,27 @@ const props = defineProps<{
                             class="rounded bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
                         >
                             Manage Modules
+                        </Link>
+                    </div>
+                </div>
+
+                <!-- License Card -->
+                <div v-if="!$page.props.isLicensingInstance" class="flex flex-col rounded-lg border bg-white p-6 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold">License</h2>
+                            <p class="text-sm text-gray-600">Set and validate this instance license key</p>
+                        </div>
+                        <div class="rounded-full bg-primary/10 p-3">
+                            <KeyRound class="h-6 w-6 text-primary" />
+                        </div>
+                    </div>
+                    <div class="mt-auto pt-4">
+                        <Link
+                            href="/administration/license"
+                            class="rounded bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
+                        >
+                            Manage License
                         </Link>
                     </div>
                 </div>

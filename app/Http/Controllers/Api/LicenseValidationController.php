@@ -19,6 +19,7 @@ class LicenseValidationController extends Controller
     {
         $request->validate([
             'license_key' => ['required', 'string'],
+            'url' => ['nullable', 'string', 'max:255'],
         ]);
 
         $license = License::with('customer:id,name')
@@ -53,6 +54,15 @@ class LicenseValidationController extends Controller
             ], 200);
         }
 
+        $requestUrl = $request->input('url');
+        if ($requestUrl && !$this->urlsMatch($requestUrl, (string) $license->url)) {
+            return response()->json([
+                'valid' => false,
+                'message' => 'License URL does not match this instance URL.',
+                'license' => $this->formatLicense($license),
+            ], 200);
+        }
+
         return response()->json([
             'valid' => true,
             'message' => 'License is valid.',
@@ -74,5 +84,32 @@ class LicenseValidationController extends Controller
             'expires_at' => $license->expires_at?->toIso8601String(),
             'url' => $license->url,
         ];
+    }
+
+    private function urlsMatch(string $requestUrl, string $licenseUrl): bool
+    {
+        return $this->normalizeUrl($requestUrl) === $this->normalizeUrl($licenseUrl);
+    }
+
+    private function normalizeUrl(?string $url): ?string
+    {
+        if (blank($url)) {
+            return null;
+        }
+
+        $trimmed = rtrim((string) $url, '/');
+        if (!str_contains($trimmed, '://')) {
+            $trimmed = 'https://' . $trimmed;
+        }
+
+        $parts = parse_url($trimmed);
+        if (!$parts || empty($parts['host'])) {
+            return null;
+        }
+
+        $host = strtolower((string) $parts['host']);
+        $path = isset($parts['path']) && $parts['path'] !== '/' ? rtrim((string) $parts['path'], '/') : '';
+
+        return $host . $path;
     }
 }

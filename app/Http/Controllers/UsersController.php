@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\InstanceLicenseService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use App\Models\Group;
@@ -13,6 +15,11 @@ use App\Models\Company;
 
 class UsersController extends Controller
 {
+    public function __construct(
+        private readonly InstanceLicenseService $licenseService
+    ) {
+    }
+
     public function index(Request $request): Response
     {
         $users = User::query()
@@ -64,6 +71,8 @@ class UsersController extends Controller
             'smtp_from_email' => ['nullable', 'email', 'max:255'],
             'smtp_from_name' => ['nullable', 'string', 'max:255'],
         ]);
+
+        $this->assertUserTypeWithinLicenseLimit($validated['user_type']);
 
         $user = new User();
         $user->name = $validated['name'];
@@ -143,6 +152,8 @@ class UsersController extends Controller
             'smtp_from_name' => ['nullable', 'string', 'max:255'],
         ]);
 
+        $this->assertUserTypeWithinLicenseLimit($validated['user_type'], $user->id);
+
         $user->name = $validated['name'];
         $user->email = $validated['email'];
         $user->user_type = $validated['user_type'];
@@ -177,6 +188,50 @@ class UsersController extends Controller
     {
         $user->delete();
         return redirect()->route('users.index')->with('success', 'User deleted');
+    }
+
+    private function assertUserTypeWithinLicenseLimit(string $userType, ?int $ignoreUserId = null): void
+    {
+        if (config('app.is_licensing_instance') || $userType === 'info') {
+            return;
+        }
+
+        $limits = $this->licenseService->getUserLimits();
+        if (!$limits) {
+            throw ValidationException::withMessages([
+                'user_type' => 'A valid license is required before managing users.',
+            ]);
+        }
+
+        if ($userType === 'limited') {
+            $count = User::query()
+                ->when($ignoreUserId, fn ($query) => $query->where('id', '!=', $ignoreUserId))
+                ->where('user_type', 'limited')
+                ->count();
+
+            if (($count + 1) > $limits['limited_users']) {
+                throw ValidationException::withMessages([
+                    'user_type' => "Limited user limit reached for this license ({$limits['limited_users']}).",
+                ]);
+            }
+
+            return;
+        }
+
+        if ($userType === 'standard') {
+            $count = User::query()
+                ->when($ignoreUserId, fn ($query) => $query->where('id', '!=', $ignoreUserId))
+                ->where(function ($query) {
+                    $query->where('user_type', 'standard')->orWhereNull('user_type');
+                })
+                ->count();
+
+            if (($count + 1) > $limits['standard_users']) {
+                throw ValidationException::withMessages([
+                    'user_type' => "Standard user limit reached for this license ({$limits['standard_users']}).",
+                ]);
+            }
+        }
     }
 }
 

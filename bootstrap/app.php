@@ -28,6 +28,7 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
             \App\Http\Middleware\RestrictLimitedUser::class,
+            \App\Http\Middleware\EnsureLicenseIsValid::class,
         ]);
 
         $middleware->alias([

@@ -9,7 +9,9 @@ use App\Models\Group;
 use App\Models\Product;
 use App\Models\Team;
 use App\Models\User;
+use App\Services\InstanceLicenseService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
@@ -17,6 +19,11 @@ use Inertia\Response;
 
 class AdministrationController extends Controller
 {
+    public function __construct(
+        private readonly InstanceLicenseService $licenseService
+    ) {
+    }
+
     public function index(): Response
     {
         $currentCompany = auth()->user()->getCurrentCompany();
@@ -107,5 +114,46 @@ class AdministrationController extends Controller
         ]);
 
         return redirect()->back()->with('success', 'Module visibility updated successfully.');
+    }
+
+    public function license(): Response
+    {
+        $settings = $this->licenseService->getSettings();
+        $validation = $this->licenseService->validate();
+
+        return Inertia::render('administration/License', [
+            'license' => [
+                'license_key' => $settings->license_key,
+                'status' => $settings->status,
+                'message' => $settings->message,
+                'licensed_url' => $settings->licensed_url,
+                'limited_users' => $settings->limited_users,
+                'standard_users' => $settings->standard_users,
+                'last_validated_at' => $settings->last_validated_at?->toIso8601String(),
+                'valid' => $validation['valid'],
+                'validation_message' => $validation['message'],
+            ],
+            'canManageLicense' => (bool) auth()->user()?->isAdministrator(),
+        ]);
+    }
+
+    public function updateLicense(Request $request): RedirectResponse
+    {
+        if (!auth()->user()?->isAdministrator()) {
+            abort(403, 'Access denied. Administrator privileges required.');
+        }
+
+        $validated = $request->validate([
+            'license_key' => ['required', 'string', 'max:64'],
+        ]);
+
+        $this->licenseService->saveLicenseKey($validated['license_key']);
+        $validation = $this->licenseService->validate(true);
+
+        if ($validation['valid']) {
+            return redirect()->back()->with('success', 'License key validated successfully.');
+        }
+
+        return redirect()->back()->with('error', $validation['message']);
     }
 }

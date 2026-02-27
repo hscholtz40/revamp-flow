@@ -146,5 +146,7 @@ return [
     */
 
     'is_licensing_instance' => (bool) env('IS_LICENSING_INSTANCE', false),
+    'license_server_url' => env('LICENSE_SERVER_URL', 'https://jco.nexorasoftware.co.za'),
+    'license_validation_timeout' => (int) env('LICENSE_VALIDATION_TIMEOUT', 10),
 
 ];

@@ -6,8 +6,13 @@ use App\Http\Controllers\WhatsAppSettingsController;
 use App\Http\Controllers\Administration\PdfTemplateController;
 use Illuminate\Support\Facades\Route;
 
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/administration/license', [AdministrationController::class, 'license'])->name('administration.license');
+});
+
 Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::get('/administration', [AdministrationController::class, 'index'])->name('administration.index');
+    Route::post('/administration/license', [AdministrationController::class, 'updateLicense'])->name('administration.license.update');
     
     // Database Upgrade route
     Route::post('/administration/upgrade-database', [AdministrationController::class, 'upgradeDatabase'])->name('administration.upgrade-database');
