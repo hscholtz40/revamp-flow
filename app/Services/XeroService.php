@@ -1290,10 +1290,37 @@ class XeroService
             $ifModifiedSince = $this->buildIfModifiedSinceHeader($lastSync);
 
             $page = 1;
-            $pageSize = 100;
+            $pageSize = max(1, min((int) config('services.xero.invoice_import_page_size', 50), 100));
+            $maxPagesPerRun = max(1, (int) config('services.xero.invoice_import_max_pages_per_run', 5));
+            $maxInvoicesPerRun = max(1, (int) config('services.xero.invoice_import_max_invoices_per_run', 250));
+            $maxSecondsPerRun = max(5, (int) config('services.xero.invoice_import_max_seconds_per_run', 45));
+            $pageDelayMs = max(0, (int) config('services.xero.invoice_import_page_delay_ms', 250));
             $totalProcessed = 0;
+            $pagesProcessed = 0;
+            $processedThisRun = 0;
+            $startedAt = microtime(true);
+            $stopReason = null;
+            $hasMorePages = false;
+
+            Log::info('Starting paginated invoice import from Xero with throttling', [
+                'company_id' => $currentCompany->id,
+                'page_size' => $pageSize,
+                'max_pages_per_run' => $maxPagesPerRun,
+                'max_invoices_per_run' => $maxInvoicesPerRun,
+                'max_seconds_per_run' => $maxSecondsPerRun,
+                'page_delay_ms' => $pageDelayMs,
+            ]);
             
             do {
+                if ($processedThisRun >= $maxInvoicesPerRun) {
+                    $stopReason = 'max_invoices_per_run_reached';
+                    break;
+                }
+                if ((microtime(true) - $startedAt) >= $maxSecondsPerRun) {
+                    $stopReason = 'max_seconds_per_run_reached';
+                    break;
+                }
+
                 Log::info('Fetching invoice page from Xero', [
                     'company_id' => $currentCompany->id,
                     'page' => $page,
@@ -1302,7 +1329,7 @@ class XeroService
 
                 $response = $this->makeXeroRequest(
                     'get',
-                    $this->baseUrl . '/api.xro/2.0/Invoices?page=' . $page . '&pageSize=' . $pageSize,
+                    $this->baseUrl . '/api.xro/2.0/Invoices?page=' . $page . '&pageSize=' . $pageSize . '&summaryOnly=false',
                     [],
                     2,
                     $ifModifiedSince
@@ -1353,6 +1380,15 @@ class XeroService
 
                 // Process invoices from this page immediately
                 foreach ($xeroInvoices as $xeroInvoice) {
+                    if ($processedThisRun >= $maxInvoicesPerRun) {
+                        $stopReason = 'max_invoices_per_run_reached';
+                        break;
+                    }
+                    if ((microtime(true) - $startedAt) >= $maxSecondsPerRun) {
+                        $stopReason = 'max_seconds_per_run_reached';
+                        break;
+                    }
+
                     try {
                         // Only import sales invoices (ACCREC), skip supplier bills (ACCPAY) and others.
                         if (($xeroInvoice['Type'] ?? null) !== 'ACCREC') {
@@ -1381,7 +1417,13 @@ class XeroService
                         }
 
                         if ($existingInvoice) {
-                            if (!$this->xeroUpdatedAtChanged($existingInvoice, $xeroInvoice)) {
+                            $localLineItemCount = $existingInvoice->lineItems()->count();
+                            $xeroLineItemCount = isset($xeroInvoice['LineItems']) && is_array($xeroInvoice['LineItems'])
+                                ? count($xeroInvoice['LineItems'])
+                                : 0;
+                            $needsLineItemBackfill = $localLineItemCount === 0 && $xeroLineItemCount > 0;
+
+                            if (!$this->xeroUpdatedAtChanged($existingInvoice, $xeroInvoice) && !$needsLineItemBackfill) {
                                 $results[] = [
                                     'invoice_id' => $existingInvoice->id,
                                     'invoice_number' => $existingInvoice->invoice_number,
@@ -1389,8 +1431,20 @@ class XeroService
                                     'message' => 'Invoice unchanged in Xero',
                                 ];
                                 $totalProcessed++;
+                                $processedThisRun++;
                                 continue;
                             }
+
+                            if ($needsLineItemBackfill) {
+                                Log::info('Forcing invoice update to backfill missing local line items', [
+                                    'company_id' => $currentCompany->id,
+                                    'invoice_id' => $existingInvoice->id,
+                                    'invoice_number' => $existingInvoice->invoice_number,
+                                    'local_line_items' => $localLineItemCount,
+                                    'xero_line_items' => $xeroLineItemCount,
+                                ]);
+                            }
+
                             $this->updateInvoiceFromXeroData($existingInvoice, $xeroInvoice);
                             if (!$existingInvoice->xero_invoice_id) {
                                 $existingInvoice->update(['xero_invoice_id' => $xeroInvoice['InvoiceID']]);
@@ -1401,6 +1455,7 @@ class XeroService
                                 'status' => 'updated',
                                 'message' => 'Invoice updated from Xero and linked to existing invoice',
                             ];
+                            $processedThisRun++;
                         } else {
                             // Create new invoice
                             $invoice = $this->createInvoiceFromXero($xeroInvoice, $currentCompany);
@@ -1410,6 +1465,7 @@ class XeroService
                                 'status' => 'created',
                                 'message' => 'Invoice imported from Xero',
                             ];
+                            $processedThisRun++;
                         }
                         
                         $totalProcessed++;
@@ -1432,6 +1488,7 @@ class XeroService
                             'status' => 'error',
                             'error' => $e->getMessage(),
                         ];
+                        $processedThisRun++;
                     }
                 }
 
@@ -1440,19 +1497,28 @@ class XeroService
                     'page' => $page,
                     'invoices_processed_on_page' => $invoicesOnPage,
                     'total_processed_so_far' => $totalProcessed,
+                    'processed_this_run' => $processedThisRun,
                 ]);
                 
+                $pagesProcessed++;
+                if ($pagesProcessed >= $maxPagesPerRun) {
+                    $stopReason = 'max_pages_per_run_reached';
+                }
+
                 $page++;
                 
                 // Add delay before fetching next page to avoid rate limiting
-                if ($hasMorePages) {
-                    sleep(1);
+                if ($hasMorePages && !$stopReason && $pageDelayMs > 0) {
+                    usleep($pageDelayMs * 1000);
                 }
-            } while ($hasMorePages);
+            } while ($hasMorePages && !$stopReason);
 
             Log::info('Finished processing all invoices from Xero', [
                 'company_id' => $currentCompany->id,
                 'total_invoices_processed' => $totalProcessed,
+                'pages_processed' => $pagesProcessed,
+                'processed_this_run' => $processedThisRun,
+                'stop_reason' => $stopReason,
             ]);
 
         } catch (\Exception $e) {
