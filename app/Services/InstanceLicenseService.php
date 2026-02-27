@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Helpers\Version;
 use App\Models\InstanceLicense;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
@@ -236,7 +237,7 @@ class InstanceLicenseService
 
     private function reportCurrentVersion(string $licenseKey, string $localUrl): void
     {
-        $appVersion = (string) config('app.version', '1.0.0');
+        $appVersion = Version::get();
         $cacheKey = 'instance-license-version-reported:' . sha1($licenseKey . '|' . $appVersion . '|' . $localUrl);
 
         if (Cache::get($cacheKey)) {
