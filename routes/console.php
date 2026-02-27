@@ -12,11 +12,12 @@ Artisan::command('inspire', function () {
 Schedule::command('xero:refresh-tokens')->cron('*/20 * * * *');
 
 // Schedule Xero sync commands to run every minute
-Schedule::command('xero:sync-customers')->everyMinute();
-Schedule::command('xero:sync-products')->everyMinute();
-Schedule::command('xero:sync-invoices')->everyMinute();
-Schedule::command('xero:sync-quotes')->everyMinute();
-Schedule::command('xero:sync-credit-notes')->everyMinute();
+Schedule::command('xero:sync-customers')->everyMinute()->withoutOverlapping();
+Schedule::command('xero:sync-products')->everyMinute()->withoutOverlapping();
+Schedule::command('xero:sync-invoices')->everyMinute()->withoutOverlapping();
+Schedule::command('xero:sync-invoices-from-xero')->everyMinute()->withoutOverlapping();
+Schedule::command('xero:sync-quotes')->everyMinute()->withoutOverlapping();
+Schedule::command('xero:sync-credit-notes')->everyMinute()->withoutOverlapping();
 
 // Schedule automated reminders to run daily at 9 AM
 Schedule::command('reminders:send')->dailyAt('09:00');
