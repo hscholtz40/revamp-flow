@@ -2295,17 +2295,7 @@ class XeroService
                     }
 
                     // Check if supplier already exists in app by Xero contact ID
-                    $existingSupplier = Supplier::where('company_id', $currentCompany->id)
-                        ->where('xero_contact_id', $xeroContact['ContactID'])
-                        ->first();
-
-                    // If not found by Xero ID, check by name (case-insensitive)
-                    if (!$existingSupplier) {
-                        $existingSupplier = Supplier::where('company_id', $currentCompany->id)
-                            ->whereRaw('LOWER(name) = ?', [strtolower($xeroContact['Name'])])
-                            ->whereNull('xero_contact_id') // Only match suppliers that don't have a Xero ID yet
-                            ->first();
-                    }
+                    $existingSupplier = $this->findExistingSupplierForXero($xeroContact, $currentCompany);
 
                     if ($existingSupplier) {
                         if (!$this->xeroUpdatedAtChanged($existingSupplier, $xeroContact)) {
@@ -2434,6 +2424,12 @@ class XeroService
      */
     private function createSupplierFromXero(array $xeroContact, Company $company): Supplier
     {
+        $existingSupplier = $this->findExistingSupplierForXero($xeroContact, $company);
+        if ($existingSupplier) {
+            $this->updateSupplierFromXero($existingSupplier, $xeroContact);
+            return $existingSupplier;
+        }
+
         $supplierData = [
             'company_id' => $company->id,
             'name' => $xeroContact['Name'],
@@ -2461,6 +2457,43 @@ class XeroService
         $supplier = Supplier::create($supplierData);
         $this->alignLocalUpdatedAtWithXero($supplier);
         return $supplier;
+    }
+
+    private function findExistingSupplierForXero(array $xeroContact, Company $company): ?Supplier
+    {
+        $contactId = $xeroContact['ContactID'] ?? null;
+        if ($contactId) {
+            $byXeroId = Supplier::where('company_id', $company->id)
+                ->where('xero_contact_id', $contactId)
+                ->first();
+            if ($byXeroId) {
+                return $byXeroId;
+            }
+        }
+
+        $email = strtolower(trim((string) ($xeroContact['EmailAddress'] ?? '')));
+        if ($email !== '') {
+            $byEmail = Supplier::where('company_id', $company->id)
+                ->whereRaw('LOWER(email) = ?', [$email])
+                ->orderByRaw('CASE WHEN xero_contact_id IS NULL THEN 0 ELSE 1 END')
+                ->first();
+            if ($byEmail) {
+                return $byEmail;
+            }
+        }
+
+        $name = strtolower(trim((string) ($xeroContact['Name'] ?? '')));
+        if ($name !== '') {
+            $byName = Supplier::where('company_id', $company->id)
+                ->whereRaw('LOWER(TRIM(name)) = ?', [$name])
+                ->orderByRaw('CASE WHEN xero_contact_id IS NULL THEN 0 ELSE 1 END')
+                ->first();
+            if ($byName) {
+                return $byName;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -5505,16 +5538,7 @@ class XeroService
             if ($contactResponse->successful()) {
                 $contactData = $contactResponse->json()['Contacts'][0] ?? null;
                 if ($contactData) {
-                    $supplier = Supplier::create([
-                        'company_id' => $company->id,
-                        'xero_contact_id' => $contactData['ContactID'],
-                        'name' => $contactData['Name'],
-                        'email' => $contactData['EmailAddress'] ?? null,
-                        'phone' => $contactData['Phones'][0]['PhoneNumber'] ?? null,
-                        'is_active' => true,
-                        ...$this->getXeroTimestamps($contactData),
-                    ]);
-                    $this->alignLocalUpdatedAtWithXero($supplier);
+                    $supplier = $this->createSupplierFromXero($contactData, $company);
                 }
             }
         }
