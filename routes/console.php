@@ -12,14 +12,14 @@ Artisan::command('inspire', function () {
 Schedule::command('xero:refresh-tokens')->cron('*/20 * * * *');
 
 // Schedule Xero sync commands to run every minute
-Schedule::command('xero:sync-customers')->everyMinute()->withoutOverlapping();
-Schedule::command('xero:sync-suppliers')->everyMinute()->withoutOverlapping();
-Schedule::command('xero:sync-products')->everyMinute()->withoutOverlapping();
-Schedule::command('xero:sync-invoices')->everyMinute()->withoutOverlapping();
-Schedule::command('xero:sync-invoices-from-xero')->everyMinute()->withoutOverlapping();
-Schedule::command('xero:sync-quotes')->everyMinute()->withoutOverlapping();
-Schedule::command('xero:sync-credit-notes')->everyMinute()->withoutOverlapping();
-Schedule::command('xero:sync-purchase-orders')->everyMinute()->withoutOverlapping();
+Schedule::command('xero:sync-customers')->everyMinute()->withoutOverlapping(10);
+Schedule::command('xero:sync-suppliers')->everyMinute()->withoutOverlapping(10);
+Schedule::command('xero:sync-products')->everyMinute()->withoutOverlapping(10);
+Schedule::command('xero:sync-invoices')->everyMinute()->withoutOverlapping(10);
+Schedule::command('xero:sync-invoices-from-xero')->everyMinute()->withoutOverlapping(10);
+Schedule::command('xero:sync-quotes')->everyMinute()->withoutOverlapping(10);
+Schedule::command('xero:sync-credit-notes')->everyMinute()->withoutOverlapping(10);
+Schedule::command('xero:sync-purchase-orders')->everyMinute()->withoutOverlapping(10);
 
 // Schedule automated reminders to run daily at 9 AM
 Schedule::command('reminders:send')->dailyAt('09:00');

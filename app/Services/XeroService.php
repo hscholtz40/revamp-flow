@@ -2094,16 +2094,10 @@ class XeroService
             return $this->cachedXeroContacts;
         }
 
-        $lastCustomerSync = Customer::where('company_id', $companyId)->whereNotNull('xero_updated_at')->max('xero_updated_at');
-        $lastSupplierSync = Supplier::where('company_id', $companyId)->whereNotNull('xero_updated_at')->max('xero_updated_at');
-        $lastSync = collect([$lastCustomerSync, $lastSupplierSync])->filter()->min();
-
         $response = $this->makeXeroRequest(
             'get',
             $this->baseUrl . '/api.xro/2.0/Contacts',
-            [],
-            2,
-            $this->buildIfModifiedSinceHeader($lastSync)
+            []
         );
 
         if (!$response->successful()) {
@@ -2701,7 +2695,12 @@ class XeroService
                 $pageCount = $pagination['PageCount'] ?? 1;
                 
                 $quotesOnPage = count($xeroQuotes);
-                $hasMorePages = ($quotesOnPage >= $pageSize) || ($currentPage < $pageCount);
+                $hasPaginationPageCount = is_array($pagination) && isset($pagination['PageCount']) && is_numeric($pagination['PageCount']);
+                if ($hasPaginationPageCount) {
+                    $hasMorePages = $currentPage < $pageCount;
+                } else {
+                    $hasMorePages = $quotesOnPage >= $pageSize;
+                }
                 
                 Log::info('Fetched quote page from Xero, processing now', [
                     'company_id' => $currentCompany->id,
@@ -5457,8 +5456,18 @@ class XeroService
                     throw new \Exception('Failed to fetch purchase orders from Xero: ' . $response->body());
                 }
 
-                $xeroPOs = $response->json()['PurchaseOrders'] ?? [];
-                $hasMorePages = count($xeroPOs) >= $pageSize;
+                $responseData = $response->json();
+                $xeroPOs = $responseData['PurchaseOrders'] ?? [];
+                $pagination = $responseData['Pagination'] ?? null;
+                $currentPage = $pagination['Page'] ?? $page;
+                $pageCount = $pagination['PageCount'] ?? 1;
+                $poCountOnPage = count($xeroPOs);
+                $hasPaginationPageCount = is_array($pagination) && isset($pagination['PageCount']) && is_numeric($pagination['PageCount']);
+                if ($hasPaginationPageCount) {
+                    $hasMorePages = $currentPage < $pageCount;
+                } else {
+                    $hasMorePages = $poCountOnPage >= $pageSize;
+                }
 
                 foreach ($xeroPOs as $xeroPO) {
                     try {
