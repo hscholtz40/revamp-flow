@@ -3306,6 +3306,7 @@ class XeroService
             'sales_account_code' => $xeroItem['SalesDetails']['AccountCode'] ?? 200,
             'purchase_account_code' => $xeroItem['PurchaseDetails']['AccountCode'] ?? null,
             ...$this->getXeroTimestamps($xeroItem),
+            'price' => 0
         ];
 
         // Add pricing if available
