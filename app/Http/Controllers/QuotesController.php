@@ -27,6 +27,8 @@ class QuotesController extends Controller
     public function index(Request $request): Response
     {
         $currentCompany = auth()->user()->getCurrentCompany();
+        $sortBy = $request->input('sort_by', 'quote_number');
+        $sortDir = $request->input('sort_dir', 'asc') === 'desc' ? 'desc' : 'asc';
         
         $query = Quote::with(['customer'])
             ->where('company_id', $currentCompany->id);
@@ -51,7 +53,21 @@ class QuotesController extends Controller
             });
         }
 
-        $quotes = $query->orderByDesc('created_at')->paginate(15);
+        $sortableFields = ['quote_number', 'title', 'customer_name', 'status', 'expiry_date', 'total', 'created_at'];
+        if (!in_array($sortBy, $sortableFields, true)) {
+            $sortBy = 'quote_number';
+        }
+
+        if ($sortBy === 'customer_name') {
+            $query->orderBy(
+                Customer::select('name')->whereColumn('customers.id', 'quotes.customer_id')->limit(1),
+                $sortDir
+            );
+        } else {
+            $query->orderBy($sortBy, $sortDir);
+        }
+
+        $quotes = $query->paginate(15)->withQueryString();
         $customers = Customer::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('quotes/Index', [
@@ -61,6 +77,8 @@ class QuotesController extends Controller
                 'status' => $request->input('status', ''),
                 'customer_id' => $request->input('customer_id', ''),
                 'search' => $request->input('search', ''),
+                'sort_by' => $sortBy,
+                'sort_dir' => $sortDir,
             ],
             'currentCompany' => $currentCompany,
             'canEditCompleted' => auth()->user()->hasModulePermission('quotes', 'edit_completed'),

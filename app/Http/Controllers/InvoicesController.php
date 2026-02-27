@@ -31,6 +31,8 @@ class InvoicesController extends Controller
     public function index(Request $request): Response
     {
         $currentCompany = auth()->user()->getCurrentCompany();
+        $sortBy = $request->input('sort_by', 'invoice_number');
+        $sortDir = $request->input('sort_dir', 'asc') === 'desc' ? 'desc' : 'asc';
         
         $query = Invoice::with(['customer', 'payments', 'creditNotes'])
             ->where('company_id', $currentCompany->id);
@@ -60,10 +62,27 @@ class InvoicesController extends Controller
             });
         }
 
-        $invoices = $query->with(['customer', 'salesperson'])
-            ->orderBy('created_at', 'desc')
-            ->paginate(15)
-            ->withQueryString();
+        $sortableFields = ['invoice_number', 'customer_name', 'salesperson_name', 'invoice_date', 'due_date', 'status', 'total', 'created_at'];
+        if (!in_array($sortBy, $sortableFields, true)) {
+            $sortBy = 'invoice_number';
+        }
+
+        $invoicesQuery = $query->with(['customer', 'salesperson']);
+        if ($sortBy === 'customer_name') {
+            $invoicesQuery->orderBy(
+                Customer::select('name')->whereColumn('customers.id', 'invoices.customer_id')->limit(1),
+                $sortDir
+            );
+        } elseif ($sortBy === 'salesperson_name') {
+            $invoicesQuery->orderBy(
+                User::select('name')->whereColumn('users.id', 'invoices.salesperson_id')->limit(1),
+                $sortDir
+            );
+        } else {
+            $invoicesQuery->orderBy($sortBy, $sortDir);
+        }
+
+        $invoices = $invoicesQuery->paginate(15)->withQueryString();
 
         $customers = Customer::where('company_id', $currentCompany->id)
             ->orderBy('name')
@@ -73,7 +92,7 @@ class InvoicesController extends Controller
             'invoices' => $invoices,
             'customers' => $customers,
             'currentCompany' => $currentCompany,
-            'filters' => $request->only(['status', 'customer_id', 'search', 'show_paid']),
+            'filters' => $request->only(['status', 'customer_id', 'search', 'show_paid', 'sort_by', 'sort_dir']),
             'canEditCompleted' => auth()->user()->hasModulePermission('invoices', 'edit_completed'),
         ]);
     }

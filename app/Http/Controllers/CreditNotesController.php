@@ -20,6 +20,8 @@ class CreditNotesController extends Controller
     public function index(Request $request): Response
     {
         $currentCompany = auth()->user()->getCurrentCompany();
+        $sortBy = $request->input('sort_by', 'credit_note_number');
+        $sortDir = $request->input('sort_dir', 'asc') === 'desc' ? 'desc' : 'asc';
 
         $query = CreditNote::with(['customer', 'invoice'])
             ->where('company_id', $currentCompany->id);
@@ -44,9 +46,26 @@ class CreditNotesController extends Controller
             });
         }
 
-        $creditNotes = $query->orderBy('created_at', 'desc')
-            ->paginate(15)
-            ->withQueryString();
+        $sortableFields = ['credit_note_number', 'customer_name', 'invoice_number', 'credit_note_date', 'status', 'total', 'remaining_credit', 'created_at'];
+        if (!in_array($sortBy, $sortableFields, true)) {
+            $sortBy = 'credit_note_number';
+        }
+
+        if ($sortBy === 'customer_name') {
+            $query->orderBy(
+                Customer::select('name')->whereColumn('customers.id', 'credit_notes.customer_id')->limit(1),
+                $sortDir
+            );
+        } elseif ($sortBy === 'invoice_number') {
+            $query->orderBy(
+                Invoice::select('invoice_number')->whereColumn('invoices.id', 'credit_notes.invoice_id')->limit(1),
+                $sortDir
+            );
+        } else {
+            $query->orderBy($sortBy, $sortDir);
+        }
+
+        $creditNotes = $query->paginate(15)->withQueryString();
 
         $customers = Customer::where('company_id', $currentCompany->id)
             ->orderBy('name')
@@ -56,7 +75,7 @@ class CreditNotesController extends Controller
             'creditNotes' => $creditNotes,
             'customers' => $customers,
             'currentCompany' => $currentCompany,
-            'filters' => $request->only(['status', 'customer_id', 'search']),
+            'filters' => $request->only(['status', 'customer_id', 'search', 'sort_by', 'sort_dir']),
         ]);
     }
 

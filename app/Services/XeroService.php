@@ -1285,6 +1285,7 @@ class XeroService
         $results = [];
 
         try {
+            $hasAnyLocalInvoices = Invoice::where('company_id', $currentCompany->id)->exists();
             $lastSync = Invoice::where('company_id', $currentCompany->id)
                 ->whereNotNull('xero_updated_at')->max('xero_updated_at');
             $ifModifiedSince = $this->buildIfModifiedSinceHeader($lastSync);
@@ -1301,6 +1302,7 @@ class XeroService
             $startedAt = microtime(true);
             $stopReason = null;
             $hasMorePages = false;
+            $isInitialInvoiceImport = !$hasAnyLocalInvoices;
 
             Log::info('Starting paginated invoice import from Xero with throttling', [
                 'company_id' => $currentCompany->id,
@@ -1309,14 +1311,15 @@ class XeroService
                 'max_invoices_per_run' => $maxInvoicesPerRun,
                 'max_seconds_per_run' => $maxSecondsPerRun,
                 'page_delay_ms' => $pageDelayMs,
+                'is_initial_invoice_import' => $isInitialInvoiceImport,
             ]);
             
             do {
-                if ($processedThisRun >= $maxInvoicesPerRun) {
+                if (!$isInitialInvoiceImport && $processedThisRun >= $maxInvoicesPerRun) {
                     $stopReason = 'max_invoices_per_run_reached';
                     break;
                 }
-                if ((microtime(true) - $startedAt) >= $maxSecondsPerRun) {
+                if (!$isInitialInvoiceImport && (microtime(true) - $startedAt) >= $maxSecondsPerRun) {
                     $stopReason = 'max_seconds_per_run_reached';
                     break;
                 }
@@ -1380,11 +1383,11 @@ class XeroService
 
                 // Process invoices from this page immediately
                 foreach ($xeroInvoices as $xeroInvoice) {
-                    if ($processedThisRun >= $maxInvoicesPerRun) {
+                    if (!$isInitialInvoiceImport && $processedThisRun >= $maxInvoicesPerRun) {
                         $stopReason = 'max_invoices_per_run_reached';
                         break;
                     }
-                    if ((microtime(true) - $startedAt) >= $maxSecondsPerRun) {
+                    if (!$isInitialInvoiceImport && (microtime(true) - $startedAt) >= $maxSecondsPerRun) {
                         $stopReason = 'max_seconds_per_run_reached';
                         break;
                     }
@@ -1501,7 +1504,7 @@ class XeroService
                 ]);
                 
                 $pagesProcessed++;
-                if ($pagesProcessed >= $maxPagesPerRun) {
+                if (!$isInitialInvoiceImport && $pagesProcessed >= $maxPagesPerRun) {
                     $stopReason = 'max_pages_per_run_reached';
                 }
 
@@ -3087,7 +3090,9 @@ class XeroService
                     'discount_amount' => round($lineItemDiscountAmount, 2),
                     'discount_percentage' => round($lineItemDiscountPercentage, 2),
                     'total' => $lineItemTotal,
-                    'account_id' => $this->resolveAccountId($xeroLineItem['AccountCode'] ?? null, $currentCompany->id),
+                    'tax_rate_id' => $this->resolveTaxRateId($xeroLineItem['TaxType'] ?? null, $company->id),
+                    'tax_amount' => (float) ($xeroLineItem['TaxAmount'] ?? 0),
+                    'account_id' => $this->resolveAccountId($xeroLineItem['AccountCode'] ?? null, $company->id),
                     'sort_order' => $index,
                 ]);
             }
@@ -3305,7 +3310,9 @@ class XeroService
                     'discount_amount' => round($lineItemDiscountAmount, 2),
                     'discount_percentage' => round($lineItemDiscountPercentage, 2),
                     'total' => $lineItemTotal,
-                    'account_id' => $this->resolveAccountId($xeroLineItem['AccountCode'] ?? null, $currentCompany->id),
+                    'tax_rate_id' => $this->resolveTaxRateId($xeroLineItem['TaxType'] ?? null, $invoice->company_id),
+                    'tax_amount' => (float) ($xeroLineItem['TaxAmount'] ?? 0),
+                    'account_id' => $this->resolveAccountId($xeroLineItem['AccountCode'] ?? null, $invoice->company_id),
                     'sort_order' => $index,
                 ]);
             }
@@ -4587,7 +4594,7 @@ class XeroService
 
                 $response = $this->makeXeroRequest(
                     'get',
-                    $this->baseUrl . '/api.xro/2.0/CreditNotes?page=' . $page . '&pageSize=' . $pageSize,
+                    $this->baseUrl . '/api.xro/2.0/CreditNotes?page=' . $page . '&pageSize=' . $pageSize . '&summaryOnly=false',
                     [],
                     2,
                     $ifModifiedSince
@@ -4642,7 +4649,12 @@ class XeroService
                         }
 
                         if ($existing) {
-                            if (!$this->xeroUpdatedAtChanged($existing, $xeroNote)) {
+                            $allocationCount = isset($xeroNote['Allocations']) && is_array($xeroNote['Allocations'])
+                                ? count($xeroNote['Allocations'])
+                                : 0;
+                            $needsAllocationBackfill = empty($existing->invoice_id) && $allocationCount > 0;
+
+                            if (!$this->xeroUpdatedAtChanged($existing, $xeroNote) && !$needsAllocationBackfill) {
                                 $results[] = [
                                     'credit_note_id' => $existing->id,
                                     'credit_note_number' => $existing->credit_note_number,
@@ -4652,6 +4664,16 @@ class XeroService
                                 $totalProcessed++;
                                 continue;
                             }
+
+                            if ($needsAllocationBackfill) {
+                                Log::info('Forcing credit note update to backfill invoice allocation', [
+                                    'company_id' => $currentCompany->id,
+                                    'credit_note_id' => $existing->id,
+                                    'credit_note_number' => $existing->credit_note_number,
+                                    'allocation_count' => $allocationCount,
+                                ]);
+                            }
+
                             $this->updateCreditNoteFromXeroData($existing, $xeroNote);
                             if (!$existing->xero_credit_note_id) {
                                 $existing->update(['xero_credit_note_id' => $xeroNote['CreditNoteID']]);
@@ -5018,6 +5040,22 @@ class XeroService
         return $account?->id;
     }
 
+    private function resolveTaxRateId(?string $taxType, int $companyId): ?int
+    {
+        if (!$taxType) {
+            return null;
+        }
+
+        $taxRate = TaxRate::where('company_id', $companyId)
+            ->where(function ($query) use ($taxType) {
+                $query->where('code', $taxType)
+                    ->orWhere('xero_tax_rate_id', $taxType);
+            })
+            ->first();
+
+        return $taxRate?->id;
+    }
+
     private function resolveCreditNoteInvoiceId(array $xeroNote, ?Company $company): ?int
     {
         if (!$company || empty($xeroNote['Allocations'])) {
@@ -5025,9 +5063,20 @@ class XeroService
         }
 
         foreach ($xeroNote['Allocations'] as $allocation) {
-            if (!empty($allocation['Invoice']['InvoiceID'])) {
+            $xeroInvoiceId = $allocation['Invoice']['InvoiceID'] ?? $allocation['InvoiceID'] ?? null;
+            if (!empty($xeroInvoiceId)) {
                 $localInvoice = Invoice::where('company_id', $company->id)
-                    ->where('xero_invoice_id', $allocation['Invoice']['InvoiceID'])
+                    ->where('xero_invoice_id', $xeroInvoiceId)
+                    ->first();
+                if ($localInvoice) {
+                    return $localInvoice->id;
+                }
+            }
+
+            $invoiceNumber = $allocation['Invoice']['InvoiceNumber'] ?? $allocation['InvoiceNumber'] ?? null;
+            if (!empty($invoiceNumber)) {
+                $localInvoice = Invoice::where('company_id', $company->id)
+                    ->where('invoice_number', $invoiceNumber)
                     ->first();
                 if ($localInvoice) {
                     return $localInvoice->id;

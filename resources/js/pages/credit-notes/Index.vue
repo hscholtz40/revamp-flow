@@ -43,6 +43,8 @@ interface Props {
         status?: string;
         customer_id?: string;
         search?: string;
+        sort_by?: string;
+        sort_dir?: 'asc' | 'desc';
     };
 }
 
@@ -51,13 +53,32 @@ const props = defineProps<Props>();
 const search = ref(props.filters.search || '');
 const statusFilter = ref(props.filters.status || '');
 const customerFilter = ref(props.filters.customer_id || '');
+const sortBy = ref(props.filters.sort_by || 'credit_note_number');
+const sortDir = ref<'asc' | 'desc'>(props.filters.sort_dir || 'asc');
 
 function applyFilters() {
     router.get('/credit-notes', {
         search: search.value || undefined,
         status: statusFilter.value || undefined,
         customer_id: customerFilter.value || undefined,
+        sort_by: sortBy.value,
+        sort_dir: sortDir.value,
     }, { preserveState: true, replace: true });
+}
+
+function toggleSort(field: string) {
+    if (sortBy.value === field) {
+        sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortBy.value = field;
+        sortDir.value = 'asc';
+    }
+    applyFilters();
+}
+
+function sortIndicator(field: string): string {
+    if (sortBy.value !== field) return '↕';
+    return sortDir.value === 'asc' ? '↑' : '↓';
 }
 
 function deleteCreditNote(cn: CreditNote) {
@@ -137,13 +158,41 @@ const statusColors: Record<string, string> = {
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Number</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Customer</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Invoice</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Date</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Total</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Remaining</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Status</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                <button @click="toggleSort('credit_note_number')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                    Number <span>{{ sortIndicator('credit_note_number') }}</span>
+                                </button>
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                <button @click="toggleSort('customer_name')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                    Customer <span>{{ sortIndicator('customer_name') }}</span>
+                                </button>
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                <button @click="toggleSort('invoice_number')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                    Invoice <span>{{ sortIndicator('invoice_number') }}</span>
+                                </button>
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                <button @click="toggleSort('credit_note_date')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                    Date <span>{{ sortIndicator('credit_note_date') }}</span>
+                                </button>
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                <button @click="toggleSort('total')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                    Total <span>{{ sortIndicator('total') }}</span>
+                                </button>
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                <button @click="toggleSort('remaining_credit')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                    Remaining <span>{{ sortIndicator('remaining_credit') }}</span>
+                                </button>
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                <button @click="toggleSort('status')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                    Status <span>{{ sortIndicator('status') }}</span>
+                                </button>
+                            </th>
                             <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Actions</th>
                         </tr>
                     </thead>

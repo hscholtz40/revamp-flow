@@ -30,6 +30,8 @@ class JobcardController extends Controller
     public function index(Request $request): Response
     {
         $currentCompany = auth()->user()->getCurrentCompany();
+        $sortBy = $request->input('sort_by', 'job_number');
+        $sortDir = $request->input('sort_dir', 'asc') === 'desc' ? 'desc' : 'asc';
         
         $query = Jobcard::with(['customer', 'assignedUser', 'assignedTeam'])
             ->where('company_id', $currentCompany->id);
@@ -73,7 +75,21 @@ class JobcardController extends Controller
             });
         }
 
-        $jobcards = $query->orderByDesc('created_at')->paginate(15);
+        $sortableFields = ['job_number', 'title', 'customer_name', 'status', 'due_date', 'total', 'created_at'];
+        if (!in_array($sortBy, $sortableFields, true)) {
+            $sortBy = 'job_number';
+        }
+
+        if ($sortBy === 'customer_name') {
+            $query->orderBy(
+                Customer::select('name')->whereColumn('customers.id', 'jobcards.customer_id')->limit(1),
+                $sortDir
+            );
+        } else {
+            $query->orderBy($sortBy, $sortDir);
+        }
+
+        $jobcards = $query->paginate(15)->withQueryString();
         $customers = Customer::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name']);
         $users = User::whereHas('companies', function ($q) use ($currentCompany) {
             $q->where('company_id', $currentCompany->id);
@@ -91,6 +107,8 @@ class JobcardController extends Controller
                 'assigned_to_user_id' => $request->input('assigned_to_user_id', ''),
                 'assigned_to_team_id' => $request->input('assigned_to_team_id', ''),
                 'search' => $request->input('search', ''),
+                'sort_by' => $sortBy,
+                'sort_dir' => $sortDir,
             ],
             'currentCompany' => $currentCompany,
             'canEditCompleted' => auth()->user()->canEditCompletedJobcards(),

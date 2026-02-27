@@ -79,25 +79,46 @@
                         <thead class="bg-gray-50 border-b">
                             <tr>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Invoice
+                                    <button @click="toggleSort('invoice_number')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                        Invoice
+                                        <span>{{ sortIndicator('invoice_number') }}</span>
+                                    </button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Customer
+                                    <button @click="toggleSort('customer_name')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                        Customer
+                                        <span>{{ sortIndicator('customer_name') }}</span>
+                                    </button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Salesperson
+                                    <button @click="toggleSort('salesperson_name')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                        Salesperson
+                                        <span>{{ sortIndicator('salesperson_name') }}</span>
+                                    </button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Date
+                                    <button @click="toggleSort('invoice_date')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                        Date
+                                        <span>{{ sortIndicator('invoice_date') }}</span>
+                                    </button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Due Date
+                                    <button @click="toggleSort('due_date')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                        Due Date
+                                        <span>{{ sortIndicator('due_date') }}</span>
+                                    </button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Status
+                                    <button @click="toggleSort('status')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                        Status
+                                        <span>{{ sortIndicator('status') }}</span>
+                                    </button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Total
+                                    <button @click="toggleSort('total')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                        Total
+                                        <span>{{ sortIndicator('total') }}</span>
+                                    </button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Actions
@@ -290,6 +311,9 @@ interface Props {
         status?: string;
         customer_id?: string;
         search?: string;
+        show_paid?: boolean;
+        sort_by?: string;
+        sort_dir?: 'asc' | 'desc';
     };
     canEditCompleted: boolean;
 }
@@ -300,6 +324,8 @@ const search = ref(props.filters.search || '');
 const status = ref(props.filters.status || '');
 const customerId = ref(props.filters.customer_id || '');
 const showPaid = ref(props.filters.show_paid || false);
+const sortBy = ref(props.filters.sort_by || 'invoice_number');
+const sortDir = ref<'asc' | 'desc'>(props.filters.sort_dir || 'asc');
 
 // Helper functions for edit/delete permissions
 const canEditInvoice = (invoice: Invoice) => {
@@ -323,6 +349,8 @@ watch([search, status, customerId, showPaid], () => {
         status: status.value,
         customer_id: customerId.value,
         show_paid: showPaid.value,
+        sort_by: sortBy.value,
+        sort_dir: sortDir.value,
     }, {
         preserveState: true,
         replace: true,
@@ -334,6 +362,32 @@ const clearFilters = () => {
     status.value = '';
     customerId.value = '';
     showPaid.value = false;
+};
+
+const toggleSort = (field: string) => {
+    if (sortBy.value === field) {
+        sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortBy.value = field;
+        sortDir.value = 'asc';
+    }
+
+    router.get(invoices.index().url, {
+        search: search.value,
+        status: status.value,
+        customer_id: customerId.value,
+        show_paid: showPaid.value,
+        sort_by: sortBy.value,
+        sort_dir: sortDir.value,
+    }, {
+        preserveState: true,
+        replace: true,
+    });
+};
+
+const sortIndicator = (field: string) => {
+    if (sortBy.value !== field) return '↕';
+    return sortDir.value === 'asc' ? '↑' : '↓';
 };
 
 const formatDate = (date: string) => {

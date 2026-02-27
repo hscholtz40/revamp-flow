@@ -29,8 +29,10 @@ class PurchaseOrdersController extends Controller
     public function index(Request $request): Response
     {
         $currentCompany = auth()->user()->getCurrentCompany();
+        $sortBy = $request->input('sort_by', 'po_number');
+        $sortDir = $request->input('sort_dir', 'asc') === 'desc' ? 'desc' : 'asc';
         
-        $purchaseOrders = PurchaseOrder::where('company_id', $currentCompany->id)
+        $query = PurchaseOrder::where('company_id', $currentCompany->id)
             ->with(['supplier', 'items.product'])
             ->when($request->filled('supplier_id'), function ($query) use ($request) {
                 $query->where('supplier_id', $request->integer('supplier_id'));
@@ -41,10 +43,23 @@ class PurchaseOrdersController extends Controller
             ->when($request->filled('search'), function ($query) use ($request) {
                 $search = $request->string('search');
                 $query->where('po_number', 'like', "%{$search}%");
-            })
-            ->orderBy('created_at', 'desc')
-            ->paginate(15)
-            ->withQueryString();
+            });
+
+        $sortableFields = ['po_number', 'supplier_name', 'order_date', 'expected_delivery_date', 'status', 'total', 'created_at'];
+        if (!in_array($sortBy, $sortableFields, true)) {
+            $sortBy = 'po_number';
+        }
+
+        if ($sortBy === 'supplier_name') {
+            $query->orderBy(
+                Supplier::select('name')->whereColumn('suppliers.id', 'purchase_orders.supplier_id')->limit(1),
+                $sortDir
+            );
+        } else {
+            $query->orderBy($sortBy, $sortDir);
+        }
+
+        $purchaseOrders = $query->paginate(15)->withQueryString();
 
         return Inertia::render('purchase-orders/Index', [
             'purchaseOrders' => $purchaseOrders,
@@ -52,6 +67,8 @@ class PurchaseOrdersController extends Controller
                 'supplier_id' => $request->integer('supplier_id'),
                 'status' => $request->string('status')->toString(),
                 'search' => $request->string('search')->toString(),
+                'sort_by' => $sortBy,
+                'sort_dir' => $sortDir,
             ],
             'suppliers' => Supplier::where('company_id', $currentCompany->id)
                 ->where('is_active', true)

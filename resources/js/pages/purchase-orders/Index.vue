@@ -47,6 +47,8 @@ interface Props {
         supplier_id?: number;
         status?: string;
         search?: string;
+        sort_by?: string;
+        sort_dir?: 'asc' | 'desc';
     };
     suppliers?: Supplier[];
 }
@@ -60,6 +62,8 @@ const props = withDefaults(defineProps<Props>(), {
 const search = ref(props.filters?.search || '');
 const supplierFilter = ref(props.filters?.supplier_id?.toString() || '');
 const statusFilter = ref(props.filters?.status || '');
+const sortBy = ref(props.filters?.sort_by || 'po_number');
+const sortDir = ref<'asc' | 'desc'>(props.filters?.sort_dir || 'asc');
 
 // Alias props.purchaseOrders to avoid conflict with imported purchaseOrders route
 const purchaseOrdersData = computed(() => props.purchaseOrders);
@@ -75,11 +79,28 @@ function applyFilters() {
     if (search.value && search.value.trim()) params.search = search.value.trim();
     if (supplierFilter.value) params.supplier_id = parseInt(supplierFilter.value);
     if (statusFilter.value) params.status = statusFilter.value;
+    params.sort_by = sortBy.value;
+    params.sort_dir = sortDir.value;
     
     router.get(purchaseOrders.index().url, params, {
         preserveState: true,
         replace: true,
     });
+}
+
+function toggleSort(field: string) {
+    if (sortBy.value === field) {
+        sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortBy.value = field;
+        sortDir.value = 'asc';
+    }
+    applyFilters();
+}
+
+function sortIndicator(field: string): string {
+    if (sortBy.value !== field) return '↕';
+    return sortDir.value === 'asc' ? '↑' : '↓';
 }
 
 function clearFilters() {
@@ -180,12 +201,36 @@ function getStatusColor(status: string) {
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">PO Number</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Supplier</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Order Date</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Expected Delivery</th>
-                            <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Total</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Status</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                <button @click="toggleSort('po_number')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                    PO Number <span>{{ sortIndicator('po_number') }}</span>
+                                </button>
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                <button @click="toggleSort('supplier_name')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                    Supplier <span>{{ sortIndicator('supplier_name') }}</span>
+                                </button>
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                <button @click="toggleSort('order_date')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                    Order Date <span>{{ sortIndicator('order_date') }}</span>
+                                </button>
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                <button @click="toggleSort('expected_delivery_date')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                    Expected Delivery <span>{{ sortIndicator('expected_delivery_date') }}</span>
+                                </button>
+                            </th>
+                            <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
+                                <button @click="toggleSort('total')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                    Total <span>{{ sortIndicator('total') }}</span>
+                                </button>
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                <button @click="toggleSort('status')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                    Status <span>{{ sortIndicator('status') }}</span>
+                                </button>
+                            </th>
                             <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Actions</th>
                         </tr>
                     </thead>

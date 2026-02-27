@@ -87,25 +87,43 @@
                         <thead class="bg-gray-50">
                             <tr>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Job Number
+                                    <button @click="toggleSort('job_number')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                        Job Number
+                                        <span>{{ sortIndicator('job_number') }}</span>
+                                    </button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Title
+                                    <button @click="toggleSort('title')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                        Title
+                                        <span>{{ sortIndicator('title') }}</span>
+                                    </button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Customer
+                                    <button @click="toggleSort('customer_name')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                        Customer
+                                        <span>{{ sortIndicator('customer_name') }}</span>
+                                    </button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Assigned To
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Status
+                                    <button @click="toggleSort('status')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                        Status
+                                        <span>{{ sortIndicator('status') }}</span>
+                                    </button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Due Date
+                                    <button @click="toggleSort('due_date')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                        Due Date
+                                        <span>{{ sortIndicator('due_date') }}</span>
+                                    </button>
                                 </th>
                                 <th v-if="!isLimitedUser" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Total
+                                    <button @click="toggleSort('total')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                        Total
+                                        <span>{{ sortIndicator('total') }}</span>
+                                    </button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Actions
@@ -282,6 +300,8 @@ interface Props {
         assigned_to_user_id?: string;
         assigned_to_team_id?: string;
         search?: string;
+        sort_by?: string;
+        sort_dir?: 'asc' | 'desc';
     };
     currentCompany: {
         id: number;
@@ -297,6 +317,8 @@ const status = ref(props.filters?.status || '');
 const customerId = ref(props.filters?.customer_id || '');
 const assignedToUserId = ref(props.filters?.assigned_to_user_id || '');
 const assignedToTeamId = ref(props.filters?.assigned_to_team_id || '');
+const sortBy = ref(props.filters?.sort_by || 'job_number');
+const sortDir = ref<'asc' | 'desc'>(props.filters?.sort_dir || 'asc');
 
 // Flag to prevent watch from running during initial setup
 let isInitialized = false;
@@ -318,6 +340,34 @@ const clearFilters = () => {
         preserveState: true,
         replace: true,
     });
+};
+
+const toggleSort = (field: string) => {
+    if (sortBy.value === field) {
+        sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortBy.value = field;
+        sortDir.value = 'asc';
+    }
+
+    const params: Record<string, string> = {};
+    if (search.value && search.value.trim()) params.search = search.value.trim();
+    if (status.value && status.value.trim()) params.status = status.value.trim();
+    if (customerId.value && customerId.value.trim()) params.customer_id = customerId.value.trim();
+    if (assignedToUserId.value && assignedToUserId.value.trim()) params.assigned_to_user_id = assignedToUserId.value.trim();
+    if (assignedToTeamId.value && assignedToTeamId.value.trim()) params.assigned_to_team_id = assignedToTeamId.value.trim();
+    params.sort_by = sortBy.value;
+    params.sort_dir = sortDir.value;
+
+    router.get(jobcards.index().url, params, {
+        preserveState: true,
+        replace: true,
+    });
+};
+
+const sortIndicator = (field: string) => {
+    if (sortBy.value !== field) return '↕';
+    return sortDir.value === 'asc' ? '↑' : '↓';
 };
 
 const canEditJobcard = (jobcard: Jobcard) => {
@@ -387,6 +437,8 @@ watch([search, status, customerId, assignedToUserId, assignedToTeamId], () => {
     if (customerId.value && customerId.value.trim()) params.customer_id = customerId.value.trim();
     if (assignedToUserId.value && assignedToUserId.value.trim()) params.assigned_to_user_id = assignedToUserId.value.trim();
     if (assignedToTeamId.value && assignedToTeamId.value.trim()) params.assigned_to_team_id = assignedToTeamId.value.trim();
+    params.sort_by = sortBy.value;
+    params.sort_dir = sortDir.value;
     
     router.get(jobcards.index().url, params, {
         preserveState: true,

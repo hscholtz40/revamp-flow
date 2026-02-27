@@ -69,22 +69,40 @@
                         <thead class="bg-gray-50">
                             <tr>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Quote Number
+                                    <button @click="toggleSort('quote_number')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                        Quote Number
+                                        <span>{{ sortIndicator('quote_number') }}</span>
+                                    </button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Title
+                                    <button @click="toggleSort('title')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                        Title
+                                        <span>{{ sortIndicator('title') }}</span>
+                                    </button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Customer
+                                    <button @click="toggleSort('customer_name')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                        Customer
+                                        <span>{{ sortIndicator('customer_name') }}</span>
+                                    </button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Status
+                                    <button @click="toggleSort('status')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                        Status
+                                        <span>{{ sortIndicator('status') }}</span>
+                                    </button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Expiry Date
+                                    <button @click="toggleSort('expiry_date')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                        Expiry Date
+                                        <span>{{ sortIndicator('expiry_date') }}</span>
+                                    </button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Total
+                                    <button @click="toggleSort('total')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                        Total
+                                        <span>{{ sortIndicator('total') }}</span>
+                                    </button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Actions
@@ -256,6 +274,8 @@ const props = defineProps<{
         status: string;
         customer_id: string;
         search: string;
+        sort_by?: string;
+        sort_dir?: 'asc' | 'desc';
     };
     currentCompany: Company;
     canEditCompleted: boolean;
@@ -264,6 +284,8 @@ const props = defineProps<{
 const search = ref(props.filters.search);
 const status = ref(props.filters.status);
 const customerId = ref(props.filters.customer_id);
+const sortBy = ref(props.filters.sort_by || 'quote_number');
+const sortDir = ref<'asc' | 'desc'>(props.filters.sort_dir || 'asc');
 
 // Helper functions for edit/delete permissions
 const canEditQuote = (quote: Quote) => {
@@ -313,9 +335,36 @@ watch([search, status, customerId], () => {
         search: search.value,
         status: status.value,
         customer_id: customerId.value,
+        sort_by: sortBy.value,
+        sort_dir: sortDir.value,
     }, {
         preserveState: true,
         replace: true,
     });
 }, { debounce: 300 });
+
+const toggleSort = (field: string) => {
+    if (sortBy.value === field) {
+        sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortBy.value = field;
+        sortDir.value = 'asc';
+    }
+
+    router.get(quotes.index().url, {
+        search: search.value,
+        status: status.value,
+        customer_id: customerId.value,
+        sort_by: sortBy.value,
+        sort_dir: sortDir.value,
+    }, {
+        preserveState: true,
+        replace: true,
+    });
+};
+
+const sortIndicator = (field: string) => {
+    if (sortBy.value !== field) return '↕';
+    return sortDir.value === 'asc' ? '↑' : '↓';
+};
 </script>
