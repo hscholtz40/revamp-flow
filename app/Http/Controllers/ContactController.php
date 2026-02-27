@@ -21,8 +21,14 @@ class ContactController extends Controller
     public function index(Request $request): Response
     {
         $currentCompany = auth()->user()->getCurrentCompany();
+        $sortBy = $request->input('sort_by', 'name');
+        $sortDir = $request->input('sort_dir', 'asc') === 'desc' ? 'desc' : 'asc';
+        $sortableFields = ['name', 'customer_name', 'email', 'phone', 'position', 'is_primary', 'created_at'];
+        if (!in_array($sortBy, $sortableFields, true)) {
+            $sortBy = 'name';
+        }
         
-        $contacts = Contact::with('customer')
+        $contactsQuery = Contact::with('customer')
             ->where('company_id', $currentCompany->id)
             ->when($request->string('search'), function ($query, $search) {
                 $query->where(function ($q) use ($search) {
@@ -33,15 +39,25 @@ class ContactController extends Controller
                             $customerQuery->where('name', 'like', "%{$search}%");
                         });
                 });
-            })
-            ->orderByDesc('id')
-            ->paginate(10)
-            ->withQueryString();
+            });
+
+        if ($sortBy === 'customer_name') {
+            $contactsQuery->orderBy(
+                Customer::select('name')->whereColumn('customers.id', 'contacts.customer_id')->limit(1),
+                $sortDir
+            );
+        } else {
+            $contactsQuery->orderBy($sortBy, $sortDir);
+        }
+
+        $contacts = $contactsQuery->paginate(10)->withQueryString();
 
         return Inertia::render('contacts/Index', [
             'contacts' => $contacts,
             'filters' => [
                 'search' => $request->string('search')->toString(),
+                'sort_by' => $sortBy,
+                'sort_dir' => $sortDir,
             ],
             'currentCompany' => $currentCompany,
         ]);

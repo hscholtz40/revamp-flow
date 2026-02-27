@@ -9,6 +9,8 @@ interface Customer {
     name: string;
     email: string;
     phone?: string | null;
+    account_code?: string | null;
+    is_default_sales?: boolean;
 }
 
 interface Company {
@@ -21,11 +23,13 @@ const props = defineProps<{
         data: Customer[];
         links: { url: string | null; label: string; active: boolean }[];
     };
-    filters: { search?: string };
+    filters: { search?: string; sort_by?: string; sort_dir?: 'asc' | 'desc' };
     currentCompany: Company;
 }>();
 
 const search = ref(props.filters?.search ?? '');
+const sortBy = ref(props.filters?.sort_by ?? 'name');
+const sortDir = ref(props.filters?.sort_dir ?? 'asc');
 const showSMSModal = ref(false);
 const showSMSResultModal = ref(false);
 const selectedCustomer = ref<Customer | null>(null);
@@ -81,12 +85,44 @@ watch(search, (value) => {
     if (value && value.trim()) {
         params.search = value.trim();
     }
+    params.sort_by = sortBy.value;
+    params.sort_dir = sortDir.value;
     
     router.get(customers.index().url, params, {
         preserveState: true,
         replace: true,
     });
 });
+
+const toggleSort = (field: string) => {
+    if (sortBy.value === field) {
+        sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortBy.value = field;
+        sortDir.value = 'asc';
+    }
+
+    const params: Record<string, string> = {};
+    if (search.value && search.value.trim()) {
+        params.search = search.value.trim();
+    }
+    params.sort_by = sortBy.value;
+    params.sort_dir = sortDir.value;
+
+    router.get(customers.index().url, params, {
+        preserveState: true,
+        replace: true,
+    });
+};
+
+const sortIndicator = (field: string) => {
+    if (sortBy.value !== field) return '↕';
+    return sortDir.value === 'asc' ? '↑' : '↓';
+};
+
+const setDefaultSales = (customer: Customer) => {
+    router.post(`/customers/${customer.id}/set-default-sales`);
+};
 </script>
 
 <template>
@@ -140,13 +176,24 @@ watch(search, (value) => {
                         <thead class="bg-gray-50">
                             <tr>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Name
+                                    <button type="button" @click="toggleSort('name')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                        Name {{ sortIndicator('name') }}
+                                    </button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Email
+                                    <button type="button" @click="toggleSort('email')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                        Email {{ sortIndicator('email') }}
+                                    </button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Phone
+                                    <button type="button" @click="toggleSort('phone')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                        Phone {{ sortIndicator('phone') }}
+                                    </button>
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    <button type="button" @click="toggleSort('account_code')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                        Account # {{ sortIndicator('account_code') }}
+                                    </button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Actions
@@ -156,13 +203,19 @@ watch(search, (value) => {
                         <tbody class="bg-white divide-y divide-gray-200">
                             <tr v-for="c in props.customers.data" :key="c.id" class="hover:bg-gray-50">
                                 <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="text-sm font-medium text-gray-900">{{ c.name }}</div>
+                                    <div class="text-sm font-medium text-gray-900 flex items-center gap-2">
+                                        <span>{{ c.name }}</span>
+                                        <span v-if="c.is_default_sales" class="inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-800">Default Sales</span>
+                                    </div>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="text-sm text-gray-900">{{ c.email }}</div>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     {{ c.phone || '-' }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    {{ c.account_code || '-' }}
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                     <div class="flex items-center gap-2">
@@ -184,6 +237,13 @@ watch(search, (value) => {
                                             class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-green-700 bg-green-100 hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                                         >
                                             SMS
+                                        </button>
+                                        <button
+                                            v-if="!c.is_default_sales"
+                                            @click="setDefaultSales(c)"
+                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                        >
+                                            Set Default
                                         </button>
                                     </div>
                                 </td>

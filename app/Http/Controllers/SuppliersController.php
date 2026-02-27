@@ -16,6 +16,12 @@ class SuppliersController extends Controller
     public function index(Request $request): Response
     {
         $currentCompany = auth()->user()->getCurrentCompany();
+        $sortBy = $request->input('sort_by', 'name');
+        $sortDir = $request->input('sort_dir', 'asc') === 'desc' ? 'desc' : 'asc';
+        $sortableFields = ['name', 'email', 'phone', 'city', 'country', 'vat_number', 'is_active', 'created_at'];
+        if (!in_array($sortBy, $sortableFields, true)) {
+            $sortBy = 'name';
+        }
         
         if (!$currentCompany) {
             \Log::warning('SuppliersController::index - No current company found for user', [
@@ -53,7 +59,7 @@ class SuppliersController extends Controller
             ->when($request->boolean('active_only'), function ($query) {
                 $query->where('is_active', true);
             })
-            ->orderBy('name')
+            ->orderBy($sortBy, $sortDir)
             ->paginate(15)
             ->withQueryString();
         
@@ -74,6 +80,8 @@ class SuppliersController extends Controller
             'filters' => [
                 'search' => $request->string('search')->toString(),
                 'active_only' => $request->boolean('active_only'),
+                'sort_by' => $sortBy,
+                'sort_dir' => $sortDir,
             ],
         ]);
     }

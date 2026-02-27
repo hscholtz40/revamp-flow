@@ -23,12 +23,14 @@ class Customer extends Model
         'vat_number',
         'account_code',
         'notes',
+        'is_default_sales',
         'xero_contact_id',
         'xero_updated_at',
         'xero_created_at',
     ];
 
     protected $casts = [
+        'is_default_sales' => 'boolean',
         'xero_updated_at' => 'datetime',
         'xero_created_at' => 'datetime',
     ];
@@ -102,6 +104,13 @@ class Customer extends Model
                 return $prefix . time();
             }
         } while (true);
+    }
+
+    public static function getDefaultSalesForCompany(int $companyId): ?self
+    {
+        return static::where('company_id', $companyId)
+            ->where('is_default_sales', true)
+            ->first();
     }
 }
 

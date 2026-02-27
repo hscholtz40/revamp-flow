@@ -18,8 +18,14 @@ class CustomersController extends Controller
     public function index(Request $request): Response
     {
         $currentCompany = auth()->user()->getCurrentCompany();
+        $sortBy = $request->input('sort_by', 'name');
+        $sortDir = $request->input('sort_dir', 'asc') === 'desc' ? 'desc' : 'asc';
+        $sortableFields = ['name', 'email', 'phone', 'account_code', 'is_default_sales', 'created_at'];
+        if (!in_array($sortBy, $sortableFields, true)) {
+            $sortBy = 'name';
+        }
         
-        $customers = Customer::where('company_id', $currentCompany->id)
+        $customersQuery = Customer::where('company_id', $currentCompany->id)
             ->when($request->string('search'), function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('name', 'like', "%{$search}%")
@@ -27,8 +33,10 @@ class CustomersController extends Controller
                         ->orWhere('phone', 'like', "%{$search}%")
                         ->orWhere('account_code', 'like', "%{$search}%");
                 });
-            })
-            ->orderByDesc('id')
+            });
+
+        $customers = $customersQuery
+            ->orderBy($sortBy, $sortDir)
             ->paginate(10)
             ->withQueryString();
 
@@ -36,6 +44,8 @@ class CustomersController extends Controller
             'customers' => $customers,
             'filters' => [
                 'search' => $request->string('search')->toString(),
+                'sort_by' => $sortBy,
+                'sort_dir' => $sortDir,
             ],
             'currentCompany' => $currentCompany,
         ]);
@@ -60,6 +70,7 @@ class CustomersController extends Controller
             'vat_number' => ['nullable', 'string', 'max:50'],
             'account_code' => ['nullable', 'string', 'max:50'],
             'notes' => ['nullable', 'string'],
+            'is_default_sales' => ['boolean'],
         ]);
 
         $validated['company_id'] = $currentCompany->id;
@@ -80,6 +91,12 @@ class CustomersController extends Controller
             }
         }
         
+        if ($validated['is_default_sales'] ?? false) {
+            Customer::where('company_id', $currentCompany->id)
+                ->where('is_default_sales', true)
+                ->update(['is_default_sales' => false]);
+        }
+
         $customer = Customer::create($validated);
 
         // If this is a non-Inertia JSON request (quick create from jobcard forms), return JSON
@@ -222,6 +239,7 @@ class CustomersController extends Controller
             'vat_number' => ['nullable', 'string', 'max:50'],
             'account_code' => ['nullable', 'string', 'max:50'],
             'notes' => ['nullable', 'string'],
+            'is_default_sales' => ['boolean'],
         ]);
 
         // Validate account code uniqueness if changed
@@ -238,6 +256,13 @@ class CustomersController extends Controller
             }
         }
 
+        if ($validated['is_default_sales'] ?? false) {
+            Customer::where('company_id', $currentCompany->id)
+                ->where('is_default_sales', true)
+                ->where('id', '!=', $customer->id)
+                ->update(['is_default_sales' => false]);
+        }
+
         $customer->update($validated);
 
         return redirect()->route('customers.index')->with('success', 'Customer updated');
@@ -247,6 +272,22 @@ class CustomersController extends Controller
     {
         $customer->delete();
         return redirect()->route('customers.index')->with('success', 'Customer deleted');
+    }
+
+    public function setDefaultSales(Customer $customer): RedirectResponse
+    {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        if ($customer->company_id !== $currentCompany->id) {
+            abort(403, 'Unauthorized access to customer.');
+        }
+
+        Customer::where('company_id', $currentCompany->id)
+            ->where('is_default_sales', true)
+            ->update(['is_default_sales' => false]);
+
+        $customer->update(['is_default_sales' => true]);
+
+        return redirect()->back()->with('success', 'Default sales customer updated.');
     }
 
     /**

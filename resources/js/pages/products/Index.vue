@@ -52,6 +52,8 @@ interface Props {
         category?: string;
         search?: string;
         active_only?: boolean;
+        sort_by?: string;
+        sort_dir?: 'asc' | 'desc';
     };
     categories: string[];
     currentCompany: Company;
@@ -64,6 +66,8 @@ const search = ref(props.filters.search || '');
 const typeFilter = ref(props.filters.type || '');
 const categoryFilter = ref(props.filters.category || '');
 const activeOnly = ref(props.filters.active_only || false);
+const sortBy = ref(props.filters.sort_by || 'name');
+const sortDir = ref(props.filters.sort_dir || 'asc');
 
 // Load view mode from localStorage or default to grid
 const STORAGE_KEY = 'products_view_mode';
@@ -93,11 +97,28 @@ function applyFilters() {
     if (typeFilter.value && typeFilter.value.trim()) params.type = typeFilter.value.trim();
     if (categoryFilter.value && categoryFilter.value.trim()) params.category = categoryFilter.value.trim();
     if (activeOnly.value) params.active_only = activeOnly.value;
+    params.sort_by = sortBy.value;
+    params.sort_dir = sortDir.value;
     
     router.get(products.index().url, params, {
         preserveState: true,
         replace: true,
     });
+}
+
+function toggleSort(field: string) {
+    if (sortBy.value === field) {
+        sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortBy.value = field;
+        sortDir.value = 'asc';
+    }
+    applyFilters();
+}
+
+function sortIndicator(field: string) {
+    if (sortBy.value !== field) return '↕';
+    return sortDir.value === 'asc' ? '↑' : '↓';
 }
 
 function clearFilters() {
@@ -409,25 +430,25 @@ function getStockStatus(product: Product) {
                         <thead class="bg-gray-50 border-b">
                             <tr>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Name
+                                    <button type="button" @click="toggleSort('name')" class="inline-flex items-center gap-1 hover:text-gray-700">Name {{ sortIndicator('name') }}</button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Type
+                                    <button type="button" @click="toggleSort('type')" class="inline-flex items-center gap-1 hover:text-gray-700">Type {{ sortIndicator('type') }}</button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    SKU
+                                    <button type="button" @click="toggleSort('sku')" class="inline-flex items-center gap-1 hover:text-gray-700">SKU {{ sortIndicator('sku') }}</button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Category
+                                    <button type="button" @click="toggleSort('category')" class="inline-flex items-center gap-1 hover:text-gray-700">Category {{ sortIndicator('category') }}</button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Price
+                                    <button type="button" @click="toggleSort('price')" class="inline-flex items-center gap-1 hover:text-gray-700">Price {{ sortIndicator('price') }}</button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Stock
+                                    <button type="button" @click="toggleSort('stock_quantity')" class="inline-flex items-center gap-1 hover:text-gray-700">Stock {{ sortIndicator('stock_quantity') }}</button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Status
+                                    <button type="button" @click="toggleSort('is_active')" class="inline-flex items-center gap-1 hover:text-gray-700">Status {{ sortIndicator('is_active') }}</button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Actions

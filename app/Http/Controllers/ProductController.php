@@ -19,6 +19,12 @@ class ProductController extends Controller
     public function index(Request $request): Response
     {
         $currentCompany = auth()->user()->getCurrentCompany();
+        $sortBy = $request->input('sort_by', 'name');
+        $sortDir = $request->input('sort_dir', 'asc') === 'desc' ? 'desc' : 'asc';
+        $sortableFields = ['name', 'type', 'sku', 'category', 'price', 'stock_quantity', 'is_active', 'created_at'];
+        if (!in_array($sortBy, $sortableFields, true)) {
+            $sortBy = 'name';
+        }
         $query = Product::where('company_id', $currentCompany->id);
 
         // Apply filters
@@ -44,7 +50,7 @@ class ProductController extends Controller
             $query->where('is_active', true);
         }
 
-        $products = $query->orderBy('name')->paginate(15)->withQueryString();
+        $products = $query->orderBy($sortBy, $sortDir)->paginate(15)->withQueryString();
 
         // Get active categories for filter dropdown
         $categories = Category::active()->ordered()->pluck('name');
@@ -96,6 +102,8 @@ class ProductController extends Controller
                 'category' => $request->input('category', ''),
                 'search' => $request->input('search', ''),
                 'active_only' => $request->boolean('active_only', false),
+                'sort_by' => $sortBy,
+                'sort_dir' => $sortDir,
             ],
             'categories' => $categories,
             'currentCompany' => $currentCompany,

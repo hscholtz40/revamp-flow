@@ -14,6 +14,7 @@ const form = useForm({
     vat_number: '',
     account_code: '',
     notes: '',
+    is_default_sales: false,
 });
 
 // Generate preview of account code based on name
@@ -95,6 +96,10 @@ function submit() {
             <label class="block">
                 <span class="mb-1 block">Notes</span>
                 <textarea v-model="form.notes" class="w-full rounded border px-3 py-2"></textarea>
+            </label>
+            <label class="flex items-center gap-2">
+                <input v-model="form.is_default_sales" type="checkbox" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                <span class="text-sm text-gray-700">Set as default sales customer</span>
             </label>
             <div class="flex items-center gap-3">
                 <button :disabled="form.processing" class="rounded bg-blue-600 px-4 py-2 text-white">Create</button>

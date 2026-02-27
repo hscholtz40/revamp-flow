@@ -27,6 +27,8 @@ interface Props {
     filters?: {
         search?: string;
         active_only?: boolean;
+        sort_by?: string;
+        sort_dir?: 'asc' | 'desc';
     };
 }
 
@@ -37,6 +39,8 @@ const props = withDefaults(defineProps<Props>(), {
 
 const search = ref(props.filters?.search || '');
 const activeOnly = ref(props.filters?.active_only || false);
+const sortBy = ref(props.filters?.sort_by || 'name');
+const sortDir = ref(props.filters?.sort_dir || 'asc');
 
 // Computed to check if suppliers exist
 const hasSuppliers = computed(() => {
@@ -71,11 +75,28 @@ function applyFilters() {
     
     if (search.value && search.value.trim()) params.search = search.value.trim();
     if (activeOnly.value) params.active_only = activeOnly.value;
+    params.sort_by = sortBy.value;
+    params.sort_dir = sortDir.value;
     
     router.get(suppliers.index().url, params, {
         preserveState: true,
         replace: true,
     });
+}
+
+function toggleSort(field: string) {
+    if (sortBy.value === field) {
+        sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortBy.value = field;
+        sortDir.value = 'asc';
+    }
+    applyFilters();
+}
+
+function sortIndicator(field: string) {
+    if (sortBy.value !== field) return '↕';
+    return sortDir.value === 'asc' ? '↑' : '↓';
 }
 
 function clearFilters() {
@@ -158,11 +179,11 @@ function deleteSupplier(supplier: Supplier) {
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Name</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Contact</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Location</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">VAT Number</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Status</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"><button type="button" @click="toggleSort('name')" class="inline-flex items-center gap-1 hover:text-gray-700">Name {{ sortIndicator('name') }}</button></th>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"><button type="button" @click="toggleSort('email')" class="inline-flex items-center gap-1 hover:text-gray-700">Contact {{ sortIndicator('email') }}</button></th>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"><button type="button" @click="toggleSort('city')" class="inline-flex items-center gap-1 hover:text-gray-700">Location {{ sortIndicator('city') }}</button></th>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"><button type="button" @click="toggleSort('vat_number')" class="inline-flex items-center gap-1 hover:text-gray-700">VAT Number {{ sortIndicator('vat_number') }}</button></th>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"><button type="button" @click="toggleSort('is_active')" class="inline-flex items-center gap-1 hover:text-gray-700">Status {{ sortIndicator('is_active') }}</button></th>
                             <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Actions</th>
                         </tr>
                     </thead>

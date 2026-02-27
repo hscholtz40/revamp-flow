@@ -27,23 +27,49 @@ const props = defineProps<{
         data: Contact[];
         links: { url: string | null; label: string; active: boolean }[];
     };
-    filters: { search?: string };
+    filters: { search?: string; sort_by?: string; sort_dir?: 'asc' | 'desc' };
     currentCompany: Company;
 }>();
 
 const search = ref(props.filters?.search ?? '');
+const sortBy = ref(props.filters?.sort_by ?? 'name');
+const sortDir = ref(props.filters?.sort_dir ?? 'asc');
 
 watch(search, (value) => {
     const params: Record<string, string> = {};
     if (value && value.trim()) {
         params.search = value.trim();
     }
+    params.sort_by = sortBy.value;
+    params.sort_dir = sortDir.value;
     
     router.get(contacts.index().url, params, {
         preserveState: true,
         replace: true,
     });
 });
+
+const toggleSort = (field: string) => {
+    if (sortBy.value === field) {
+        sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortBy.value = field;
+        sortDir.value = 'asc';
+    }
+
+    const params: Record<string, string> = {};
+    if (search.value && search.value.trim()) {
+        params.search = search.value.trim();
+    }
+    params.sort_by = sortBy.value;
+    params.sort_dir = sortDir.value;
+    router.get(contacts.index().url, params, { preserveState: true, replace: true });
+};
+
+const sortIndicator = (field: string) => {
+    if (sortBy.value !== field) return '↕';
+    return sortDir.value === 'asc' ? '↑' : '↓';
+};
 
 // SMS functionality
 const showSMSModal = ref(false);
@@ -145,22 +171,22 @@ const closeSMSResultModal = () => {
                         <thead class="bg-gray-50">
                             <tr>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Name
+                                    <button type="button" @click="toggleSort('name')" class="inline-flex items-center gap-1 hover:text-gray-700">Name {{ sortIndicator('name') }}</button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Customer
+                                    <button type="button" @click="toggleSort('customer_name')" class="inline-flex items-center gap-1 hover:text-gray-700">Customer {{ sortIndicator('customer_name') }}</button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Email
+                                    <button type="button" @click="toggleSort('email')" class="inline-flex items-center gap-1 hover:text-gray-700">Email {{ sortIndicator('email') }}</button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Phone
+                                    <button type="button" @click="toggleSort('phone')" class="inline-flex items-center gap-1 hover:text-gray-700">Phone {{ sortIndicator('phone') }}</button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Position
+                                    <button type="button" @click="toggleSort('position')" class="inline-flex items-center gap-1 hover:text-gray-700">Position {{ sortIndicator('position') }}</button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Primary
+                                    <button type="button" @click="toggleSort('is_primary')" class="inline-flex items-center gap-1 hover:text-gray-700">Primary {{ sortIndicator('is_primary') }}</button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Actions

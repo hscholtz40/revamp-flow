@@ -139,6 +139,8 @@ class InvoicesController extends Controller
         $selectedCustomer = null;
         if ($request->filled('customer_id')) {
             $selectedCustomer = Customer::find($request->customer_id);
+        } else {
+            $selectedCustomer = Customer::getDefaultSalesForCompany($currentCompany->id);
         }
 
         $taxRates = TaxRate::where('company_id', $currentCompany->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'rate', 'is_default_sales']);

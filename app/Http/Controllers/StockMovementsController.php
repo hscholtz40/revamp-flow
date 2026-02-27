@@ -26,8 +26,14 @@ class StockMovementsController extends Controller
     public function index(Request $request): Response
     {
         $currentCompany = auth()->user()->getCurrentCompany();
+        $sortBy = $request->input('sort_by', 'created_at');
+        $sortDir = $request->input('sort_dir', 'desc') === 'asc' ? 'asc' : 'desc';
+        $sortableFields = ['created_at', 'quantity', 'stock_before', 'stock_after', 'type', 'reference', 'product_name', 'user_name'];
+        if (!in_array($sortBy, $sortableFields, true)) {
+            $sortBy = 'created_at';
+        }
         
-        $movements = StockMovement::where('company_id', $currentCompany->id)
+        $movementsQuery = StockMovement::where('company_id', $currentCompany->id)
             ->with(['product', 'user'])
             ->when($request->filled('product_id'), function ($query) use ($request) {
                 $query->where('product_id', $request->integer('product_id'));
@@ -40,10 +46,23 @@ class StockMovementsController extends Controller
             })
             ->when($request->filled('date_to'), function ($query) use ($request) {
                 $query->whereDate('created_at', '<=', $request->date('date_to'));
-            })
-            ->orderBy('created_at', 'desc')
-            ->paginate(20)
-            ->withQueryString();
+            });
+
+        if ($sortBy === 'product_name') {
+            $movementsQuery->orderBy(
+                Product::select('name')->whereColumn('products.id', 'stock_movements.product_id')->limit(1),
+                $sortDir
+            );
+        } elseif ($sortBy === 'user_name') {
+            $movementsQuery->orderBy(
+                \App\Models\User::select('name')->whereColumn('users.id', 'stock_movements.user_id')->limit(1),
+                $sortDir
+            );
+        } else {
+            $movementsQuery->orderBy($sortBy, $sortDir);
+        }
+
+        $movements = $movementsQuery->paginate(20)->withQueryString();
 
         return Inertia::render('stock-movements/Index', [
             'movements' => $movements,
@@ -52,6 +71,8 @@ class StockMovementsController extends Controller
                 'type' => $request->string('type')->toString(),
                 'date_from' => $request->date('date_from')?->format('Y-m-d'),
                 'date_to' => $request->date('date_to')?->format('Y-m-d'),
+                'sort_by' => $sortBy,
+                'sort_dir' => $sortDir,
             ],
             'products' => Product::where('company_id', $currentCompany->id)
                 ->where('track_stock', true)

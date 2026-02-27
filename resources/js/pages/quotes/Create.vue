@@ -504,6 +504,7 @@ const props = defineProps<{
     products: Product[];
     currentCompany: Company;
     defaultTerms?: string;
+    defaultSalesCustomerId?: number | null;
     taxRates: { id: number; name: string; rate: number; is_default_sales: boolean }[];
     defaultSalesTaxRateId: number | null;
     chartOfAccounts: { id: number; account_code: string; account_name: string; account_type: string; is_default_sales: boolean }[];
@@ -540,7 +541,7 @@ const getDefaultExpiryDate = () => {
 };
 
 const form = useForm({
-    customer_id: '',
+    customer_id: props.defaultSalesCustomerId ? props.defaultSalesCustomerId.toString() : '',
     title: '',
     description: '',
     status: 'draft',
@@ -564,6 +565,15 @@ const form = useForm({
         }
     ] as LineItem[],
 });
+
+if (props.defaultSalesCustomerId) {
+    const defaultCustomer = props.customers.find(c => c.id === props.defaultSalesCustomerId);
+    if (defaultCustomer) {
+        selectedCustomer.value = defaultCustomer;
+        customerSearchQuery.value = defaultCustomer.name;
+        form.title = defaultCustomer.name;
+    }
+}
 
 const addLineItem = () => {
     form.line_items.push({

@@ -48,6 +48,8 @@ interface Props {
         type?: string;
         date_from?: string;
         date_to?: string;
+        sort_by?: string;
+        sort_dir?: 'asc' | 'desc';
     };
     products?: Product[];
 }
@@ -73,6 +75,8 @@ const searchProduct = ref(props.filters?.product_id?.toString() || '');
 const typeFilter = ref(props.filters?.type || '');
 const dateFrom = ref(props.filters?.date_from || '');
 const dateTo = ref(props.filters?.date_to || '');
+const sortBy = ref(props.filters?.sort_by || 'created_at');
+const sortDir = ref(props.filters?.sort_dir || 'desc');
 
 function applyFilters() {
     const params: Record<string, string | number> = {};
@@ -81,11 +85,28 @@ function applyFilters() {
     if (typeFilter.value) params.type = typeFilter.value;
     if (dateFrom.value) params.date_from = dateFrom.value;
     if (dateTo.value) params.date_to = dateTo.value;
+    params.sort_by = sortBy.value;
+    params.sort_dir = sortDir.value;
     
     router.get(stockMovements.index().url, params, {
         preserveState: true,
         replace: true,
     });
+}
+
+function toggleSort(field: string) {
+    if (sortBy.value === field) {
+        sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortBy.value = field;
+        sortDir.value = field === 'created_at' ? 'desc' : 'asc';
+    }
+    applyFilters();
+}
+
+function sortIndicator(field: string) {
+    if (sortBy.value !== field) return '↕';
+    return sortDir.value === 'asc' ? '↑' : '↓';
 }
 
 function clearFilters() {
@@ -193,14 +214,14 @@ function getTypeColor(type: string) {
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Date</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Product</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Type</th>
-                            <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Quantity</th>
-                            <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Stock Before</th>
-                            <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Stock After</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Reference</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">User</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"><button type="button" @click="toggleSort('created_at')" class="inline-flex items-center gap-1 hover:text-gray-700">Date {{ sortIndicator('created_at') }}</button></th>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"><button type="button" @click="toggleSort('product_name')" class="inline-flex items-center gap-1 hover:text-gray-700">Product {{ sortIndicator('product_name') }}</button></th>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"><button type="button" @click="toggleSort('type')" class="inline-flex items-center gap-1 hover:text-gray-700">Type {{ sortIndicator('type') }}</button></th>
+                            <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500"><button type="button" @click="toggleSort('quantity')" class="inline-flex items-center gap-1 hover:text-gray-700">Quantity {{ sortIndicator('quantity') }}</button></th>
+                            <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500"><button type="button" @click="toggleSort('stock_before')" class="inline-flex items-center gap-1 hover:text-gray-700">Stock Before {{ sortIndicator('stock_before') }}</button></th>
+                            <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500"><button type="button" @click="toggleSort('stock_after')" class="inline-flex items-center gap-1 hover:text-gray-700">Stock After {{ sortIndicator('stock_after') }}</button></th>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"><button type="button" @click="toggleSort('reference')" class="inline-flex items-center gap-1 hover:text-gray-700">Reference {{ sortIndicator('reference') }}</button></th>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"><button type="button" @click="toggleSort('user_name')" class="inline-flex items-center gap-1 hover:text-gray-700">User {{ sortIndicator('user_name') }}</button></th>
                             <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Actions</th>
                         </tr>
                     </thead>
