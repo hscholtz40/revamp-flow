@@ -273,9 +273,12 @@ class InstanceLicenseService
     private function signedLicenseApiPost($client, string $url, array $payload, string $licenseKey): HttpResponse
     {
         $body = json_encode($payload, JSON_UNESCAPED_SLASHES);
+        if ($body === false) {
+            $body = '{}';
+        }
         $timestamp = (string) now()->timestamp;
         $path = parse_url($url, PHP_URL_PATH) ?: '/';
-        $payloadHash = hash('sha256', $body ?: '');
+        $payloadHash = hash('sha256', $body);
         $toSign = $timestamp . '|POST|' . ltrim($path, '/') . '|' . $payloadHash;
         $signature = hash_hmac('sha256', $toSign, $licenseKey);
 
@@ -283,9 +286,10 @@ class InstanceLicenseService
             ->withHeaders([
                 'X-License-Timestamp' => $timestamp,
                 'X-License-Signature' => $signature,
+                'Content-Type' => 'application/json',
             ])
-            ->asJson()
-            ->post($url, $payload);
+            ->withBody($body, 'application/json')
+            ->post($url);
     }
 
     private function urlsMatch(string $localUrl, string $licenseUrl): bool
