@@ -13,6 +13,7 @@ Schedule::command('xero:refresh-tokens')->cron('*/20 * * * *');
 
 // Schedule Xero sync commands to run every minute
 Schedule::command('xero:sync-customers')->everyMinute()->withoutOverlapping();
+Schedule::command('xero:sync-suppliers')->everyMinute()->withoutOverlapping();
 Schedule::command('xero:sync-products')->everyMinute()->withoutOverlapping();
 Schedule::command('xero:sync-invoices')->everyMinute()->withoutOverlapping();
 Schedule::command('xero:sync-invoices-from-xero')->everyMinute()->withoutOverlapping();

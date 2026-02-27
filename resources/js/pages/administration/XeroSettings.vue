@@ -639,6 +639,45 @@
                             {{ syncing === 'chart-of-accounts-from-xero' ? 'Importing...' : 'Import Chart of Accounts from Xero' }}
                         </button>
                     </div>
+
+                    <div class="mt-6 border-t border-blue-200 pt-4">
+                        <h4 class="text-sm font-medium text-blue-900 mb-2">Reset Initial Sync Status</h4>
+                        <p class="text-sm text-blue-700 mb-3">
+                            Use this if you want to re-run a module's initial import flow from scratch.
+                        </p>
+                        <div class="flex flex-wrap gap-3">
+                            <button @click="resetInitialSyncStatus('customer', 'Customers')" :disabled="syncing" class="bg-white border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50 text-sm">
+                                {{ syncing === 'reset-customer' ? 'Resetting...' : 'Reset Customers Initial Sync' }}
+                            </button>
+                            <button @click="resetInitialSyncStatus('product', 'Products')" :disabled="syncing" class="bg-white border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50 text-sm">
+                                {{ syncing === 'reset-product' ? 'Resetting...' : 'Reset Products Initial Sync' }}
+                            </button>
+                            <button @click="resetInitialSyncStatus('supplier', 'Suppliers')" :disabled="syncing" class="bg-white border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50 text-sm">
+                                {{ syncing === 'reset-supplier' ? 'Resetting...' : 'Reset Suppliers Initial Sync' }}
+                            </button>
+                            <button @click="resetInitialSyncStatus('quote', 'Quotes')" :disabled="syncing" class="bg-white border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50 text-sm">
+                                {{ syncing === 'reset-quote' ? 'Resetting...' : 'Reset Quotes Initial Sync' }}
+                            </button>
+                            <button @click="resetInitialSyncStatus('invoice', 'Invoices')" :disabled="syncing" class="bg-white border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50 text-sm">
+                                {{ syncing === 'reset-invoice' ? 'Resetting...' : 'Reset Invoices Initial Sync' }}
+                            </button>
+                            <button @click="resetInitialSyncStatus('credit_note', 'Credit Notes')" :disabled="syncing" class="bg-white border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50 text-sm">
+                                {{ syncing === 'reset-credit_note' ? 'Resetting...' : 'Reset Credit Notes Initial Sync' }}
+                            </button>
+                            <button @click="resetInitialSyncStatus('purchase_order', 'Purchase Orders')" :disabled="syncing" class="bg-white border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50 text-sm">
+                                {{ syncing === 'reset-purchase_order' ? 'Resetting...' : 'Reset Purchase Orders Initial Sync' }}
+                            </button>
+                            <button @click="resetInitialSyncStatus('tax_rate', 'Tax Rates')" :disabled="syncing" class="bg-white border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50 text-sm">
+                                {{ syncing === 'reset-tax_rate' ? 'Resetting...' : 'Reset Tax Rates Initial Sync' }}
+                            </button>
+                            <button @click="resetInitialSyncStatus('bank_account', 'Bank Accounts')" :disabled="syncing" class="bg-white border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50 text-sm">
+                                {{ syncing === 'reset-bank_account' ? 'Resetting...' : 'Reset Bank Accounts Initial Sync' }}
+                            </button>
+                            <button @click="resetInitialSyncStatus('chart_of_account', 'Chart of Accounts')" :disabled="syncing" class="bg-white border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50 text-sm">
+                                {{ syncing === 'reset-chart_of_account' ? 'Resetting...' : 'Reset Chart of Accounts Initial Sync' }}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1074,6 +1113,20 @@ const switchCompany = (event: Event) => {
     });
     
     switchForm.post('/xero/switch-company');
+};
+
+const resetInitialSyncStatus = (module: string, label: string) => {
+    if (!confirm(`Reset initial sync status for ${label}?`)) {
+        return;
+    }
+
+    syncing.value = `reset-${module}`;
+    const resetForm = useForm({ module });
+    resetForm.post('/xero/reset-initial-sync-status', {
+        onFinish: () => {
+            syncing.value = null;
+        },
+    });
 };
 
 </script>

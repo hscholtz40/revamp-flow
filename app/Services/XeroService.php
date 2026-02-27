@@ -29,6 +29,22 @@ class XeroService
     private ?array $cachedXeroContacts = null;
     private ?array $cachedXeroAccounts = null;
 
+    public static function getInitialSyncCompletedCacheKey(int $companyId, string $module): string
+    {
+        return "xero_{$module}_full_sync_completed_company_{$companyId}";
+    }
+
+    public static function getInitialSyncCursorCacheKey(int $companyId, string $module): string
+    {
+        return "xero_{$module}_import_cursor_company_{$companyId}";
+    }
+
+    public static function resetInitialSyncStatus(int $companyId, string $module): void
+    {
+        Cache::forget(self::getInitialSyncCompletedCacheKey($companyId, $module));
+        Cache::forget(self::getInitialSyncCursorCacheKey($companyId, $module));
+    }
+
     public function __construct(Company $company = null)
     {
         if ($company) {
@@ -1306,8 +1322,8 @@ class XeroService
 
         try {
             $hasAnyLocalInvoices = Invoice::where('company_id', $currentCompany->id)->exists();
-            $fullSyncCompletedKey = "xero_invoice_full_sync_completed_company_{$currentCompany->id}";
-            $cursorKey = "xero_invoice_import_cursor_company_{$currentCompany->id}";
+            $fullSyncCompletedKey = self::getInitialSyncCompletedCacheKey($currentCompany->id, 'invoice');
+            $cursorKey = self::getInitialSyncCursorCacheKey($currentCompany->id, 'invoice');
             $isInitialInvoiceImport = !$hasAnyLocalInvoices;
             $isBackfillMode = $isInitialInvoiceImport || !Cache::get($fullSyncCompletedKey, false);
             $cursor = Cache::get($cursorKey, ['page' => 1]);
@@ -1344,6 +1360,51 @@ class XeroService
                 'page_delay_ms' => $pageDelayMs,
                 'is_initial_invoice_import' => $isInitialInvoiceImport,
             ]);
+
+            // While backfill is in progress, also check newest updates first so newly created
+            // Xero invoices don't wait until the historical cursor reaches page 1 again.
+            if ($isBackfillMode && !$isInitialInvoiceImport && !empty($lastSync)) {
+                try {
+                    $incrementalResponse = $this->makeXeroRequest(
+                        'get',
+                        $this->baseUrl . '/api.xro/2.0/Invoices?page=1&pageSize=' . $pageSize . '&summaryOnly=false',
+                        [],
+                        2,
+                        $this->buildIfModifiedSinceHeader($lastSync)
+                    );
+
+                    if ($incrementalResponse->successful()) {
+                        $incrementalInvoices = $incrementalResponse->json()['Invoices'] ?? [];
+                        foreach ($incrementalInvoices as $xeroInvoice) {
+                            if (($xeroInvoice['Type'] ?? null) !== 'ACCREC') {
+                                continue;
+                            }
+                            if (empty($xeroInvoice['InvoiceNumber']) && empty($xeroInvoice['Reference'])) {
+                                continue;
+                            }
+
+                            $existingInvoice = Invoice::where('company_id', $currentCompany->id)
+                                ->where('xero_invoice_id', $xeroInvoice['InvoiceID'] ?? null)
+                                ->first();
+
+                            if (!$existingInvoice) {
+                                $invoice = $this->createInvoiceFromXero($xeroInvoice, $currentCompany);
+                                $results[] = [
+                                    'invoice_id' => $invoice->id,
+                                    'invoice_number' => $invoice->invoice_number,
+                                    'status' => 'created',
+                                    'message' => 'Invoice imported from Xero (incremental pre-pass)',
+                                ];
+                            }
+                        }
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('Incremental pre-pass failed during invoice backfill', [
+                        'company_id' => $currentCompany->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
             
             do {
                 if (!$isInitialInvoiceImport && $processedThisRun >= $maxInvoicesPerRun) {
@@ -1399,7 +1460,14 @@ class XeroService
                 $itemCount = $pagination['ItemCount'] ?? count($xeroInvoices);
                 
                 $invoicesOnPage = count($xeroInvoices);
-                $hasMorePages = ($invoicesOnPage >= $pageSize) || ($currentPage < $pageCount);
+                // Prefer Xero pagination metadata when available to avoid looping forever
+                // on APIs that can return a full final page or clamp page numbers.
+                $hasPaginationPageCount = is_array($pagination) && isset($pagination['PageCount']) && is_numeric($pagination['PageCount']);
+                if ($hasPaginationPageCount) {
+                    $hasMorePages = $currentPage < $pageCount;
+                } else {
+                    $hasMorePages = $invoicesOnPage >= $pageSize;
+                }
                 
                 Log::info('Fetched invoice page from Xero, processing now', [
                     'company_id' => $currentCompany->id,

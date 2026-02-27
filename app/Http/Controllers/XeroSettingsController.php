@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\XeroSettings;
+use App\Services\XeroService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -262,6 +263,18 @@ class XeroSettingsController extends Controller
 
         $company = \App\Models\Company::find($companyId);
         return redirect()->back()->with('success', "Switched to {$company->name} for Xero settings.");
+    }
+
+    public function resetInitialSyncStatus(Request $request)
+    {
+        $request->validate([
+            'module' => 'required|string|in:customer,product,supplier,quote,invoice,credit_note,purchase_order,tax_rate,bank_account,chart_of_account',
+        ]);
+
+        $currentCompany = auth()->user()->getCurrentCompany();
+        XeroService::resetInitialSyncStatus($currentCompany->id, $request->string('module')->toString());
+
+        return redirect()->back()->with('success', 'Initial sync status reset successfully.');
     }
 
     private function generateAuthUrl($clientId)

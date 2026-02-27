@@ -23,6 +23,8 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
         ->name('xero.fetch-tenants');
     Route::post('/xero/switch-company', [XeroSettingsController::class, 'switchCompany'])
         ->name('xero.switch-company');
+    Route::post('/xero/reset-initial-sync-status', [XeroSettingsController::class, 'resetInitialSyncStatus'])
+        ->name('xero.reset-initial-sync-status');
     
     // Xero Sync Routes
     Route::post('/xero/sync/customers', function () {
