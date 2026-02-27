@@ -54,7 +54,7 @@ const search = ref(props.filters.search || '');
 const statusFilter = ref(props.filters.status || '');
 const customerFilter = ref(props.filters.customer_id || '');
 const sortBy = ref(props.filters.sort_by || 'credit_note_number');
-const sortDir = ref<'asc' | 'desc'>(props.filters.sort_dir || 'asc');
+const sortDir = ref<'asc' | 'desc'>(props.filters.sort_dir || 'desc');
 
 function applyFilters() {
     router.get('/credit-notes', {

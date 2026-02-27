@@ -318,7 +318,7 @@ const customerId = ref(props.filters?.customer_id || '');
 const assignedToUserId = ref(props.filters?.assigned_to_user_id || '');
 const assignedToTeamId = ref(props.filters?.assigned_to_team_id || '');
 const sortBy = ref(props.filters?.sort_by || 'job_number');
-const sortDir = ref<'asc' | 'desc'>(props.filters?.sort_dir || 'asc');
+const sortDir = ref<'asc' | 'desc'>(props.filters?.sort_dir || 'desc');
 
 // Flag to prevent watch from running during initial setup
 let isInitialized = false;

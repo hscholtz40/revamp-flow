@@ -30,7 +30,7 @@ class PurchaseOrdersController extends Controller
     {
         $currentCompany = auth()->user()->getCurrentCompany();
         $sortBy = $request->input('sort_by', 'po_number');
-        $sortDir = $request->input('sort_dir', 'asc') === 'desc' ? 'desc' : 'asc';
+        $sortDir = $request->input('sort_dir', 'desc') === 'asc' ? 'asc' : 'desc';
         
         $query = PurchaseOrder::where('company_id', $currentCompany->id)
             ->with(['supplier', 'items.product'])

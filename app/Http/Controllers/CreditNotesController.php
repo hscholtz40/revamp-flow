@@ -21,7 +21,7 @@ class CreditNotesController extends Controller
     {
         $currentCompany = auth()->user()->getCurrentCompany();
         $sortBy = $request->input('sort_by', 'credit_note_number');
-        $sortDir = $request->input('sort_dir', 'asc') === 'desc' ? 'desc' : 'asc';
+        $sortDir = $request->input('sort_dir', 'desc') === 'asc' ? 'asc' : 'desc';
 
         $query = CreditNote::with(['customer', 'invoice'])
             ->where('company_id', $currentCompany->id);

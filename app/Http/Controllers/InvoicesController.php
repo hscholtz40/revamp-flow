@@ -32,7 +32,7 @@ class InvoicesController extends Controller
     {
         $currentCompany = auth()->user()->getCurrentCompany();
         $sortBy = $request->input('sort_by', 'invoice_number');
-        $sortDir = $request->input('sort_dir', 'asc') === 'desc' ? 'desc' : 'asc';
+        $sortDir = $request->input('sort_dir', 'desc') === 'asc' ? 'asc' : 'desc';
         
         $query = Invoice::with(['customer', 'payments', 'creditNotes'])
             ->where('company_id', $currentCompany->id);

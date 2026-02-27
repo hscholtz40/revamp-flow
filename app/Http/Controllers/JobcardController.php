@@ -31,7 +31,7 @@ class JobcardController extends Controller
     {
         $currentCompany = auth()->user()->getCurrentCompany();
         $sortBy = $request->input('sort_by', 'job_number');
-        $sortDir = $request->input('sort_dir', 'asc') === 'desc' ? 'desc' : 'asc';
+        $sortDir = $request->input('sort_dir', 'desc') === 'asc' ? 'asc' : 'desc';
         
         $query = Jobcard::with(['customer', 'assignedUser', 'assignedTeam'])
             ->where('company_id', $currentCompany->id);

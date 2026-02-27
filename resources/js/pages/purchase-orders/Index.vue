@@ -63,7 +63,7 @@ const search = ref(props.filters?.search || '');
 const supplierFilter = ref(props.filters?.supplier_id?.toString() || '');
 const statusFilter = ref(props.filters?.status || '');
 const sortBy = ref(props.filters?.sort_by || 'po_number');
-const sortDir = ref<'asc' | 'desc'>(props.filters?.sort_dir || 'asc');
+const sortDir = ref<'asc' | 'desc'>(props.filters?.sort_dir || 'desc');
 
 // Alias props.purchaseOrders to avoid conflict with imported purchaseOrders route
 const purchaseOrdersData = computed(() => props.purchaseOrders);

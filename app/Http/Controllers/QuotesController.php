@@ -28,7 +28,7 @@ class QuotesController extends Controller
     {
         $currentCompany = auth()->user()->getCurrentCompany();
         $sortBy = $request->input('sort_by', 'quote_number');
-        $sortDir = $request->input('sort_dir', 'asc') === 'desc' ? 'desc' : 'asc';
+        $sortDir = $request->input('sort_dir', 'desc') === 'asc' ? 'asc' : 'desc';
         
         $query = Quote::with(['customer'])
             ->where('company_id', $currentCompany->id);

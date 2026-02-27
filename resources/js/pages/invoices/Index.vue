@@ -325,7 +325,7 @@ const status = ref(props.filters.status || '');
 const customerId = ref(props.filters.customer_id || '');
 const showPaid = ref(props.filters.show_paid || false);
 const sortBy = ref(props.filters.sort_by || 'invoice_number');
-const sortDir = ref<'asc' | 'desc'>(props.filters.sort_dir || 'asc');
+const sortDir = ref<'asc' | 'desc'>(props.filters.sort_dir || 'desc');
 
 // Helper functions for edit/delete permissions
 const canEditInvoice = (invoice: Invoice) => {
