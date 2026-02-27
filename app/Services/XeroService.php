@@ -17,6 +17,7 @@ use App\Models\CreditNote;
 use App\Models\CreditNoteLineItem;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Cache;
@@ -251,11 +252,16 @@ class XeroService
     private function makeXeroRequest(string $method, string $url, array $data = [], int $maxRetries = 2, array $additionalHeaders = []): \Illuminate\Http\Client\Response
     {
         $attempt = 0;
+        $timeoutSeconds = max(10, (int) config('services.xero.request_timeout_seconds', 60));
+        $connectTimeoutSeconds = max(5, (int) config('services.xero.connect_timeout_seconds', 15));
         
         while ($attempt <= $maxRetries) {
             try {
                 $headers = array_merge($this->getHeaders(), $additionalHeaders);
-                $request = Http::withHeaders($headers);
+                $request = Http::withHeaders($headers)
+                    ->connectTimeout($connectTimeoutSeconds)
+                    ->timeout($timeoutSeconds);
+                $requestStartedAt = microtime(true);
                 
                 switch (strtolower($method)) {
                     case 'get':
@@ -275,6 +281,17 @@ class XeroService
                         break;
                     default:
                         throw new \Exception("Unsupported HTTP method: {$method}");
+                }
+
+                $elapsedMs = (int) ((microtime(true) - $requestStartedAt) * 1000);
+                if ($elapsedMs > 15000) {
+                    Log::warning('Slow Xero API response detected', [
+                        'method' => strtoupper($method),
+                        'url' => $url,
+                        'status' => $response->status(),
+                        'elapsed_ms' => $elapsedMs,
+                        'attempt' => $attempt + 1,
+                    ]);
                 }
                 
                 // If successful or not a rate limit error, return response
@@ -309,6 +326,23 @@ class XeroService
                 
                 return $response;
                 
+            } catch (ConnectionException $e) {
+                if ($attempt >= $maxRetries) {
+                    throw new \Exception("Xero API connection timed out after {$maxRetries} retries for {$method} {$url}: " . $e->getMessage());
+                }
+
+                $waitTime = min(30, 5 * ($attempt + 1));
+                Log::warning('Xero API connection timeout, retrying', [
+                    'attempt' => $attempt + 1,
+                    'wait_time' => $waitTime,
+                    'method' => strtoupper($method),
+                    'url' => $url,
+                    'timeout_seconds' => $timeoutSeconds,
+                    'connect_timeout_seconds' => $connectTimeoutSeconds,
+                ]);
+
+                sleep($waitTime);
+                $attempt++;
             } catch (\Exception $e) {
                 // If it's not a rate limit error, throw immediately
                 if (!str_contains($e->getMessage(), '429') && !str_contains($e->getMessage(), 'rate limit')) {
