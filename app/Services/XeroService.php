@@ -2567,7 +2567,7 @@ class XeroService
             do {
                 $response = $this->makeXeroRequest(
                     'get',
-                    $this->baseUrl . '/api.xro/2.0/Quotes?page=' . $page . '&pageSize=' . $pageSize,
+                    $this->baseUrl . '/api.xro/2.0/Quotes?page=' . $page . '&pageSize=' . $pageSize . '&summaryOnly=false',
                     [],
                     2,
                     $ifModifiedSince
@@ -2627,7 +2627,13 @@ class XeroService
                         }
 
                         if ($existingQuote) {
-                            if (!$this->xeroUpdatedAtChanged($existingQuote, $xeroQuote)) {
+                            $localLineItemCount = $existingQuote->lineItems()->count();
+                            $xeroLineItemCount = isset($xeroQuote['LineItems']) && is_array($xeroQuote['LineItems'])
+                                ? count($xeroQuote['LineItems'])
+                                : 0;
+                            $needsLineItemBackfill = $localLineItemCount === 0 && $xeroLineItemCount > 0;
+
+                            if (!$this->xeroUpdatedAtChanged($existingQuote, $xeroQuote) && !$needsLineItemBackfill) {
                                 $results[] = [
                                     'quote_id' => $existingQuote->id,
                                     'quote_number' => $xeroQuote['QuoteNumber'],
@@ -2876,6 +2882,21 @@ class XeroService
         }
 
         $quote->update($updateData);
+
+        if (isset($xeroQuote['LineItems']) && is_array($xeroQuote['LineItems'])) {
+            $quote->lineItems()->delete();
+            foreach ($xeroQuote['LineItems'] as $index => $xeroLineItem) {
+                \App\Models\QuoteLineItem::create([
+                    'quote_id' => $quote->id,
+                    'description' => $xeroLineItem['Description'] ?? '',
+                    'quantity' => $xeroLineItem['Quantity'] ?? 1,
+                    'unit_price' => $xeroLineItem['UnitAmount'] ?? 0,
+                    'total' => $xeroLineItem['LineAmount'] ?? 0,
+                    'account_id' => $this->resolveAccountId($xeroLineItem['AccountCode'] ?? null, $quote->company_id),
+                    'sort_order' => $index,
+                ]);
+            }
+        }
     }
 
     /**
@@ -2954,7 +2975,7 @@ class XeroService
                     'quantity' => $xeroLineItem['Quantity'] ?? 1,
                     'unit_price' => $xeroLineItem['UnitAmount'] ?? 0,
                     'total' => $xeroLineItem['LineAmount'] ?? 0,
-                    'account_id' => $this->resolveAccountId($xeroLineItem['AccountCode'] ?? null, $currentCompany->id),
+                    'account_id' => $this->resolveAccountId($xeroLineItem['AccountCode'] ?? null, $company->id),
                     'sort_order' => $index,
                 ]);
             }
@@ -5325,7 +5346,7 @@ class XeroService
             do {
                 $response = $this->makeXeroRequest(
                     'get',
-                    $this->baseUrl . '/api.xro/2.0/PurchaseOrders?page=' . $page . '&pageSize=' . $pageSize,
+                    $this->baseUrl . '/api.xro/2.0/PurchaseOrders?page=' . $page . '&pageSize=' . $pageSize . '&summaryOnly=false',
                     [],
                     2,
                     $ifModifiedSince
@@ -5352,7 +5373,13 @@ class XeroService
                         }
 
                         if ($existing) {
-                            if (!$this->xeroUpdatedAtChanged($existing, $xeroPO)) {
+                            $localLineItemCount = $existing->items()->count();
+                            $xeroLineItemCount = isset($xeroPO['LineItems']) && is_array($xeroPO['LineItems'])
+                                ? count($xeroPO['LineItems'])
+                                : 0;
+                            $needsLineItemBackfill = $localLineItemCount === 0 && $xeroLineItemCount > 0;
+
+                            if (!$this->xeroUpdatedAtChanged($existing, $xeroPO) && !$needsLineItemBackfill) {
                                 $results[] = [
                                     'po_number' => $existing->po_number,
                                     'status' => 'skipped',

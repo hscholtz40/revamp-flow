@@ -70,6 +70,7 @@ class PurchaseOrdersController extends Controller
                 'sort_by' => $sortBy,
                 'sort_dir' => $sortDir,
             ],
+            'currentCompany' => $currentCompany,
             'suppliers' => Supplier::where('company_id', $currentCompany->id)
                 ->where('is_active', true)
                 ->orderBy('name')
