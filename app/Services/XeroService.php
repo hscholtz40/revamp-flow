@@ -6528,20 +6528,43 @@ class XeroService
 
         if (!$response->successful()) {
             $errorBody = $response->body();
+            $retryData = $data;
+            $shouldRetry = false;
 
-            // Retry once without AccountCode if Xero rejects account code for PO document type.
+            // Xero can reject status in update-like scenarios, even when we expected a create.
+            if (
+                str_contains($errorBody, 'PurchaseOrder status change is invalid')
+                || str_contains($errorBody, 'Please provide a valid Status Code')
+            ) {
+                unset($retryData['Status']);
+                $shouldRetry = true;
+            }
+
+            // Xero may reject account codes for PurchaseOrders depending on org setup.
             if (str_contains($errorBody, 'is not a valid code for this document')) {
-                $retryData = $data;
                 $retryData['LineItems'] = array_map(function (array $line) {
                     unset($line['AccountCode']);
                     return $line;
-                }, $data['LineItems'] ?? []);
+                }, $retryData['LineItems'] ?? []);
+                $shouldRetry = true;
+            }
 
+            if ($shouldRetry) {
                 $retryResponse = $this->makeXeroRequest('post', $this->baseUrl . '/api.xro/2.0/PurchaseOrders', [
                     'PurchaseOrders' => [$retryData],
                 ]);
 
                 if ($retryResponse->successful()) {
+                    Log::warning('Purchase order sync succeeded after fallback payload retry', [
+                        'purchase_order_id' => $po->id,
+                        'po_number' => $po->po_number,
+                        'xero_purchase_order_id' => $po->xero_purchase_order_id,
+                        'fallback_removed_status' => !isset($retryData['Status']) && isset($data['Status']),
+                        'fallback_removed_account_codes' => collect($data['LineItems'] ?? [])
+                            ->contains(fn ($line) => array_key_exists('AccountCode', $line))
+                            && collect($retryData['LineItems'] ?? [])
+                                ->every(fn ($line) => !array_key_exists('AccountCode', $line)),
+                    ]);
                     return $retryResponse->json()['PurchaseOrders'][0] ?? [];
                 }
 
