@@ -164,7 +164,7 @@ class CreditNotesController extends Controller
             'company_id' => $currentCompany->id,
             'customer_id' => $validated['customer_id'],
             'invoice_id' => $validated['invoice_id'] ?? null,
-            'credit_note_number' => CreditNote::generateCreditNoteNumber(),
+            'credit_note_number' => CreditNote::generateCreditNoteNumber($currentCompany->id),
             'title' => $validated['title'] ?? null,
             'description' => $validated['description'] ?? null,
             'credit_note_date' => $validated['credit_note_date'],

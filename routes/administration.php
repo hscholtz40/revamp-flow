@@ -13,6 +13,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::get('/administration', [AdministrationController::class, 'index'])->name('administration.index');
     Route::post('/administration/license', [AdministrationController::class, 'updateLicense'])->name('administration.license.update');
+    Route::get('/administration/document-numbering', [AdministrationController::class, 'documentNumbering'])->name('administration.document-numbering');
+    Route::put('/administration/document-numbering', [AdministrationController::class, 'updateDocumentNumbering'])->name('administration.document-numbering.update');
     
     // Database Upgrade route
     Route::post('/administration/upgrade-database', [AdministrationController::class, 'upgradeDatabase'])->name('administration.upgrade-database');

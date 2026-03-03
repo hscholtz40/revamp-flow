@@ -45,6 +45,16 @@ class Company extends Model
         'bank_account_name',
         'bank_account_number',
         'bank_sort_code',
+        'invoice_number_prefix',
+        'invoice_number_next',
+        'quote_number_prefix',
+        'quote_number_next',
+        'jobcard_number_prefix',
+        'jobcard_number_next',
+        'credit_note_number_prefix',
+        'credit_note_number_next',
+        'purchase_order_number_prefix',
+        'purchase_order_number_next',
     ];
 
     protected $casts = [
@@ -52,6 +62,11 @@ class Company extends Model
         'is_default' => 'boolean',
         'smtp_port' => 'integer',
         'visible_modules' => 'array',
+        'invoice_number_next' => 'integer',
+        'quote_number_next' => 'integer',
+        'jobcard_number_next' => 'integer',
+        'credit_note_number_next' => 'integer',
+        'purchase_order_number_next' => 'integer',
     ];
 
     protected $hidden = [

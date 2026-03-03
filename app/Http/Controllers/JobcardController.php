@@ -181,7 +181,7 @@ class JobcardController extends Controller
         ]);
 
         $validated['company_id'] = $currentCompany->id;
-        $validated['job_number'] = Jobcard::generateJobNumber();
+        $validated['job_number'] = Jobcard::generateJobNumber($currentCompany->id);
         $validated['tax_rate'] = $validated['tax_rate'] ?? 0;
 
         $jobcard = Jobcard::create($validated);

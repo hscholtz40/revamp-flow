@@ -196,7 +196,7 @@ class InvoicesController extends Controller
         ]);
 
         // Generate invoice number
-        $invoiceNumber = Invoice::generateInvoiceNumber();
+        $invoiceNumber = Invoice::generateInvoiceNumber($currentCompany->id);
 
         // Set default salesperson to current user if not provided
         $salespersonId = $validated['salesperson_id'] ?? auth()->id();
@@ -965,7 +965,7 @@ class InvoicesController extends Controller
         
         // Generate invoice number
         $invoiceNumber = Invoice::create([
-            'invoice_number' => Invoice::generateInvoiceNumber(),
+            'invoice_number' => Invoice::generateInvoiceNumber($currentCompany->id),
             'title' => $quote->title,
             'description' => $quote->description,
             'customer_id' => $quote->customer_id,
@@ -1014,7 +1014,7 @@ class InvoicesController extends Controller
         
         // Generate invoice number
         $invoiceNumber = Invoice::create([
-            'invoice_number' => Invoice::generateInvoiceNumber(),
+            'invoice_number' => Invoice::generateInvoiceNumber($currentCompany->id),
             'title' => $jobcard->title,
             'description' => $jobcard->description,
             'customer_id' => $jobcard->customer_id,

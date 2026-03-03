@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Support\Facades\DB;
 
 class Invoice extends Model
 {
@@ -114,7 +115,28 @@ class Invoice extends Model
     /**
      * Generate a unique invoice number.
      */
-    public static function generateInvoiceNumber(): string
+    public static function generateInvoiceNumber(?int $companyId = null): string
+    {
+        if ($companyId) {
+            return DB::transaction(function () use ($companyId) {
+                $company = Company::whereKey($companyId)->lockForUpdate()->first();
+                if ($company && $company->invoice_number_prefix !== null && $company->invoice_number_next !== null) {
+                    $next = max(1, (int) $company->invoice_number_next);
+                    $number = $company->invoice_number_prefix . str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+                    $company->invoice_number_next = $next + 1;
+                    $company->save();
+
+                    return $number;
+                }
+
+                return self::generateLegacyInvoiceNumber();
+            });
+        }
+
+        return self::generateLegacyInvoiceNumber();
+    }
+
+    private static function generateLegacyInvoiceNumber(): string
     {
         $year = date('Y');
         $month = date('m');

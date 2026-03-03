@@ -156,4 +156,77 @@ class AdministrationController extends Controller
 
         return redirect()->back()->with('error', $validation['message']);
     }
+
+    public function documentNumbering(): Response
+    {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        if (!$currentCompany) {
+            abort(404, 'No active company selected.');
+        }
+
+        return Inertia::render('administration/DocumentNumbering', [
+            'numbering' => [
+                'invoice_prefix' => $currentCompany->invoice_number_prefix,
+                'invoice_next' => $currentCompany->invoice_number_next,
+                'quote_prefix' => $currentCompany->quote_number_prefix,
+                'quote_next' => $currentCompany->quote_number_next,
+                'jobcard_prefix' => $currentCompany->jobcard_number_prefix,
+                'jobcard_next' => $currentCompany->jobcard_number_next,
+                'credit_note_prefix' => $currentCompany->credit_note_number_prefix,
+                'credit_note_next' => $currentCompany->credit_note_number_next,
+                'purchase_order_prefix' => $currentCompany->purchase_order_number_prefix,
+                'purchase_order_next' => $currentCompany->purchase_order_number_next,
+            ],
+            'company' => [
+                'id' => $currentCompany->id,
+                'name' => $currentCompany->name,
+            ],
+        ]);
+    }
+
+    public function updateDocumentNumbering(Request $request): RedirectResponse
+    {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        if (!$currentCompany) {
+            abort(404, 'No active company selected.');
+        }
+
+        $validated = $request->validate([
+            'invoice_prefix' => ['nullable', 'string', 'max:50'],
+            'invoice_next' => ['nullable', 'integer', 'min:1'],
+            'quote_prefix' => ['nullable', 'string', 'max:50'],
+            'quote_next' => ['nullable', 'integer', 'min:1'],
+            'jobcard_prefix' => ['nullable', 'string', 'max:50'],
+            'jobcard_next' => ['nullable', 'integer', 'min:1'],
+            'credit_note_prefix' => ['nullable', 'string', 'max:50'],
+            'credit_note_next' => ['nullable', 'integer', 'min:1'],
+            'purchase_order_prefix' => ['nullable', 'string', 'max:50'],
+            'purchase_order_next' => ['nullable', 'integer', 'min:1'],
+        ]);
+
+        $currentCompany->update([
+            'invoice_number_prefix' => $this->normalizePrefix($validated['invoice_prefix'] ?? null),
+            'invoice_number_next' => $validated['invoice_next'] ?? null,
+            'quote_number_prefix' => $this->normalizePrefix($validated['quote_prefix'] ?? null),
+            'quote_number_next' => $validated['quote_next'] ?? null,
+            'jobcard_number_prefix' => $this->normalizePrefix($validated['jobcard_prefix'] ?? null),
+            'jobcard_number_next' => $validated['jobcard_next'] ?? null,
+            'credit_note_number_prefix' => $this->normalizePrefix($validated['credit_note_prefix'] ?? null),
+            'credit_note_number_next' => $validated['credit_note_next'] ?? null,
+            'purchase_order_number_prefix' => $this->normalizePrefix($validated['purchase_order_prefix'] ?? null),
+            'purchase_order_number_next' => $validated['purchase_order_next'] ?? null,
+        ]);
+
+        return redirect()->back()->with('success', 'Document numbering settings updated.');
+    }
+
+    private function normalizePrefix(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $trimmed = trim($value);
+        return $trimmed === '' ? null : $trimmed;
+    }
 }

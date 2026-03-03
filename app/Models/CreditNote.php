@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 class CreditNote extends Model
 {
@@ -69,8 +70,26 @@ class CreditNote extends Model
         return $this->hasMany(CreditNoteLineItem::class)->orderBy('sort_order');
     }
 
-    public static function generateCreditNoteNumber(): string
+    public static function generateCreditNoteNumber(int $companyId): string
     {
+        $customNumber = DB::transaction(function () use ($companyId) {
+            $company = Company::whereKey($companyId)->lockForUpdate()->first();
+            if ($company && $company->credit_note_number_prefix !== null && $company->credit_note_number_next !== null) {
+                $next = max(1, (int) $company->credit_note_number_next);
+                $number = $company->credit_note_number_prefix . str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+                $company->credit_note_number_next = $next + 1;
+                $company->save();
+
+                return $number;
+            }
+
+            return null;
+        });
+
+        if ($customNumber !== null) {
+            return $customNumber;
+        }
+
         $prefix = 'CN-' . date('Ym');
         $lastCN = static::where('credit_note_number', 'like', $prefix . '%')
             ->orderByRaw('CAST(SUBSTRING(credit_note_number, ' . (strlen($prefix) + 1) . ') AS UNSIGNED) DESC')

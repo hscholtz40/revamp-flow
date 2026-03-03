@@ -1527,9 +1527,7 @@ class XeroService
                             if (($xeroInvoice['Type'] ?? null) !== 'ACCREC') {
                                 continue;
                             }
-                            if (empty($xeroInvoice['InvoiceNumber']) && empty($xeroInvoice['Reference'])) {
-                                continue;
-                            }
+                            $xeroInvoice = $this->hydrateInvoiceDetails($xeroInvoice);
 
                             $existingInvoice = Invoice::where('company_id', $currentCompany->id)
                                 ->where('xero_invoice_id', $xeroInvoice['InvoiceID'] ?? null)
@@ -1669,6 +1667,8 @@ class XeroService
                         if (($xeroInvoice['Type'] ?? null) !== 'ACCREC') {
                             continue;
                         }
+
+                        $xeroInvoice = $this->hydrateInvoiceDetails($xeroInvoice);
 
                         // Skip if invoice doesn't have required fields
                         if (empty($xeroInvoice['InvoiceNumber']) && empty($xeroInvoice['Reference'])) {
@@ -3563,6 +3563,22 @@ class XeroService
         return null;
     }
 
+    private function hydrateInvoiceDetails(array $xeroInvoice): array
+    {
+        $hasLineItems = isset($xeroInvoice['LineItems']) && is_array($xeroInvoice['LineItems']) && count($xeroInvoice['LineItems']) > 0;
+        $hasNumber = !empty($xeroInvoice['InvoiceNumber']) || !empty($xeroInvoice['Reference']);
+        if ((empty($xeroInvoice['InvoiceID'])) || ($hasLineItems && $hasNumber)) {
+            return $xeroInvoice;
+        }
+
+        $detailed = $this->getXeroInvoice((string) $xeroInvoice['InvoiceID']);
+        if (!is_array($detailed) || empty($detailed)) {
+            return $xeroInvoice;
+        }
+
+        return array_replace($xeroInvoice, $detailed);
+    }
+
     /**
      * Update invoice from Xero data
      */
@@ -3613,12 +3629,20 @@ class XeroService
 
         $invoice->update($updateData);
         
-        // Update line items if provided (optional - only if line items exist in Xero data)
+        // Update line items only when Xero sends non-empty line item arrays.
+        // Some list endpoints can include LineItems: [] even when the invoice has lines.
         if (isset($xeroInvoice['LineItems']) && is_array($xeroInvoice['LineItems'])) {
-            // Delete existing line items and recreate from Xero data
-            $invoice->lineItems()->delete();
-            
-            foreach ($xeroInvoice['LineItems'] as $index => $xeroLineItem) {
+            if (count($xeroInvoice['LineItems']) === 0) {
+                Log::warning('Skipping invoice line item replacement due to empty Xero LineItems payload', [
+                    'invoice_id' => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'xero_invoice_id' => $xeroInvoice['InvoiceID'] ?? $invoice->xero_invoice_id,
+                ]);
+            } else {
+                // Delete existing line items and recreate from Xero data
+                $invoice->lineItems()->delete();
+
+                foreach ($xeroInvoice['LineItems'] as $index => $xeroLineItem) {
                 // Try to find product by Xero item ID or SKU
                 $product = null;
                 
@@ -3715,20 +3739,21 @@ class XeroService
                     $lineItemDiscountPercentage = ($lineItemDiscountAmount / $lineItemSubtotal) * 100;
                 }
 
-                \App\Models\InvoiceLineItem::create([
-                    'invoice_id' => $invoice->id,
-                    'product_id' => $product?->id,
-                    'description' => $xeroLineItem['Description'] ?? '',
-                    'quantity' => $lineItemQuantity,
-                    'unit_price' => $lineItemUnitPrice,
-                    'discount_amount' => round($lineItemDiscountAmount, 2),
-                    'discount_percentage' => round($lineItemDiscountPercentage, 2),
-                    'total' => $lineItemTotal,
-                    'tax_rate_id' => $this->resolveTaxRateId($xeroLineItem['TaxType'] ?? null, $invoice->company_id),
-                    'tax_amount' => (float) ($xeroLineItem['TaxAmount'] ?? 0),
-                    'account_id' => $this->resolveAccountId($xeroLineItem['AccountCode'] ?? null, $invoice->company_id),
-                    'sort_order' => $index,
-                ]);
+                    \App\Models\InvoiceLineItem::create([
+                        'invoice_id' => $invoice->id,
+                        'product_id' => $product?->id,
+                        'description' => $xeroLineItem['Description'] ?? '',
+                        'quantity' => $lineItemQuantity,
+                        'unit_price' => $lineItemUnitPrice,
+                        'discount_amount' => round($lineItemDiscountAmount, 2),
+                        'discount_percentage' => round($lineItemDiscountPercentage, 2),
+                        'total' => $lineItemTotal,
+                        'tax_rate_id' => $this->resolveTaxRateId($xeroLineItem['TaxType'] ?? null, $invoice->company_id),
+                        'tax_amount' => (float) ($xeroLineItem['TaxAmount'] ?? 0),
+                        'account_id' => $this->resolveAccountId($xeroLineItem['AccountCode'] ?? null, $invoice->company_id),
+                        'sort_order' => $index,
+                    ]);
+                }
             }
         }
     }
@@ -5423,7 +5448,7 @@ class XeroService
             'customer_id' => $customer->id,
             'invoice_id' => $invoiceId,
             'xero_credit_note_id' => $xeroNote['CreditNoteID'],
-            'credit_note_number' => $xeroNote['CreditNoteNumber'] ?? CreditNote::generateCreditNoteNumber(),
+            'credit_note_number' => $xeroNote['CreditNoteNumber'] ?? CreditNote::generateCreditNoteNumber($company->id),
             'title' => $xeroNote['Reference'] ?? null,
             'status' => $this->mapXeroCreditNoteStatusToLocal($xeroNote['Status'] ?? 'DRAFT'),
             'credit_note_date' => isset($xeroNote['Date']) ? $this->parseXeroDate($xeroNote['Date']) : now(),

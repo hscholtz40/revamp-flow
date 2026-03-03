@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 class Quote extends Model
 {
@@ -72,8 +73,26 @@ class Quote extends Model
     /**
      * Generate a unique quote number
      */
-    public static function generateQuoteNumber(): string
+    public static function generateQuoteNumber(int $companyId): string
     {
+        $customNumber = DB::transaction(function () use ($companyId) {
+            $company = Company::whereKey($companyId)->lockForUpdate()->first();
+            if ($company && $company->quote_number_prefix !== null && $company->quote_number_next !== null) {
+                $next = max(1, (int) $company->quote_number_next);
+                $number = $company->quote_number_prefix . str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+                $company->quote_number_next = $next + 1;
+                $company->save();
+
+                return $number;
+            }
+
+            return null;
+        });
+
+        if ($customNumber !== null) {
+            return $customNumber;
+        }
+
         $prefix = 'QT';
         $year = date('Y');
         $month = date('m');
@@ -163,7 +182,7 @@ class Quote extends Model
         $jobcard = Jobcard::create([
             'company_id' => $this->company_id,
             'customer_id' => $this->customer_id,
-            'job_number' => Jobcard::generateJobNumber(),
+            'job_number' => Jobcard::generateJobNumber($this->company_id),
             'title' => $this->title,
             'description' => $this->description,
             'status' => 'draft',
@@ -204,7 +223,7 @@ class Quote extends Model
         $invoice = Invoice::create([
             'company_id' => $this->company_id,
             'customer_id' => $this->customer_id,
-            'invoice_number' => Invoice::generateInvoiceNumber(),
+            'invoice_number' => Invoice::generateInvoiceNumber($this->company_id),
             'title' => $this->title,
             'description' => $this->description,
             'status' => 'draft',

@@ -149,7 +149,7 @@ class QuotesController extends Controller
         $quote = Quote::create([
             'company_id' => $currentCompany->id,
             'customer_id' => $validated['customer_id'],
-            'quote_number' => Quote::generateQuoteNumber(),
+            'quote_number' => Quote::generateQuoteNumber($currentCompany->id),
             'title' => $validated['title'],
             'description' => $validated['description'],
             'status' => $validated['status'],

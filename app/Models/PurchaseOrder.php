@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 class PurchaseOrder extends Model
 {
@@ -78,6 +79,24 @@ class PurchaseOrder extends Model
      */
     public static function generatePONumber(int $companyId): string
     {
+        $customNumber = DB::transaction(function () use ($companyId) {
+            $company = Company::whereKey($companyId)->lockForUpdate()->first();
+            if ($company && $company->purchase_order_number_prefix !== null && $company->purchase_order_number_next !== null) {
+                $next = max(1, (int) $company->purchase_order_number_next);
+                $number = $company->purchase_order_number_prefix . str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+                $company->purchase_order_number_next = $next + 1;
+                $company->save();
+
+                return $number;
+            }
+
+            return null;
+        });
+
+        if ($customNumber !== null) {
+            return $customNumber;
+        }
+
         $year = date('Y');
         $lastPO = static::where('company_id', $companyId)
             ->whereYear('created_at', $year)
