@@ -236,8 +236,20 @@
         background-color: hsl(0 0% 11%);
     }
 
+    .dark .bg-gray-100 {
+        background-color: hsl(0 0% 14%);
+    }
+
+    .dark .bg-gray-200 {
+        background-color: hsl(0 0% 18%);
+    }
+
     .dark .bg-blue-50 {
         background-color: hsl(215 35% 14%);
+    }
+
+    .dark .bg-blue-100 {
+        background-color: hsl(215 35% 18%);
     }
 
     .dark .text-gray-900 {
@@ -253,13 +265,94 @@
         color: hsl(0 0% 70%);
     }
 
+    .dark .text-gray-400 {
+        color: hsl(0 0% 58%);
+    }
+
+    .dark .text-blue-800,
+    .dark .text-blue-700 {
+        color: hsl(215 85% 78%);
+    }
+
+    .dark .text-blue-600 {
+        color: hsl(215 85% 72%);
+    }
+
     .dark .border-gray-200,
     .dark .border-gray-300 {
         border-color: hsl(0 0% 24%);
     }
 
+    .dark .border-blue-200 {
+        border-color: hsl(215 45% 38%);
+    }
+
+    .dark .border-blue-500 {
+        border-color: hsl(215 70% 58%);
+    }
+
     .dark .hover\:bg-gray-50:hover {
         background-color: hsl(0 0% 14%);
+    }
+
+    .dark .hover\:bg-gray-100:hover {
+        background-color: hsl(0 0% 18%);
+    }
+
+    .dark .hover\:bg-gray-200:hover {
+        background-color: hsl(0 0% 22%);
+    }
+
+    .dark .hover\:bg-blue-50:hover {
+        background-color: hsl(215 35% 20%);
+    }
+
+    .dark .hover\:bg-blue-100:hover {
+        background-color: hsl(215 35% 24%);
+    }
+
+    /*
+     * Pagination controls in list views (Laravel + manual pagers).
+     */
+    .dark nav[role='navigation'] .bg-white {
+        background-color: hsl(0 0% 10%);
+    }
+
+    .dark nav[role='navigation'] .bg-blue-50 {
+        background-color: hsl(215 35% 20%);
+    }
+
+    .dark nav[role='navigation'] .text-gray-500,
+    .dark nav[role='navigation'] .text-gray-400 {
+        color: hsl(0 0% 72%);
+    }
+
+    .dark nav[role='navigation'] .text-blue-600 {
+        color: hsl(215 85% 75%);
+    }
+
+    /*
+     * Dropdown/popover/menu panels and modal surfaces.
+     * Many pages use these utility combinations without dark variants.
+     */
+    .dark .shadow-lg.bg-white,
+    .dark .shadow-xl.bg-white,
+    .dark .ring-1.bg-white {
+        background-color: hsl(0 0% 10%);
+        border-color: hsl(0 0% 24%);
+    }
+
+    .dark .bg-black\/50,
+    .dark .bg-black.bg-opacity-50,
+    .dark .bg-gray-600.bg-opacity-50 {
+        background-color: rgb(0 0 0 / 0.7);
+    }
+
+    .dark [role='dialog'].bg-white,
+    .dark .fixed .bg-white {
+        background-color: hsl(0 0% 10%);
+        color: hsl(0 0% 95%);
+        border-color: hsl(0 0% 24%);
     }
 
     .dark input,

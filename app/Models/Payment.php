@@ -9,6 +9,7 @@ class Payment extends Model
 {
     protected $fillable = [
         'invoice_id',
+        'credit_note_id',
         'amount',
         'payment_method',
         'payment_date',
@@ -27,6 +28,11 @@ class Payment extends Model
     public function invoice(): BelongsTo
     {
         return $this->belongsTo(Invoice::class);
+    }
+
+    public function creditNote(): BelongsTo
+    {
+        return $this->belongsTo(CreditNote::class);
     }
 
     public function company(): BelongsTo

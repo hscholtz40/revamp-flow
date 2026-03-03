@@ -48,7 +48,7 @@ class CreditNote extends Model
         'xero_created_at' => 'datetime',
     ];
 
-    protected $appends = ['status_color', 'formatted_total'];
+    protected $appends = ['status_color', 'formatted_total', 'total_refunded'];
 
     public function company(): BelongsTo
     {
@@ -68,6 +68,11 @@ class CreditNote extends Model
     public function lineItems(): HasMany
     {
         return $this->hasMany(CreditNoteLineItem::class)->orderBy('sort_order');
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class)->orderBy('payment_date', 'desc');
     }
 
     public static function generateCreditNoteNumber(int $companyId): string
@@ -115,6 +120,8 @@ class CreditNote extends Model
         $this->tax_amount = $taxAmount;
         $this->discount_amount = $discountAmount;
         $this->total = $subtotal + $taxAmount;
+        $refunded = (float) $this->payments()->sum('amount');
+        $this->remaining_credit = max(0, round(((float) $this->total) - $refunded, 2));
         $this->save();
     }
 
@@ -133,6 +140,15 @@ class CreditNote extends Model
     public function getFormattedTotalAttribute(): string
     {
         return number_format((float) $this->total, 2);
+    }
+
+    public function getTotalRefundedAttribute(): float
+    {
+        if ($this->relationLoaded('payments')) {
+            return (float) $this->payments->sum(fn ($payment) => (float) $payment->amount);
+        }
+
+        return (float) $this->payments()->sum('amount');
     }
 
     public function scopeForCompany($query, int $companyId)

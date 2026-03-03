@@ -6,9 +6,11 @@ use App\Models\CreditNote;
 use App\Models\CreditNoteLineItem;
 use App\Models\Customer;
 use App\Models\Invoice;
+use App\Models\Payment;
 use App\Models\Product;
 use App\Models\ChartOfAccount;
 use App\Models\TaxRate;
+use App\Services\XeroService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -213,6 +215,7 @@ class CreditNotesController extends Controller
         }
 
         $creditNote->calculateTotals();
+        $this->syncCreditNoteStatusFromBalance($creditNote);
         $this->syncInvoiceStatusAfterCreditNoteChange($creditNote);
 
         return redirect()->route('credit-notes.show', $creditNote)
@@ -227,9 +230,11 @@ class CreditNotesController extends Controller
             'lineItems.product',
             'lineItems.taxRate',
             'company',
+            'payments',
         ]);
 
         $creditNote->calculateTotals();
+        $this->syncCreditNoteStatusFromBalance($creditNote);
 
         return Inertia::render('credit-notes/Show', [
             'creditNote' => $creditNote,
@@ -358,6 +363,7 @@ class CreditNotesController extends Controller
         }
 
         $creditNote->calculateTotals();
+        $this->syncCreditNoteStatusFromBalance($creditNote);
         $this->syncInvoiceStatusAfterCreditNoteChange($creditNote);
 
         return redirect()->route('credit-notes.show', $creditNote)
@@ -386,6 +392,77 @@ class CreditNotesController extends Controller
             ->with('success', "Credit note status updated to {$validated['status']}.");
     }
 
+    public function storePayment(Request $request, CreditNote $creditNote): RedirectResponse
+    {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        if ($creditNote->company_id !== $currentCompany->id) {
+            return redirect()->back()->with('error', 'You do not have access to this credit note.');
+        }
+
+        $validated = $request->validate([
+            'amount' => 'required|numeric|min:0.01',
+            'payment_method' => 'required|in:cash,card,eft',
+            'payment_date' => 'required|date',
+            'notes' => 'nullable|string|max:1000',
+        ]);
+
+        $creditNote->refresh();
+        $remainingCredit = max(0, round((float) $creditNote->total - (float) $creditNote->payments()->sum('amount'), 2));
+        if ((float) $validated['amount'] > $remainingCredit) {
+            return redirect()->back()->with('error', 'Refund amount cannot exceed remaining credit of ' . number_format($remainingCredit, 2));
+        }
+
+        $payment = Payment::create([
+            'invoice_id' => null,
+            'credit_note_id' => $creditNote->id,
+            'company_id' => $currentCompany->id,
+            'amount' => $validated['amount'],
+            'payment_method' => $validated['payment_method'],
+            'payment_date' => $validated['payment_date'],
+            'notes' => $validated['notes'] ?? null,
+        ]);
+
+        $creditNote->refresh();
+        $creditNote->calculateTotals();
+        $this->syncCreditNoteStatusFromBalance($creditNote);
+
+        if ($creditNote->xero_credit_note_id) {
+            try {
+                $xeroService = new XeroService($currentCompany);
+                if ($xeroService->isConfigured()) {
+                    $xeroService->syncCreditNotePaymentsToXero($creditNote);
+                }
+            } catch (\Throwable $e) {
+                Log::error('Failed to sync credit note refund to Xero', [
+                    'credit_note_id' => $creditNote->id,
+                    'payment_id' => $payment->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return redirect()->back()->with('success', 'Refund payment added successfully.');
+    }
+
+    public function destroyPayment(CreditNote $creditNote, Payment $payment): RedirectResponse
+    {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        if ($creditNote->company_id !== $currentCompany->id || $payment->company_id !== $currentCompany->id) {
+            return redirect()->back()->with('error', 'You do not have access to this refund payment.');
+        }
+
+        if ((int) $payment->credit_note_id !== (int) $creditNote->id) {
+            return redirect()->back()->with('error', 'This payment does not belong to the selected credit note.');
+        }
+
+        $payment->delete();
+        $creditNote->refresh();
+        $creditNote->calculateTotals();
+        $this->syncCreditNoteStatusFromBalance($creditNote);
+
+        return redirect()->back()->with('success', 'Refund payment removed successfully.');
+    }
+
     private function syncInvoiceStatusAfterCreditNoteChange(CreditNote $creditNote): void
     {
         if (!$creditNote->invoice_id) {
@@ -400,6 +477,23 @@ class CreditNotesController extends Controller
         $invoice->refresh();
         if ($invoice->isFullyPaid() && $invoice->status !== 'paid') {
             $invoice->update(['status' => 'paid']);
+        }
+    }
+
+    private function syncCreditNoteStatusFromBalance(CreditNote $creditNote): void
+    {
+        $creditNote->refresh();
+        $remaining = max(0, round((float) $creditNote->total - (float) $creditNote->payments()->sum('amount'), 2));
+        $creditNote->update(['remaining_credit' => $remaining]);
+
+        if ($creditNote->status !== 'voided') {
+            if ($remaining <= 0.01 && $creditNote->status !== 'paid') {
+                $creditNote->update(['status' => 'paid']);
+            }
+
+            if ($remaining > 0.01 && $creditNote->status === 'paid') {
+                $creditNote->update(['status' => 'authorised']);
+            }
         }
     }
 }

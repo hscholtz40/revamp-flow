@@ -1437,6 +1437,38 @@ class XeroService
                     'xero_invoice_id' => $xeroInvoice['InvoiceID'] ?? null,
                     'decision_reason' => 'exported',
                 ]);
+
+                // If this invoice is already fully paid locally, sync payment(s) immediately
+                // so Xero receives invoice + payment in the same sync run.
+                if ($invoice->isFullyPaid()) {
+                    try {
+                        $paymentResults = $this->syncPaymentsToXero($invoice, $xeroInvoice);
+                        $successCount = collect($paymentResults)->where('status', 'success')->count();
+
+                        if ($successCount > 0) {
+                            $results[] = [
+                                'invoice_id' => $invoice->id,
+                                'invoice_number' => $invoice->invoice_number,
+                                'status' => 'payments_synced',
+                                'message' => "Synced {$successCount} payment(s) to Xero immediately after invoice export",
+                            ];
+                        }
+
+                        Log::info('Immediate payment sync attempted after invoice export', [
+                            'invoice_id' => $invoice->id,
+                            'invoice_number' => $invoice->invoice_number,
+                            'xero_invoice_id' => $invoice->xero_invoice_id,
+                            'payment_sync_success_count' => $successCount,
+                        ]);
+                    } catch (\Exception $paymentSyncError) {
+                        Log::error('Immediate payment sync failed after invoice export', [
+                            'invoice_id' => $invoice->id,
+                            'invoice_number' => $invoice->invoice_number,
+                            'xero_invoice_id' => $invoice->xero_invoice_id,
+                            'error' => $paymentSyncError->getMessage(),
+                        ]);
+                    }
+                }
             } catch (\Exception $e) {
                 Log::error('Invoice sync failed', [
                     'invoice_id' => $invoice->id,
@@ -1977,9 +2009,34 @@ class XeroService
         if ($invoice->xero_invoice_id) {
             $invoiceData['InvoiceID'] = $invoice->xero_invoice_id;
             
-            // For paid invoices, we need to fetch existing line items and include LineItemIDs
+            // Fetch current Xero invoice to preserve constraints around paid/credited invoices.
             $xeroInvoice = $this->getXeroInvoice($invoice->xero_invoice_id);
-            if ($xeroInvoice && $xeroInvoice['Status'] === 'PAID') {
+            if ($xeroInvoice) {
+                $xeroAmountPaid = (float) ($xeroInvoice['AmountPaid'] ?? 0);
+                $xeroAmountCredited = (float) ($xeroInvoice['AmountCredited'] ?? 0);
+                $hasAllocations = $xeroAmountPaid > 0 || $xeroAmountCredited > 0;
+
+                // Xero rejects forcing AUTHORISED when payments/credits are already allocated.
+                // For updates, omit Status and let Xero keep its existing status.
+                if ($hasAllocations) {
+                    unset($invoiceData['Status']);
+                    Log::info('Skipping invoice status in Xero payload because allocations exist', [
+                        'invoice_id' => $invoice->id,
+                        'invoice_number' => $invoice->invoice_number,
+                        'xero_invoice_id' => $invoice->xero_invoice_id,
+                        'xero_status' => $xeroInvoice['Status'] ?? null,
+                        'amount_paid' => $xeroAmountPaid,
+                        'amount_credited' => $xeroAmountCredited,
+                    ]);
+                }
+            }
+
+            // For paid/allocated invoices, include existing LineItemIDs to keep Xero line links stable.
+            if ($xeroInvoice && (
+                ($xeroInvoice['Status'] ?? null) === 'PAID'
+                || (float) ($xeroInvoice['AmountPaid'] ?? 0) > 0
+                || (float) ($xeroInvoice['AmountCredited'] ?? 0) > 0
+            )) {
                 // Map local line items to Xero line items by matching description and amount
                 $xeroLineItems = $xeroInvoice['LineItems'] ?? [];
                 
@@ -3986,7 +4043,7 @@ class XeroService
     /**
      * Sync payments to Xero for a specific invoice
      */
-    public function syncPaymentsToXero(Invoice $invoice): array
+    public function syncPaymentsToXero(Invoice $invoice, ?array $xeroInvoice = null): array
     {
         if (!$this->settings->sync_invoices_to_xero) {
             return ['skipped' => true, 'message' => 'Invoice sync to Xero is disabled'];
@@ -3997,7 +4054,7 @@ class XeroService
         }
 
         $results = [];
-        $xeroInvoice = $this->getXeroInvoiceCached($invoice->xero_invoice_id);
+        $xeroInvoice = $xeroInvoice ?? $this->getXeroInvoiceCached($invoice->xero_invoice_id);
         $payments = $invoice->payments()
             ->where(function ($query) {
                 $query->whereNull('xero_payment_id')
@@ -4497,44 +4554,54 @@ class XeroService
                         $paymentDate = $paymentCreatedDate; // Fallback to created date
                     }
 
-                    // Get invoice ID from payment
                     $xeroInvoiceId = $xeroPayment['Invoice']['InvoiceID'] ?? null;
-                    if (!$xeroInvoiceId) {
-                        Log::warning('Payment from Xero has no invoice ID', [
+                    $xeroCreditNoteId = $xeroPayment['CreditNote']['CreditNoteID'] ?? null;
+                    $invoice = null;
+                    $creditNote = null;
+
+                    if ($xeroInvoiceId) {
+                        $invoice = Invoice::where('company_id', $currentCompany->id)
+                            ->where('xero_invoice_id', $xeroInvoiceId)
+                            ->first();
+                    } elseif ($xeroCreditNoteId) {
+                        $creditNote = CreditNote::where('company_id', $currentCompany->id)
+                            ->where('xero_credit_note_id', $xeroCreditNoteId)
+                            ->first();
+                    } else {
+                        Log::warning('Payment from Xero has no invoice or credit note ID', [
                             'payment_id' => $xeroPayment['PaymentID'] ?? 'Unknown',
                         ]);
                         continue;
                     }
 
-                    // Find local invoice by Xero invoice ID
-                    $invoice = Invoice::where('company_id', $currentCompany->id)
-                        ->where('xero_invoice_id', $xeroInvoiceId)
-                        ->first();
-
-                    if (!$invoice) {
-                        Log::info('Invoice not found locally for Xero payment', [
+                    if (!$invoice && !$creditNote) {
+                        Log::info('Invoice/Credit note not found locally for Xero payment', [
                             'company_id' => $currentCompany->id,
                             'xero_invoice_id' => $xeroInvoiceId,
+                            'xero_credit_note_id' => $xeroCreditNoteId,
                             'payment_id' => $xeroPayment['PaymentID'] ?? 'Unknown',
                         ]);
                         $skippedCount++;
                         continue;
                     }
 
-                    // Check if payment already exists (match by invoice, amount, and date)
+                    // Check if payment already exists (match by entity, amount, and date)
                     $amount = $xeroPayment['Amount'] ?? 0;
                     $existingPayment = null;
                     $xeroPaymentId = $xeroPayment['PaymentID'] ?? null;
                     if ($xeroPaymentId) {
-                        $existingPayment = Payment::where('invoice_id', $invoice->id)
-                            ->where('xero_payment_id', $xeroPaymentId)
-                            ->first();
+                        $existingPayment = Payment::where('xero_payment_id', $xeroPaymentId)->first();
                     }
                     if (!$existingPayment) {
-                        $existingPayment = Payment::where('invoice_id', $invoice->id)
-                            ->where('amount', $amount)
-                            ->whereDate('payment_date', $paymentDate->format('Y-m-d'))
-                            ->first();
+                        $paymentQuery = Payment::query()->where('amount', $amount)
+                            ->whereDate('payment_date', $paymentDate->format('Y-m-d'));
+                        if ($invoice) {
+                            $paymentQuery->where('invoice_id', $invoice->id);
+                        }
+                        if ($creditNote) {
+                            $paymentQuery->where('credit_note_id', $creditNote->id);
+                        }
+                        $existingPayment = $paymentQuery->first();
                     }
 
                     if ($existingPayment) {
@@ -4546,7 +4613,8 @@ class XeroService
                         }
                         Log::info('Payment already exists locally', [
                             'payment_id' => $existingPayment->id,
-                            'invoice_id' => $invoice->id,
+                            'invoice_id' => $invoice?->id,
+                            'credit_note_id' => $creditNote?->id,
                             'amount' => $amount,
                             'date' => $paymentDate->format('Y-m-d'),
                         ]);
@@ -4571,7 +4639,8 @@ class XeroService
 
                     // Create payment
                     $payment = Payment::create([
-                        'invoice_id' => $invoice->id,
+                        'invoice_id' => $invoice?->id,
+                        'credit_note_id' => $creditNote?->id,
                         'company_id' => $currentCompany->id,
                         'amount' => $amount,
                         'payment_method' => $paymentMethod,
@@ -4585,22 +4654,37 @@ class XeroService
                     
                     Log::info('Created payment from Xero', [
                         'payment_id' => $payment->id,
-                        'invoice_id' => $invoice->id,
-                        'invoice_number' => $invoice->invoice_number,
+                        'invoice_id' => $invoice?->id,
+                        'invoice_number' => $invoice?->invoice_number,
+                        'credit_note_id' => $creditNote?->id,
+                        'credit_note_number' => $creditNote?->credit_note_number,
                         'amount' => $amount,
                         'date' => $paymentDate->format('Y-m-d'),
                     ]);
 
                     // Update invoice status if fully paid
-                    $invoice->refresh();
-                    if ($invoice->isFullyPaid()) {
-                        $invoice->update(['status' => 'paid']);
+                    if ($invoice) {
+                        $invoice->refresh();
+                        if ($invoice->isFullyPaid()) {
+                            $invoice->update(['status' => 'paid']);
+                        }
+                    }
+
+                    if ($creditNote) {
+                        $creditNote->refresh();
+                        $remaining = max(0, round((float) $creditNote->total - (float) $creditNote->payments()->sum('amount'), 2));
+                        $creditNote->update(['remaining_credit' => $remaining]);
+                        if ($creditNote->status !== 'voided' && $remaining <= 0.01 && $creditNote->status !== 'paid') {
+                            $creditNote->update(['status' => 'paid']);
+                        }
                     }
 
                     $results[] = [
                         'payment_id' => $payment->id,
-                        'invoice_id' => $invoice->id,
-                        'invoice_number' => $invoice->invoice_number,
+                        'invoice_id' => $invoice?->id,
+                        'invoice_number' => $invoice?->invoice_number,
+                        'credit_note_id' => $creditNote?->id,
+                        'credit_note_number' => $creditNote?->credit_note_number,
                         'amount' => $amount,
                         'status' => 'created',
                     ];
@@ -4623,7 +4707,8 @@ class XeroService
                     $results[] = [
                         'payment_id' => null,
                         'xero_payment_id' => $xeroPayment['PaymentID'] ?? 'Unknown',
-                        'xero_invoice_id' => $xeroPayment['Invoice']['InvoiceID'] ?? 'Unknown',
+                        'xero_invoice_id' => $xeroPayment['Invoice']['InvoiceID'] ?? null,
+                        'xero_credit_note_id' => $xeroPayment['CreditNote']['CreditNoteID'] ?? null,
                         'status' => 'error',
                         'error' => $e->getMessage(),
                     ];
@@ -5213,6 +5298,17 @@ class XeroService
 
                 $xeroData = $this->createOrUpdateCreditNoteInXero($creditNote);
 
+                if (!empty($xeroData['_sync_skipped_reason'])) {
+                    $this->updateCreditNoteFromXeroData($creditNote, $xeroData);
+                    $results[] = [
+                        'credit_note_id' => $creditNote->id,
+                        'credit_note_number' => $creditNote->credit_note_number,
+                        'status' => 'skipped',
+                        'message' => $xeroData['_sync_skipped_reason'],
+                    ];
+                    continue;
+                }
+
                 if (isset($xeroData['CreditNoteID'])) {
                     $updateData = $this->getXeroTimestamps($xeroData);
                     if (!$creditNote->xero_credit_note_id) {
@@ -5235,6 +5331,18 @@ class XeroService
                     } catch (\Exception $e) {
                         Log::warning('Failed to allocate credit note to invoice in Xero', [
                             'credit_note_id' => $creditNote->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+
+                if ($creditNote->xero_credit_note_id) {
+                    try {
+                        $this->syncCreditNotePaymentsToXero($creditNote);
+                    } catch (\Exception $e) {
+                        Log::warning('Failed to sync credit note refund payments to Xero', [
+                            'credit_note_id' => $creditNote->id,
+                            'credit_note_number' => $creditNote->credit_note_number,
                             'error' => $e->getMessage(),
                         ]);
                     }
@@ -5535,6 +5643,111 @@ class XeroService
         ]);
     }
 
+    public function syncCreditNotePaymentsToXero(CreditNote $creditNote): array
+    {
+        if (!$this->settings->sync_credit_notes_to_xero) {
+            return ['skipped' => true, 'message' => 'Credit note sync to Xero is disabled'];
+        }
+
+        if (!$creditNote->xero_credit_note_id) {
+            return [['status' => 'skipped', 'message' => 'Credit note has not been synced to Xero yet']];
+        }
+
+        $payments = $creditNote->payments()
+            ->where(function ($query) {
+                $query->whereNull('xero_payment_id')
+                    ->orWhereNull('xero_synced_at')
+                    ->orWhereColumn('payments.updated_at', '>', 'payments.xero_synced_at');
+            })
+            ->orderBy('id')
+            ->get();
+
+        if ($payments->isEmpty()) {
+            return [[
+                'credit_note_id' => $creditNote->id,
+                'status' => 'skipped',
+                'message' => 'No unsynced credit note refund payments found',
+            ]];
+        }
+
+        $results = [];
+        foreach ($payments as $payment) {
+            try {
+                $results[] = $this->createCreditNotePaymentInXero($creditNote, $payment);
+            } catch (\Exception $e) {
+                Log::error('Credit note payment sync failed', [
+                    'credit_note_id' => $creditNote->id,
+                    'payment_id' => $payment->id,
+                    'error' => $e->getMessage(),
+                ]);
+                $results[] = [
+                    'payment_id' => $payment->id,
+                    'status' => 'error',
+                    'error' => $e->getMessage(),
+                ];
+            }
+        }
+
+        return $results;
+    }
+
+    private function createCreditNotePaymentInXero(CreditNote $creditNote, Payment $payment): array
+    {
+        if (!empty($payment->xero_payment_id) && !empty($payment->xero_synced_at) && !$payment->updated_at->gt($payment->xero_synced_at)) {
+            return [
+                'payment_id' => $payment->id,
+                'amount' => $payment->amount,
+                'status' => 'skipped',
+                'message' => 'Credit note payment already synced to Xero',
+            ];
+        }
+
+        $currentCompany = $this->getCompany();
+        $defaultBankAccount = BankAccount::getDefaultForCompany($currentCompany->id);
+        if (!$defaultBankAccount || !$defaultBankAccount->xero_account_id) {
+            throw new \Exception("No default bank account configured with Xero account ID. Please set a default bank account with Xero integration in Bank Accounts settings.");
+        }
+
+        $paymentData = [
+            'CreditNote' => [
+                'CreditNoteID' => $creditNote->xero_credit_note_id,
+            ],
+            'Account' => [
+                'AccountID' => $defaultBankAccount->xero_account_id,
+            ],
+            'Date' => $payment->payment_date->format('Y-m-d'),
+            'Amount' => (float) $payment->amount,
+            'Reference' => 'Refund for ' . $creditNote->credit_note_number . ($payment->notes ? (' - ' . $payment->notes) : ''),
+        ];
+
+        $response = $this->makeXeroRequest('post', $this->baseUrl . '/api.xro/2.0/Payments', [
+            'Payments' => [$paymentData],
+        ]);
+
+        if (!$response->successful()) {
+            $errorBody = $response->body();
+            throw new \Exception('Failed to create credit note payment in Xero: ' . $errorBody);
+        }
+
+        $result = $response->json();
+        $xeroPayment = $result['Payments'][0] ?? [];
+        $syncStamp = !empty($xeroPayment['UpdatedDateUTC']) ? $this->parseXeroDate($xeroPayment['UpdatedDateUTC']) : now();
+
+        if (!empty($xeroPayment['PaymentID'])) {
+            $payment->update([
+                'xero_payment_id' => $xeroPayment['PaymentID'],
+                'xero_synced_at' => $syncStamp,
+            ]);
+        }
+
+        return [
+            'payment_id' => $payment->id,
+            'amount' => $payment->amount,
+            'status' => 'success',
+            'xero_payment_id' => $xeroPayment['PaymentID'] ?? null,
+        ];
+    }
+
     private function createOrUpdateCreditNoteInXero(CreditNote $creditNote): array
     {
         if (!$creditNote->relationLoaded('lineItems')) {
@@ -5624,6 +5837,43 @@ class XeroService
 
         if ($creditNote->xero_credit_note_id) {
             $data['CreditNoteID'] = $creditNote->xero_credit_note_id;
+
+            // Credit notes with allocations/applied amounts are often non-editable in Xero.
+            // Skip outbound mutation to avoid repeated validation failures.
+            $existingXeroCreditNote = $this->getXeroCreditNote($creditNote->xero_credit_note_id);
+            if ($existingXeroCreditNote) {
+                $allocationCount = isset($existingXeroCreditNote['Allocations']) && is_array($existingXeroCreditNote['Allocations'])
+                    ? count($existingXeroCreditNote['Allocations'])
+                    : 0;
+                $paymentCount = isset($existingXeroCreditNote['Payments']) && is_array($existingXeroCreditNote['Payments'])
+                    ? count($existingXeroCreditNote['Payments'])
+                    : 0;
+                $xeroTotal = (float) ($existingXeroCreditNote['Total'] ?? $creditNote->total ?? 0);
+                $remainingCredit = (float) ($existingXeroCreditNote['RemainingCredit'] ?? $creditNote->remaining_credit ?? 0);
+                $appliedAmount = max(0, $xeroTotal - $remainingCredit);
+                $xeroStatus = (string) ($existingXeroCreditNote['Status'] ?? '');
+
+                $isLockedForEdit = $allocationCount > 0
+                    || $paymentCount > 0
+                    || $appliedAmount > 0.01
+                    || in_array($xeroStatus, ['PAID', 'VOIDED'], true);
+
+                if ($isLockedForEdit) {
+                    Log::info('Skipping outbound credit note update because Xero credit note is non-editable', [
+                        'credit_note_id' => $creditNote->id,
+                        'credit_note_number' => $creditNote->credit_note_number,
+                        'xero_credit_note_id' => $creditNote->xero_credit_note_id,
+                        'xero_status' => $xeroStatus,
+                        'allocation_count' => $allocationCount,
+                        'payment_count' => $paymentCount,
+                        'applied_amount' => $appliedAmount,
+                        'remaining_credit' => $remainingCredit,
+                    ]);
+
+                    $existingXeroCreditNote['_sync_skipped_reason'] = 'Skipped outbound update: credit note is allocated/applied and non-editable in Xero';
+                    return $existingXeroCreditNote;
+                }
+            }
         }
 
         Log::info('Creating/updating credit note in Xero', [

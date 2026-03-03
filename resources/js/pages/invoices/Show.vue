@@ -599,17 +599,26 @@
                         </div>
                         <div>
                             <label style="display: block; font-size: 14px; font-weight: 500; color: #374151; margin-bottom: 4px;">Payment Method</label>
-                            <select
-                                v-model="paymentForm.payment_method"
-                                style="width: 100%; border: 1px solid #d1d5db; border-radius: 4px; padding: 8px 12px; font-size: 14px;"
-                                :style="{ 'border-color': paymentForm.errors.payment_method ? '#ef4444' : '#d1d5db' }"
-                                required
-                            >
-                                <option value="">Select Method</option>
-                                <option value="cash">Cash</option>
-                                <option value="card">Card</option>
-                                <option value="eft">EFT</option>
-                            </select>
+                            <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px;">
+                                <button
+                                    v-for="method in paymentMethodOptions"
+                                    :key="method.value"
+                                    type="button"
+                                    @click="paymentForm.payment_method = method.value"
+                                    :style="{
+                                        border: paymentForm.payment_method === method.value ? '1px solid #3b82f6' : '1px solid #d1d5db',
+                                        background: paymentForm.payment_method === method.value ? '#eff6ff' : '#ffffff',
+                                        color: paymentForm.payment_method === method.value ? '#1d4ed8' : '#374151',
+                                        borderRadius: '4px',
+                                        padding: '8px 10px',
+                                        fontSize: '14px',
+                                        fontWeight: '500',
+                                        cursor: 'pointer'
+                                    }"
+                                >
+                                    {{ method.label }}
+                                </button>
+                            </div>
                             <div v-if="paymentForm.errors.payment_method" style="color: #ef4444; font-size: 12px; margin-top: 4px;">
                                 {{ paymentForm.errors.payment_method }}
                             </div>
@@ -866,6 +875,12 @@ const sendEmail = () => {
 };
 
 // Payment form
+const paymentMethodOptions = [
+    { value: 'cash', label: 'Cash' },
+    { value: 'card', label: 'Card' },
+    { value: 'eft', label: 'EFT' },
+];
+
 const paymentForm = useForm({
     invoice_id: props.invoice.id,
     amount: (props.invoice.remaining_balance || props.invoice.total).toString(),

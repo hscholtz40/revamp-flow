@@ -27,6 +27,11 @@ const props = defineProps<{
 }>();
 
 const paymentTermsOptions = ['COD', 'Net 7 Days', 'Net 14 Days', 'Net 30 Days', 'Net 60 Days'];
+const paymentMethodOptions = [
+    { value: 'cash', label: 'Cash' },
+    { value: 'card', label: 'Card' },
+    { value: 'eft', label: 'EFT' },
+];
 const showProductSuggestions = ref<Record<number, boolean>>({});
 const pendingPrintWindow = ref<Window | null>(null);
 const customerSearchQuery = ref(props.selectedCustomer?.name || '');
@@ -40,7 +45,7 @@ const form = useForm({
     due_date: new Date().toISOString().split('T')[0],
     terms: (props.selectedCustomer?.terms || 'COD').trim() || 'COD',
     notes: '',
-    payment_method: 'cash',
+    payment_method: '',
     amount_paid: 0,
     tendered_amount: 0,
     line_items: [
@@ -219,6 +224,27 @@ const changeDue = computed(() => {
     return Math.max(0, (Number(form.tendered_amount) || 0) - (Number(form.amount_paid) || 0));
 });
 
+const hasAtLeastOneLineItem = computed(() => form.line_items.length > 0);
+const areLineItemsValid = computed(() =>
+    form.line_items.length > 0 &&
+    form.line_items.every((item) =>
+        (item.description || '').trim().length > 0 &&
+        Number(item.quantity) >= 1 &&
+        Number(item.unit_price) >= 0
+    )
+);
+
+const canCompleteSale = computed(() =>
+    Boolean(form.customer_id) &&
+    Boolean(form.payment_method) &&
+    Boolean(form.invoice_date) &&
+    Boolean(form.due_date) &&
+    Boolean((form.terms || '').trim()) &&
+    Number(form.amount_paid) > 0 &&
+    hasAtLeastOneLineItem.value &&
+    areLineItemsValid.value
+);
+
 const formatCurrency = (amount: number) => new Intl.NumberFormat('en-ZA', {
     style: 'currency',
     currency: 'ZAR',
@@ -245,7 +271,7 @@ const resetSale = () => {
     form.invoice_date = new Date().toISOString().split('T')[0];
     form.terms = (defaultCustomer?.terms || 'COD').trim() || 'COD';
     form.notes = '';
-    form.payment_method = 'cash';
+    form.payment_method = '';
     form.line_items = [makeEmptyLineItem()];
     applyDueDate();
     form.amount_paid = Number(total.value.toFixed(2));
@@ -253,6 +279,10 @@ const resetSale = () => {
 };
 
 const submit = () => {
+    if (!canCompleteSale.value) {
+        return;
+    }
+
     // Open immediately within user interaction to avoid popup blockers.
     pendingPrintWindow.value = window.open('', '_blank');
 
@@ -295,8 +325,8 @@ const submit = () => {
                 <Link :href="invoices.index().url" class="rounded border px-3 py-2 text-sm">Back to Invoices</Link>
             </div>
 
-            <div v-if="$page.props.flash?.success" class="rounded-lg border border-green-300 bg-green-50 px-4 py-3 text-green-800">
-                {{ $page.props.flash.success }}
+            <div v-if="($page.props.flash as any)?.success" class="rounded-lg border border-green-300 bg-green-50 px-4 py-3 text-green-800">
+                {{ ($page.props.flash as any).success }}
             </div>
 
             <form @submit.prevent="submit" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -440,11 +470,22 @@ const submit = () => {
                         <div class="font-semibold">Payment</div>
                         <div>
                             <label class="block text-sm mb-1">Payment Method *</label>
-                            <select v-model="form.payment_method" class="w-full rounded border px-3 py-2" required>
-                                <option value="cash">Cash</option>
-                                <option value="card">Card</option>
-                                <option value="eft">EFT</option>
-                            </select>
+                            <div class="grid grid-cols-3 gap-2">
+                                <button
+                                    v-for="method in paymentMethodOptions"
+                                    :key="method.value"
+                                    type="button"
+                                    @click="form.payment_method = method.value"
+                                    :class="[
+                                        'rounded-md border px-3 py-2 text-sm font-medium transition-colors',
+                                        form.payment_method === method.value
+                                            ? 'border-blue-500 bg-blue-50 text-blue-700'
+                                            : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                                    ]"
+                                >
+                                    {{ method.label }}
+                                </button>
+                            </div>
                         </div>
                         <div>
                             <label class="block text-sm mb-1">Amount Paid *</label>
@@ -471,7 +512,11 @@ const submit = () => {
                             <div class="flex justify-between border-t pt-2 text-lg font-semibold"><span>Total</span><span>{{ formatCurrency(total) }}</span></div>
                         </div>
 
-                        <button type="submit" :disabled="form.processing" class="w-full rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50">
+                        <button
+                            type="submit"
+                            :disabled="form.processing || !canCompleteSale"
+                            class="w-full rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
                             {{ form.processing ? 'Processing...' : 'Complete POS Sale' }}
                         </button>
                     </div>
