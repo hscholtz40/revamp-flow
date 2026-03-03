@@ -3,9 +3,25 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import customers from '@/routes/customers';
 
+const paymentTermsOptions = ['COD', 'Net 7 Days', 'Net 14 Days', 'Net 30 Days', 'Net 60 Days'];
+
 const props = defineProps<{ customer: any }>();
 
-const form = useForm({
+interface CustomerFormData {
+    name: string;
+    email: string;
+    phone: string;
+    address: string;
+    city: string;
+    country: string;
+    terms: string;
+    vat_number: string;
+    account_code: string;
+    notes: string;
+    is_default_sales: boolean;
+}
+
+const form = useForm<CustomerFormData>({
     name: props.customer.name ?? '',
     email: props.customer.email ?? '',
     phone: props.customer.phone ?? '',
@@ -58,7 +74,9 @@ function submit() {
                 </label>
                 <label class="block">
                     <span class="mb-1 block">Payment Terms</span>
-                    <input v-model="form.terms" class="w-full rounded border px-3 py-2" placeholder="e.g. COD, Net 7 Days, Net 30 Days" />
+                    <select v-model="form.terms" class="w-full rounded border px-3 py-2">
+                        <option v-for="term in paymentTermsOptions" :key="term" :value="term">{{ term }}</option>
+                    </select>
                     <div v-if="form.errors.terms" class="text-sm text-red-600">{{ form.errors.terms }}</div>
                 </label>
                 <label class="block">

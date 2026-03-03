@@ -208,7 +208,8 @@
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Due Date *</label>
                             <input v-model="form.due_date" type="date" class="w-full rounded border px-3 py-2"
-                                :class="{ 'border-red-500': form.errors.due_date }" required />
+                                :class="{ 'border-red-500': form.errors.due_date }" required readonly />
+                            <p class="text-xs text-gray-500 mt-1">Auto-calculated from payment terms.</p>
                             <div v-if="form.errors.due_date" class="text-red-500 text-sm mt-1">
                                 {{ form.errors.due_date }}
                             </div>
@@ -524,9 +525,11 @@
                         </div>
 
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Terms & Conditions</label>
-                            <textarea v-model="form.terms" rows="4" class="w-full rounded border px-3 py-2"
-                                :class="{ 'border-red-500': form.errors.terms }"></textarea>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Payment Terms</label>
+                            <select v-model="form.terms" class="w-full rounded border px-3 py-2"
+                                :class="{ 'border-red-500': form.errors.terms }">
+                                <option v-for="term in paymentTermsOptions" :key="term" :value="term">{{ term }}</option>
+                            </select>
                             <div v-if="form.errors.terms" class="text-red-500 text-sm mt-1">
                                 {{ form.errors.terms }}
                             </div>
@@ -562,6 +565,7 @@ interface Customer {
     email?: string;
     phone?: string;
     account_code?: string;
+    terms?: string;
 }
 
 interface SerialNumber {
@@ -634,6 +638,7 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+const paymentTermsOptions = ['COD', 'Net 7 Days', 'Net 14 Days', 'Net 30 Days', 'Net 60 Days'];
 
 // Track product suggestions and discount types for each line item
 const showProductSuggestions = ref<Record<number, boolean>>({});
@@ -737,6 +742,45 @@ const lineItemDiscountsTotal = computed(() => {
     }, 0);
 });
 
+const parseCustomerTermsToDays = (terms?: string) => {
+    const normalized = (terms || 'COD').trim();
+
+    if (!normalized || /^cod$/i.test(normalized)) {
+        return 0;
+    }
+
+    const netDaysMatch = normalized.match(/net\s*(\d+)\s*days?/i);
+    if (netDaysMatch) {
+        return Number(netDaysMatch[1]) || 0;
+    }
+
+    const numericMatch = normalized.match(/(\d+)/);
+    if (numericMatch) {
+        return Number(numericMatch[1]) || 0;
+    }
+
+    return 0;
+};
+
+const applyDueDateFromTerms = (syncTermsFromCustomer = false) => {
+    const customer = selectedCustomer.value
+        || props.customers.find(c => c.id === Number(form.customer_id))
+        || null;
+
+    if (syncTermsFromCustomer) {
+        form.terms = (customer?.terms || 'COD').trim() || 'COD';
+    }
+
+    const invoiceDate = form.invoice_date ? new Date(form.invoice_date) : new Date();
+    if (Number.isNaN(invoiceDate.getTime())) {
+        return;
+    }
+
+    const termsDays = parseCustomerTermsToDays(form.terms);
+    invoiceDate.setDate(invoiceDate.getDate() + termsDays);
+    form.due_date = invoiceDate.toISOString().split('T')[0];
+};
+
 const subtotal = computed(() => {
     return subtotalBeforeDiscount.value - lineItemDiscountsTotal.value;
 });
@@ -809,6 +853,7 @@ const selectCustomer = (customer: Customer) => {
     
     // Update title
     form.title = `Invoice for ${customer.name}`;
+    applyDueDateFromTerms(true);
 };
 
 const clearCustomer = () => {
@@ -816,6 +861,7 @@ const clearCustomer = () => {
     form.customer_id = 0;
     customerSearchQuery.value = '';
     filteredCustomers.value = [];
+    applyDueDateFromTerms(true);
 };
 
 const quickCreateCustomer = async () => {
@@ -858,6 +904,15 @@ watch(() => form.customer_id, (newCustomerId) => {
             form.title = `Invoice for ${customer.name}`;
         }
     }
+    applyDueDateFromTerms(true);
+});
+
+watch(() => form.invoice_date, () => {
+    applyDueDateFromTerms();
+});
+
+watch(() => form.terms, () => {
+    applyDueDateFromTerms();
 });
 
 // Update form discount_amount when line item discounts change
