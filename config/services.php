@@ -68,6 +68,7 @@ return [
         // Cache contact list to avoid frequent /Contacts pulls in scheduler runs.
         'contacts_cache_ttl_seconds' => env('XERO_CONTACTS_CACHE_TTL_SECONDS', 300),
         // Cap outbound sync batches per scheduler run.
+        'invoice_export_max_per_run' => env('XERO_INVOICE_EXPORT_MAX_PER_RUN', 200),
         'quote_export_max_per_run' => env('XERO_QUOTE_EXPORT_MAX_PER_RUN', 150),
         'quote_export_delay_ms' => env('XERO_QUOTE_EXPORT_DELAY_MS', 250),
         'payment_export_max_invoices_per_run' => env('XERO_PAYMENT_EXPORT_MAX_INVOICES_PER_RUN', 120),

@@ -1283,10 +1283,16 @@ class XeroService
         }
 
         $currentCompany = $this->getCompany();
-        
-        $oneHourAgo = now()->subHour();
+
+        $maxInvoicesPerRun = max(1, (int) config('services.xero.invoice_export_max_per_run', 200));
         $invoices = Invoice::where('company_id', $currentCompany->id)
-            ->where('updated_at', '>=', $oneHourAgo)
+            ->where(function ($query) {
+                $query->whereNull('xero_invoice_id')
+                    ->orWhereNull('xero_updated_at')
+                    ->orWhereColumn('updated_at', '>', 'xero_updated_at');
+            })
+            ->orderByDesc('updated_at')
+            ->limit($maxInvoicesPerRun)
             ->with(['customer', 'lineItems'])
             ->get();
         $results = [];
@@ -1294,8 +1300,8 @@ class XeroService
         Log::info('Starting invoice sync to Xero', [
             'company_id' => $currentCompany->id,
             'invoice_count' => $invoices->count(),
-            'filter_applied' => true,
-            'modified_since' => $oneHourAgo->toIso8601String(),
+            'filter_applied' => 'updated_at_gt_xero_updated_at_or_unsynced',
+            'max_invoices_per_run' => $maxInvoicesPerRun,
         ]);
 
         // Pre-fetch all Xero invoices once to avoid N+1 individual GET requests
@@ -1306,7 +1312,7 @@ class XeroService
                 $this->baseUrl . '/api.xro/2.0/Invoices',
                 [],
                 2,
-                $this->buildIfModifiedSinceHeader($oneHourAgo->toIso8601String())
+                []
             );
             if ($response->successful()) {
                 foreach ($response->json()['Invoices'] ?? [] as $xi) {
