@@ -3236,6 +3236,10 @@ class XeroService
         // If quote already has a Xero ID, update it; otherwise create new
         if ($quote->xero_quote_id) {
             $quoteData['QuoteID'] = $quote->xero_quote_id;
+
+            // Xero can reject status codes during quote updates.
+            // Keep status immutable on update and only sync editable fields.
+            unset($quoteData['Status']);
         }
         
         $response = $this->makeXeroRequest('post', $this->baseUrl . '/api.xro/2.0/Quotes', [
@@ -3245,6 +3249,24 @@ class XeroService
         if (!$response->successful()) {
             $errorBody = $response->body();
             $statusCode = $response->status();
+
+            // Defensive fallback: if Xero rejects status code, retry once without Status.
+            if (
+                isset($quoteData['Status'])
+                && str_contains($errorBody, 'Please provide a valid Status Code')
+            ) {
+                $retryPayload = $quoteData;
+                unset($retryPayload['Status']);
+
+                $retryResponse = $this->makeXeroRequest('post', $this->baseUrl . '/api.xro/2.0/Quotes', [
+                    'Quotes' => [$retryPayload],
+                ]);
+
+                if ($retryResponse->successful()) {
+                    $retryResult = $retryResponse->json();
+                    return $retryResult['Quotes'][0] ?? [];
+                }
+            }
             
             Log::error('Failed to create/update quote in Xero', [
                 'quote_id' => $quote->id,
@@ -3277,7 +3299,8 @@ class XeroService
             'sent' => 'SENT',
             'accepted' => 'ACCEPTED',
             'rejected' => 'DECLINED',
-            'expired' => 'EXPIRED',
+            // Xero derives expiry from ExpiryDate; EXPIRED is not a reliable write status.
+            'expired' => 'SENT',
             default => 'DRAFT',
         };
     }
