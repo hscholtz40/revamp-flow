@@ -55,6 +55,7 @@ class XeroSettingsController extends Controller
                 'invoice' => $this->buildBackfillProgress($currentCompany->id, 'invoice'),
                 'purchase_order' => $this->buildBackfillProgress($currentCompany->id, 'purchase_order'),
             ],
+            'xeroApiUsage' => XeroService::getRequestUsageSnapshot($currentCompany->id, 8),
         ]);
     }
 

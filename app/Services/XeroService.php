@@ -19,6 +19,7 @@ use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -29,6 +30,7 @@ class XeroService
     private $baseUrl = 'https://api.xero.com';
     private ?array $cachedXeroContacts = null;
     private ?array $cachedXeroAccounts = null;
+    private array $xeroInvoiceCache = [];
 
     public static function getInitialSyncCompletedCacheKey(int $companyId, string $module): string
     {
@@ -263,6 +265,7 @@ class XeroService
         
         while ($attempt <= $maxRetries) {
             try {
+                $this->assertRequestBudgetWithinLimit($method, $url);
                 $headers = array_merge($this->getHeaders(), $additionalHeaders);
                 $request = Http::withHeaders($headers)
                     ->connectTimeout($connectTimeoutSeconds)
@@ -374,6 +377,109 @@ class XeroService
         }
         
         throw new \Exception("Failed to make Xero API request after {$maxRetries} retries");
+    }
+
+    private function assertRequestBudgetWithinLimit(string $method, string $url): void
+    {
+        $budgetPerMinute = max(0, (int) config('services.xero.request_budget_per_minute', 0));
+        $companyId = $this->settings->company_id ?? null;
+        if (!$companyId) {
+            return;
+        }
+
+        $requestCount = $this->trackRequestMetric($companyId, $method, $url);
+        if ($budgetPerMinute === 0) {
+            return;
+        }
+
+        if ($requestCount > $budgetPerMinute) {
+            throw new \Exception(
+                "Local Xero request budget exceeded ({$budgetPerMinute}/minute) for company {$companyId}. Last request: "
+                . strtoupper($method) . " {$url}"
+            );
+        }
+    }
+
+    private function trackRequestMetric(int $companyId, string $method, string $url): int
+    {
+        $now = now();
+        $minuteWindow = $now->format('YmdHi');
+        $dayWindow = $now->format('Ymd');
+        $endpoint = $this->normalizeXeroEndpoint($method, $url);
+        $endpointHash = sha1($endpoint);
+
+        $counterKey = "xero_request_budget_company_{$companyId}_{$minuteWindow}_total";
+        $requestCount = Cache::increment($counterKey);
+        if ($requestCount === 1) {
+            Cache::put($counterKey, 1, now()->addSeconds(120));
+        }
+
+        $dayTotalKey = "xero_request_usage_company_{$companyId}_{$dayWindow}_total";
+        $dayTotal = Cache::increment($dayTotalKey);
+        if ($dayTotal === 1) {
+            Cache::put($dayTotalKey, 1, now()->endOfDay()->addHour());
+        }
+
+        $endpointDayCountKey = "xero_request_usage_company_{$companyId}_{$dayWindow}_endpoint_{$endpointHash}";
+        $endpointDayCount = Cache::increment($endpointDayCountKey);
+        if ($endpointDayCount === 1) {
+            Cache::put($endpointDayCountKey, 1, now()->endOfDay()->addHour());
+        }
+
+        $endpointMapKey = "xero_request_usage_company_{$companyId}_{$dayWindow}_endpoint_map";
+        $endpointMap = Cache::get($endpointMapKey, []);
+        if (!isset($endpointMap[$endpointHash])) {
+            $endpointMap[$endpointHash] = $endpoint;
+            Cache::put($endpointMapKey, $endpointMap, now()->endOfDay()->addHour());
+        }
+
+        return $requestCount;
+    }
+
+    private function normalizeXeroEndpoint(string $method, string $url): string
+    {
+        $path = parse_url($url, PHP_URL_PATH) ?? $url;
+        $path = preg_replace('#^/api\.xro/2\.0/#', '', (string) $path);
+        $path = trim((string) $path, '/');
+        if ($path === '') {
+            $path = 'root';
+        }
+
+        return strtoupper($method) . ' ' . $path;
+    }
+
+    public static function getRequestUsageSnapshot(int $companyId, int $topLimit = 5): array
+    {
+        $now = now();
+        $minuteWindow = $now->format('YmdHi');
+        $dayWindow = $now->format('Ymd');
+
+        $minuteTotal = (int) Cache::get("xero_request_budget_company_{$companyId}_{$minuteWindow}_total", 0);
+        $dayTotal = (int) Cache::get("xero_request_usage_company_{$companyId}_{$dayWindow}_total", 0);
+
+        $endpointMap = Cache::get("xero_request_usage_company_{$companyId}_{$dayWindow}_endpoint_map", []);
+        $endpointCounts = [];
+        if (is_array($endpointMap)) {
+            foreach ($endpointMap as $hash => $endpoint) {
+                $count = (int) Cache::get("xero_request_usage_company_{$companyId}_{$dayWindow}_endpoint_{$hash}", 0);
+                if ($count > 0) {
+                    $endpointCounts[] = [
+                        'endpoint' => $endpoint,
+                        'count' => $count,
+                    ];
+                }
+            }
+        }
+
+        usort($endpointCounts, fn ($a, $b) => $b['count'] <=> $a['count']);
+
+        return [
+            'minute_total' => $minuteTotal,
+            'day_total' => $dayTotal,
+            'budget_per_minute' => max(0, (int) config('services.xero.request_budget_per_minute', 0)),
+            'top_endpoints' => array_slice($endpointCounts, 0, max(1, $topLimit)),
+            'captured_at' => $now->toIso8601String(),
+        ];
     }
 
     /**
@@ -1406,9 +1512,10 @@ class XeroService
             // Xero invoices don't wait until the historical cursor reaches page 1 again.
             if ($isBackfillMode && !$isInitialInvoiceImport && !empty($lastSync)) {
                 try {
+                    $salesInvoiceWhere = rawurlencode('Type=="ACCREC"');
                     $incrementalResponse = $this->makeXeroRequest(
                         'get',
-                        $this->baseUrl . '/api.xro/2.0/Invoices?page=1&pageSize=' . $pageSize . '&summaryOnly=false',
+                        $this->baseUrl . '/api.xro/2.0/Invoices?page=1&pageSize=' . $pageSize . '&summaryOnly=false&where=' . $salesInvoiceWhere,
                         [],
                         2,
                         $this->buildIfModifiedSinceHeader($lastSync)
@@ -1463,9 +1570,10 @@ class XeroService
                     'page_size' => $pageSize,
                 ]);
 
+                $salesInvoiceWhere = rawurlencode('Type=="ACCREC"');
                 $response = $this->makeXeroRequest(
                     'get',
-                    $this->baseUrl . '/api.xro/2.0/Invoices?page=' . $page . '&pageSize=' . $pageSize . '&summaryOnly=false',
+                    $this->baseUrl . '/api.xro/2.0/Invoices?page=' . $page . '&pageSize=' . $pageSize . '&summaryOnly=false&where=' . $salesInvoiceWhere,
                     [],
                     2,
                     $ifModifiedSince
@@ -1504,6 +1612,23 @@ class XeroService
                 // Prefer Xero pagination metadata when available to avoid looping forever
                 // on APIs that can return a full final page or clamp page numbers.
                 $hasPaginationPageCount = is_array($pagination) && isset($pagination['PageCount']) && is_numeric($pagination['PageCount']);
+
+                // Self-heal stale cursors when switching query strategy (e.g., adding Type filter).
+                // If the saved page is beyond the available filtered pages, restart at page 1.
+                $normalizedPageCount = is_numeric($pageCount) ? (int) $pageCount : null;
+                if ($isBackfillMode && $hasPaginationPageCount && $normalizedPageCount !== null && $normalizedPageCount >= 1 && $page > $normalizedPageCount) {
+                    Log::warning('Invoice backfill cursor exceeded available pages; resetting to page 1', [
+                        'company_id' => $currentCompany->id,
+                        'requested_page' => $page,
+                        'reported_current_page' => $currentPage,
+                        'reported_page_count' => $normalizedPageCount,
+                    ]);
+                    $page = 1;
+                    Cache::put($cursorKey, ['page' => $page], now()->addDays(7));
+                    $hasMorePages = true;
+                    continue;
+                }
+
                 if ($hasPaginationPageCount) {
                     $hasMorePages = $currentPage < $pageCount;
                 } else {
@@ -2704,10 +2829,27 @@ class XeroService
             $ifModifiedSince = $this->buildIfModifiedSinceHeader($lastSync);
 
             $page = 1;
-            $pageSize = 100;
+            $pageSize = max(1, min((int) config('services.xero.quote_import_page_size', 50), 100));
+            $maxPagesPerRun = max(1, (int) config('services.xero.quote_import_max_pages_per_run', 3));
+            $maxQuotesPerRun = max(1, (int) config('services.xero.quote_import_max_quotes_per_run', 150));
+            $maxSecondsPerRun = max(5, (int) config('services.xero.quote_import_max_seconds_per_run', 35));
+            $pageDelayMs = max(0, (int) config('services.xero.quote_import_page_delay_ms', 300));
             $totalProcessed = 0;
+            $pagesProcessed = 0;
+            $processedThisRun = 0;
+            $startedAt = microtime(true);
+            $stopReason = null;
             
             do {
+                if ($processedThisRun >= $maxQuotesPerRun) {
+                    $stopReason = 'max_quotes_per_run_reached';
+                    break;
+                }
+                if ((microtime(true) - $startedAt) >= $maxSecondsPerRun) {
+                    $stopReason = 'max_seconds_per_run_reached';
+                    break;
+                }
+
                 $response = $this->makeXeroRequest(
                     'get',
                     $this->baseUrl . '/api.xro/2.0/Quotes?page=' . $page . '&pageSize=' . $pageSize . '&summaryOnly=false',
@@ -2758,6 +2900,15 @@ class XeroService
                 ]);
 
                 foreach ($xeroQuotes as $xeroQuote) {
+                    if ($processedThisRun >= $maxQuotesPerRun) {
+                        $stopReason = 'max_quotes_per_run_reached';
+                        break;
+                    }
+                    if ((microtime(true) - $startedAt) >= $maxSecondsPerRun) {
+                        $stopReason = 'max_seconds_per_run_reached';
+                        break;
+                    }
+
                     try {
                         if (empty($xeroQuote['QuoteNumber'])) {
                             continue;
@@ -2789,6 +2940,7 @@ class XeroService
                                     'message' => 'Quote unchanged in Xero',
                                 ];
                                 $totalProcessed++;
+                                $processedThisRun++;
                                 continue;
                             }
                             $this->updateQuoteFromXeroData($existingQuote, $xeroQuote);
@@ -2809,6 +2961,7 @@ class XeroService
                         }
                         
                         $totalProcessed++;
+                        $processedThisRun++;
                     } catch (\Exception $e) {
                         Log::error('Failed to process quote from Xero', [
                             'company_id' => $currentCompany->id,
@@ -2823,19 +2976,27 @@ class XeroService
                             'status' => 'error',
                             'error' => $e->getMessage(),
                         ];
+                        $processedThisRun++;
                     }
                 }
 
                 $page++;
-                
-                if ($hasMorePages) {
-                    sleep(1);
+                $pagesProcessed++;
+                if ($pagesProcessed >= $maxPagesPerRun) {
+                    $stopReason = 'max_pages_per_run_reached';
                 }
-            } while ($hasMorePages);
+                
+                if ($hasMorePages && !$stopReason && $pageDelayMs > 0) {
+                    usleep($pageDelayMs * 1000);
+                }
+            } while ($hasMorePages && !$stopReason);
 
             Log::info('Finished processing all quotes from Xero', [
                 'company_id' => $currentCompany->id,
                 'total_quotes_processed' => $totalProcessed,
+                'processed_this_run' => $processedThisRun,
+                'pages_processed' => $pagesProcessed,
+                'stop_reason' => $stopReason,
             ]);
 
         } catch (\Exception $e) {
@@ -3667,10 +3828,11 @@ class XeroService
         }
 
         $results = [];
+        $xeroInvoice = $this->getXeroInvoiceCached($invoice->xero_invoice_id);
 
         foreach ($invoice->payments as $payment) {
             try {
-                $result = $this->createPaymentInXero($invoice, $payment);
+                $result = $this->createPaymentInXero($invoice, $payment, $xeroInvoice);
                 
                 // Use the result from createPaymentInXero (which may include 'skipped' status)
                 $results[] = $result;
@@ -3697,10 +3859,10 @@ class XeroService
     /**
      * Create payment in Xero
      */
-    private function createPaymentInXero(Invoice $invoice, Payment $payment): array
+    private function createPaymentInXero(Invoice $invoice, Payment $payment, ?array $xeroInvoice = null): array
     {
         // Check if invoice is already fully paid in Xero
-        $xeroInvoice = $this->getXeroInvoice($invoice->xero_invoice_id);
+        $xeroInvoice = $xeroInvoice ?? $this->getXeroInvoiceCached($invoice->xero_invoice_id);
         if ($xeroInvoice && isset($xeroInvoice['AmountDue']) && $xeroInvoice['AmountDue'] <= 0) {
             Log::info('Skipping payment creation - invoice already fully paid in Xero', [
                 'invoice_id' => $invoice->id,
@@ -3780,6 +3942,21 @@ class XeroService
 
         $result = $response->json();
         return $result['Payments'][0];
+    }
+
+    private function getXeroInvoiceCached(?string $xeroInvoiceId): ?array
+    {
+        if (!$xeroInvoiceId) {
+            return null;
+        }
+
+        if (array_key_exists($xeroInvoiceId, $this->xeroInvoiceCache)) {
+            return $this->xeroInvoiceCache[$xeroInvoiceId];
+        }
+
+        $invoice = $this->getXeroInvoice($xeroInvoiceId);
+        $this->xeroInvoiceCache[$xeroInvoiceId] = $invoice;
+        return $invoice;
     }
 
 
@@ -3948,9 +4125,12 @@ class XeroService
 
         // Use company from XeroSettings
         $currentCompany = $this->getCompany();
+        $maxInvoicesPerRun = max(1, (int) config('services.xero.payment_export_max_invoices_per_run', 120));
         $invoices = Invoice::where('company_id', $currentCompany->id)
             ->whereNotNull('xero_invoice_id')
             ->whereHas('payments')
+            ->orderByDesc('updated_at')
+            ->limit($maxInvoicesPerRun)
             ->get();
         
         $results = [];
@@ -5485,11 +5665,25 @@ class XeroService
 
         try {
             $hasAnyLocalPurchaseOrders = PurchaseOrder::where('company_id', $currentCompany->id)->exists();
+            $localPurchaseOrderCount = PurchaseOrder::where('company_id', $currentCompany->id)->count();
             $fullSyncCompletedKey = self::getInitialSyncCompletedCacheKey($currentCompany->id, 'purchase_order');
             $cursorKey = self::getInitialSyncCursorCacheKey($currentCompany->id, 'purchase_order');
             $paginationKey = self::getInitialSyncPaginationCacheKey($currentCompany->id, 'purchase_order');
             $isBackfillMode = !$hasAnyLocalPurchaseOrders || !Cache::get($fullSyncCompletedKey, false);
             $cursor = Cache::get($cursorKey, ['page' => 1]);
+
+            // Self-heal edge case where completed flag was set previously but historical data
+            // was never fully imported (observed as only 0-1 local purchase orders).
+            if (!$isBackfillMode && $localPurchaseOrderCount <= 1) {
+                Log::warning('Purchase order full-sync flag appears stale; forcing backfill restart', [
+                    'company_id' => $currentCompany->id,
+                    'local_purchase_orders' => $localPurchaseOrderCount,
+                ]);
+                $isBackfillMode = true;
+                Cache::forget($fullSyncCompletedKey);
+                Cache::put($cursorKey, ['page' => 1], now()->addDays(7));
+                $cursor = ['page' => 1];
+            }
 
             $lastSync = PurchaseOrder::where('company_id', $currentCompany->id)
                 ->whereNotNull('xero_updated_at')->max('xero_updated_at');
@@ -5500,8 +5694,16 @@ class XeroService
             if ($page < 1) {
                 $page = 1;
             }
-            $pageSize = 100;
+            $pageSize = max(1, min((int) config('services.xero.purchase_order_import_page_size', 50), 100));
+            $maxPagesPerRun = max(1, (int) config('services.xero.purchase_order_import_max_pages_per_run', 3));
+            $maxPurchaseOrdersPerRun = max(1, (int) config('services.xero.purchase_order_import_max_pos_per_run', 150));
+            $maxSecondsPerRun = max(5, (int) config('services.xero.purchase_order_import_max_seconds_per_run', 35));
+            $pageDelayMs = max(0, (int) config('services.xero.purchase_order_import_page_delay_ms', 300));
             $hasMorePages = false;
+            $pagesProcessed = 0;
+            $processedThisRun = 0;
+            $startedAt = microtime(true);
+            $stopReason = null;
 
             Log::info('Starting purchase order import from Xero', [
                 'company_id' => $currentCompany->id,
@@ -5511,6 +5713,15 @@ class XeroService
             ]);
 
             do {
+                if ($processedThisRun >= $maxPurchaseOrdersPerRun) {
+                    $stopReason = 'max_purchase_orders_per_run_reached';
+                    break;
+                }
+                if ((microtime(true) - $startedAt) >= $maxSecondsPerRun) {
+                    $stopReason = 'max_seconds_per_run_reached';
+                    break;
+                }
+
                 $response = $this->makeXeroRequest(
                     'get',
                     $this->baseUrl . '/api.xro/2.0/PurchaseOrders?page=' . $page . '&pageSize=' . $pageSize . '&summaryOnly=false',
@@ -5530,6 +5741,19 @@ class XeroService
                 $pageCount = $pagination['PageCount'] ?? 1;
                 $poCountOnPage = count($xeroPOs);
                 $hasPaginationPageCount = is_array($pagination) && isset($pagination['PageCount']) && is_numeric($pagination['PageCount']);
+                $normalizedPageCount = is_numeric($pageCount) ? (int) $pageCount : null;
+                if ($isBackfillMode && $hasPaginationPageCount && $normalizedPageCount !== null && $normalizedPageCount >= 1 && $page > $normalizedPageCount) {
+                    Log::warning('Purchase order backfill cursor exceeded available pages; resetting to page 1', [
+                        'company_id' => $currentCompany->id,
+                        'requested_page' => $page,
+                        'reported_current_page' => $currentPage,
+                        'reported_page_count' => $normalizedPageCount,
+                    ]);
+                    $page = 1;
+                    Cache::put($cursorKey, ['page' => $page], now()->addDays(7));
+                    $hasMorePages = true;
+                    continue;
+                }
                 if ($hasPaginationPageCount) {
                     $hasMorePages = $currentPage < $pageCount;
                 } else {
@@ -5544,6 +5768,15 @@ class XeroService
                 ], now()->addDays(7));
 
                 foreach ($xeroPOs as $xeroPO) {
+                    if ($processedThisRun >= $maxPurchaseOrdersPerRun) {
+                        $stopReason = 'max_purchase_orders_per_run_reached';
+                        break;
+                    }
+                    if ((microtime(true) - $startedAt) >= $maxSecondsPerRun) {
+                        $stopReason = 'max_seconds_per_run_reached';
+                        break;
+                    }
+
                     try {
                         // Xero list endpoints may omit LineItems on page payloads even with summaryOnly=false.
                         // Hydrate PO details when needed so local items are consistently imported.
@@ -5572,6 +5805,7 @@ class XeroService
                                     'po_number' => $existing->po_number,
                                     'status' => 'skipped',
                                 ];
+                                $processedThisRun++;
                                 continue;
                             }
                             $this->updatePurchaseOrderFromXeroData($existing, $xeroPODetails);
@@ -5582,12 +5816,14 @@ class XeroService
                                 'po_number' => $existing->po_number,
                                 'status' => 'updated',
                             ];
+                            $processedThisRun++;
                         } else {
                             $po = $this->createPurchaseOrderFromXero($xeroPODetails, $currentCompany);
                             $results[] = [
                                 'po_number' => $po->po_number,
                                 'status' => 'created',
                             ];
+                            $processedThisRun++;
                         }
                     } catch (\Exception $e) {
                         Log::error('Failed to process purchase order from Xero', [
@@ -5599,22 +5835,35 @@ class XeroService
                             'status' => 'error',
                             'error' => $e->getMessage(),
                         ];
+                        $processedThisRun++;
                     }
                 }
 
                 $page++;
+                $pagesProcessed++;
+                if ($pagesProcessed >= $maxPagesPerRun) {
+                    $stopReason = 'max_pages_per_run_reached';
+                }
                 if ($isBackfillMode) {
                     Cache::put($cursorKey, ['page' => $page], now()->addDays(7));
                 }
-                if ($hasMorePages) {
-                    sleep(1);
+                if ($hasMorePages && !$stopReason && $pageDelayMs > 0) {
+                    usleep($pageDelayMs * 1000);
                 }
-            } while ($hasMorePages);
+            } while ($hasMorePages && !$stopReason);
 
-            if ($isBackfillMode) {
+            if ($isBackfillMode && !$hasMorePages && !$stopReason) {
                 Cache::put($fullSyncCompletedKey, true, now()->addDays(365));
                 Cache::forget($cursorKey);
             }
+
+            Log::info('Finished processing purchase orders from Xero', [
+                'company_id' => $currentCompany->id,
+                'mode' => $isBackfillMode ? 'backfill' : 'incremental',
+                'pages_processed' => $pagesProcessed,
+                'processed_this_run' => $processedThisRun,
+                'stop_reason' => $stopReason,
+            ]);
         } catch (\Exception $e) {
             Log::error('Failed to sync purchase orders from Xero', [
                 'error' => $e->getMessage(),
@@ -5689,7 +5938,10 @@ class XeroService
 
     private function hydratePurchaseOrderDetails(array $xeroPO): array
     {
-        if (!empty($xeroPO['LineItems']) || empty($xeroPO['PurchaseOrderID'])) {
+        if (
+            empty($xeroPO['PurchaseOrderID']) ||
+            (!empty($xeroPO['LineItems']) && !empty($xeroPO['PurchaseOrderNumber']))
+        ) {
             return $xeroPO;
         }
 
@@ -5741,104 +5993,143 @@ class XeroService
             throw new \Exception('Could not resolve supplier for purchase order');
         }
 
-        $po = PurchaseOrder::create([
-            'company_id' => $company->id,
-            'supplier_id' => $supplier->id,
-            'xero_purchase_order_id' => $xeroPO['PurchaseOrderID'],
-            'po_number' => $xeroPO['PurchaseOrderNumber'] ?? PurchaseOrder::generatePONumber($company->id),
-            'order_date' => isset($xeroPO['Date']) ? $this->parseXeroDate($xeroPO['Date']) : now(),
-            'expected_delivery_date' => isset($xeroPO['DeliveryDate']) ? $this->parseXeroDate($xeroPO['DeliveryDate']) : null,
-            'status' => $this->mapXeroPOStatusToLocal($xeroPO['Status'] ?? 'DRAFT'),
-            'subtotal' => (float) ($xeroPO['SubTotal'] ?? 0),
-            'tax_amount' => (float) ($xeroPO['TotalTax'] ?? 0),
-            'total' => (float) ($xeroPO['Total'] ?? 0),
-            'notes' => $xeroPO['Reference'] ?? null,
-            ...$this->getXeroTimestamps($xeroPO),
-        ]);
-        $this->alignLocalUpdatedAtWithXero($po);
+        return DB::transaction(function () use ($xeroPO, $company, $supplier) {
+            $xeroPurchaseOrderNumber = trim((string) ($xeroPO['PurchaseOrderNumber'] ?? ''));
 
-        if (!empty($xeroPO['LineItems'])) {
-            foreach ($xeroPO['LineItems'] as $xeroLineItem) {
-                $product = null;
-                if (!empty($xeroLineItem['ItemCode'])) {
-                    $product = Product::where('company_id', $company->id)
-                        ->where('sku', $xeroLineItem['ItemCode'])
-                        ->first();
-                }
+            $po = PurchaseOrder::create([
+                'company_id' => $company->id,
+                'supplier_id' => $supplier->id,
+                'xero_purchase_order_id' => $xeroPO['PurchaseOrderID'],
+                'po_number' => $xeroPurchaseOrderNumber !== '' ? $xeroPurchaseOrderNumber : PurchaseOrder::generatePONumber($company->id),
+                'order_date' => isset($xeroPO['Date']) ? $this->parseXeroDate($xeroPO['Date']) : now(),
+                'expected_delivery_date' => isset($xeroPO['DeliveryDate']) ? $this->parseXeroDate($xeroPO['DeliveryDate']) : null,
+                'status' => $this->mapXeroPOStatusToLocal($xeroPO['Status'] ?? 'DRAFT'),
+                'subtotal' => (float) ($xeroPO['SubTotal'] ?? 0),
+                'tax_amount' => (float) ($xeroPO['TotalTax'] ?? 0),
+                'total' => (float) ($xeroPO['Total'] ?? 0),
+                'notes' => $xeroPO['Reference'] ?? null,
+                ...$this->getXeroTimestamps($xeroPO),
+            ]);
+            $this->alignLocalUpdatedAtWithXero($po);
 
-                $taxRateId = null;
-                if (!empty($xeroLineItem['TaxType'])) {
-                    $taxRate = TaxRate::where('company_id', $company->id)
-                        ->where(function ($q) use ($xeroLineItem) {
-                            $q->where('code', $xeroLineItem['TaxType'])
-                              ->orWhere('xero_tax_rate_id', $xeroLineItem['TaxType']);
-                        })->first();
-                    $taxRateId = $taxRate?->id;
-                }
+            $this->syncPurchaseOrderLineItemsFromXero($po, $xeroPO['LineItems'] ?? [], $company->id);
 
-                PurchaseOrderItem::create([
-                    'purchase_order_id' => $po->id,
-                    'product_id' => $product?->id,
-                    'tax_rate_id' => $taxRateId,
-                    'description' => $xeroLineItem['Description'] ?? 'Item',
-                    'quantity' => (int) ($xeroLineItem['Quantity'] ?? 1),
-                    'unit_cost' => (float) ($xeroLineItem['UnitAmount'] ?? 0),
-                    'tax_amount' => (float) ($xeroLineItem['TaxAmount'] ?? 0),
-                    'total' => (float) ($xeroLineItem['LineAmount'] ?? 0),
-                    'account_id' => $this->resolveAccountId($xeroLineItem['AccountCode'] ?? null, $po->company_id),
-                    'quantity_received' => 0,
-                ]);
-            }
-        }
-
-        return $po;
+            return $po;
+        });
     }
 
     private function updatePurchaseOrderFromXeroData(PurchaseOrder $po, array $xeroPO): void
     {
-        $po->update([
-            'status' => $this->mapXeroPOStatusToLocal($xeroPO['Status'] ?? $po->status),
-            'subtotal' => (float) ($xeroPO['SubTotal'] ?? $po->subtotal),
-            'tax_amount' => (float) ($xeroPO['TotalTax'] ?? $po->tax_amount),
-            'total' => (float) ($xeroPO['Total'] ?? $po->total),
-            'expected_delivery_date' => isset($xeroPO['DeliveryDate']) ? $this->parseXeroDate($xeroPO['DeliveryDate']) : $po->expected_delivery_date,
-            ...$this->getXeroTimestamps($xeroPO),
-        ]);
+        DB::transaction(function () use ($po, $xeroPO) {
+            $xeroPurchaseOrderNumber = trim((string) ($xeroPO['PurchaseOrderNumber'] ?? ''));
 
-        if (!empty($xeroPO['LineItems'])) {
-            $po->items()->delete();
-            foreach ($xeroPO['LineItems'] as $xeroLineItem) {
-                $product = null;
-                if (!empty($xeroLineItem['ItemCode'])) {
-                    $product = Product::where('company_id', $po->company_id)
-                        ->where('sku', $xeroLineItem['ItemCode'])
-                        ->first();
-                }
+            $po->update([
+                'po_number' => $xeroPurchaseOrderNumber !== '' ? $xeroPurchaseOrderNumber : $po->po_number,
+                'status' => $this->mapXeroPOStatusToLocal($xeroPO['Status'] ?? $po->status),
+                'subtotal' => (float) ($xeroPO['SubTotal'] ?? $po->subtotal),
+                'tax_amount' => (float) ($xeroPO['TotalTax'] ?? $po->tax_amount),
+                'total' => (float) ($xeroPO['Total'] ?? $po->total),
+                'expected_delivery_date' => isset($xeroPO['DeliveryDate']) ? $this->parseXeroDate($xeroPO['DeliveryDate']) : $po->expected_delivery_date,
+                ...$this->getXeroTimestamps($xeroPO),
+            ]);
 
-                $taxRateId = null;
-                if (!empty($xeroLineItem['TaxType'])) {
-                    $taxRate = TaxRate::where('company_id', $po->company_id)
-                        ->where(function ($q) use ($xeroLineItem) {
-                            $q->where('code', $xeroLineItem['TaxType'])
-                              ->orWhere('xero_tax_rate_id', $xeroLineItem['TaxType']);
-                        })->first();
-                    $taxRateId = $taxRate?->id;
-                }
+            if (!empty($xeroPO['LineItems'])) {
+                $po->items()->delete();
+                $this->syncPurchaseOrderLineItemsFromXero($po, $xeroPO['LineItems'], $po->company_id);
+            }
+        });
+    }
 
-                PurchaseOrderItem::create([
-                    'purchase_order_id' => $po->id,
-                    'product_id' => $product?->id,
-                    'tax_rate_id' => $taxRateId,
-                    'description' => $xeroLineItem['Description'] ?? 'Item',
-                    'quantity' => (int) ($xeroLineItem['Quantity'] ?? 1),
-                    'unit_cost' => (float) ($xeroLineItem['UnitAmount'] ?? 0),
-                    'tax_amount' => (float) ($xeroLineItem['TaxAmount'] ?? 0),
-                    'total' => (float) ($xeroLineItem['LineAmount'] ?? 0),
-                    'account_id' => $this->resolveAccountId($xeroLineItem['AccountCode'] ?? null, $po->company_id),
-                    'quantity_received' => 0,
-                ]);
+    private function syncPurchaseOrderLineItemsFromXero(PurchaseOrder $po, array $xeroLineItems, int $companyId): void
+    {
+        foreach ($xeroLineItems as $xeroLineItem) {
+            $product = $this->resolveOrCreateProductForPurchaseOrderLine($xeroLineItem, $companyId);
+
+            PurchaseOrderItem::create([
+                'purchase_order_id' => $po->id,
+                'product_id' => $product->id,
+                'tax_rate_id' => $this->resolveTaxRateIdForPurchaseOrderLine($xeroLineItem, $companyId),
+                'description' => $xeroLineItem['Description'] ?? 'Item',
+                'quantity' => (int) ($xeroLineItem['Quantity'] ?? 1),
+                'unit_cost' => (float) ($xeroLineItem['UnitAmount'] ?? 0),
+                'tax_amount' => (float) ($xeroLineItem['TaxAmount'] ?? 0),
+                'total' => (float) ($xeroLineItem['LineAmount'] ?? 0),
+                'account_id' => $this->resolveAccountId($xeroLineItem['AccountCode'] ?? null, $po->company_id),
+                'quantity_received' => 0,
+            ]);
+        }
+    }
+
+    private function resolveOrCreateProductForPurchaseOrderLine(array $xeroLineItem, int $companyId): Product
+    {
+        $itemCode = trim((string) ($xeroLineItem['ItemCode'] ?? ($xeroLineItem['Item']['Code'] ?? '')));
+        $itemId = trim((string) ($xeroLineItem['ItemID'] ?? ($xeroLineItem['Item']['ItemID'] ?? '')));
+        $description = trim((string) ($xeroLineItem['Description'] ?? ''));
+
+        if ($itemId !== '') {
+            $existingByXeroId = Product::where('company_id', $companyId)
+                ->where('xero_item_id', $itemId)
+                ->first();
+            if ($existingByXeroId) {
+                return $existingByXeroId;
             }
         }
+
+        if ($itemCode !== '') {
+            $existingBySku = Product::where('company_id', $companyId)
+                ->where('sku', $itemCode)
+                ->first();
+            if ($existingBySku) {
+                return $existingBySku;
+            }
+        }
+
+        if ($description !== '') {
+            $existingByName = Product::where('company_id', $companyId)
+                ->where('name', $description)
+                ->first();
+            if ($existingByName) {
+                return $existingByName;
+            }
+        }
+
+        $quantity = (float) ($xeroLineItem['Quantity'] ?? 1);
+        if ($quantity <= 0) {
+            $quantity = 1.0;
+        }
+        $unitAmount = (float) ($xeroLineItem['UnitAmount'] ?? 0);
+        $lineAmount = (float) ($xeroLineItem['LineAmount'] ?? 0);
+        $price = $unitAmount !== 0.0 ? $unitAmount : ($lineAmount / $quantity);
+
+        $name = $description !== '' ? $description : ($itemCode !== '' ? $itemCode : 'Xero Purchase Item');
+
+        return Product::create([
+            'company_id' => $companyId,
+            'name' => mb_substr($name, 0, 255),
+            'description' => $description !== '' ? $description : null,
+            'type' => 'product',
+            'sku' => $itemCode !== '' ? $itemCode : null,
+            'price' => $price,
+            'cost' => $unitAmount,
+            'track_stock' => false,
+            'is_active' => true,
+            'xero_item_id' => $itemId !== '' ? $itemId : null,
+        ]);
+    }
+
+    private function resolveTaxRateIdForPurchaseOrderLine(array $xeroLineItem, int $companyId): ?int
+    {
+        if (empty($xeroLineItem['TaxType'])) {
+            return null;
+        }
+
+        $taxRate = TaxRate::where('company_id', $companyId)
+            ->where(function ($q) use ($xeroLineItem) {
+                $q->where('code', $xeroLineItem['TaxType'])
+                    ->orWhere('xero_tax_rate_id', $xeroLineItem['TaxType']);
+            })->first();
+
+        return $taxRate?->id;
     }
 
     private function mapPurchaseOrderStatus(string $status): string

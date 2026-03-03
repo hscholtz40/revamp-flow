@@ -11,15 +11,15 @@ Artisan::command('inspire', function () {
 // Schedule Xero token refresh to run every 20 minutes to prevent expiration
 Schedule::command('xero:refresh-tokens')->cron('*/20 * * * *');
 
-// Schedule Xero sync commands to run every minute
-Schedule::command('xero:sync-customers')->everyMinute()->withoutOverlapping(10);
-Schedule::command('xero:sync-suppliers')->everyMinute()->withoutOverlapping(10);
-Schedule::command('xero:sync-products')->everyMinute()->withoutOverlapping(10);
-Schedule::command('xero:sync-invoices')->everyMinute()->withoutOverlapping(10);
-Schedule::command('xero:sync-invoices-from-xero')->everyMinute()->withoutOverlapping(10);
-Schedule::command('xero:sync-quotes')->everyMinute()->withoutOverlapping(10);
-Schedule::command('xero:sync-credit-notes')->everyMinute()->withoutOverlapping(10);
-Schedule::command('xero:sync-purchase-orders')->everyMinute()->withoutOverlapping(10);
+// Stagger Xero sync commands to reduce burst traffic and daily API pressure.
+Schedule::command('xero:sync-invoices')->cron('*/2 * * * *')->withoutOverlapping(10);
+Schedule::command('xero:sync-invoices-from-xero')->cron('*/5 * * * *')->withoutOverlapping(20);
+Schedule::command('xero:sync-customers')->cron('1-59/10 * * * *')->withoutOverlapping(20);
+Schedule::command('xero:sync-products')->cron('2-59/10 * * * *')->withoutOverlapping(20);
+Schedule::command('xero:sync-suppliers')->cron('3-59/10 * * * *')->withoutOverlapping(20);
+Schedule::command('xero:sync-quotes')->cron('4-59/10 * * * *')->withoutOverlapping(20);
+Schedule::command('xero:sync-credit-notes')->cron('5-59/10 * * * *')->withoutOverlapping(20);
+Schedule::command('xero:sync-purchase-orders')->cron('6-59/10 * * * *')->withoutOverlapping(20);
 
 // Schedule automated reminders to run daily at 9 AM
 Schedule::command('reminders:send')->dailyAt('09:00');
