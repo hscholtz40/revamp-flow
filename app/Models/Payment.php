@@ -14,11 +14,14 @@ class Payment extends Model
         'payment_date',
         'notes',
         'company_id',
+        'xero_payment_id',
+        'xero_synced_at',
     ];
 
     protected $casts = [
         'payment_date' => 'date',
         'amount' => 'decimal:2',
+        'xero_synced_at' => 'datetime',
     ];
 
     public function invoice(): BelongsTo

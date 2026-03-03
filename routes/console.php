@@ -20,6 +20,7 @@ Schedule::command('xero:sync-suppliers')->cron('3-59/10 * * * *')->withoutOverla
 Schedule::command('xero:sync-quotes')->cron('4-59/10 * * * *')->withoutOverlapping(20);
 Schedule::command('xero:sync-credit-notes')->cron('5-59/10 * * * *')->withoutOverlapping(20);
 Schedule::command('xero:sync-purchase-orders')->cron('6-59/10 * * * *')->withoutOverlapping(20);
+Schedule::command('xero:sync-payments')->cron('7-59/10 * * * *')->withoutOverlapping(20);
 
 // Schedule automated reminders to run daily at 9 AM
 Schedule::command('reminders:send')->dailyAt('09:00');

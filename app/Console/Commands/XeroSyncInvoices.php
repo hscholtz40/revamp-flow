@@ -96,33 +96,8 @@ class XeroSyncInvoices extends Command
                     $this->warn("  Failed to sync payments from Xero: " . $e->getMessage());
                 }
                 
-                // Also sync payments for invoices that have been synced TO Xero
-                $this->info("  Syncing payments to Xero...");
-                $paymentResults = $xeroService->syncAllPaymentsToXero();
-                
-                if (isset($paymentResults['skipped']) && $paymentResults['skipped']) {
-                    $this->info("  {$paymentResults['message']}");
-                } else {
-                    $totalPayments = 0;
-                    $paymentErrors = 0;
-                    
-                    foreach ($paymentResults as $invoiceResult) {
-                        if (isset($invoiceResult['payments'])) {
-                            foreach ($invoiceResult['payments'] as $payment) {
-                                $totalPayments++;
-                                if ($payment['status'] === 'error') {
-                                    $paymentErrors++;
-                                }
-                            }
-                        }
-                    }
-                    
-                    if ($paymentErrors > 0) {
-                        $this->warn("  Synced " . ($totalPayments - $paymentErrors) . " payments successfully, {$paymentErrors} failed.");
-                    } else {
-                        $this->info("  Successfully synced {$totalPayments} payments to Xero.");
-                    }
-                }
+                // Payment export is intentionally handled by xero:sync-payments
+                // to avoid duplicate processing from overlapping scheduler paths.
                 
             } catch (\Exception $e) {
                 $this->error("  Failed to sync invoices for {$settings->company->name}: " . $e->getMessage());

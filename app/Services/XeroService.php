@@ -546,7 +546,7 @@ class XeroService
                 if ($customer->xero_contact_id && isset($xeroContactsMap[$customer->xero_contact_id])) {
                     $xeroCustomer = $xeroContactsMap[$customer->xero_contact_id];
                     
-                    if ($this->xeroUpdatedAtChanged($customer, $xeroCustomer)) {
+                    if ($this->isXeroRecordNewerThanLocal($customer, $xeroCustomer)) {
                         $this->updateCustomerFromXero($customer, $xeroCustomer);
                         $results[] = [
                             'customer_id' => $customer->id,
@@ -692,6 +692,7 @@ class XeroService
                         'xero_contact_id' => $xeroContact['ContactID'],
                         ...$this->getXeroTimestamps($xeroContact),
                     ]);
+                    $this->alignLocalUpdatedAtWithXero($customer);
                     
                     $results[] = [
                         'customer_id' => $customer->id,
@@ -731,6 +732,7 @@ class XeroService
                             'xero_contact_id' => $xeroCustomer['ContactID'],
                             ...$this->getXeroTimestamps($xeroCustomer),
                         ]);
+                        $this->alignLocalUpdatedAtWithXero($customer);
                     }
                     
                     $results[] = [
@@ -891,75 +893,56 @@ class XeroService
 
         $currentCompany = $this->getCompany();
         $results = [];
-
-        $xeroItemsMap = [];
-        try {
-            $response = $this->makeXeroRequest('get', $this->baseUrl . '/api.xro/2.0/Items');
-            if ($response->successful()) {
-                foreach ($response->json()['Items'] ?? [] as $xeroItem) {
-                    $xeroItemsMap[$xeroItem['ItemID']] = $xeroItem;
-                }
-            }
-        } catch (\Exception $e) {
-            Log::warning('Failed to fetch Xero items for comparison', ['error' => $e->getMessage()]);
-        }
+        $maxPerRun = max(1, (int) config('services.xero.product_export_max_per_run', 200));
 
         $productsToSync = [];
         $batchSize = 100;
+        $products = Product::where('company_id', $currentCompany->id)
+            ->where(function ($query) {
+                $query->whereNull('xero_item_id')
+                    ->orWhereNull('xero_updated_at')
+                    ->orWhereColumn('updated_at', '>', 'xero_updated_at');
+            })
+            ->orderByDesc('updated_at')
+            ->limit($maxPerRun)
+            ->get();
 
-        Product::where('company_id', $currentCompany->id)->chunk(200, function ($products) use (&$results, &$productsToSync, $xeroItemsMap, $batchSize) {
-            foreach ($products as $product) {
-                try {
-                    if ($product->xero_item_id && isset($xeroItemsMap[$product->xero_item_id])) {
-                        $xeroItem = $xeroItemsMap[$product->xero_item_id];
-                        
-                        if ($this->xeroUpdatedAtChanged($product, $xeroItem)) {
-                            $this->updateProductFromXero($product, $xeroItem);
-                            $results[] = [
-                                'product_id' => $product->id,
-                                'product_name' => $product->name,
-                                'status' => 'updated_from_xero',
-                                'message' => 'Product updated from Xero (Xero was newer)',
-                            ];
-                            continue;
-                        }
-                    }
-                    
-                    $itemData = [
-                        'Code' => $product->sku,
-                        'Name' => $product->name,
-                        'Description' => $product->description,
+        foreach ($products as $product) {
+            try {
+                $itemData = [
+                    'Code' => $product->sku,
+                    'Name' => $product->name,
+                    'Description' => $product->description,
+                    'UnitPrice' => $product->price,
+                    'SalesDetails' => [
                         'UnitPrice' => $product->price,
-                        'SalesDetails' => [
-                            'UnitPrice' => $product->price,
-                        ],
-                    ];
-                    
-                    if ($product->xero_item_id) {
-                        $itemData['ItemID'] = $product->xero_item_id;
-                    }
-                    
-                    $productsToSync[] = [
-                        'product' => $product,
-                        'itemData' => $itemData,
-                    ];
-                    
-                    if (count($productsToSync) >= $batchSize) {
-                        $batchResults = $this->batchCreateOrUpdateProductsInXero($productsToSync);
-                        $results = array_merge($results, $batchResults);
-                        $productsToSync = [];
-                        sleep(1);
-                    }
-                } catch (\Exception $e) {
-                    $results[] = [
-                        'product_id' => $product->id,
-                        'product_name' => $product->name,
-                        'status' => 'error',
-                        'error' => $e->getMessage(),
-                    ];
+                    ],
+                ];
+
+                if ($product->xero_item_id) {
+                    $itemData['ItemID'] = $product->xero_item_id;
                 }
+
+                $productsToSync[] = [
+                    'product' => $product,
+                    'itemData' => $itemData,
+                ];
+
+                if (count($productsToSync) >= $batchSize) {
+                    $batchResults = $this->batchCreateOrUpdateProductsInXero($productsToSync);
+                    $results = array_merge($results, $batchResults);
+                    $productsToSync = [];
+                    sleep(1);
+                }
+            } catch (\Exception $e) {
+                $results[] = [
+                    'product_id' => $product->id,
+                    'product_name' => $product->name,
+                    'status' => 'error',
+                    'error' => $e->getMessage(),
+                ];
             }
-        });
+        }
 
         if (!empty($productsToSync)) {
             $batchResults = $this->batchCreateOrUpdateProductsInXero($productsToSync);
@@ -1063,6 +1046,7 @@ class XeroService
                         'xero_item_id' => $xeroItem['ItemID'],
                         ...$this->getXeroTimestamps($xeroItem),
                     ]);
+                    $this->alignLocalUpdatedAtWithXero($product);
                     
                     $results[] = [
                         'product_id' => $product->id,
@@ -1102,6 +1086,7 @@ class XeroService
                             'xero_item_id' => $xeroItem['ItemID'],
                             ...$this->getXeroTimestamps($xeroItem),
                         ]);
+                        $this->alignLocalUpdatedAtWithXero($product);
                     }
                     
                     $results[] = [
@@ -1304,44 +1289,32 @@ class XeroService
             'max_invoices_per_run' => $maxInvoicesPerRun,
         ]);
 
-        // Pre-fetch all Xero invoices once to avoid N+1 individual GET requests
-        $xeroInvoicesMap = [];
-        try {
-            $response = $this->makeXeroRequest(
-                'get',
-                $this->baseUrl . '/api.xro/2.0/Invoices',
-                [],
-                2,
-                []
-            );
-            if ($response->successful()) {
-                foreach ($response->json()['Invoices'] ?? [] as $xi) {
-                    $xeroInvoicesMap[$xi['InvoiceID']] = $xi;
-                }
-            }
-        } catch (\Exception $e) {
-            Log::warning('Failed to pre-fetch Xero invoices for comparison', ['error' => $e->getMessage()]);
-        }
-
         foreach ($invoices as $index => $invoice) {
             try {
                 if ($index > 0) {
                     sleep(1);
                 }
+
+                $hasLocalChangesForExport = !$invoice->xero_updated_at
+                    || ($invoice->updated_at && $invoice->updated_at->gt($invoice->xero_updated_at));
                 
                 if ($invoice->xero_invoice_id) {
-                    $xeroInvoice = $xeroInvoicesMap[$invoice->xero_invoice_id] ?? null;
+                    $xeroInvoice = $this->getXeroInvoiceCached($invoice->xero_invoice_id);
                     if ($xeroInvoice) {
                         // Check payment status in both systems
                         $isPaidInXero = ($xeroInvoice['AmountDue'] ?? $xeroInvoice['AmountOwing'] ?? $xeroInvoice['Total'] ?? 0) <= 0.01;
                         $isPaidLocally = $invoice->isFullyPaid();
                         
-                        // If paid in both systems, skip updating
-                        if ($isPaidInXero && $isPaidLocally) {
+                        // If paid in both systems and there are no local changes to export, skip updating.
+                        // If local data changed after last Xero sync, we still attempt export.
+                        if ($isPaidInXero && $isPaidLocally && !$hasLocalChangesForExport) {
                             Log::info('Invoice is fully paid in both systems, skipping update', [
                                 'invoice_id' => $invoice->id,
                                 'invoice_number' => $invoice->invoice_number,
                                 'xero_invoice_id' => $invoice->xero_invoice_id,
+                                'updated_at' => optional($invoice->updated_at)?->toDateTimeString(),
+                                'xero_updated_at' => optional($invoice->xero_updated_at)?->toDateTimeString(),
+                                'decision_reason' => 'skip_paid_no_change',
                             ]);
                             $results[] = [
                                 'invoice_id' => $invoice->id,
@@ -1414,7 +1387,15 @@ class XeroService
                             }
                         }
                         
-                        if ($this->xeroUpdatedAtChanged($invoice, $xeroInvoice)) {
+                        if ($this->isXeroRecordNewerThanLocal($invoice, $xeroInvoice)) {
+                            Log::info('Skipping outbound invoice push because Xero record is newer', [
+                                'invoice_id' => $invoice->id,
+                                'invoice_number' => $invoice->invoice_number,
+                                'updated_at' => optional($invoice->updated_at)?->toDateTimeString(),
+                                'xero_updated_at' => optional($invoice->xero_updated_at)?->toDateTimeString(),
+                                'xero_updated_date_utc' => $xeroInvoice['UpdatedDateUTC'] ?? null,
+                                'decision_reason' => 'skip_xero_newer',
+                            ]);
                             $this->updateInvoiceFromXeroData($invoice, $xeroInvoice);
                             $results[] = [
                                 'invoice_id' => $invoice->id,
@@ -1426,6 +1407,15 @@ class XeroService
                         }
                     }
                 }
+
+                Log::info('Attempting outbound invoice sync to Xero', [
+                    'invoice_id' => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'xero_invoice_id' => $invoice->xero_invoice_id,
+                    'updated_at' => optional($invoice->updated_at)?->toDateTimeString(),
+                    'xero_updated_at' => optional($invoice->xero_updated_at)?->toDateTimeString(),
+                    'has_local_changes_for_export' => $hasLocalChangesForExport,
+                ]);
                 
                 $xeroInvoice = $this->createOrUpdateInvoiceInXero($invoice);
                 if (isset($xeroInvoice['InvoiceID'])) {
@@ -1433,6 +1423,7 @@ class XeroService
                         'xero_invoice_id' => $xeroInvoice['InvoiceID'],
                         ...$this->getXeroTimestamps($xeroInvoice),
                     ]);
+                    $this->alignLocalUpdatedAtWithXero($invoice);
                 }
                 $results[] = [
                     'invoice_id' => $invoice->id,
@@ -1440,6 +1431,12 @@ class XeroService
                     'status' => 'success',
                     'xero_invoice_id' => $xeroInvoice['InvoiceID'] ?? null,
                 ];
+                Log::info('Invoice exported to Xero', [
+                    'invoice_id' => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'xero_invoice_id' => $xeroInvoice['InvoiceID'] ?? null,
+                    'decision_reason' => 'exported',
+                ]);
             } catch (\Exception $e) {
                 Log::error('Invoice sync failed', [
                     'invoice_id' => $invoice->id,
@@ -2132,10 +2129,16 @@ class XeroService
 
             if ($invoice) {
                 $status = $this->mapXeroStatusToLocal($xeroInvoice['Status']);
-                $invoice->update([
+                $updated = $this->updateModelIfChanged($invoice, [
                     'status' => $status,
                     ...$this->getXeroTimestamps($xeroInvoice),
+                ], 'invoice', [
+                    'invoice_id' => $invoice->id,
+                    'xero_invoice_id' => $xeroInvoiceId,
                 ]);
+                if ($updated) {
+                    $this->alignLocalUpdatedAtWithXero($invoice);
+                }
                 
                 Log::info("Updated invoice {$invoice->id} status to {$status} from Xero");
             }
@@ -2230,6 +2233,49 @@ class XeroService
         $model->setAttribute('updated_at', $xeroUpdatedAt);
     }
 
+    private function updateModelIfChanged(Model $model, array $updateData, string $entity, array $context = []): bool
+    {
+        $changes = [];
+        foreach ($updateData as $key => $value) {
+            if ($this->syncValuesDiffer($model->getAttribute($key), $value)) {
+                $changes[$key] = $value;
+            }
+        }
+
+        if (empty($changes)) {
+            Log::info('Skipping local model update (no material changes)', array_merge([
+                'entity' => $entity,
+                'decision_reason' => 'skip_noop',
+                'model' => $model::class,
+                'model_id' => $model->getKey(),
+            ], $context));
+            return false;
+        }
+
+        $model->update($changes);
+        return true;
+    }
+
+    private function syncValuesDiffer(mixed $current, mixed $incoming): bool
+    {
+        if ($current instanceof \DateTimeInterface) {
+            $current = \Carbon\Carbon::parse($current)->toIso8601String();
+        }
+        if ($incoming instanceof \DateTimeInterface) {
+            $incoming = \Carbon\Carbon::parse($incoming)->toIso8601String();
+        }
+
+        if (is_numeric($current) && is_numeric($incoming)) {
+            return abs((float) $current - (float) $incoming) > 0.00001;
+        }
+
+        if (is_bool($current) || is_bool($incoming)) {
+            return (bool) $current !== (bool) $incoming;
+        }
+
+        return $current !== $incoming;
+    }
+
     private function xeroUpdatedAtChanged($existingModel, array $xeroData): bool
     {
         if (empty($xeroData['UpdatedDateUTC'])) {
@@ -2243,6 +2289,24 @@ class XeroService
         $xeroUpdated = $this->parseXeroDate($xeroData['UpdatedDateUTC']);
 
         return !$existingModel->xero_updated_at->eq($xeroUpdated);
+    }
+
+    /**
+     * Returns true only when Xero timestamp is strictly newer than local record timestamp.
+     * We compare against local updated_at so local edits win if they happened after last Xero change.
+     */
+    private function isXeroRecordNewerThanLocal($existingModel, array $xeroData): bool
+    {
+        if (empty($xeroData['UpdatedDateUTC'])) {
+            return false;
+        }
+
+        if (empty($existingModel->updated_at)) {
+            return true;
+        }
+
+        $xeroUpdated = $this->parseXeroDate($xeroData['UpdatedDateUTC']);
+        return $xeroUpdated->gt($existingModel->updated_at);
     }
 
     private function buildIfModifiedSinceHeader(?string $lastSync): array
@@ -2379,7 +2443,12 @@ class XeroService
             $updateData['country'] = $address['Country'] ?? $customer->country;
         }
 
-        $customer->update($updateData);
+        if ($this->updateModelIfChanged($customer, $updateData, 'customer', [
+            'customer_id' => $customer->id,
+            'xero_contact_id' => $xeroCustomer['ContactID'] ?? $customer->xero_contact_id,
+        ])) {
+            $this->alignLocalUpdatedAtWithXero($customer);
+        }
     }
 
     /**
@@ -2462,7 +2531,7 @@ class XeroService
             try {
                 if ($supplier->xero_contact_id && isset($xeroContactsMap[$supplier->xero_contact_id])) {
                     $xeroSupplier = $xeroContactsMap[$supplier->xero_contact_id];
-                    if ($this->xeroUpdatedAtChanged($supplier, $xeroSupplier)) {
+                    if ($this->isXeroRecordNewerThanLocal($supplier, $xeroSupplier)) {
                         $this->updateSupplierFromXero($supplier, $xeroSupplier);
                         $results[] = [
                             'supplier_id' => $supplier->id,
@@ -2481,6 +2550,7 @@ class XeroService
                         'xero_contact_id' => $xeroSupplier['ContactID'],
                         ...$this->getXeroTimestamps($xeroSupplier),
                     ]);
+                    $this->alignLocalUpdatedAtWithXero($supplier);
                 }
                 
                 $results[] = [
@@ -2657,7 +2727,12 @@ class XeroService
             $updateData['country'] = $address['Country'] ?? $supplier->country;
         }
 
-        $supplier->update($updateData);
+        if ($this->updateModelIfChanged($supplier, $updateData, 'supplier', [
+            'supplier_id' => $supplier->id,
+            'xero_contact_id' => $xeroSupplier['ContactID'] ?? $supplier->xero_contact_id,
+        ])) {
+            $this->alignLocalUpdatedAtWithXero($supplier);
+        }
     }
 
     /**
@@ -2783,6 +2858,7 @@ class XeroService
                         'xero_quote_id' => $xeroQuote['QuoteID'],
                         ...$this->getXeroTimestamps($xeroQuote),
                     ]);
+                    $this->alignLocalUpdatedAtWithXero($quote);
                 }
                 $results[] = [
                     'quote_id' => $quote->id,
@@ -3196,20 +3272,35 @@ class XeroService
             $updateData['expiry_date'] = \Carbon\Carbon::parse($xeroQuote['ExpiryDateString'])->format('Y-m-d');
         }
 
-        $quote->update($updateData);
+        $updated = $this->updateModelIfChanged($quote, $updateData, 'quote', [
+            'quote_id' => $quote->id,
+            'xero_quote_id' => $xeroQuote['QuoteID'] ?? $quote->xero_quote_id,
+        ]);
+        if ($updated) {
+            $this->alignLocalUpdatedAtWithXero($quote);
+        }
 
         if (isset($xeroQuote['LineItems']) && is_array($xeroQuote['LineItems'])) {
-            $quote->lineItems()->delete();
-            foreach ($xeroQuote['LineItems'] as $index => $xeroLineItem) {
-                \App\Models\QuoteLineItem::create([
+            if (count($xeroQuote['LineItems']) === 0) {
+                Log::info('Skipping quote line item replacement due to empty Xero LineItems payload', [
                     'quote_id' => $quote->id,
-                    'description' => $xeroLineItem['Description'] ?? '',
-                    'quantity' => $xeroLineItem['Quantity'] ?? 1,
-                    'unit_price' => $xeroLineItem['UnitAmount'] ?? 0,
-                    'total' => $xeroLineItem['LineAmount'] ?? 0,
-                    'account_id' => $this->resolveAccountId($xeroLineItem['AccountCode'] ?? null, $quote->company_id),
-                    'sort_order' => $index,
+                    'quote_number' => $quote->quote_number,
+                    'xero_quote_id' => $xeroQuote['QuoteID'] ?? $quote->xero_quote_id,
+                    'decision_reason' => 'skip_noop',
                 ]);
+            } else {
+                $quote->lineItems()->delete();
+                foreach ($xeroQuote['LineItems'] as $index => $xeroLineItem) {
+                    \App\Models\QuoteLineItem::create([
+                        'quote_id' => $quote->id,
+                        'description' => $xeroLineItem['Description'] ?? '',
+                        'quantity' => $xeroLineItem['Quantity'] ?? 1,
+                        'unit_price' => $xeroLineItem['UnitAmount'] ?? 0,
+                        'total' => $xeroLineItem['LineAmount'] ?? 0,
+                        'account_id' => $this->resolveAccountId($xeroLineItem['AccountCode'] ?? null, $quote->company_id),
+                        'sort_order' => $index,
+                    ]);
+                }
             }
         }
     }
@@ -3569,6 +3660,42 @@ class XeroService
         return null;
     }
 
+    private function getXeroCreditNote(string $creditNoteId): ?array
+    {
+        try {
+            $response = $this->makeXeroRequest('get', $this->baseUrl . '/api.xro/2.0/CreditNotes/' . $creditNoteId);
+            if ($response->successful()) {
+                $result = $response->json();
+                return $result['CreditNotes'][0] ?? null;
+            }
+        } catch (\Exception $e) {
+            Log::error('Failed to get Xero credit note', [
+                'credit_note_id' => $creditNoteId,
+                'error' => $e->getMessage()
+            ]);
+        }
+
+        return null;
+    }
+
+    private function getXeroPurchaseOrder(string $purchaseOrderId): ?array
+    {
+        try {
+            $response = $this->makeXeroRequest('get', $this->baseUrl . '/api.xro/2.0/PurchaseOrders/' . $purchaseOrderId);
+            if ($response->successful()) {
+                $result = $response->json();
+                return $result['PurchaseOrders'][0] ?? null;
+            }
+        } catch (\Exception $e) {
+            Log::error('Failed to get Xero purchase order', [
+                'purchase_order_id' => $purchaseOrderId,
+                'error' => $e->getMessage()
+            ]);
+        }
+
+        return null;
+    }
+
     private function hydrateInvoiceDetails(array $xeroInvoice): array
     {
         $hasLineItems = isset($xeroInvoice['LineItems']) && is_array($xeroInvoice['LineItems']) && count($xeroInvoice['LineItems']) > 0;
@@ -3633,7 +3760,13 @@ class XeroService
             $updateData['due_date'] = \Carbon\Carbon::parse($xeroInvoice['DueDate'])->format('Y-m-d');
         }
 
-        $invoice->update($updateData);
+        $updated = $this->updateModelIfChanged($invoice, $updateData, 'invoice', [
+            'invoice_id' => $invoice->id,
+            'xero_invoice_id' => $xeroInvoice['InvoiceID'] ?? $invoice->xero_invoice_id,
+        ]);
+        if ($updated) {
+            $this->alignLocalUpdatedAtWithXero($invoice);
+        }
         
         // Update line items only when Xero sends non-empty line item arrays.
         // Some list endpoints can include LineItems: [] even when the invoice has lines.
@@ -3812,7 +3945,12 @@ class XeroService
             $updateData['cost'] = $xeroItem['PurchaseDetails']['UnitPrice'];
         }
 
-        $product->update($updateData);
+        if ($this->updateModelIfChanged($product, $updateData, 'product', [
+            'product_id' => $product->id,
+            'xero_item_id' => $xeroItem['ItemID'] ?? $product->xero_item_id,
+        ])) {
+            $this->alignLocalUpdatedAtWithXero($product);
+        }
     }
 
     /**
@@ -3860,8 +3998,24 @@ class XeroService
 
         $results = [];
         $xeroInvoice = $this->getXeroInvoiceCached($invoice->xero_invoice_id);
+        $payments = $invoice->payments()
+            ->where(function ($query) {
+                $query->whereNull('xero_payment_id')
+                    ->orWhereNull('xero_synced_at')
+                    ->orWhereColumn('payments.updated_at', '>', 'payments.xero_synced_at');
+            })
+            ->orderBy('id')
+            ->get();
 
-        foreach ($invoice->payments as $payment) {
+        if ($payments->isEmpty()) {
+            return [[
+                'invoice_id' => $invoice->id,
+                'status' => 'skipped',
+                'message' => 'No unsynced payment changes found',
+            ]];
+        }
+
+        foreach ($payments as $payment) {
             try {
                 $result = $this->createPaymentInXero($invoice, $payment, $xeroInvoice);
                 
@@ -3892,6 +4046,15 @@ class XeroService
      */
     private function createPaymentInXero(Invoice $invoice, Payment $payment, ?array $xeroInvoice = null): array
     {
+        if (!empty($payment->xero_payment_id) && !empty($payment->xero_synced_at) && !$payment->updated_at->gt($payment->xero_synced_at)) {
+            return [
+                'payment_id' => $payment->id,
+                'amount' => $payment->amount,
+                'status' => 'skipped',
+                'message' => 'Payment already synced to Xero',
+            ];
+        }
+
         // Check if invoice is already fully paid in Xero
         $xeroInvoice = $xeroInvoice ?? $this->getXeroInvoiceCached($invoice->xero_invoice_id);
         if ($xeroInvoice && isset($xeroInvoice['AmountDue']) && $xeroInvoice['AmountDue'] <= 0) {
@@ -3972,7 +4135,26 @@ class XeroService
         }
 
         $result = $response->json();
-        return $result['Payments'][0];
+        $xeroPayment = $result['Payments'][0] ?? [];
+
+        $syncStamp = now();
+        if (!empty($xeroPayment['UpdatedDateUTC'])) {
+            $syncStamp = $this->parseXeroDate($xeroPayment['UpdatedDateUTC']);
+        }
+
+        if (!empty($xeroPayment['PaymentID'])) {
+            $payment->update([
+                'xero_payment_id' => $xeroPayment['PaymentID'],
+                'xero_synced_at' => $syncStamp,
+            ]);
+        }
+
+        return [
+            'payment_id' => $payment->id,
+            'amount' => $payment->amount,
+            'status' => 'success',
+            'xero_payment_id' => $xeroPayment['PaymentID'] ?? null,
+        ];
     }
 
     private function getXeroInvoiceCached(?string $xeroInvoiceId): ?array
@@ -4072,12 +4254,27 @@ class XeroService
                 }
 
                 // Check if payment already exists (match by invoice, amount, and date)
-                $existingPayment = Payment::where('invoice_id', $invoice->id)
-                    ->where('amount', $amount)
-                    ->whereDate('payment_date', $paymentDate->format('Y-m-d'))
-                    ->first();
+                $existingPayment = null;
+                $xeroPaymentId = $xeroPayment['PaymentID'] ?? null;
+                if ($xeroPaymentId) {
+                    $existingPayment = Payment::where('invoice_id', $invoice->id)
+                        ->where('xero_payment_id', $xeroPaymentId)
+                        ->first();
+                }
+                if (!$existingPayment) {
+                    $existingPayment = Payment::where('invoice_id', $invoice->id)
+                        ->where('amount', $amount)
+                        ->whereDate('payment_date', $paymentDate->format('Y-m-d'))
+                        ->first();
+                }
 
                 if ($existingPayment) {
+                    if (!empty($xeroPayment['PaymentID']) && empty($existingPayment->xero_payment_id)) {
+                        $existingPayment->update([
+                            'xero_payment_id' => $xeroPayment['PaymentID'],
+                            'xero_synced_at' => isset($xeroPayment['UpdatedDateUTC']) ? $this->parseXeroDate($xeroPayment['UpdatedDateUTC']) : now(),
+                        ]);
+                    }
                     Log::info('Payment already exists locally', [
                         'payment_id' => $existingPayment->id,
                         'invoice_id' => $invoice->id,
@@ -4109,6 +4306,8 @@ class XeroService
                     'payment_method' => $paymentMethod,
                     'payment_date' => $paymentDate->format('Y-m-d'),
                     'notes' => $notes,
+                    'xero_payment_id' => $xeroPayment['PaymentID'] ?? null,
+                    'xero_synced_at' => isset($xeroPayment['UpdatedDateUTC']) ? $this->parseXeroDate($xeroPayment['UpdatedDateUTC']) : now(),
                 ]);
 
                 $createdCount++;
@@ -4324,12 +4523,27 @@ class XeroService
 
                     // Check if payment already exists (match by invoice, amount, and date)
                     $amount = $xeroPayment['Amount'] ?? 0;
-                    $existingPayment = Payment::where('invoice_id', $invoice->id)
-                        ->where('amount', $amount)
-                        ->whereDate('payment_date', $paymentDate->format('Y-m-d'))
-                        ->first();
+                    $existingPayment = null;
+                    $xeroPaymentId = $xeroPayment['PaymentID'] ?? null;
+                    if ($xeroPaymentId) {
+                        $existingPayment = Payment::where('invoice_id', $invoice->id)
+                            ->where('xero_payment_id', $xeroPaymentId)
+                            ->first();
+                    }
+                    if (!$existingPayment) {
+                        $existingPayment = Payment::where('invoice_id', $invoice->id)
+                            ->where('amount', $amount)
+                            ->whereDate('payment_date', $paymentDate->format('Y-m-d'))
+                            ->first();
+                    }
 
                     if ($existingPayment) {
+                        if (!empty($xeroPayment['PaymentID']) && empty($existingPayment->xero_payment_id)) {
+                            $existingPayment->update([
+                                'xero_payment_id' => $xeroPayment['PaymentID'],
+                                'xero_synced_at' => $paymentCreatedDate ?? now(),
+                            ]);
+                        }
                         Log::info('Payment already exists locally', [
                             'payment_id' => $existingPayment->id,
                             'invoice_id' => $invoice->id,
@@ -4363,6 +4577,8 @@ class XeroService
                         'payment_method' => $paymentMethod,
                         'payment_date' => $paymentDate->format('Y-m-d'),
                         'notes' => $notes,
+                        'xero_payment_id' => $xeroPayment['PaymentID'] ?? null,
+                        'xero_synced_at' => $paymentCreatedDate ?? now(),
                     ]);
 
                     $createdCount++;
@@ -4521,7 +4737,7 @@ class XeroService
                             ];
                             continue;
                         }
-                        $existingTaxRate->update([
+                        $updated = $this->updateModelIfChanged($existingTaxRate, [
                             'xero_tax_rate_id' => $xeroTaxRate['TaxType'],
                             'name' => $xeroTaxRate['Name'],
                             'code' => $xeroTaxRate['TaxType'] ?? null,
@@ -4529,7 +4745,13 @@ class XeroService
                             'description' => $xeroTaxRate['ReportTaxType'] ?? null,
                             'is_active' => true,
                             ...$this->getXeroTimestamps($xeroTaxRate),
+                        ], 'tax_rate', [
+                            'tax_rate_id' => $existingTaxRate->id,
+                            'xero_tax_rate_id' => $xeroTaxRate['TaxType'] ?? null,
                         ]);
+                        if ($updated) {
+                            $this->alignLocalUpdatedAtWithXero($existingTaxRate);
+                        }
                         
                         $results[] = [
                             'tax_rate_id' => $existingTaxRate->id,
@@ -4549,6 +4771,7 @@ class XeroService
                             'is_active' => true,
                             ...$this->getXeroTimestamps($xeroTaxRate),
                         ]);
+                        $this->alignLocalUpdatedAtWithXero($taxRate);
                         
                         $results[] = [
                             'tax_rate_id' => $taxRate->id,
@@ -4670,7 +4893,13 @@ class XeroService
                             ];
                             continue;
                         }
-                        $existingBankAccount->update($accountData);
+                        $updated = $this->updateModelIfChanged($existingBankAccount, $accountData, 'bank_account', [
+                            'bank_account_id' => $existingBankAccount->id,
+                            'xero_account_id' => $xeroAccount['AccountID'] ?? null,
+                        ]);
+                        if ($updated) {
+                            $this->alignLocalUpdatedAtWithXero($existingBankAccount);
+                        }
                         
                         $results[] = [
                             'bank_account_id' => $existingBankAccount->id,
@@ -4683,6 +4912,7 @@ class XeroService
                             'company_id' => $currentCompany->id,
                             ...$accountData,
                         ]);
+                        $this->alignLocalUpdatedAtWithXero($bankAccount);
                         
                         $results[] = [
                             'bank_account_id' => $bankAccount->id,
@@ -4812,7 +5042,13 @@ class XeroService
                             ];
                             continue;
                         }
-                        $existingAccount->update($accountData);
+                        $updated = $this->updateModelIfChanged($existingAccount, $accountData, 'chart_of_account', [
+                            'account_id' => $existingAccount->id,
+                            'xero_account_id' => $xeroAccount['AccountID'] ?? null,
+                        ]);
+                        if ($updated) {
+                            $this->alignLocalUpdatedAtWithXero($existingAccount);
+                        }
                         $accountMap[$xeroAccount['AccountID']] = $existingAccount;
                         $processedCount++;
                         
@@ -4825,6 +5061,7 @@ class XeroService
                     } else {
                         // Create new account (parent will be set in second pass)
                         $account = ChartOfAccount::create($accountData);
+                        $this->alignLocalUpdatedAtWithXero($account);
                         $accountMap[$xeroAccount['AccountID']] = $account;
                         $processedCount++;
                         
@@ -4877,7 +5114,9 @@ class XeroService
                 $parentAccount = $accountMap[$xeroAccount['ParentAccountID']] ?? null;
 
                 if ($parentAccount) {
-                    $account->update(['parent_account_id' => $parentAccount->id]);
+                    if ((int) $account->parent_account_id !== (int) $parentAccount->id) {
+                        $account->update(['parent_account_id' => $parentAccount->id]);
+                    }
                 }
             }
 
@@ -4924,35 +5163,21 @@ class XeroService
         $currentCompany = $this->getCompany();
         $results = [];
 
-        $oneHourAgo = now()->subHour();
         $creditNotes = CreditNote::where('company_id', $currentCompany->id)
-            ->where('updated_at', '>=', $oneHourAgo)
+            ->where(function ($query) {
+                $query->whereNull('xero_credit_note_id')
+                    ->orWhereNull('xero_updated_at')
+                    ->orWhereColumn('updated_at', '>', 'xero_updated_at');
+            })
+            ->orderByDesc('updated_at')
             ->with(['customer', 'lineItems.product', 'invoice'])
             ->get();
 
         Log::info('Starting credit note sync to Xero', [
             'company_id' => $currentCompany->id,
             'credit_note_count' => $creditNotes->count(),
-            'modified_since' => $oneHourAgo->toIso8601String(),
+            'filter_applied' => 'updated_at_gt_xero_updated_at_or_unsynced',
         ]);
-
-        $xeroCreditNotesMap = [];
-        try {
-            $response = $this->makeXeroRequest(
-                'get',
-                $this->baseUrl . '/api.xro/2.0/CreditNotes',
-                [],
-                2,
-                $this->buildIfModifiedSinceHeader($oneHourAgo->toIso8601String())
-            );
-            if ($response->successful()) {
-                foreach ($response->json()['CreditNotes'] ?? [] as $xcn) {
-                    $xeroCreditNotesMap[$xcn['CreditNoteID']] = $xcn;
-                }
-            }
-        } catch (\Exception $e) {
-            Log::warning('Failed to pre-fetch Xero credit notes for comparison', ['error' => $e->getMessage()]);
-        }
 
         foreach ($creditNotes as $index => $creditNote) {
             try {
@@ -4971,9 +5196,9 @@ class XeroService
                 }
 
                 if ($creditNote->xero_credit_note_id) {
-                    $xeroCN = $xeroCreditNotesMap[$creditNote->xero_credit_note_id] ?? null;
+                    $xeroCN = $this->getXeroCreditNote($creditNote->xero_credit_note_id);
                     if ($xeroCN) {
-                        if ($this->xeroUpdatedAtChanged($creditNote, $xeroCN)) {
+                        if ($this->isXeroRecordNewerThanLocal($creditNote, $xeroCN)) {
                             $this->updateCreditNoteFromXeroData($creditNote, $xeroCN);
                             $results[] = [
                                 'credit_note_id' => $creditNote->id,
@@ -4994,6 +5219,7 @@ class XeroService
                         $updateData['xero_credit_note_id'] = $xeroData['CreditNoteID'];
                     }
                     $creditNote->update($updateData);
+                    $this->alignLocalUpdatedAtWithXero($creditNote);
                 }
 
                 $results[] = [
@@ -5143,6 +5369,7 @@ class XeroService
                             $this->updateCreditNoteFromXeroData($existing, $xeroNote);
                             if (!$existing->xero_credit_note_id) {
                                 $existing->update(['xero_credit_note_id' => $xeroNote['CreditNoteID']]);
+                                $this->alignLocalUpdatedAtWithXero($existing);
                             }
                             $results[] = [
                                 'credit_note_id' => $existing->id,
@@ -5468,6 +5695,7 @@ class XeroService
         $this->alignLocalUpdatedAtWithXero($creditNote);
 
         $this->createCreditNoteLineItemsFromXero($creditNote, $xeroNote['LineItems'] ?? [], $company);
+        $this->syncInvoiceStatusAfterCreditNoteImport($invoiceId, $company->id);
 
         return $creditNote;
     }
@@ -5476,7 +5704,7 @@ class XeroService
     {
         $invoiceId = $this->resolveCreditNoteInvoiceId($xeroNote, Company::find($creditNote->company_id)) ?? $creditNote->invoice_id;
 
-        $creditNote->update([
+        $updated = $this->updateModelIfChanged($creditNote, [
             'status' => $this->mapXeroCreditNoteStatusToLocal($xeroNote['Status'] ?? 'DRAFT'),
             'total' => (float) ($xeroNote['Total'] ?? $creditNote->total),
             'subtotal' => (float) ($xeroNote['SubTotal'] ?? $creditNote->subtotal),
@@ -5486,12 +5714,27 @@ class XeroService
             'reference' => $xeroNote['Reference'] ?? $creditNote->reference,
             'credit_note_date' => isset($xeroNote['Date']) ? $this->parseXeroDate($xeroNote['Date']) : $creditNote->credit_note_date,
             ...$this->getXeroTimestamps($xeroNote),
+        ], 'credit_note', [
+            'credit_note_id' => $creditNote->id,
+            'xero_credit_note_id' => $xeroNote['CreditNoteID'] ?? $creditNote->xero_credit_note_id,
         ]);
+        if ($updated) {
+            $this->alignLocalUpdatedAtWithXero($creditNote);
+        }
 
-        if (!empty($xeroNote['LineItems'])) {
+        if (isset($xeroNote['LineItems']) && is_array($xeroNote['LineItems']) && count($xeroNote['LineItems']) > 0) {
             $creditNote->lineItems()->delete();
             $this->createCreditNoteLineItemsFromXero($creditNote, $xeroNote['LineItems'], Company::find($creditNote->company_id));
+        } elseif (isset($xeroNote['LineItems']) && is_array($xeroNote['LineItems'])) {
+            Log::info('Skipping credit note line item replacement due to empty Xero LineItems payload', [
+                'credit_note_id' => $creditNote->id,
+                'credit_note_number' => $creditNote->credit_note_number,
+                'xero_credit_note_id' => $xeroNote['CreditNoteID'] ?? $creditNote->xero_credit_note_id,
+                'decision_reason' => 'skip_noop',
+            ]);
         }
+
+        $this->syncInvoiceStatusAfterCreditNoteImport($invoiceId, $creditNote->company_id);
     }
 
     private function resolveAccountId(?string $accountCode, int $companyId): ?int
@@ -5552,6 +5795,31 @@ class XeroService
         }
 
         return null;
+    }
+
+    private function syncInvoiceStatusAfterCreditNoteImport(?int $invoiceId, int $companyId): void
+    {
+        if (!$invoiceId) {
+            return;
+        }
+
+        $invoice = Invoice::where('company_id', $companyId)
+            ->whereKey($invoiceId)
+            ->first();
+        if (!$invoice) {
+            return;
+        }
+
+        $invoice->refresh();
+
+        if ($invoice->isFullyPaid() && $invoice->status !== 'paid') {
+            $invoice->update(['status' => 'paid']);
+            Log::info('Marked invoice as paid after credit note import from Xero', [
+                'invoice_id' => $invoice->id,
+                'invoice_number' => $invoice->invoice_number,
+                'decision_reason' => 'credit_note_allocation_settled_invoice',
+            ]);
+        }
     }
 
     private function createCreditNoteLineItemsFromXero(CreditNote $creditNote, array $xeroLineItems, Company $company): void
@@ -5636,7 +5904,12 @@ class XeroService
         $results = [];
 
         $purchaseOrders = PurchaseOrder::where('company_id', $currentCompany->id)
-            ->where('updated_at', '>=', now()->subHour())
+            ->where(function ($query) {
+                $query->whereNull('xero_purchase_order_id')
+                    ->orWhereNull('xero_updated_at')
+                    ->orWhereColumn('updated_at', '>', 'xero_updated_at');
+            })
+            ->orderByDesc('updated_at')
             ->with(['supplier', 'items.product'])
             ->get();
 
@@ -5652,6 +5925,20 @@ class XeroService
                     continue;
                 }
 
+                if ($po->xero_purchase_order_id) {
+                    $xeroPO = $this->getXeroPurchaseOrder($po->xero_purchase_order_id);
+                    if ($xeroPO && $this->isXeroRecordNewerThanLocal($po, $xeroPO)) {
+                        $this->updatePurchaseOrderFromXeroData($po, $xeroPO);
+                        $results[] = [
+                            'po_id' => $po->id,
+                            'po_number' => $po->po_number,
+                            'status' => 'updated_from_xero',
+                            'message' => 'Purchase order updated from Xero (Xero was newer)',
+                        ];
+                        continue;
+                    }
+                }
+
                 $xeroData = $this->createOrUpdatePurchaseOrderInXero($po);
 
                 if (!$po->xero_purchase_order_id && isset($xeroData['PurchaseOrderID'])) {
@@ -5662,6 +5949,7 @@ class XeroService
                 } else {
                     $po->update($this->getXeroTimestamps($xeroData));
                 }
+                $this->alignLocalUpdatedAtWithXero($po);
 
                 $results[] = [
                     'po_id' => $po->id,
@@ -5842,6 +6130,7 @@ class XeroService
                             $this->updatePurchaseOrderFromXeroData($existing, $xeroPODetails);
                             if (!$existing->xero_purchase_order_id) {
                                 $existing->update(['xero_purchase_order_id' => $xeroPODetails['PurchaseOrderID']]);
+                                $this->alignLocalUpdatedAtWithXero($existing);
                             }
                             $results[] = [
                                 'po_number' => $existing->po_number,
@@ -6054,7 +6343,7 @@ class XeroService
         DB::transaction(function () use ($po, $xeroPO) {
             $xeroPurchaseOrderNumber = trim((string) ($xeroPO['PurchaseOrderNumber'] ?? ''));
 
-            $po->update([
+            $updated = $this->updateModelIfChanged($po, [
                 'po_number' => $xeroPurchaseOrderNumber !== '' ? $xeroPurchaseOrderNumber : $po->po_number,
                 'status' => $this->mapXeroPOStatusToLocal($xeroPO['Status'] ?? $po->status),
                 'subtotal' => (float) ($xeroPO['SubTotal'] ?? $po->subtotal),
@@ -6062,11 +6351,24 @@ class XeroService
                 'total' => (float) ($xeroPO['Total'] ?? $po->total),
                 'expected_delivery_date' => isset($xeroPO['DeliveryDate']) ? $this->parseXeroDate($xeroPO['DeliveryDate']) : $po->expected_delivery_date,
                 ...$this->getXeroTimestamps($xeroPO),
+            ], 'purchase_order', [
+                'purchase_order_id' => $po->id,
+                'xero_purchase_order_id' => $xeroPO['PurchaseOrderID'] ?? $po->xero_purchase_order_id,
             ]);
+            if ($updated) {
+                $this->alignLocalUpdatedAtWithXero($po);
+            }
 
             if (!empty($xeroPO['LineItems'])) {
                 $po->items()->delete();
                 $this->syncPurchaseOrderLineItemsFromXero($po, $xeroPO['LineItems'], $po->company_id);
+            } elseif (isset($xeroPO['LineItems']) && is_array($xeroPO['LineItems'])) {
+                Log::info('Skipping purchase order line item replacement due to empty Xero LineItems payload', [
+                    'purchase_order_id' => $po->id,
+                    'po_number' => $po->po_number,
+                    'xero_purchase_order_id' => $xeroPO['PurchaseOrderID'] ?? $po->xero_purchase_order_id,
+                    'decision_reason' => 'skip_noop',
+                ]);
             }
         });
     }

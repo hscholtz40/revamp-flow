@@ -73,6 +73,7 @@ return [
         'quote_export_delay_ms' => env('XERO_QUOTE_EXPORT_DELAY_MS', 250),
         'payment_export_max_invoices_per_run' => env('XERO_PAYMENT_EXPORT_MAX_INVOICES_PER_RUN', 120),
         'customer_export_max_per_run' => env('XERO_CUSTOMER_EXPORT_MAX_PER_RUN', 200),
+        'product_export_max_per_run' => env('XERO_PRODUCT_EXPORT_MAX_PER_RUN', 200),
         'supplier_export_max_per_run' => env('XERO_SUPPLIER_EXPORT_MAX_PER_RUN', 200),
     ],
 
