@@ -40,10 +40,16 @@ class XeroService
         return "xero_{$module}_import_cursor_company_{$companyId}";
     }
 
+    public static function getInitialSyncPaginationCacheKey(int $companyId, string $module): string
+    {
+        return "xero_{$module}_import_pagination_company_{$companyId}";
+    }
+
     public static function resetInitialSyncStatus(int $companyId, string $module): void
     {
         Cache::forget(self::getInitialSyncCompletedCacheKey($companyId, $module));
         Cache::forget(self::getInitialSyncCursorCacheKey($companyId, $module));
+        Cache::forget(self::getInitialSyncPaginationCacheKey($companyId, $module));
     }
 
     public function __construct(Company $company = null)
@@ -1358,6 +1364,7 @@ class XeroService
             $hasAnyLocalInvoices = Invoice::where('company_id', $currentCompany->id)->exists();
             $fullSyncCompletedKey = self::getInitialSyncCompletedCacheKey($currentCompany->id, 'invoice');
             $cursorKey = self::getInitialSyncCursorCacheKey($currentCompany->id, 'invoice');
+            $paginationKey = self::getInitialSyncPaginationCacheKey($currentCompany->id, 'invoice');
             $isInitialInvoiceImport = !$hasAnyLocalInvoices;
             $isBackfillMode = $isInitialInvoiceImport || !Cache::get($fullSyncCompletedKey, false);
             $cursor = Cache::get($cursorKey, ['page' => 1]);
@@ -1441,11 +1448,11 @@ class XeroService
             }
             
             do {
-                if (!$isInitialInvoiceImport && $processedThisRun >= $maxInvoicesPerRun) {
+                if (!$isBackfillMode && $processedThisRun >= $maxInvoicesPerRun) {
                     $stopReason = 'max_invoices_per_run_reached';
                     break;
                 }
-                if (!$isInitialInvoiceImport && (microtime(true) - $startedAt) >= $maxSecondsPerRun) {
+                if (!$isBackfillMode && (microtime(true) - $startedAt) >= $maxSecondsPerRun) {
                     $stopReason = 'max_seconds_per_run_reached';
                     break;
                 }
@@ -1513,14 +1520,21 @@ class XeroService
                     'page_size' => $pageSize,
                     'has_more_pages' => $hasMorePages,
                 ]);
+                Cache::put($paginationKey, [
+                    'page' => (int) $currentPage,
+                    'page_count' => is_numeric($pageCount) ? (int) $pageCount : null,
+                    'item_count' => is_numeric($itemCount) ? (int) $itemCount : null,
+                    'page_size' => $pageSize,
+                    'captured_at' => now()->toIso8601String(),
+                ], now()->addDays(7));
 
                 // Process invoices from this page immediately
                 foreach ($xeroInvoices as $xeroInvoice) {
-                    if (!$isInitialInvoiceImport && $processedThisRun >= $maxInvoicesPerRun) {
+                    if (!$isBackfillMode && $processedThisRun >= $maxInvoicesPerRun) {
                         $stopReason = 'max_invoices_per_run_reached';
                         break;
                     }
-                    if (!$isInitialInvoiceImport && (microtime(true) - $startedAt) >= $maxSecondsPerRun) {
+                    if (!$isBackfillMode && (microtime(true) - $startedAt) >= $maxSecondsPerRun) {
                         $stopReason = 'max_seconds_per_run_reached';
                         break;
                     }
@@ -1637,7 +1651,7 @@ class XeroService
                 ]);
                 
                 $pagesProcessed++;
-                if (!$isInitialInvoiceImport && $pagesProcessed >= $maxPagesPerRun) {
+                if (!$isBackfillMode && $pagesProcessed >= $maxPagesPerRun) {
                     $stopReason = 'max_pages_per_run_reached';
                 }
 
@@ -5470,12 +5484,31 @@ class XeroService
         $results = [];
 
         try {
+            $hasAnyLocalPurchaseOrders = PurchaseOrder::where('company_id', $currentCompany->id)->exists();
+            $fullSyncCompletedKey = self::getInitialSyncCompletedCacheKey($currentCompany->id, 'purchase_order');
+            $cursorKey = self::getInitialSyncCursorCacheKey($currentCompany->id, 'purchase_order');
+            $paginationKey = self::getInitialSyncPaginationCacheKey($currentCompany->id, 'purchase_order');
+            $isBackfillMode = !$hasAnyLocalPurchaseOrders || !Cache::get($fullSyncCompletedKey, false);
+            $cursor = Cache::get($cursorKey, ['page' => 1]);
+
             $lastSync = PurchaseOrder::where('company_id', $currentCompany->id)
                 ->whereNotNull('xero_updated_at')->max('xero_updated_at');
-            $ifModifiedSince = $this->buildIfModifiedSinceHeader($lastSync);
+            // During backfill mode we intentionally avoid If-Modified-Since so older pages are not skipped.
+            $ifModifiedSince = $isBackfillMode ? [] : $this->buildIfModifiedSinceHeader($lastSync);
 
-            $page = 1;
+            $page = (int) ($isBackfillMode ? ($cursor['page'] ?? 1) : 1);
+            if ($page < 1) {
+                $page = 1;
+            }
             $pageSize = 100;
+            $hasMorePages = false;
+
+            Log::info('Starting purchase order import from Xero', [
+                'company_id' => $currentCompany->id,
+                'mode' => $isBackfillMode ? 'backfill' : 'incremental',
+                'start_page' => $page,
+                'page_size' => $pageSize,
+            ]);
 
             do {
                 $response = $this->makeXeroRequest(
@@ -5502,44 +5535,55 @@ class XeroService
                 } else {
                     $hasMorePages = $poCountOnPage >= $pageSize;
                 }
+                Cache::put($paginationKey, [
+                    'page' => is_numeric($currentPage) ? (int) $currentPage : $page,
+                    'page_count' => is_numeric($pageCount) ? (int) $pageCount : null,
+                    'item_count' => is_numeric($pagination['ItemCount'] ?? null) ? (int) $pagination['ItemCount'] : null,
+                    'page_size' => $pageSize,
+                    'captured_at' => now()->toIso8601String(),
+                ], now()->addDays(7));
 
                 foreach ($xeroPOs as $xeroPO) {
                     try {
+                        // Xero list endpoints may omit LineItems on page payloads even with summaryOnly=false.
+                        // Hydrate PO details when needed so local items are consistently imported.
+                        $xeroPODetails = $this->hydratePurchaseOrderDetails($xeroPO);
+
                         $existing = PurchaseOrder::where('company_id', $currentCompany->id)
-                            ->where('xero_purchase_order_id', $xeroPO['PurchaseOrderID'])
+                            ->where('xero_purchase_order_id', $xeroPODetails['PurchaseOrderID'] ?? null)
                             ->first();
 
-                        if (!$existing && !empty($xeroPO['PurchaseOrderNumber'])) {
+                        if (!$existing && !empty($xeroPODetails['PurchaseOrderNumber'])) {
                             $existing = PurchaseOrder::where('company_id', $currentCompany->id)
-                                ->where('po_number', $xeroPO['PurchaseOrderNumber'])
+                                ->where('po_number', $xeroPODetails['PurchaseOrderNumber'])
                                 ->whereNull('xero_purchase_order_id')
                                 ->first();
                         }
 
                         if ($existing) {
                             $localLineItemCount = $existing->items()->count();
-                            $xeroLineItemCount = isset($xeroPO['LineItems']) && is_array($xeroPO['LineItems'])
-                                ? count($xeroPO['LineItems'])
+                            $xeroLineItemCount = isset($xeroPODetails['LineItems']) && is_array($xeroPODetails['LineItems'])
+                                ? count($xeroPODetails['LineItems'])
                                 : 0;
                             $needsLineItemBackfill = $localLineItemCount === 0 && $xeroLineItemCount > 0;
 
-                            if (!$this->xeroUpdatedAtChanged($existing, $xeroPO) && !$needsLineItemBackfill) {
+                            if (!$this->xeroUpdatedAtChanged($existing, $xeroPODetails) && !$needsLineItemBackfill) {
                                 $results[] = [
                                     'po_number' => $existing->po_number,
                                     'status' => 'skipped',
                                 ];
                                 continue;
                             }
-                            $this->updatePurchaseOrderFromXeroData($existing, $xeroPO);
+                            $this->updatePurchaseOrderFromXeroData($existing, $xeroPODetails);
                             if (!$existing->xero_purchase_order_id) {
-                                $existing->update(['xero_purchase_order_id' => $xeroPO['PurchaseOrderID']]);
+                                $existing->update(['xero_purchase_order_id' => $xeroPODetails['PurchaseOrderID']]);
                             }
                             $results[] = [
                                 'po_number' => $existing->po_number,
                                 'status' => 'updated',
                             ];
                         } else {
-                            $po = $this->createPurchaseOrderFromXero($xeroPO, $currentCompany);
+                            $po = $this->createPurchaseOrderFromXero($xeroPODetails, $currentCompany);
                             $results[] = [
                                 'po_number' => $po->po_number,
                                 'status' => 'created',
@@ -5559,10 +5603,18 @@ class XeroService
                 }
 
                 $page++;
+                if ($isBackfillMode) {
+                    Cache::put($cursorKey, ['page' => $page], now()->addDays(7));
+                }
                 if ($hasMorePages) {
                     sleep(1);
                 }
             } while ($hasMorePages);
+
+            if ($isBackfillMode) {
+                Cache::put($fullSyncCompletedKey, true, now()->addDays(365));
+                Cache::forget($cursorKey);
+            }
         } catch (\Exception $e) {
             Log::error('Failed to sync purchase orders from Xero', [
                 'error' => $e->getMessage(),
@@ -5633,6 +5685,37 @@ class XeroService
         }
 
         return $response->json()['PurchaseOrders'][0] ?? [];
+    }
+
+    private function hydratePurchaseOrderDetails(array $xeroPO): array
+    {
+        if (!empty($xeroPO['LineItems']) || empty($xeroPO['PurchaseOrderID'])) {
+            return $xeroPO;
+        }
+
+        $response = $this->makeXeroRequest(
+            'get',
+            $this->baseUrl . '/api.xro/2.0/PurchaseOrders/' . $xeroPO['PurchaseOrderID']
+        );
+
+        if (!$response->successful()) {
+            Log::warning('Could not hydrate purchase order details from Xero', [
+                'purchase_order_id' => $xeroPO['PurchaseOrderID'],
+                'status' => $response->status(),
+                'response' => $response->body(),
+            ]);
+
+            return $xeroPO;
+        }
+
+        $detailed = $response->json()['PurchaseOrders'][0] ?? [];
+        if (!is_array($detailed) || empty($detailed)) {
+            return $xeroPO;
+        }
+
+        // Keep the detailed payload authoritative while preserving any fallback keys
+        // from the list response that might not be present in the details payload.
+        return array_replace($xeroPO, $detailed);
     }
 
     private function createPurchaseOrderFromXero(array $xeroPO, Company $company): PurchaseOrder

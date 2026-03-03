@@ -557,6 +557,32 @@
                     <p class="text-sm text-blue-700 mb-4">
                         Import existing customers, products, suppliers, quotes, tax rates, bank accounts, and chart of accounts from your Xero account to get started.
                     </p>
+                    <div class="mb-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div class="bg-white border border-blue-200 rounded p-3">
+                            <div class="flex items-center justify-between">
+                                <h4 class="text-sm font-medium text-blue-900">Invoices Backfill</h4>
+                                <span :class="backfillStatusClass(syncProgress.invoice.full_sync_completed)" class="text-xs px-2 py-1 rounded-full">
+                                    {{ backfillStatusText(syncProgress.invoice.full_sync_completed) }}
+                                </span>
+                            </div>
+                            <p class="text-xs text-blue-800 mt-2">
+                                {{ backfillProgressText(syncProgress.invoice) }}
+                            </p>
+                            <p class="text-xs text-blue-700 mt-1">Local records: {{ syncProgress.invoice.local_count }}</p>
+                        </div>
+                        <div class="bg-white border border-blue-200 rounded p-3">
+                            <div class="flex items-center justify-between">
+                                <h4 class="text-sm font-medium text-blue-900">Purchase Orders Backfill</h4>
+                                <span :class="backfillStatusClass(syncProgress.purchase_order.full_sync_completed)" class="text-xs px-2 py-1 rounded-full">
+                                    {{ backfillStatusText(syncProgress.purchase_order.full_sync_completed) }}
+                                </span>
+                            </div>
+                            <p class="text-xs text-blue-800 mt-2">
+                                {{ backfillProgressText(syncProgress.purchase_order) }}
+                            </p>
+                            <p class="text-xs text-blue-700 mt-1">Local records: {{ syncProgress.purchase_order.local_count }}</p>
+                        </div>
+                    </div>
                     <div class="flex flex-wrap gap-3">
                         <button
                             v-if="form.sync_customers_from_xero"
@@ -739,6 +765,10 @@ interface Props {
         is_default: boolean;
     }>;
     xeroTenants: XeroTenant[];
+    syncProgress: {
+        invoice: BackfillProgress;
+        purchase_order: BackfillProgress;
+    };
 }
 
 const props = defineProps<Props>();
@@ -748,6 +778,20 @@ const availableTenants = ref<XeroTenant[]>(props.xeroTenants || []);
 const selectedTenantId = ref<string>(props.settings.tenant_id || '');
 const changingTenant = ref(false);
 const fetchingTenants = ref(false);
+const syncProgress = computed(() => props.syncProgress);
+
+interface BackfillProgress {
+    module: string;
+    is_backfill_in_progress: boolean;
+    full_sync_completed: boolean;
+    next_page: number | null;
+    current_page: number | null;
+    page_count: number | null;
+    item_count: number | null;
+    page_size: number | null;
+    captured_at: string | null;
+    local_count: number;
+}
 
 const form = useForm({
     is_enabled: props.settings.is_enabled,
@@ -813,6 +857,21 @@ const statusClass = computed(() => {
     if (!props.settings.tenant_name) return 'bg-yellow-100 text-yellow-800';
     return 'bg-green-100 text-green-800';
 });
+
+const backfillStatusText = (completed: boolean) => (completed ? 'Complete' : 'In progress');
+const backfillStatusClass = (completed: boolean) => (
+    completed ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+);
+
+const backfillProgressText = (progress: BackfillProgress) => {
+    if (progress.current_page && progress.page_count) {
+        return `Page ${progress.current_page} of ${progress.page_count}${progress.next_page ? ` (next: ${progress.next_page})` : ''}`;
+    }
+    if (progress.next_page) {
+        return `Next import page: ${progress.next_page}`;
+    }
+    return progress.full_sync_completed ? 'Initial backfill completed.' : 'Waiting for first backfill page.';
+};
 
 const submit = () => {
     form.put('/administration/xero-settings');

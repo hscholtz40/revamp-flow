@@ -3,8 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\XeroSettings;
+use App\Models\Invoice;
+use App\Models\PurchaseOrder;
 use App\Services\XeroService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 
 class XeroSettingsController extends Controller
@@ -48,6 +51,10 @@ class XeroSettingsController extends Controller
             'currentCompany' => $currentCompany,
             'availableCompanies' => $availableCompanies,
             'xeroTenants' => session('xero_tenants', []),
+            'syncProgress' => [
+                'invoice' => $this->buildBackfillProgress($currentCompany->id, 'invoice'),
+                'purchase_order' => $this->buildBackfillProgress($currentCompany->id, 'purchase_order'),
+            ],
         ]);
     }
 
@@ -339,5 +346,35 @@ class XeroSettingsController extends Controller
         }
 
         return $connections;
+    }
+
+    private function buildBackfillProgress(int $companyId, string $module): array
+    {
+        $fullSyncCompletedKey = XeroService::getInitialSyncCompletedCacheKey($companyId, $module);
+        $cursorKey = XeroService::getInitialSyncCursorCacheKey($companyId, $module);
+        $paginationKey = XeroService::getInitialSyncPaginationCacheKey($companyId, $module);
+
+        $fullSyncCompleted = (bool) Cache::get($fullSyncCompletedKey, false);
+        $cursor = Cache::get($cursorKey);
+        $pagination = Cache::get($paginationKey);
+
+        $localCount = match ($module) {
+            'invoice' => Invoice::where('company_id', $companyId)->count(),
+            'purchase_order' => PurchaseOrder::where('company_id', $companyId)->count(),
+            default => 0,
+        };
+
+        return [
+            'module' => $module,
+            'is_backfill_in_progress' => !$fullSyncCompleted,
+            'full_sync_completed' => $fullSyncCompleted,
+            'next_page' => isset($cursor['page']) ? (int) $cursor['page'] : null,
+            'current_page' => isset($pagination['page']) ? (int) $pagination['page'] : null,
+            'page_count' => isset($pagination['page_count']) ? (int) $pagination['page_count'] : null,
+            'item_count' => isset($pagination['item_count']) ? (int) $pagination['item_count'] : null,
+            'page_size' => isset($pagination['page_size']) ? (int) $pagination['page_size'] : null,
+            'captured_at' => $pagination['captured_at'] ?? null,
+            'local_count' => $localCount,
+        ];
     }
 }
