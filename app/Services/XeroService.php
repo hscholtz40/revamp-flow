@@ -6516,6 +6516,10 @@ class XeroService
 
         if ($po->xero_purchase_order_id) {
             $data['PurchaseOrderID'] = $po->xero_purchase_order_id;
+
+            // Xero can reject status transitions during PO updates depending on
+            // current remote state (e.g. billed/authorised). Keep status immutable on updates.
+            unset($data['Status']);
         }
 
         $response = $this->makeXeroRequest('post', $this->baseUrl . '/api.xro/2.0/PurchaseOrders', [
@@ -6523,7 +6527,28 @@ class XeroService
         ]);
 
         if (!$response->successful()) {
-            throw new \Exception('Failed to create/update purchase order in Xero: ' . $response->body());
+            $errorBody = $response->body();
+
+            // Retry once without AccountCode if Xero rejects account code for PO document type.
+            if (str_contains($errorBody, 'is not a valid code for this document')) {
+                $retryData = $data;
+                $retryData['LineItems'] = array_map(function (array $line) {
+                    unset($line['AccountCode']);
+                    return $line;
+                }, $data['LineItems'] ?? []);
+
+                $retryResponse = $this->makeXeroRequest('post', $this->baseUrl . '/api.xro/2.0/PurchaseOrders', [
+                    'PurchaseOrders' => [$retryData],
+                ]);
+
+                if ($retryResponse->successful()) {
+                    return $retryResponse->json()['PurchaseOrders'][0] ?? [];
+                }
+
+                $errorBody = $retryResponse->body();
+            }
+
+            throw new \Exception('Failed to create/update purchase order in Xero: ' . $errorBody);
         }
 
         return $response->json()['PurchaseOrders'][0] ?? [];
