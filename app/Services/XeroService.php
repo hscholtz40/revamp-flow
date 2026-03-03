@@ -1301,6 +1301,29 @@ class XeroService
                 if ($invoice->xero_invoice_id) {
                     $xeroInvoice = $this->getXeroInvoiceCached($invoice->xero_invoice_id);
                     if ($xeroInvoice) {
+                        $xeroStatus = strtoupper((string) ($xeroInvoice['Status'] ?? ''));
+
+                        // Xero invoices in terminal states cannot be modified.
+                        // Keep local in sync and skip outbound updates for these.
+                        if (in_array($xeroStatus, ['VOIDED', 'DELETED'], true)) {
+                            Log::info('Skipping outbound invoice push because Xero invoice is non-editable', [
+                                'invoice_id' => $invoice->id,
+                                'invoice_number' => $invoice->invoice_number,
+                                'xero_invoice_id' => $invoice->xero_invoice_id,
+                                'xero_status' => $xeroStatus,
+                                'decision_reason' => 'skip_xero_terminal_status',
+                            ]);
+
+                            $this->updateInvoiceFromXeroData($invoice, $xeroInvoice);
+                            $results[] = [
+                                'invoice_id' => $invoice->id,
+                                'invoice_number' => $invoice->invoice_number,
+                                'status' => 'skipped',
+                                'message' => "Skipped outbound sync: Xero invoice status is {$xeroStatus}",
+                            ];
+                            continue;
+                        }
+
                         // Check payment status in both systems
                         $isPaidInXero = ($xeroInvoice['AmountDue'] ?? $xeroInvoice['AmountOwing'] ?? $xeroInvoice['Total'] ?? 0) <= 0.01;
                         $isPaidLocally = $invoice->isFullyPaid();
