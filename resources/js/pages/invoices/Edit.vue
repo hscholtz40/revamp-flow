@@ -188,9 +188,9 @@
                         </div>
 
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Title</label>
                             <input v-model="form.title" type="text" class="w-full rounded border px-3 py-2"
-                                :class="{ 'border-red-500': form.errors.title }" required />
+                                :class="{ 'border-red-500': form.errors.title }" placeholder="Optional (defaults to invoice number)" />
                             <div v-if="form.errors.title" class="text-red-500 text-sm mt-1">
                                 {{ form.errors.title }}
                             </div>

@@ -172,7 +172,7 @@ class InvoicesController extends Controller
         $currentCompany = auth()->user()->getCurrentCompany();
         
         $validated = $request->validate([
-            'title' => 'required|string|max:255',
+            'title' => 'nullable|string|max:255',
             'description' => 'nullable|string',
             'customer_id' => 'required|exists:customers,id',
             'salesperson_id' => 'nullable|exists:users,id',
@@ -208,7 +208,7 @@ class InvoicesController extends Controller
         // Create invoice
         $invoice = Invoice::create([
             'invoice_number' => $invoiceNumber,
-            'title' => $validated['title'],
+            'title' => !empty(trim((string) ($validated['title'] ?? ''))) ? trim((string) $validated['title']) : $invoiceNumber,
             'description' => $validated['description'],
             'customer_id' => $validated['customer_id'],
             'salesperson_id' => $salespersonId,
@@ -485,7 +485,7 @@ class InvoicesController extends Controller
     public function update(Request $request, Invoice $invoice): RedirectResponse
     {
         $validated = $request->validate([
-            'title' => 'required|string|max:255',
+            'title' => 'nullable|string|max:255',
             'description' => 'nullable|string',
             'customer_id' => 'required|exists:customers,id',
             'salesperson_id' => 'nullable|exists:users,id',
@@ -524,7 +524,7 @@ class InvoicesController extends Controller
         
         // Prepare update data
         $updateData = [
-            'title' => $validated['title'],
+            'title' => !empty(trim((string) ($validated['title'] ?? ''))) ? trim((string) $validated['title']) : $invoice->invoice_number,
             'description' => $validated['description'],
             'customer_id' => $validated['customer_id'],
             'invoice_date' => $validated['invoice_date'],
