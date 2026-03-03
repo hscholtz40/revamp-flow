@@ -25,6 +25,7 @@ const form = useForm({
     default_jobcard_terms: '',
     is_active: true,
     is_default: false,
+    enable_pos: false,
     logo: null as File | null,
     bank_name: '',
     bank_account_name: '',
@@ -399,6 +400,17 @@ function submit() {
                                         class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                     />
                                     <span class="text-sm font-medium text-gray-700">Set as default company</span>
+                                </label>
+                            </div>
+
+                            <div>
+                                <label class="flex items-center gap-2">
+                                    <input
+                                        v-model="form.enable_pos"
+                                        type="checkbox"
+                                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <span class="text-sm font-medium text-gray-700">Enable Point of Sale (POS)</span>
                                 </label>
                             </div>
                         </div>

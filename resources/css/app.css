@@ -222,4 +222,56 @@
     .animate-shimmer {
         animation: shimmer 2s infinite;
     }
+
+    /*
+     * Legacy page compatibility:
+     * Many older Inertia pages use fixed light utility classes.
+     * These overrides provide dark-mode parity without rewriting every page.
+     */
+    .dark .bg-white {
+        background-color: hsl(0 0% 8%);
+    }
+
+    .dark .bg-gray-50 {
+        background-color: hsl(0 0% 11%);
+    }
+
+    .dark .bg-blue-50 {
+        background-color: hsl(215 35% 14%);
+    }
+
+    .dark .text-gray-900 {
+        color: hsl(0 0% 95%);
+    }
+
+    .dark .text-gray-700 {
+        color: hsl(0 0% 82%);
+    }
+
+    .dark .text-gray-600,
+    .dark .text-gray-500 {
+        color: hsl(0 0% 70%);
+    }
+
+    .dark .border-gray-200,
+    .dark .border-gray-300 {
+        border-color: hsl(0 0% 24%);
+    }
+
+    .dark .hover\:bg-gray-50:hover {
+        background-color: hsl(0 0% 14%);
+    }
+
+    .dark input,
+    .dark select,
+    .dark textarea {
+        background-color: hsl(0 0% 10%);
+        color: hsl(0 0% 95%);
+        border-color: hsl(0 0% 26%);
+    }
+
+    .dark input::placeholder,
+    .dark textarea::placeholder {
+        color: hsl(0 0% 55%);
+    }
 }

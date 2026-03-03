@@ -32,6 +32,7 @@ class Company extends Model
         'default_jobcard_terms',
         'is_active',
         'is_default',
+        'enable_pos',
         'smtp_host',
         'smtp_port',
         'smtp_username',
@@ -60,6 +61,7 @@ class Company extends Model
     protected $casts = [
         'is_active' => 'boolean',
         'is_default' => 'boolean',
+        'enable_pos' => 'boolean',
         'smtp_port' => 'integer',
         'visible_modules' => 'array',
         'invoice_number_next' => 'integer',

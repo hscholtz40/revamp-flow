@@ -66,6 +66,7 @@ class CompanySettingsController extends Controller
             'default_jobcard_terms' => ['nullable', 'string'],
             'is_active' => ['boolean'],
             'is_default' => ['boolean'],
+            'enable_pos' => ['boolean'],
             'logo' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg', 'max:2048'],
             'smtp_host' => ['nullable', 'string', 'max:255'],
             'smtp_port' => ['nullable', 'integer', 'min:1', 'max:65535'],
@@ -168,6 +169,7 @@ class CompanySettingsController extends Controller
                 'default_jobcard_terms' => $company->default_jobcard_terms,
                 'is_active' => $company->is_active,
                 'is_default' => $company->is_default,
+                'enable_pos' => $company->enable_pos,
             ];
             
             if ($request->hasFile('logo')) {
@@ -198,6 +200,7 @@ class CompanySettingsController extends Controller
             'default_jobcard_terms' => ['nullable', 'string'],
             'is_active' => ['boolean'],
             'is_default' => ['boolean'],
+            'enable_pos' => ['boolean'],
             'logo' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg', 'max:2048'],
             'smtp_host' => ['nullable', 'string', 'max:255'],
             'smtp_port' => ['nullable', 'integer', 'min:1', 'max:65535'],

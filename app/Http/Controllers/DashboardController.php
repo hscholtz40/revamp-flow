@@ -101,6 +101,8 @@ class DashboardController extends Controller
                 'monthlyRevenue' => $monthlyRevenue,
                 'statusCharts' => $statusCharts,
                 'currentCompany' => null,
+                'canCreateInvoices' => false,
+                'isPosEnabled' => false,
                 'warning' => 'No active company access is configured for your user. Please contact an administrator.',
             ]);
         }
@@ -324,6 +326,8 @@ class DashboardController extends Controller
             'monthlyRevenue' => $monthlyRevenue,
             'statusCharts' => $statusCharts,
             'currentCompany' => $currentCompany,
+            'canCreateInvoices' => auth()->user()->hasModulePermission('invoices', 'create'),
+            'isPosEnabled' => (bool) ($currentCompany->enable_pos ?? false),
         ]);
     }
 }

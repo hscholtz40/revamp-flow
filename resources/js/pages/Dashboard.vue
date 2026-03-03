@@ -62,6 +62,8 @@ interface Props {
         jobcard_status: { labels: string[]; data: number[]; colors: string[] };
     };
     currentCompany: any;
+    canCreateInvoices: boolean;
+    isPosEnabled: boolean;
 }
 
 const props = defineProps<Props>();
@@ -197,6 +199,11 @@ const getStatusColor = (status: string) => {
                         Welcome back! Here's what's happening with your business.
                     </p>
                 </div>
+                <Button v-if="props.canCreateInvoices && props.isPosEnabled" as-child>
+                    <Link href="/invoices/pos">
+                        POS
+                    </Link>
+                </Button>
             </div>
 
             <!-- Quick Actions -->
@@ -217,6 +224,12 @@ const getStatusColor = (status: string) => {
                             <Link :href="invoices.create().url">
                                 <Receipt class="mr-2 h-4 w-4" />
                                 New Invoice
+                            </Link>
+                        </Button>
+                        <Button v-if="props.canCreateInvoices && props.isPosEnabled" as-child class="w-full justify-start" variant="outline">
+                            <Link href="/invoices/pos">
+                                <Receipt class="mr-2 h-4 w-4" />
+                                POS
                             </Link>
                         </Button>
                         <Button as-child class="w-full justify-start" variant="outline">

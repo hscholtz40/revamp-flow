@@ -14,9 +14,14 @@
             <!-- Header -->
             <div class="flex items-center justify-between gap-3 mb-6">
                 <h1 class="text-2xl font-bold text-gray-900">Invoices</h1>
-                <Link :href="invoices.create().url" class="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">
-                    New Invoice
-                </Link>
+                <div class="flex items-center gap-2">
+                    <Link v-if="props.canCreateInvoices && props.isPosEnabled" href="/invoices/pos" class="rounded bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700">
+                        POS
+                    </Link>
+                    <Link v-if="props.canCreateInvoices" :href="invoices.create().url" class="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">
+                        New Invoice
+                    </Link>
+                </div>
             </div>
 
             <!-- Filters -->
@@ -316,6 +321,8 @@ interface Props {
         sort_dir?: 'asc' | 'desc';
     };
     canEditCompleted: boolean;
+    canCreateInvoices: boolean;
+    isPosEnabled: boolean;
 }
 
 const props = defineProps<Props>();

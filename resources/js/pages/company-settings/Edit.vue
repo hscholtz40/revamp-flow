@@ -27,6 +27,7 @@ interface Company {
     default_jobcard_terms: string;
     is_active: boolean;
     is_default: boolean;
+    enable_pos: boolean;
     smtp_host: string | null;
     smtp_port: number | null;
     smtp_username: string | null;
@@ -135,6 +136,7 @@ const form = useForm({
     default_jobcard_terms: '',
     is_active: true,
     is_default: false,
+    enable_pos: false,
     logo: null as File | null,
     smtp_host: '',
     smtp_port: 587,
@@ -171,6 +173,7 @@ onMounted(() => {
     form.default_jobcard_terms = props.company.default_jobcard_terms || '';
     form.is_active = props.company.is_active ?? true;
     form.is_default = props.company.is_default ?? false;
+    form.enable_pos = props.company.enable_pos ?? false;
     form.smtp_host = props.company.smtp_host || '';
     form.smtp_port = props.company.smtp_port ?? 587;
     form.smtp_username = props.company.smtp_username || '';
@@ -231,6 +234,7 @@ function submit() {
         default_jobcard_terms: form.default_jobcard_terms,
         is_active: form.is_active,
         is_default: form.is_default,
+        enable_pos: form.enable_pos,
         smtp_host: form.smtp_host,
         smtp_port: form.smtp_port,
         smtp_username: form.smtp_username,
@@ -764,6 +768,17 @@ function submitReminderSettings() {
                                         class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                     />
                                     <span class="text-sm font-medium text-gray-700">Set as default company</span>
+                                </label>
+                            </div>
+
+                            <div>
+                                <label class="flex items-center gap-2">
+                                    <input
+                                        v-model="form.enable_pos"
+                                        type="checkbox"
+                                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <span class="text-sm font-medium text-gray-700">Enable Point of Sale (POS)</span>
                                 </label>
                             </div>
                         </div>

@@ -12,6 +12,7 @@ use App\Models\Jobcard;
 use App\Models\ChartOfAccount;
 use App\Models\TaxRate;
 use App\Models\User;
+use App\Models\Payment;
 use App\Services\ReminderService;
 use App\Services\StockService;
 use Illuminate\Http\RedirectResponse;
@@ -19,6 +20,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Inertia\Inertia;
@@ -95,6 +97,8 @@ class InvoicesController extends Controller
             'currentCompany' => $currentCompany,
             'filters' => $request->only(['status', 'customer_id', 'search', 'show_paid', 'sort_by', 'sort_dir']),
             'canEditCompleted' => auth()->user()->hasModulePermission('invoices', 'edit_completed'),
+            'canCreateInvoices' => auth()->user()->hasModulePermission('invoices', 'create'),
+            'isPosEnabled' => (bool) ($currentCompany?->enable_pos ?? false),
         ]);
     }
 
@@ -162,6 +166,198 @@ class InvoicesController extends Controller
             'chartOfAccounts' => $chartOfAccounts,
             'defaultSalesAccountId' => $defaultSalesAccount?->id,
         ]);
+    }
+
+    public function pos(Request $request): Response
+    {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        if (!$currentCompany || !$currentCompany->enable_pos) {
+            abort(403, 'POS is not enabled for this company.');
+        }
+
+        $customers = Customer::where('company_id', $currentCompany->id)
+            ->orderBy('name')
+            ->get();
+
+        $products = Product::where('company_id', $currentCompany->id)
+            ->orderBy('name')
+            ->get(['id', 'name', 'sku', 'price', 'track_stock', 'stock_quantity']);
+        $selectedCustomer = Customer::getDefaultSalesForCompany($currentCompany->id);
+        $printPdfUrl = null;
+        if ($request->filled('print_invoice')) {
+            $printInvoice = Invoice::where('company_id', $currentCompany->id)
+                ->whereKey((int) $request->input('print_invoice'))
+                ->first();
+            if ($printInvoice) {
+                $printPdfUrl = route('invoices.print-pdf', $printInvoice->id);
+            }
+        }
+
+        $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
+        $defaultSalesAccount = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id);
+
+        return Inertia::render('invoices/Pos', [
+            'customers' => $customers,
+            'products' => $products,
+            'selectedCustomer' => $selectedCustomer,
+            'currentCompany' => $currentCompany,
+            'defaultTerms' => $currentCompany->default_invoice_terms,
+            'printPdfUrl' => $printPdfUrl,
+            'defaultSalesTaxRate' => $defaultSalesTaxRate ? [
+                'id' => $defaultSalesTaxRate->id,
+                'name' => $defaultSalesTaxRate->name,
+                'rate' => (float) $defaultSalesTaxRate->rate,
+            ] : null,
+            'defaultSalesAccountLabel' => $defaultSalesAccount
+                ? trim(($defaultSalesAccount->account_code ? $defaultSalesAccount->account_code . ' - ' : '') . $defaultSalesAccount->account_name)
+                : null,
+        ]);
+    }
+
+    public function storePos(Request $request): RedirectResponse
+    {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        if (!$currentCompany || !$currentCompany->enable_pos) {
+            abort(403, 'POS is not enabled for this company.');
+        }
+
+        $validated = $request->validate([
+            'customer_id' => 'required|exists:customers,id',
+            'invoice_date' => 'required|date',
+            'notes' => 'nullable|string',
+            'terms' => 'nullable|string|max:255',
+            'line_items' => 'required|array|min:1',
+            'line_items.*.product_id' => 'nullable|exists:products,id',
+            'line_items.*.description' => 'required|string',
+            'line_items.*.quantity' => 'required|integer|min:1',
+            'line_items.*.unit_price' => 'required|numeric|min:0',
+            'line_items.*.discount_amount' => 'nullable|numeric|min:0',
+            'line_items.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
+            'payment_method' => 'required|in:cash,card,eft',
+            'amount_paid' => 'required|numeric|min:0.01',
+            'tendered_amount' => 'nullable|numeric|min:0',
+        ]);
+
+        $customer = Customer::where('company_id', $currentCompany->id)->findOrFail($validated['customer_id']);
+        $invoiceDate = Carbon::parse($validated['invoice_date'])->startOfDay();
+        $invoiceNumber = Invoice::generateInvoiceNumber($currentCompany->id);
+        $dueDate = $this->resolveInvoiceDueDateFromCustomerTerms($customer, $invoiceDate);
+        $defaultTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
+        $defaultTaxRateId = $defaultTaxRate?->id;
+        $defaultTaxRateRate = (float) ($defaultTaxRate?->rate ?? 0);
+        $defaultAccountId = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id)?->id;
+        $terms = !empty(trim((string) ($validated['terms'] ?? '')))
+            ? trim((string) $validated['terms'])
+            : ((string) ($customer->terms ?: 'COD'));
+
+        $created = DB::transaction(function () use ($validated, $currentCompany, $invoiceNumber, $dueDate, $terms, $invoiceDate, $defaultTaxRateId, $defaultTaxRateRate, $defaultAccountId) {
+            $invoice = Invoice::create([
+                'invoice_number' => $invoiceNumber,
+                'title' => $invoiceNumber,
+                'description' => 'POS Sale',
+                'customer_id' => $validated['customer_id'],
+                'salesperson_id' => auth()->id(),
+                'company_id' => $currentCompany->id,
+                'status' => 'sent',
+                'invoice_date' => $invoiceDate->toDateString(),
+                'due_date' => $dueDate->toDateString(),
+                'tax_rate' => 0,
+                'notes' => $validated['notes'] ?? null,
+                'terms' => $terms,
+            ]);
+
+            $stockService = new StockService();
+            foreach ($validated['line_items'] as $index => $lineItemData) {
+                $quantity = (int) ($lineItemData['quantity'] ?? 0);
+                $unitPrice = (float) ($lineItemData['unit_price'] ?? 0);
+                $discountAmount = (float) ($lineItemData['discount_amount'] ?? 0);
+                $discountPercentage = (float) ($lineItemData['discount_percentage'] ?? 0);
+                $subtotal = $quantity * $unitPrice;
+
+                if ($discountPercentage > 0) {
+                    $discountAmount = $subtotal * ($discountPercentage / 100);
+                }
+
+                $total = max(0, $subtotal - $discountAmount);
+                $lineTaxAmount = 0;
+                if ($defaultTaxRateId) {
+                    $lineTaxAmount = ceil(($total * ($defaultTaxRateRate / 100)) * 100) / 100;
+                }
+
+                InvoiceLineItem::create([
+                    'invoice_id' => $invoice->id,
+                    'product_id' => $lineItemData['product_id'],
+                    'description' => $lineItemData['description'],
+                    'quantity' => $quantity,
+                    'unit_price' => $unitPrice,
+                    'discount_amount' => $lineItemData['discount_amount'] ?? 0,
+                    'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
+                    'total' => $total,
+                    'tax_rate_id' => $defaultTaxRateId,
+                    'tax_amount' => $lineTaxAmount,
+                    'account_id' => $defaultAccountId,
+                    'sort_order' => $index,
+                ]);
+
+                if (!empty($lineItemData['product_id'])) {
+                    $product = Product::find($lineItemData['product_id']);
+                    if ($product && $product->track_stock) {
+                        try {
+                            $stockService->removeStock(
+                                $product,
+                                $quantity,
+                                "POS Sale: {$invoiceNumber}",
+                                'invoice',
+                                $invoice->id,
+                                "Stock deducted for POS sale {$invoiceNumber}"
+                            );
+                        } catch (\Exception $e) {
+                            Log::warning('POS stock deduction skipped', [
+                                'invoice_number' => $invoiceNumber,
+                                'product_id' => $product->id,
+                                'quantity' => $quantity,
+                                'reason' => $e->getMessage(),
+                            ]);
+                        }
+                    }
+                }
+            }
+
+            $invoice->calculateTotals();
+            $invoice->refresh();
+
+            $amountPaid = (float) $validated['amount_paid'];
+            if ($amountPaid > (float) $invoice->total) {
+                abort(422, 'Payment amount cannot exceed invoice total.');
+            }
+
+            if (($validated['payment_method'] ?? '') === 'cash') {
+                $tendered = (float) ($validated['tendered_amount'] ?? 0);
+                if ($tendered < $amountPaid) {
+                    abort(422, 'Tendered cash must be greater than or equal to amount paid.');
+                }
+            }
+
+            Payment::create([
+                'invoice_id' => $invoice->id,
+                'company_id' => $currentCompany->id,
+                'amount' => $amountPaid,
+                'payment_method' => $validated['payment_method'],
+                'payment_date' => $invoiceDate->toDateString(),
+                'notes' => $validated['notes'] ?? null,
+            ]);
+
+            $invoice->refresh();
+            $invoice->load('payments');
+            if ($invoice->isFullyPaid()) {
+                $invoice->update(['status' => 'paid']);
+            }
+
+            return $invoice;
+        });
+
+        return redirect()->route('invoices.pos', ['print_invoice' => $created->id])
+            ->with('success', 'POS sale created successfully.');
     }
 
     /**
@@ -892,6 +1088,36 @@ class InvoicesController extends Controller
         }
         
         return $pdf->download("invoice-{$invoice->invoice_number}.pdf");
+    }
+
+    /**
+     * Stream printable PDF of the invoice.
+     */
+    public function printPdf(Request $request, Invoice $invoice)
+    {
+        $invoice->load(['customer', 'lineItems.product', 'lineItems.taxRate', 'company']);
+        
+        foreach ($invoice->lineItems as $lineItem) {
+            if (!empty($lineItem->serial_number_ids)) {
+                $lineItem->serialNumbers = \App\Models\ProductSerialNumber::whereIn('id', $lineItem->serial_number_ids)
+                    ->get(['id', 'serial_number', 'status']);
+            } else {
+                $lineItem->serialNumbers = collect([]);
+            }
+        }
+        
+        $company = $invoice->company;
+        $templateId = $request->get('template_id');
+        
+        $pdfService = new \App\Services\PdfGenerationService();
+        $pdf = $pdfService->generatePdf('invoice', compact('invoice', 'company'), $company, $templateId);
+
+        $filename = "invoice-{$invoice->invoice_number}.pdf";
+
+        return response($pdf->output(), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => "inline; filename=\"{$filename}\"",
+        ]);
     }
 
     /**
