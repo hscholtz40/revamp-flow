@@ -213,6 +213,7 @@ class CreditNotesController extends Controller
         }
 
         $creditNote->calculateTotals();
+        $this->syncInvoiceStatusAfterCreditNoteChange($creditNote);
 
         return redirect()->route('credit-notes.show', $creditNote)
             ->with('success', "Credit note {$creditNote->credit_note_number} created successfully.");
@@ -357,6 +358,7 @@ class CreditNotesController extends Controller
         }
 
         $creditNote->calculateTotals();
+        $this->syncInvoiceStatusAfterCreditNoteChange($creditNote);
 
         return redirect()->route('credit-notes.show', $creditNote)
             ->with('success', "Credit note {$creditNote->credit_note_number} updated successfully.");
@@ -382,5 +384,22 @@ class CreditNotesController extends Controller
 
         return redirect()->back()
             ->with('success', "Credit note status updated to {$validated['status']}.");
+    }
+
+    private function syncInvoiceStatusAfterCreditNoteChange(CreditNote $creditNote): void
+    {
+        if (!$creditNote->invoice_id) {
+            return;
+        }
+
+        $invoice = Invoice::find($creditNote->invoice_id);
+        if (!$invoice) {
+            return;
+        }
+
+        $invoice->refresh();
+        if ($invoice->isFullyPaid() && $invoice->status !== 'paid') {
+            $invoice->update(['status' => 'paid']);
+        }
     }
 }

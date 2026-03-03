@@ -67,6 +67,7 @@ class CustomersController extends Controller
             'address' => ['nullable', 'string', 'max:255'],
             'city' => ['nullable', 'string', 'max:100'],
             'country' => ['nullable', 'string', 'max:100'],
+            'terms' => ['nullable', 'string', 'max:50'],
             'vat_number' => ['nullable', 'string', 'max:50'],
             'account_code' => ['nullable', 'string', 'max:50'],
             'notes' => ['nullable', 'string'],
@@ -74,6 +75,7 @@ class CustomersController extends Controller
         ]);
 
         $validated['company_id'] = $currentCompany->id;
+        $validated['terms'] = !empty($validated['terms']) ? trim($validated['terms']) : 'COD';
         
         // Auto-generate account code if not provided
         if (empty($validated['account_code'])) {
@@ -130,7 +132,7 @@ class CustomersController extends Controller
             })
             ->orderBy('name')
             ->limit(20)
-            ->get(['id', 'name', 'email', 'phone', 'account_code']);
+            ->get(['id', 'name', 'email', 'phone', 'account_code', 'terms']);
         
         return response()->json($customers);
     }
@@ -146,9 +148,11 @@ class CustomersController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:customers,email,NULL,id,company_id,' . $currentCompany->id],
             'phone' => ['nullable', 'string', 'max:50'],
+            'terms' => ['nullable', 'string', 'max:50'],
         ]);
 
         $validated['company_id'] = $currentCompany->id;
+        $validated['terms'] = !empty($validated['terms']) ? trim($validated['terms']) : 'COD';
         
         // Auto-generate account code
         $validated['account_code'] = Customer::generateAccountCode($validated['name'], $currentCompany->id);
@@ -157,7 +161,7 @@ class CustomersController extends Controller
 
         return response()->json([
             'success' => true,
-            'customer' => $customer->only(['id', 'name', 'email', 'phone', 'account_code']),
+            'customer' => $customer->only(['id', 'name', 'email', 'phone', 'account_code', 'terms']),
         ]);
     }
 
@@ -236,6 +240,7 @@ class CustomersController extends Controller
             'address' => ['nullable', 'string', 'max:255'],
             'city' => ['nullable', 'string', 'max:100'],
             'country' => ['nullable', 'string', 'max:100'],
+            'terms' => ['nullable', 'string', 'max:50'],
             'vat_number' => ['nullable', 'string', 'max:50'],
             'account_code' => ['nullable', 'string', 'max:50'],
             'notes' => ['nullable', 'string'],
@@ -263,6 +268,7 @@ class CustomersController extends Controller
                 ->update(['is_default_sales' => false]);
         }
 
+        $validated['terms'] = !empty($validated['terms']) ? trim($validated['terms']) : 'COD';
         $customer->update($validated);
 
         return redirect()->route('customers.index')->with('success', 'Customer updated');

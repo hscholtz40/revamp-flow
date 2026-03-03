@@ -276,7 +276,7 @@
                                                 <span class="font-medium text-gray-900">{{ product.name }}</span>
                                                 <span v-if="product.sku" class="text-gray-400 ml-1 text-xs">({{ product.sku }})</span>
                                             </div>
-                                            <span class="text-gray-500 text-xs ml-2">R{{ product.price.toFixed(2) }}</span>
+                                            <span class="text-gray-500 text-xs ml-2">R{{ Number(product.price || 0).toFixed(2) }}</span>
                                         </div>
                                     </div>
                                 </div>

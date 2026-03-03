@@ -38,6 +38,7 @@ const props = defineProps<{
         address?: string | null
         city?: string | null
         country?: string | null
+        terms?: string | null
         account_code?: string | null
         notes?: string | null
         created_at?: string
@@ -232,6 +233,10 @@ watch([contactSearch, contactsPerPage, smsSearch, smsStatus, smsPerPage], () => 
                                     <div class="flex items-center">
                                         <span class="text-sm font-medium text-gray-500 w-20">Account:</span>
                                         <span class="text-sm text-gray-900">{{ props.customer.account_code || '-' }}</span>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <span class="text-sm font-medium text-gray-500 w-20">Terms:</span>
+                                        <span class="text-sm text-gray-900">{{ props.customer.terms || 'COD' }}</span>
                                     </div>
                                 </div>
                             </div>

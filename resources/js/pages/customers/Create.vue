@@ -11,6 +11,7 @@ const form = useForm({
     address: '',
     city: '',
     country: '',
+    terms: 'COD',
     vat_number: '',
     account_code: '',
     notes: '',
@@ -71,6 +72,11 @@ function submit() {
                 <label class="block">
                     <span class="mb-1 block">Country</span>
                     <input v-model="form.country" class="w-full rounded border px-3 py-2" />
+                </label>
+                <label class="block">
+                    <span class="mb-1 block">Payment Terms</span>
+                    <input v-model="form.terms" class="w-full rounded border px-3 py-2" placeholder="e.g. COD, Net 7 Days, Net 30 Days" />
+                    <div v-if="form.errors.terms" class="text-sm text-red-600">{{ form.errors.terms }}</div>
                 </label>
                 <label class="block">
                     <span class="mb-1 block">VAT Number</span>

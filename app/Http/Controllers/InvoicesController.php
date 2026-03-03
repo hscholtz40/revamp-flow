@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Config;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -176,7 +177,7 @@ class InvoicesController extends Controller
             'customer_id' => 'required|exists:customers,id',
             'salesperson_id' => 'nullable|exists:users,id',
             'invoice_date' => 'required|date',
-            'due_date' => 'required|date|after_or_equal:invoice_date',
+            'due_date' => 'nullable|date|after_or_equal:invoice_date',
             'tax_rate' => 'required|numeric|min:0|max:100',
             'discount_amount' => 'nullable|numeric|min:0',
             'discount_percentage' => 'nullable|numeric|min:0|max:100',
@@ -197,6 +198,9 @@ class InvoicesController extends Controller
 
         // Generate invoice number
         $invoiceNumber = Invoice::generateInvoiceNumber($currentCompany->id);
+        $customer = Customer::where('company_id', $currentCompany->id)->findOrFail($validated['customer_id']);
+        $invoiceDate = Carbon::parse($validated['invoice_date'])->startOfDay();
+        $dueDate = $this->resolveInvoiceDueDateFromCustomerTerms($customer, $invoiceDate);
 
         // Set default salesperson to current user if not provided
         $salespersonId = $validated['salesperson_id'] ?? auth()->id();
@@ -210,7 +214,7 @@ class InvoicesController extends Controller
             'salesperson_id' => $salespersonId,
             'company_id' => $currentCompany->id,
             'invoice_date' => $validated['invoice_date'],
-            'due_date' => $validated['due_date'],
+            'due_date' => $dueDate->toDateString(),
             'tax_rate' => $validated['tax_rate'],
             'notes' => $validated['notes'],
             'terms' => $validated['terms'],
@@ -971,7 +975,10 @@ class InvoicesController extends Controller
             'customer_id' => $quote->customer_id,
             'company_id' => $currentCompany->id,
             'invoice_date' => now()->toDateString(),
-            'due_date' => now()->addDays(30)->toDateString(),
+            'due_date' => $this->resolveInvoiceDueDateFromCustomerTerms(
+                $quote->customer,
+                now()->startOfDay()
+            )->toDateString(),
             'tax_rate' => $quote->tax_rate,
             'notes' => $quote->notes,
             'terms' => $quote->terms,
@@ -1020,7 +1027,10 @@ class InvoicesController extends Controller
             'customer_id' => $jobcard->customer_id,
             'company_id' => $currentCompany->id,
             'invoice_date' => now()->toDateString(),
-            'due_date' => now()->addDays(30)->toDateString(),
+            'due_date' => $this->resolveInvoiceDueDateFromCustomerTerms(
+                $jobcard->customer,
+                now()->startOfDay()
+            )->toDateString(),
             'tax_rate' => $jobcard->tax_rate,
             'notes' => $jobcard->notes,
             'terms' => $jobcard->terms,
@@ -1086,6 +1096,35 @@ class InvoicesController extends Controller
 
         return redirect()->route('invoices.show', $invoiceNumber)
             ->with('success', 'Invoice created from jobcard successfully.');
+    }
+
+    private function resolveInvoiceDueDateFromCustomerTerms(?Customer $customer, Carbon $invoiceDate): Carbon
+    {
+        $terms = trim((string) ($customer?->terms ?: 'COD'));
+        $days = $this->extractNetDaysFromTerms($terms);
+
+        return $invoiceDate->copy()->addDays($days);
+    }
+
+    private function extractNetDaysFromTerms(string $terms): int
+    {
+        if ($terms === '') {
+            return 0;
+        }
+
+        if (preg_match('/^cod$/i', $terms) === 1) {
+            return 0;
+        }
+
+        if (preg_match('/net\s*(\d+)\s*days?/i', $terms, $matches) === 1) {
+            return (int) $matches[1];
+        }
+
+        if (preg_match('/(\d+)/', $terms, $matches) === 1) {
+            return (int) $matches[1];
+        }
+
+        return 0;
     }
 
 }

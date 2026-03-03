@@ -20,6 +20,7 @@ class Customer extends Model
         'address',
         'city',
         'country',
+        'terms',
         'vat_number',
         'account_code',
         'notes',

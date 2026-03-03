@@ -292,7 +292,7 @@
                                                 <span class="font-medium text-gray-900">{{ product.name }}</span>
                                                 <span v-if="product.sku" class="text-gray-400 ml-1 text-xs">({{ product.sku }})</span>
                                             </div>
-                                            <span class="text-gray-500 text-xs ml-2">R{{ product.price.toFixed(2) }}</span>
+                                            <span class="text-gray-500 text-xs ml-2">R{{ Number(product.price || 0).toFixed(2) }}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -436,7 +436,7 @@
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Total Discount (R)</label>
                                 <input
                                     type="text"
-                                    :value="discountAmount.toFixed(2)"
+                                    :value="formatCurrency(discountAmount)"
                                     class="w-full rounded border px-3 py-2 bg-gray-50"
                                     readonly
                                     disabled
@@ -447,7 +447,7 @@
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Subtotal Before Discount (R)</label>
                                 <input
                                     type="text"
-                                    :value="subtotalBeforeDiscount.toFixed(2)"
+                                    :value="formatCurrency(subtotalBeforeDiscount)"
                                     class="w-full rounded border px-3 py-2 bg-gray-50"
                                     readonly
                                     disabled
@@ -738,8 +738,8 @@ const calculateLineTotalValue = (item: LineItem) => {
 // Calculate subtotal before discounts
 const subtotalBeforeDiscount = computed(() => {
     return form.line_items.reduce((sum, item) => {
-        const quantity = item.quantity || 0;
-        const unitPrice = item.unit_price || 0;
+        const quantity = Number(item.quantity) || 0;
+        const unitPrice = Number(item.unit_price) || 0;
         return sum + (quantity * unitPrice);
     }, 0);
 });
@@ -747,10 +747,10 @@ const subtotalBeforeDiscount = computed(() => {
 // Calculate total discount from line items
 const lineItemDiscountsTotal = computed(() => {
     return form.line_items.reduce((sum, item) => {
-        const quantity = item.quantity || 0;
-        const unitPrice = item.unit_price || 0;
-        const discountAmount = item.discount_amount || 0;
-        const discountPercentage = item.discount_percentage || 0;
+        const quantity = Number(item.quantity) || 0;
+        const unitPrice = Number(item.unit_price) || 0;
+        const discountAmount = Number(item.discount_amount) || 0;
+        const discountPercentage = Number(item.discount_percentage) || 0;
         
         const itemSubtotal = quantity * unitPrice;
         let itemDiscount = discountAmount;

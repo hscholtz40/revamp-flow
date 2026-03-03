@@ -187,7 +187,8 @@
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Due Date *</label>
                             <input v-model="form.due_date" type="date" class="w-full rounded border px-3 py-2"
-                                :class="{ 'border-red-500': form.errors.due_date }" required />
+                                :class="{ 'border-red-500': form.errors.due_date }" required readonly />
+                            <p class="text-xs text-gray-500 mt-1">Auto-calculated from customer payment terms.</p>
                             <div v-if="form.errors.due_date" class="text-red-500 text-sm mt-1">
                                 {{ form.errors.due_date }}
                             </div>
@@ -285,7 +286,7 @@
                                                     <span class="font-medium text-gray-900">{{ product.name }}</span>
                                                     <span v-if="product.sku" class="text-gray-400 ml-1 text-xs">({{ product.sku }})</span>
                                                 </div>
-                                                <span class="text-gray-500 text-xs ml-2">R{{ product.price.toFixed(2) }}</span>
+                                            <span class="text-gray-500 text-xs ml-2">R{{ Number(product.price || 0).toFixed(2) }}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -528,6 +529,7 @@ interface Customer {
     email?: string;
     phone?: string;
     account_code?: string;
+    terms?: string;
 }
 
 interface SerialNumber {
@@ -608,7 +610,7 @@ const form = useForm({
     customer_id: props.selectedCustomer?.id || '',
     salesperson_id: props.currentUser.id, // Default to current user
     invoice_date: new Date().toISOString().split('T')[0],
-    due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from now
+    due_date: new Date().toISOString().split('T')[0],
     tax_rate: 15,
     discount_amount: 0,
     discount_percentage: 0,
@@ -641,6 +643,43 @@ if (props.selectedCustomer) {
         customerSearchQuery.value = customer.name;
     }
 }
+
+const parseCustomerTermsToDays = (terms?: string) => {
+    const normalized = (terms || 'COD').trim();
+
+    if (!normalized || /^cod$/i.test(normalized)) {
+        return 0;
+    }
+
+    const netDaysMatch = normalized.match(/net\s*(\d+)\s*days?/i);
+    if (netDaysMatch) {
+        return Number(netDaysMatch[1]) || 0;
+    }
+
+    const numericMatch = normalized.match(/(\d+)/);
+    if (numericMatch) {
+        return Number(numericMatch[1]) || 0;
+    }
+
+    return 0;
+};
+
+const applyDueDateFromCustomerTerms = () => {
+    const customer = selectedCustomer.value
+        || props.customers.find(c => c.id === Number(form.customer_id))
+        || null;
+    const termsDays = parseCustomerTermsToDays(customer?.terms);
+    const invoiceDate = form.invoice_date ? new Date(form.invoice_date) : new Date();
+
+    if (Number.isNaN(invoiceDate.getTime())) {
+        return;
+    }
+
+    invoiceDate.setDate(invoiceDate.getDate() + termsDays);
+    form.due_date = invoiceDate.toISOString().split('T')[0];
+};
+
+applyDueDateFromCustomerTerms();
 
 // Update quick create form name when search query changes (moved after form declaration)
 watch(customerSearchQuery, (newQuery) => {
@@ -690,6 +729,7 @@ const selectCustomer = (customer: Customer) => {
     
     // Update title
     form.title = `Invoice for ${customer.name}`;
+    applyDueDateFromCustomerTerms();
 };
 
 const clearCustomer = () => {
@@ -697,6 +737,7 @@ const clearCustomer = () => {
     form.customer_id = '';
     customerSearchQuery.value = '';
     filteredCustomers.value = [];
+    applyDueDateFromCustomerTerms();
 };
 
 const quickCreateCustomer = async () => {
@@ -739,6 +780,11 @@ watch(() => form.customer_id, (newCustomerId) => {
             form.title = `Invoice for ${customer.name}`;
         }
     }
+    applyDueDateFromCustomerTerms();
+});
+
+watch(() => form.invoice_date, () => {
+    applyDueDateFromCustomerTerms();
 });
 
 const addLineItem = () => {
