@@ -926,7 +926,7 @@ class XeroService
         foreach ($products as $product) {
             try {
                 $itemData = [
-                    'Code' => $product->sku,
+                    'Code' => $this->resolveXeroProductCode($product),
                     'Name' => $product->name,
                     'Description' => $product->description,
                     'UnitPrice' => $product->price,
@@ -1250,7 +1250,7 @@ class XeroService
     private function createOrUpdateProductInXero(Product $product): array
     {
         $itemData = [
-            'Code' => $product->sku,
+            'Code' => $this->resolveXeroProductCode($product),
             'Name' => $product->name,
             'Description' => $product->description,
             'UnitPrice' => $product->price,
@@ -1274,6 +1274,21 @@ class XeroService
 
         $result = $response->json();
         return $result['Items'][0];
+    }
+
+    private function resolveXeroProductCode(Product $product): string
+    {
+        $rawCode = trim((string) ($product->sku ?? ''));
+        if ($rawCode === '') {
+            $rawCode = 'JCO-' . $product->company_id . '-' . $product->id;
+        }
+
+        $normalized = strtoupper((string) preg_replace('/[^A-Z0-9._-]/', '', strtoupper($rawCode)));
+        if ($normalized === '') {
+            $normalized = 'JCO-' . $product->company_id . '-' . $product->id;
+        }
+
+        return substr($normalized, 0, 30);
     }
 
     /**
