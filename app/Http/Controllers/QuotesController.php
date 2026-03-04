@@ -206,10 +206,6 @@ class QuotesController extends Controller
     {
         $quote->load(['customer', 'lineItems.product', 'lineItems.taxRate', 'company', 'invoice']);
         
-        // Ensure totals are calculated
-        $quote->calculateTotals();
-        $quote->refresh();
-        
         $currentCompany = auth()->user()->getCurrentCompany();
         
         // Get available PDF templates for quotes and proforma invoices

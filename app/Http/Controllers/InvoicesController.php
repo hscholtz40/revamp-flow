@@ -542,15 +542,7 @@ class InvoicesController extends Controller
 
         $invoice->load(['customer', 'salesperson', 'lineItems.product', 'lineItems.taxRate', 'company', 'source', 'payments', 'creditNotes']);
         
-        // Ensure totals are calculated
-        $invoice->calculateTotals();
-        $invoice->refresh();
-        
-        // Reload relationships after refresh (refresh clears loaded relationships)
-        $invoice->load(['customer', 'salesperson', 'lineItems.product', 'lineItems.taxRate', 'company', 'source', 'payments', 'creditNotes']);
-        
         // Load serial numbers for line items that have serial_number_ids
-        // Do this after refresh to ensure we have the latest data
         $invoice->load('lineItems');
         
         // Ensure payments are loaded for accurate total_paid and remaining_balance calculations
