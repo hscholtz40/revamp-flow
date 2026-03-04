@@ -5461,6 +5461,31 @@ class XeroService
                     sleep(1);
                 }
 
+                if ($creditNote->invoice_id && in_array($creditNote->status, ['draft', 'submitted'], true)) {
+                    $creditNote->update(['status' => 'authorised']);
+                    $creditNote->refresh();
+                }
+
+                if (!in_array($creditNote->status, ['authorised', 'paid', 'voided'], true)) {
+                    $results[] = [
+                        'credit_note_id' => $creditNote->id,
+                        'credit_note_number' => $creditNote->credit_note_number,
+                        'status' => 'skipped',
+                        'message' => "Skipped outbound sync: status '{$creditNote->status}' is not eligible",
+                    ];
+                    continue;
+                }
+
+                if ($creditNote->status === 'voided' && !$creditNote->xero_credit_note_id) {
+                    $results[] = [
+                        'credit_note_id' => $creditNote->id,
+                        'credit_note_number' => $creditNote->credit_note_number,
+                        'status' => 'skipped',
+                        'message' => 'Skipped outbound sync: cannot void in Xero before initial sync',
+                    ];
+                    continue;
+                }
+
                 if (!$creditNote->customer || !$creditNote->customer->xero_contact_id) {
                     $results[] = [
                         'credit_note_id' => $creditNote->id,
@@ -6003,16 +6028,20 @@ class XeroService
             $lineItemData = [
                 'Description' => $lineItem->description ?? 'Item',
                 'Quantity' => $lineItem->quantity,
-                'UnitAmount' => $lineItem->unit_price,
-                'LineAmount' => $lineAmount,
+                // Xero validates line totals as Quantity * UnitAmount when no Discount* is provided.
+                // For discounted lines, send net UnitAmount so Xero expected totals match local totals.
+                'UnitAmount' => round(
+                    ($discountPercentage > 0 || $discountAmount > 0)
+                        ? ($lineItem->quantity > 0 ? ((float) $lineAmount / (float) $lineItem->quantity) : (float) $lineAmount)
+                        : (float) $lineItem->unit_price,
+                    4
+                ),
                 'AccountCode' => ($lineItem->account_id && $lineItem->account ? $lineItem->account->account_code : null) ?? $lineItem->account_code ?? $accountCode,
                 'TaxType' => $taxTypeCode,
             ];
 
-            if ($discountPercentage > 0) {
-                $lineItemData['DiscountRate'] = round($discountPercentage, 2);
-            } elseif ($discountAmount > 0) {
-                $lineItemData['DiscountAmount'] = round($discountAmount, 2);
+            if ($discountPercentage <= 0 && $discountAmount <= 0) {
+                $lineItemData['LineAmount'] = round($lineAmount, 2);
             }
 
             $lineItems[] = $lineItemData;
@@ -6023,13 +6052,22 @@ class XeroService
             'Contact' => ['ContactID' => $creditNote->customer->xero_contact_id],
             'Date' => $creditNote->credit_note_date->format('Y-m-d'),
             'LineItems' => $lineItems,
+            'LineAmountTypes' => 'Exclusive',
             'Status' => $this->mapCreditNoteStatus($creditNote->status),
             'Reference' => $creditNote->reference ?? $creditNote->credit_note_number,
             'CreditNoteNumber' => $creditNote->credit_note_number,
         ];
 
         if ($creditNote->xero_credit_note_id) {
-            $data['CreditNoteID'] = $creditNote->xero_credit_note_id;
+            if ($creditNote->status === 'voided') {
+                // Void transitions should be status-only updates.
+                $data = [
+                    'CreditNoteID' => $creditNote->xero_credit_note_id,
+                    'Status' => 'VOIDED',
+                ];
+            } else {
+                $data['CreditNoteID'] = $creditNote->xero_credit_note_id;
+            }
 
             // Credit notes with allocations/applied amounts are often non-editable in Xero.
             // Skip outbound mutation to avoid repeated validation failures.
@@ -6050,8 +6088,9 @@ class XeroService
                     || $paymentCount > 0
                     || $appliedAmount > 0.01
                     || in_array($xeroStatus, ['PAID', 'VOIDED'], true);
+                $isVoidingTransition = $creditNote->status === 'voided' && $xeroStatus !== 'VOIDED';
 
-                if ($isLockedForEdit) {
+                if ($isLockedForEdit && !$isVoidingTransition) {
                     Log::info('Skipping outbound credit note update because Xero credit note is non-editable', [
                         'credit_note_id' => $creditNote->id,
                         'credit_note_number' => $creditNote->credit_note_number,

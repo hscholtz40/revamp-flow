@@ -487,6 +487,11 @@ class CreditNotesController extends Controller
         $creditNote->update(['remaining_credit' => $remaining]);
 
         if ($creditNote->status !== 'voided') {
+            // Credit notes allocated to an invoice must be authorised for outbound Xero sync.
+            if ($creditNote->invoice_id && in_array($creditNote->status, ['draft', 'submitted'], true)) {
+                $creditNote->update(['status' => 'authorised']);
+            }
+
             if ($remaining <= 0.01 && $creditNote->status !== 'paid') {
                 $creditNote->update(['status' => 'paid']);
             }
