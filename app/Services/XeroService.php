@@ -17,6 +17,7 @@ use App\Models\CreditNote;
 use App\Models\CreditNoteLineItem;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
+use App\Models\XeroSyncState;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -26,10 +27,22 @@ use Illuminate\Support\Facades\Log;
 
 class XeroService
 {
+    private const SYNC_MODULE_CUSTOMERS = 'customers';
+    private const SYNC_MODULE_PRODUCTS = 'products';
+    private const SYNC_MODULE_INVOICES = 'invoices';
+    private const SYNC_MODULE_SUPPLIERS = 'suppliers';
+    private const SYNC_MODULE_QUOTES = 'quotes';
+    private const SYNC_MODULE_PAYMENTS = 'payments';
+    private const SYNC_MODULE_TAX_RATES = 'tax_rates';
+    private const SYNC_MODULE_BANK_ACCOUNTS = 'bank_accounts';
+    private const SYNC_MODULE_CHART_OF_ACCOUNTS = 'chart_of_accounts';
+    private const SYNC_MODULE_CREDIT_NOTES = 'credit_notes';
+    private const SYNC_MODULE_PURCHASE_ORDERS = 'purchase_orders';
+
     private $settings;
     private $baseUrl = 'https://api.xero.com';
-    private ?array $cachedXeroContacts = null;
-    private ?array $cachedXeroAccounts = null;
+    private array $cachedXeroContacts = [];
+    private array $cachedXeroAccounts = [];
     private array $xeroInvoiceCache = [];
 
     public static function getInitialSyncCompletedCacheKey(int $companyId, string $module): string
@@ -528,7 +541,7 @@ class XeroService
         // If customer import-from-Xero is disabled, keep protective comparison fetch.
         if (!$this->settings->sync_customers_from_xero) {
             try {
-                $xeroContacts = $this->fetchXeroContacts();
+                $xeroContacts = $this->fetchXeroContacts(self::SYNC_MODULE_CUSTOMERS);
                 foreach ($xeroContacts as $xeroContact) {
                     $xeroContactsMap[$xeroContact['ContactID']] = $xeroContact;
                 }
@@ -766,9 +779,10 @@ class XeroService
 
         $currentCompany = $this->getCompany();
         $results = [];
+        $syncStartedAt = now();
 
         try {
-            $xeroContacts = $this->fetchXeroContacts();
+            $xeroContacts = $this->fetchXeroContacts(self::SYNC_MODULE_CUSTOMERS);
             
             foreach ($xeroContacts as $xeroContact) {
                 try {
@@ -834,6 +848,8 @@ class XeroService
             
             return ['skipped' => true, 'message' => 'Failed to sync customers from Xero: ' . $e->getMessage()];
         }
+
+        $this->recordSyncDatetimeForModule(self::SYNC_MODULE_CUSTOMERS, $syncStartedAt);
 
         return $results;
     }
@@ -1120,10 +1136,10 @@ class XeroService
 
         $currentCompany = $this->getCompany();
         $results = [];
+        $syncStartedAt = now();
 
         try {
-            $lastSync = Product::where('company_id', $currentCompany->id)
-                ->whereNotNull('xero_updated_at')->max('xero_updated_at');
+            $lastSync = $this->getLastSyncDatetimeForModule(self::SYNC_MODULE_PRODUCTS);
 
             $response = $this->makeXeroRequest(
                 'get',
@@ -1219,6 +1235,8 @@ class XeroService
             
             return ['skipped' => true, 'message' => 'Failed to sync products from Xero: ' . $e->getMessage()];
         }
+
+        $this->recordSyncDatetimeForModule(self::SYNC_MODULE_PRODUCTS, $syncStartedAt);
 
         return $results;
     }
@@ -1523,6 +1541,8 @@ class XeroService
 
         $currentCompany = $this->getCompany();
         $results = [];
+        $syncStartedAt = now();
+        $syncFullyCompleted = false;
 
         try {
             $hasAnyLocalInvoices = Invoice::where('company_id', $currentCompany->id)->exists();
@@ -1533,8 +1553,7 @@ class XeroService
             $isBackfillMode = $isInitialInvoiceImport || !Cache::get($fullSyncCompletedKey, false);
             $cursor = Cache::get($cursorKey, ['page' => 1]);
 
-            $lastSync = Invoice::where('company_id', $currentCompany->id)
-                ->whereNotNull('xero_updated_at')->max('xero_updated_at');
+            $lastSync = $this->getLastSyncDatetimeForModule(self::SYNC_MODULE_INVOICES);
             // During backfill mode we intentionally avoid If-Modified-Since so older pages are not skipped.
             $ifModifiedSince = $isBackfillMode ? [] : $this->buildIfModifiedSinceHeader($lastSync);
 
@@ -1862,6 +1881,7 @@ class XeroService
                 'processed_this_run' => $processedThisRun,
                 'stop_reason' => $stopReason,
             ]);
+            $syncFullyCompleted = !$stopReason && !$hasMorePages;
 
         } catch (\Exception $e) {
             Log::error('Failed to sync invoices from Xero', [
@@ -1871,6 +1891,10 @@ class XeroService
             ]);
             
             throw $e;
+        }
+
+        if ($syncFullyCompleted) {
+            $this->recordSyncDatetimeForModule(self::SYNC_MODULE_INVOICES, $syncStartedAt);
         }
 
         return $results;
@@ -2398,29 +2422,56 @@ class XeroService
         return ['If-Modified-Since' => \Carbon\Carbon::parse($lastSync)->format('D, d M Y H:i:s \G\M\T')];
     }
 
+    private function getLastSyncDatetimeForModule(string $module): ?string
+    {
+        $state = XeroSyncState::where('company_id', $this->getCompany()->id)
+            ->where('module', $module)
+            ->first();
+
+        return $state?->last_synced_at?->toDateTimeString();
+    }
+
+    private function recordSyncDatetimeForModule(string $module, \Carbon\CarbonInterface $syncedAt): void
+    {
+        XeroSyncState::updateOrCreate(
+            [
+                'company_id' => $this->getCompany()->id,
+                'module' => $module,
+            ],
+            [
+                'last_synced_at' => $syncedAt->copy()->utc(),
+            ]
+        );
+    }
+
     /**
      * Fetch contacts from Xero with caching and If-Modified-Since.
      * Shared by customer and supplier syncs to avoid duplicate API calls.
      */
-    private function fetchXeroContacts(): array
+    private function fetchXeroContacts(string $module): array
     {
-        if ($this->cachedXeroContacts !== null) {
-            return $this->cachedXeroContacts;
+        if (array_key_exists($module, $this->cachedXeroContacts)) {
+            return $this->cachedXeroContacts[$module];
         }
 
         $companyId = $this->getCompany()->id;
         $cacheTtlSeconds = max(60, (int) config('services.xero.contacts_cache_ttl_seconds', 300));
-        $cacheKey = "xero_contacts_cache_company_{$companyId}";
+        $cacheKey = "xero_contacts_cache_company_{$companyId}_module_{$module}";
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && array_key_exists('contacts', $cached) && is_array($cached['contacts'])) {
-            $this->cachedXeroContacts = $cached['contacts'];
-            return $this->cachedXeroContacts;
+            $this->cachedXeroContacts[$module] = $cached['contacts'];
+            return $this->cachedXeroContacts[$module];
         }
+
+        $lastSync = $this->getLastSyncDatetimeForModule($module);
+        $headers = $this->buildIfModifiedSinceHeader($lastSync);
 
         $response = $this->makeXeroRequest(
             'get',
             $this->baseUrl . '/api.xro/2.0/Contacts',
-            []
+            [],
+            2,
+            $headers
         );
 
         if (!$response->successful()) {
@@ -2437,34 +2488,33 @@ class XeroService
                     'company_id' => $companyId,
                     'status' => $statusCode,
                 ]);
-                $this->cachedXeroContacts = $cached['contacts'];
-                return $this->cachedXeroContacts;
+                $this->cachedXeroContacts[$module] = $cached['contacts'];
+                return $this->cachedXeroContacts[$module];
             }
 
             throw new \Exception('Failed to fetch contacts from Xero: ' . $errorBody);
         }
 
-        $this->cachedXeroContacts = $response->json()['Contacts'] ?? [];
-        Cache::put($cacheKey, ['contacts' => $this->cachedXeroContacts], now()->addSeconds($cacheTtlSeconds));
-        return $this->cachedXeroContacts;
+        $this->cachedXeroContacts[$module] = $response->json()['Contacts'] ?? [];
+        Cache::put($cacheKey, ['contacts' => $this->cachedXeroContacts[$module]], now()->addSeconds($cacheTtlSeconds));
+        return $this->cachedXeroContacts[$module];
     }
 
     /**
      * Fetch accounts from Xero with caching and If-Modified-Since.
      * Shared by bank account and chart of accounts syncs.
      */
-    private function fetchXeroAccounts(bool $forceFullFetch = false): array
+    private function fetchXeroAccounts(string $module, bool $forceFullFetch = false): array
     {
-        if (!$forceFullFetch && $this->cachedXeroAccounts !== null) {
-            return $this->cachedXeroAccounts;
+        $cacheKeySuffix = $forceFullFetch ? 'full' : 'delta';
+        $cacheKey = "{$module}:{$cacheKeySuffix}";
+        if (array_key_exists($cacheKey, $this->cachedXeroAccounts)) {
+            return $this->cachedXeroAccounts[$cacheKey];
         }
 
         $headers = [];
         if (!$forceFullFetch) {
-            $companyId = $this->getCompany()->id;
-            $lastBankSync = BankAccount::where('company_id', $companyId)->whereNotNull('xero_updated_at')->max('xero_updated_at');
-            $lastChartSync = ChartOfAccount::where('company_id', $companyId)->whereNotNull('xero_updated_at')->max('xero_updated_at');
-            $lastSync = collect([$lastBankSync, $lastChartSync])->filter()->min();
+            $lastSync = $this->getLastSyncDatetimeForModule($module);
             $headers = $this->buildIfModifiedSinceHeader($lastSync);
         }
 
@@ -2488,8 +2538,8 @@ class XeroService
             throw new \Exception('Failed to fetch accounts from Xero: ' . $errorBody);
         }
 
-        $this->cachedXeroAccounts = $response->json()['Accounts'] ?? [];
-        return $this->cachedXeroAccounts;
+        $this->cachedXeroAccounts[$cacheKey] = $response->json()['Accounts'] ?? [];
+        return $this->cachedXeroAccounts[$cacheKey];
     }
 
     /**
@@ -2497,9 +2547,10 @@ class XeroService
      */
     private function updateCustomerFromXero(Customer $customer, array $xeroCustomer): void
     {
+        $resolvedEmail = $this->resolveCustomerEmailFromXero($xeroCustomer, $customer->company_id);
         $updateData = [
             'name' => $xeroCustomer['Name'] ?? $customer->name,
-            'email' => $xeroCustomer['EmailAddress'] ?? $customer->email,
+            'email' => $resolvedEmail ?: $customer->email,
             'xero_contact_id' => $xeroCustomer['ContactID'] ?? $customer->xero_contact_id,
             ...$this->getXeroTimestamps($xeroCustomer),
         ];
@@ -2539,7 +2590,7 @@ class XeroService
         $customerData = [
             'company_id' => $company->id,
             'name' => $xeroContact['Name'],
-            'email' => $xeroContact['EmailAddress'] ?? null,
+            'email' => $this->resolveCustomerEmailFromXero($xeroContact, $company->id),
             'xero_contact_id' => $xeroContact['ContactID'],
             ...$this->getXeroTimestamps($xeroContact),
         ];
@@ -2566,6 +2617,26 @@ class XeroService
         $customer = Customer::create($customerData);
         $this->alignLocalUpdatedAtWithXero($customer);
         return $customer;
+    }
+
+    private function resolveCustomerEmailFromXero(array $xeroContact, int $companyId): string
+    {
+        $email = strtolower(trim((string) ($xeroContact['EmailAddress'] ?? '')));
+        if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return $email;
+        }
+
+        $contactId = strtolower((string) ($xeroContact['ContactID'] ?? ''));
+        $token = preg_replace('/[^a-z0-9]/', '', $contactId);
+
+        if ($token === '') {
+            $nameSeed = strtolower(trim((string) ($xeroContact['Name'] ?? 'unknown')));
+            $token = substr(sha1($companyId . '|' . $nameSeed), 0, 16);
+        } else {
+            $token = substr($token, 0, 32);
+        }
+
+        return "xero-{$companyId}-{$token}@placeholder.invalid";
     }
 
     /**
@@ -2597,7 +2668,7 @@ class XeroService
         // If supplier import-from-Xero is disabled, keep protective comparison fetch.
         if (!$this->settings->sync_suppliers_from_xero) {
             try {
-                $xeroContacts = $this->fetchXeroContacts();
+                $xeroContacts = $this->fetchXeroContacts(self::SYNC_MODULE_SUPPLIERS);
                 foreach ($xeroContacts as $xeroContact) {
                     $xeroContactsMap[$xeroContact['ContactID']] = $xeroContact;
                 }
@@ -2669,9 +2740,10 @@ class XeroService
 
         $currentCompany = $this->getCompany();
         $results = [];
+        $syncStartedAt = now();
 
         try {
-            $xeroContacts = $this->fetchXeroContacts();
+            $xeroContacts = $this->fetchXeroContacts(self::SYNC_MODULE_SUPPLIERS);
             
             // Filter for suppliers only (contacts where IsSupplier is true)
             $xeroSuppliers = array_filter($xeroContacts, function($contact) {
@@ -2732,6 +2804,8 @@ class XeroService
             
             return ['skipped' => true, 'message' => 'Failed to sync suppliers from Xero: ' . $e->getMessage()];
         }
+
+        $this->recordSyncDatetimeForModule(self::SYNC_MODULE_SUPPLIERS, $syncStartedAt);
 
         return $results;
     }
@@ -2984,10 +3058,11 @@ class XeroService
 
         $currentCompany = $this->getCompany();
         $results = [];
+        $syncStartedAt = now();
+        $syncFullyCompleted = false;
 
         try {
-            $lastSync = Quote::where('company_id', $currentCompany->id)
-                ->whereNotNull('xero_updated_at')->max('xero_updated_at');
+            $lastSync = $this->getLastSyncDatetimeForModule(self::SYNC_MODULE_QUOTES);
             $ifModifiedSince = $this->buildIfModifiedSinceHeader($lastSync);
 
             $page = 1;
@@ -3160,6 +3235,7 @@ class XeroService
                 'pages_processed' => $pagesProcessed,
                 'stop_reason' => $stopReason,
             ]);
+            $syncFullyCompleted = !$stopReason && !$hasMorePages;
 
         } catch (\Exception $e) {
             Log::error('Failed to sync quotes from Xero', [
@@ -3168,6 +3244,10 @@ class XeroService
             ]);
             
             return ['skipped' => true, 'message' => 'Failed to sync quotes from Xero: ' . $e->getMessage()];
+        }
+
+        if ($syncFullyCompleted) {
+            $this->recordSyncDatetimeForModule(self::SYNC_MODULE_QUOTES, $syncStartedAt);
         }
 
         return $results;
@@ -4495,16 +4575,17 @@ class XeroService
         $createdCount = 0;
         $skippedCount = 0;
         $errorCount = 0;
+        $syncStartedAt = now();
 
         try {
-            // Calculate date one hour ago for filtering payments
-            $oneHourAgo = now()->subHour();
-            $ifModifiedSince = $oneHourAgo->format('D, d M Y H:i:s \G\M\T');
+            $lastSync = $this->getLastSyncDatetimeForModule(self::SYNC_MODULE_PAYMENTS);
+            $windowStart = $lastSync ? \Carbon\Carbon::parse($lastSync) : now()->subHour();
+            $headers = $this->buildIfModifiedSinceHeader($windowStart->toDateTimeString());
             
             Log::info('Starting payment sync from Xero with date filter', [
                 'company_id' => $currentCompany->id,
-                'if_modified_since' => $ifModifiedSince,
-                'one_hour_ago' => $oneHourAgo->toIso8601String(),
+                'if_modified_since' => $windowStart->toIso8601String(),
+                'last_sync' => $lastSync,
             ]);
 
             // Fetch payments from Xero created in the last hour
@@ -4514,23 +4595,24 @@ class XeroService
                 $this->baseUrl . '/api.xro/2.0/Payments',
                 [],
                 2,
-                ['If-Modified-Since' => $ifModifiedSince]
+                $headers
             );
 
             $statusCode = $response->status();
             
-            // Handle 304 Not Modified - no payments have been modified since the specified date
+            // Handle 304 Not Modified - no payments have been modified since the stored watermark
             if ($statusCode === 304) {
-                Log::info('No payments modified since last hour', [
+                Log::info('No payments modified since last sync', [
                     'company_id' => $currentCompany->id,
-                    'if_modified_since' => $ifModifiedSince,
+                    'if_modified_since' => $windowStart->toIso8601String(),
                 ]);
+                $this->recordSyncDatetimeForModule(self::SYNC_MODULE_PAYMENTS, $syncStartedAt);
                 return [
                     'skipped' => true,
                     'created' => 0,
                     'skipped_count' => 0,
                     'errors' => 0,
-                    'message' => 'No payments modified since last hour',
+                    'message' => 'No payments modified since last sync',
                 ];
             }
 
@@ -4554,7 +4636,7 @@ class XeroService
 
             foreach ($xeroPayments as $xeroPayment) {
                 try {
-                    // Check if payment was updated/created in the last hour
+                    // Check if payment was updated/created after last sync
                     // Use UpdatedDateUTC if available, otherwise use payment Date
                     $paymentCreatedDate = null;
                     if (isset($xeroPayment['UpdatedDateUTC'])) {
@@ -4579,8 +4661,8 @@ class XeroService
                         continue;
                     }
 
-                    // Only process payments created/updated in the last hour
-                    if ($paymentCreatedDate->lt($oneHourAgo)) {
+                    // Only process payments created/updated after the watermark.
+                    if ($paymentCreatedDate->lt($windowStart)) {
                         continue;
                     }
 
@@ -4767,6 +4849,7 @@ class XeroService
                 'skipped' => $skippedCount,
                 'errors' => $errorCount,
             ]);
+            $this->recordSyncDatetimeForModule(self::SYNC_MODULE_PAYMENTS, $syncStartedAt);
 
         } catch (\Exception $e) {
             Log::error('Failed to sync payments from Xero', [
@@ -4797,10 +4880,10 @@ class XeroService
 
         $currentCompany = $this->getCompany();
         $results = [];
+        $syncStartedAt = now();
 
         try {
-            $lastSync = TaxRate::where('company_id', $currentCompany->id)
-                ->whereNotNull('xero_updated_at')->max('xero_updated_at');
+            $lastSync = $this->getLastSyncDatetimeForModule(self::SYNC_MODULE_TAX_RATES);
 
             $response = $this->makeXeroRequest(
                 'get',
@@ -4929,6 +5012,8 @@ class XeroService
             return ['skipped' => true, 'message' => 'Failed to sync tax rates from Xero: ' . $e->getMessage()];
         }
 
+        $this->recordSyncDatetimeForModule(self::SYNC_MODULE_TAX_RATES, $syncStartedAt);
+
         return $results;
     }
 
@@ -4943,13 +5028,14 @@ class XeroService
 
         $currentCompany = $this->getCompany();
         $results = [];
+        $syncStartedAt = now();
 
         try {
             $hasExistingBankAccounts = BankAccount::where('company_id', $currentCompany->id)
                 ->whereNotNull('xero_account_id')
                 ->exists();
 
-            $allAccounts = $this->fetchXeroAccounts(!$hasExistingBankAccounts);
+            $allAccounts = $this->fetchXeroAccounts(self::SYNC_MODULE_BANK_ACCOUNTS, !$hasExistingBankAccounts);
             $xeroAccounts = array_values(array_filter($allAccounts, function ($a) {
                 $isBank = ($a['Type'] ?? '') === 'BANK';
                 $acceptsPayments = !empty($a['EnablePaymentsToAccount']);
@@ -5070,6 +5156,8 @@ class XeroService
             return ['skipped' => true, 'message' => 'Failed to sync bank accounts from Xero: ' . $e->getMessage()];
         }
 
+        $this->recordSyncDatetimeForModule(self::SYNC_MODULE_BANK_ACCOUNTS, $syncStartedAt);
+
         return $results;
     }
 
@@ -5084,13 +5172,14 @@ class XeroService
 
         $currentCompany = $this->getCompany();
         $results = [];
+        $syncStartedAt = now();
 
         try {
             $hasExistingCoa = ChartOfAccount::where('company_id', $currentCompany->id)
                 ->whereNotNull('xero_account_id')
                 ->exists();
 
-            $allAccounts = $this->fetchXeroAccounts(!$hasExistingCoa);
+            $allAccounts = $this->fetchXeroAccounts(self::SYNC_MODULE_CHART_OF_ACCOUNTS, !$hasExistingCoa);
             $xeroAccounts = array_values(array_filter($allAccounts, fn($a) => ($a['Type'] ?? '') !== 'BANK'));
             
             Log::info('Chart of accounts sync - After filtering bank accounts', [
@@ -5260,6 +5349,8 @@ class XeroService
             
             return ['skipped' => true, 'message' => 'Failed to sync chart of accounts from Xero: ' . $e->getMessage()];
         }
+
+        $this->recordSyncDatetimeForModule(self::SYNC_MODULE_CHART_OF_ACCOUNTS, $syncStartedAt);
         
         if (empty($results)) {
             $existingCount = ChartOfAccount::where('company_id', $currentCompany->id)
@@ -5421,10 +5512,10 @@ class XeroService
 
         $currentCompany = $this->getCompany();
         $results = [];
+        $syncStartedAt = now();
 
         try {
-            $lastSync = CreditNote::where('company_id', $currentCompany->id)
-                ->whereNotNull('xero_updated_at')->max('xero_updated_at');
+            $lastSync = $this->getLastSyncDatetimeForModule(self::SYNC_MODULE_CREDIT_NOTES);
             $ifModifiedSince = $this->buildIfModifiedSinceHeader($lastSync);
 
             $page = 1;
@@ -5578,6 +5669,8 @@ class XeroService
             ]);
             return ['skipped' => true, 'message' => 'Failed to sync credit notes from Xero: ' . $e->getMessage()];
         }
+
+        $this->recordSyncDatetimeForModule(self::SYNC_MODULE_CREDIT_NOTES, $syncStartedAt);
 
         return $results;
     }
@@ -6277,6 +6370,8 @@ class XeroService
 
         $currentCompany = $this->getCompany();
         $results = [];
+        $syncStartedAt = now();
+        $syncFullyCompleted = false;
 
         try {
             $hasAnyLocalPurchaseOrders = PurchaseOrder::where('company_id', $currentCompany->id)->exists();
@@ -6300,8 +6395,7 @@ class XeroService
                 $cursor = ['page' => 1];
             }
 
-            $lastSync = PurchaseOrder::where('company_id', $currentCompany->id)
-                ->whereNotNull('xero_updated_at')->max('xero_updated_at');
+            $lastSync = $this->getLastSyncDatetimeForModule(self::SYNC_MODULE_PURCHASE_ORDERS);
             // During backfill mode we intentionally avoid If-Modified-Since so older pages are not skipped.
             $ifModifiedSince = $isBackfillMode ? [] : $this->buildIfModifiedSinceHeader($lastSync);
 
@@ -6480,11 +6574,16 @@ class XeroService
                 'processed_this_run' => $processedThisRun,
                 'stop_reason' => $stopReason,
             ]);
+            $syncFullyCompleted = !$stopReason && !$hasMorePages;
         } catch (\Exception $e) {
             Log::error('Failed to sync purchase orders from Xero', [
                 'error' => $e->getMessage(),
             ]);
             return ['skipped' => true, 'message' => 'Failed: ' . $e->getMessage()];
+        }
+
+        if ($syncFullyCompleted) {
+            $this->recordSyncDatetimeForModule(self::SYNC_MODULE_PURCHASE_ORDERS, $syncStartedAt);
         }
 
         return $results;
