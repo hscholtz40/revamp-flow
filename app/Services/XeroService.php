@@ -1584,6 +1584,7 @@ class XeroService
             $totalProcessed = 0;
             $pagesProcessed = 0;
             $processedThisRun = 0;
+            $processedInvoiceKeys = [];
             $startedAt = microtime(true);
             $stopReason = null;
             $hasMorePages = false;
@@ -1619,6 +1620,10 @@ class XeroService
                             if (($xeroInvoice['Type'] ?? null) !== 'ACCREC') {
                                 continue;
                             }
+                            $invoiceProcessingKey = $this->getInvoiceProcessingKey($xeroInvoice);
+                            if ($invoiceProcessingKey !== null && isset($processedInvoiceKeys[$invoiceProcessingKey])) {
+                                continue;
+                            }
                             $xeroInvoice = $this->hydrateInvoiceDetails($xeroInvoice);
 
                             $existingInvoice = Invoice::where('company_id', $currentCompany->id)
@@ -1633,6 +1638,9 @@ class XeroService
                                     'status' => 'created',
                                     'message' => 'Invoice imported from Xero (incremental pre-pass)',
                                 ];
+                            }
+                            if ($invoiceProcessingKey !== null) {
+                                $processedInvoiceKeys[$invoiceProcessingKey] = true;
                             }
                         }
                     }
@@ -1759,6 +1767,16 @@ class XeroService
                         if (($xeroInvoice['Type'] ?? null) !== 'ACCREC') {
                             continue;
                         }
+                        $invoiceProcessingKey = $this->getInvoiceProcessingKey($xeroInvoice);
+                        if ($invoiceProcessingKey !== null && isset($processedInvoiceKeys[$invoiceProcessingKey])) {
+                            $results[] = [
+                                'invoice_id' => null,
+                                'invoice_number' => $xeroInvoice['InvoiceNumber'] ?? $xeroInvoice['Reference'] ?? 'Unknown',
+                                'status' => 'skipped',
+                                'message' => 'Invoice already processed in this run',
+                            ];
+                            continue;
+                        }
 
                         $xeroInvoice = $this->hydrateInvoiceDetails($xeroInvoice);
 
@@ -1836,6 +1854,9 @@ class XeroService
                         }
                         
                         $totalProcessed++;
+                        if ($invoiceProcessingKey !== null) {
+                            $processedInvoiceKeys[$invoiceProcessingKey] = true;
+                        }
                     } catch (\Exception $e) {
                         Log::error('Failed to process invoice from Xero', [
                             'company_id' => $currentCompany->id,
@@ -1856,6 +1877,9 @@ class XeroService
                             'error' => $e->getMessage(),
                         ];
                         $processedThisRun++;
+                        if (isset($invoiceProcessingKey) && $invoiceProcessingKey !== null) {
+                            $processedInvoiceKeys[$invoiceProcessingKey] = true;
+                        }
                     }
                 }
 
@@ -2435,6 +2459,21 @@ class XeroService
         }
 
         return ['If-Modified-Since' => \Carbon\Carbon::parse($lastSync)->format('D, d M Y H:i:s \G\M\T')];
+    }
+
+    private function getInvoiceProcessingKey(array $xeroInvoice): ?string
+    {
+        $invoiceId = trim((string) ($xeroInvoice['InvoiceID'] ?? ''));
+        if ($invoiceId !== '') {
+            return 'id:' . strtolower($invoiceId);
+        }
+
+        $invoiceNumber = trim((string) ($xeroInvoice['InvoiceNumber'] ?? $xeroInvoice['Reference'] ?? ''));
+        if ($invoiceNumber !== '') {
+            return 'number:' . strtolower($invoiceNumber);
+        }
+
+        return null;
     }
 
     private function getLastSyncDatetimeForModule(string $module): ?string
