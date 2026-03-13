@@ -1,0 +1,11 @@
+---
+description: Require changelog entries for production changes
+alwaysApply: true
+---
+
+# Changelog Required
+
+- For any code change, bug fix, behavior change, migration, config change, or production-impacting edit, add an entry to `CHANGELOG.md` in the project root before finishing the task.
+- Add the changelog entry in the same work session as the code change.
+- Keep entries concise and practical: date, short title, and a brief note about what changed and why.
+- If a change is intentionally not logged, confirm with the user first.

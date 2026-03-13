@@ -14,9 +14,42 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 use Carbon\Carbon;
+use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
+    private function netSalesRevenueQuery(int $companyId, ?int $salespersonId = null): Builder
+    {
+        $creditNoteTotals = DB::table('credit_notes')
+            ->select('invoice_id', DB::raw('SUM(total) as allocated_credit_total'))
+            ->whereNotNull('invoice_id')
+            ->where('status', '!=', 'voided')
+            ->groupBy('invoice_id');
+
+        $query = DB::table('invoices')
+            ->leftJoinSub($creditNoteTotals, 'credit_note_totals', function ($join) {
+                $join->on('invoices.id', '=', 'credit_note_totals.invoice_id');
+            })
+            ->where('invoices.company_id', $companyId)
+            ->where('invoices.status', '!=', 'cancelled');
+
+        if ($salespersonId !== null) {
+            $query->where('invoices.salesperson_id', $salespersonId);
+        }
+
+        return $query;
+    }
+
+    private function getNetSalesRevenueForMonth(int $companyId, Carbon $date, ?int $salespersonId = null): float
+    {
+        return (float) $this->netSalesRevenueQuery($companyId, $salespersonId)
+            ->whereMonth('invoices.invoice_date', $date->month)
+            ->whereYear('invoices.invoice_date', $date->year)
+            ->selectRaw('COALESCE(SUM(invoices.total - COALESCE(credit_note_totals.allocated_credit_total, 0)), 0) as revenue')
+            ->value('revenue');
+    }
+
     public function index(Request $request): Response
     {
         $currentCompany = auth()->user()?->getCurrentCompany();
@@ -115,12 +148,11 @@ class DashboardController extends Controller
 
         // User-specific revenue statistics
         $revenueStats = [
-            'current_month_revenue' => Invoice::where('company_id', $currentCompany->id)
-                ->where('salesperson_id', auth()->id())
-                ->where('status', '!=', 'cancelled')
-                ->whereMonth('invoice_date', Carbon::now()->month)
-                ->whereYear('invoice_date', Carbon::now()->year)
-                ->sum('total'),
+            'current_month_revenue' => $this->getNetSalesRevenueForMonth(
+                $currentCompany->id,
+                Carbon::now(),
+                auth()->id()
+            ),
         ];
 
         // User's 12-month revenue history
@@ -128,12 +160,11 @@ class DashboardController extends Controller
         for ($i = 11; $i >= 0; $i--) {
             $date = Carbon::now()->subMonths($i);
             $monthName = $date->format('M Y');
-            $revenue = Invoice::where('company_id', $currentCompany->id)
-                ->where('salesperson_id', auth()->id())
-                ->where('status', '!=', 'cancelled')
-                ->whereMonth('invoice_date', $date->month)
-                ->whereYear('invoice_date', $date->year)
-                ->sum('total');
+            $revenue = $this->getNetSalesRevenueForMonth(
+                $currentCompany->id,
+                $date,
+                auth()->id()
+            );
             
             $userMonthlyRevenue[] = [
                 'month' => $monthName,
