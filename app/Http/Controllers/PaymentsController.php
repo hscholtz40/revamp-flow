@@ -106,6 +106,24 @@ class PaymentsController extends Controller
         }
 
         $invoice = $payment->invoice;
+        if ($payment->xero_payment_id) {
+            try {
+                $xeroService = new XeroService($currentCompany);
+                if ($xeroService->isConfigured()) {
+                    $xeroService->deletePaymentInXero($payment);
+                }
+            } catch (\Exception $e) {
+                Log::error('Failed to delete payment in Xero during local deletion', [
+                    'payment_id' => $payment->id,
+                    'invoice_id' => $invoice?->id,
+                    'xero_payment_id' => $payment->xero_payment_id,
+                    'error' => $e->getMessage(),
+                ]);
+
+                return redirect()->back()->with('error', 'Failed to delete payment in Xero. Local payment was not removed.');
+            }
+        }
+
         $payment->delete();
 
         // Refresh invoice to reload payments relationship for accurate calculations

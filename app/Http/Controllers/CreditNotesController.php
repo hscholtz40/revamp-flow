@@ -455,6 +455,24 @@ class CreditNotesController extends Controller
             return redirect()->back()->with('error', 'This payment does not belong to the selected credit note.');
         }
 
+        if ($payment->xero_payment_id) {
+            try {
+                $xeroService = new XeroService($currentCompany);
+                if ($xeroService->isConfigured()) {
+                    $xeroService->deletePaymentInXero($payment);
+                }
+            } catch (\Throwable $e) {
+                Log::error('Failed to delete credit note refund in Xero during local deletion', [
+                    'credit_note_id' => $creditNote->id,
+                    'payment_id' => $payment->id,
+                    'xero_payment_id' => $payment->xero_payment_id,
+                    'error' => $e->getMessage(),
+                ]);
+
+                return redirect()->back()->with('error', 'Failed to delete refund payment in Xero. Local refund was not removed.');
+            }
+        }
+
         $payment->delete();
         $creditNote->refresh();
         $creditNote->calculateTotals();

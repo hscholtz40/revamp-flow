@@ -162,6 +162,7 @@ class QuotesController extends Controller
         ]);
 
         // Create line items
+        $defaultSalesAccountId = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id)?->id;
         foreach ($validated['line_items'] as $index => $lineItemData) {
             $lineItem = new QuoteLineItem([
                 'quote_id' => $quote->id,
@@ -172,6 +173,7 @@ class QuotesController extends Controller
                 'discount_amount' => $lineItemData['discount_amount'] ?? 0,
                 'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
                 'tax_rate_id' => $lineItemData['tax_rate_id'] ?? null,
+                'account_id' => $lineItemData['account_id'] ?? $defaultSalesAccountId,
                 'sort_order' => $index,
             ]);
             $lineItem->calculateTotal();
@@ -315,6 +317,7 @@ class QuotesController extends Controller
         $quote->lineItems()->delete();
 
         // Create new line items
+        $defaultSalesAccountId = ChartOfAccount::getDefaultSalesForCompany($quote->company_id)?->id;
         foreach ($validated['line_items'] as $index => $lineItemData) {
             $lineItem = new QuoteLineItem([
                 'quote_id' => $quote->id,
@@ -325,7 +328,7 @@ class QuotesController extends Controller
                 'discount_amount' => $lineItemData['discount_amount'] ?? 0,
                 'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
                 'tax_rate_id' => $lineItemData['tax_rate_id'] ?? null,
-                'account_id' => $lineItemData['account_id'] ?? null,
+                'account_id' => $lineItemData['account_id'] ?? $defaultSalesAccountId,
                 'sort_order' => $index,
             ]);
             $lineItem->calculateTotal();

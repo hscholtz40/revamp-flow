@@ -1564,11 +1564,19 @@ class XeroService
             $fullSyncCompletedKey = self::getInitialSyncCompletedCacheKey($currentCompany->id, 'invoice');
             $cursorKey = self::getInitialSyncCursorCacheKey($currentCompany->id, 'invoice');
             $paginationKey = self::getInitialSyncPaginationCacheKey($currentCompany->id, 'invoice');
-            $isInitialInvoiceImport = !$hasAnyLocalInvoices;
-            $isBackfillMode = $isInitialInvoiceImport || !Cache::get($fullSyncCompletedKey, false);
-            $cursor = Cache::get($cursorKey, ['page' => 1]);
-
             $lastSync = $this->getLastSyncDatetimeForModule(self::SYNC_MODULE_INVOICES);
+            $fullSyncCompleted = (bool) Cache::get($fullSyncCompletedKey, false);
+            if (!$fullSyncCompleted && $hasAnyLocalInvoices && !empty($lastSync)) {
+                $fullSyncCompleted = true;
+                Cache::put($fullSyncCompletedKey, true, now()->addDays(365));
+                Log::info('Rehydrated invoice full-sync completion state from xero_sync_states', [
+                    'company_id' => $currentCompany->id,
+                    'last_sync' => $lastSync,
+                ]);
+            }
+            $isInitialInvoiceImport = !$hasAnyLocalInvoices;
+            $isBackfillMode = $isInitialInvoiceImport || !$fullSyncCompleted;
+            $cursor = Cache::get($cursorKey, ['page' => 1]);
             // During backfill mode we intentionally avoid If-Modified-Since so older pages are not skipped.
             $ifModifiedSince = $isBackfillMode ? [] : $this->buildIfModifiedSinceHeader($lastSync);
 
@@ -1978,11 +1986,11 @@ class XeroService
             $discountAmount = (float) ($lineItem->discount_amount ?? 0);
             $discountPercentage = (float) ($lineItem->discount_percentage ?? 0);
             
-            $accountCode = '200';
+            $accountCode = '1000';
             if ($lineItem->account_id && $lineItem->account) {
-                $accountCode = $lineItem->account->account_code ?? '200';
+                $accountCode = $lineItem->account->account_code ?? '1000';
             } elseif ($lineItem->product_id && $lineItem->product) {
-                $accountCode = $lineItem->product->sales_account_code ?? '200';
+                $accountCode = $lineItem->product->sales_account_code ?? '1000';
             } else {
                 $defaultAccount = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id);
                 if ($defaultAccount) {
@@ -3116,10 +3124,30 @@ class XeroService
         $syncFullyCompleted = false;
 
         try {
+            $hasAnyLocalQuotes = Quote::where('company_id', $currentCompany->id)->exists();
+            $fullSyncCompletedKey = self::getInitialSyncCompletedCacheKey($currentCompany->id, 'quote');
+            $cursorKey = self::getInitialSyncCursorCacheKey($currentCompany->id, 'quote');
+            $paginationKey = self::getInitialSyncPaginationCacheKey($currentCompany->id, 'quote');
             $lastSync = $this->getLastSyncDatetimeForModule(self::SYNC_MODULE_QUOTES);
-            $ifModifiedSince = $this->buildIfModifiedSinceHeader($lastSync);
+            $fullSyncCompleted = (bool) Cache::get($fullSyncCompletedKey, false);
+            if (!$fullSyncCompleted && $hasAnyLocalQuotes && !empty($lastSync)) {
+                $fullSyncCompleted = true;
+                Cache::put($fullSyncCompletedKey, true, now()->addDays(365));
+                Log::info('Rehydrated quote full-sync completion state from xero_sync_states', [
+                    'company_id' => $currentCompany->id,
+                    'last_sync' => $lastSync,
+                ]);
+            }
+            $isInitialQuoteImport = !$hasAnyLocalQuotes;
+            $isBackfillMode = $isInitialQuoteImport || !$fullSyncCompleted;
+            $cursor = Cache::get($cursorKey, ['page' => 1]);
+            // During backfill mode we intentionally avoid If-Modified-Since so older pages are not skipped.
+            $ifModifiedSince = $isBackfillMode ? [] : $this->buildIfModifiedSinceHeader($lastSync);
 
-            $page = 1;
+            $page = (int) ($isBackfillMode ? ($cursor['page'] ?? 1) : 1);
+            if ($page < 1) {
+                $page = 1;
+            }
             $pageSize = max(1, min((int) config('services.xero.quote_import_page_size', 50), 100));
             $maxPagesPerRun = max(1, (int) config('services.xero.quote_import_max_pages_per_run', 3));
             $maxQuotesPerRun = max(1, (int) config('services.xero.quote_import_max_quotes_per_run', 150));
@@ -3130,13 +3158,14 @@ class XeroService
             $processedThisRun = 0;
             $startedAt = microtime(true);
             $stopReason = null;
-            
+            $hasMorePages = false;
+
             do {
-                if ($processedThisRun >= $maxQuotesPerRun) {
+                if (!$isBackfillMode && $processedThisRun >= $maxQuotesPerRun) {
                     $stopReason = 'max_quotes_per_run_reached';
                     break;
                 }
-                if ((microtime(true) - $startedAt) >= $maxSecondsPerRun) {
+                if (!$isBackfillMode && (microtime(true) - $startedAt) >= $maxSecondsPerRun) {
                     $stopReason = 'max_seconds_per_run_reached';
                     break;
                 }
@@ -3174,28 +3203,49 @@ class XeroService
                 $pagination = $responseData['Pagination'] ?? null;
                 $currentPage = $pagination['Page'] ?? $page;
                 $pageCount = $pagination['PageCount'] ?? 1;
-                
                 $quotesOnPage = count($xeroQuotes);
                 $hasPaginationPageCount = is_array($pagination) && isset($pagination['PageCount']) && is_numeric($pagination['PageCount']);
+                $normalizedPageCount = is_numeric($pageCount) ? (int) $pageCount : null;
+                if ($isBackfillMode && $hasPaginationPageCount && $normalizedPageCount !== null && $normalizedPageCount >= 1 && $page > $normalizedPageCount) {
+                    Log::warning('Quote backfill cursor exceeded available pages; resetting to page 1', [
+                        'company_id' => $currentCompany->id,
+                        'requested_page' => $page,
+                        'reported_current_page' => $currentPage,
+                        'reported_page_count' => $normalizedPageCount,
+                    ]);
+                    $page = 1;
+                    Cache::put($cursorKey, ['page' => $page], now()->addDays(7));
+                    $hasMorePages = true;
+                    continue;
+                }
                 if ($hasPaginationPageCount) {
                     $hasMorePages = $currentPage < $pageCount;
                 } else {
                     $hasMorePages = $quotesOnPage >= $pageSize;
                 }
+                Cache::put($paginationKey, [
+                    'page' => is_numeric($currentPage) ? (int) $currentPage : $page,
+                    'page_count' => is_numeric($pageCount) ? (int) $pageCount : null,
+                    'item_count' => is_numeric($pagination['ItemCount'] ?? null) ? (int) $pagination['ItemCount'] : null,
+                    'page_size' => $pageSize,
+                    'captured_at' => now()->toIso8601String(),
+                ], now()->addDays(7));
                 
                 Log::info('Fetched quote page from Xero, processing now', [
                     'company_id' => $currentCompany->id,
-                    'page' => $page,
+                    'requested_page' => $page,
+                    'current_page' => $currentPage,
+                    'page_count' => $pageCount,
                     'quotes_on_page' => $quotesOnPage,
                     'has_more_pages' => $hasMorePages,
                 ]);
 
                 foreach ($xeroQuotes as $xeroQuote) {
-                    if ($processedThisRun >= $maxQuotesPerRun) {
+                    if (!$isBackfillMode && $processedThisRun >= $maxQuotesPerRun) {
                         $stopReason = 'max_quotes_per_run_reached';
                         break;
                     }
-                    if ((microtime(true) - $startedAt) >= $maxSecondsPerRun) {
+                    if (!$isBackfillMode && (microtime(true) - $startedAt) >= $maxSecondsPerRun) {
                         $stopReason = 'max_seconds_per_run_reached';
                         break;
                     }
@@ -3271,19 +3321,29 @@ class XeroService
                     }
                 }
 
-                $page++;
                 $pagesProcessed++;
-                if ($pagesProcessed >= $maxPagesPerRun) {
+                if (!$isBackfillMode && $pagesProcessed >= $maxPagesPerRun) {
                     $stopReason = 'max_pages_per_run_reached';
                 }
-                
+
+                $page++;
+                if ($isBackfillMode) {
+                    Cache::put($cursorKey, ['page' => $page], now()->addDays(7));
+                }
+
                 if ($hasMorePages && !$stopReason && $pageDelayMs > 0) {
                     usleep($pageDelayMs * 1000);
                 }
             } while ($hasMorePages && !$stopReason);
 
+            if ($isBackfillMode && !$hasMorePages && !$stopReason) {
+                Cache::put($fullSyncCompletedKey, true, now()->addDays(365));
+                Cache::forget($cursorKey);
+            }
+
             Log::info('Finished processing all quotes from Xero', [
                 'company_id' => $currentCompany->id,
+                'mode' => $isBackfillMode ? 'backfill' : 'incremental',
                 'total_quotes_processed' => $totalProcessed,
                 'processed_this_run' => $processedThisRun,
                 'pages_processed' => $pagesProcessed,
@@ -3343,11 +3403,11 @@ class XeroService
         
         $lineItems = [];
         foreach ($quote->lineItems as $lineItem) {
-            $accountCode = '200';
+            $accountCode = '1000';
             if ($lineItem->account_id && $lineItem->account) {
-                $accountCode = $lineItem->account->account_code ?? '200';
+                $accountCode = $lineItem->account->account_code ?? '1000';
             } elseif ($lineItem->product_id && $lineItem->product) {
-                $accountCode = $lineItem->product->sales_account_code ?? '200';
+                $accountCode = $lineItem->product->sales_account_code ?? '1000';
             } else {
                 $defaultAccount = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id);
                 if ($defaultAccount) {
@@ -4409,6 +4469,146 @@ class XeroService
         return $invoice;
     }
 
+    public function deletePaymentInXero(Payment $payment): array
+    {
+        if (empty($payment->xero_payment_id)) {
+            return [
+                'payment_id' => $payment->id,
+                'status' => 'skipped',
+                'message' => 'Payment has not been synced to Xero',
+            ];
+        }
+
+        $response = $this->makeXeroRequest(
+            'post',
+            $this->baseUrl . '/api.xro/2.0/Payments/' . $payment->xero_payment_id,
+            ['Status' => 'DELETED']
+        );
+
+        if (!$response->successful()) {
+            $errorBody = $response->body();
+            $statusCode = $response->status();
+            $normalizedError = strtolower($errorBody);
+            $alreadyDeleted = $statusCode === 404
+                || str_contains($normalizedError, 'not found')
+                || str_contains($normalizedError, 'cannot be found')
+                || str_contains($normalizedError, 'already deleted')
+                || str_contains($normalizedError, '"status":"deleted"');
+
+            if (!$alreadyDeleted) {
+                throw new \Exception('Failed to delete payment in Xero: ' . $errorBody);
+            }
+
+            Log::warning('Xero payment already absent while reconciling deletion', [
+                'payment_id' => $payment->id,
+                'xero_payment_id' => $payment->xero_payment_id,
+                'status' => $statusCode,
+                'response' => $errorBody,
+            ]);
+
+            return [
+                'payment_id' => $payment->id,
+                'status' => 'success',
+                'message' => 'Payment already absent in Xero',
+            ];
+        }
+
+        $responseData = $response->json();
+        $xeroPayment = $responseData['Payments'][0] ?? $responseData['Payment'] ?? [];
+        if (!empty($xeroPayment['UpdatedDateUTC'])) {
+            $payment->update([
+                'xero_synced_at' => $this->parseXeroDate($xeroPayment['UpdatedDateUTC']),
+            ]);
+        }
+
+        return [
+            'payment_id' => $payment->id,
+            'status' => 'success',
+            'xero_payment_id' => $payment->xero_payment_id,
+        ];
+    }
+
+    private function findExistingPaymentForImport(
+        ?int $invoiceId,
+        ?int $creditNoteId,
+        ?string $xeroPaymentId,
+        float $amount,
+        \Carbon\CarbonInterface $paymentDate
+    ): ?Payment {
+        if ($xeroPaymentId) {
+            $existingPayment = Payment::where('xero_payment_id', $xeroPaymentId)->first();
+            if ($existingPayment) {
+                return $existingPayment;
+            }
+
+            $deletedPayment = Payment::onlyTrashed()->where('xero_payment_id', $xeroPaymentId)->first();
+            if ($deletedPayment) {
+                return $deletedPayment;
+            }
+        }
+
+        $activePaymentQuery = Payment::query()
+            ->where('amount', $amount)
+            ->whereDate('payment_date', $paymentDate->format('Y-m-d'));
+        if ($invoiceId) {
+            $activePaymentQuery->where('invoice_id', $invoiceId);
+        }
+        if ($creditNoteId) {
+            $activePaymentQuery->where('credit_note_id', $creditNoteId);
+        }
+
+        $existingPayment = $activePaymentQuery->first();
+        if ($existingPayment) {
+            return $existingPayment;
+        }
+
+        $deletedPaymentQuery = Payment::onlyTrashed()
+            ->where('amount', $amount)
+            ->whereDate('payment_date', $paymentDate->format('Y-m-d'));
+        if ($invoiceId) {
+            $deletedPaymentQuery->where('invoice_id', $invoiceId);
+        }
+        if ($creditNoteId) {
+            $deletedPaymentQuery->where('credit_note_id', $creditNoteId);
+        }
+
+        return $deletedPaymentQuery->first();
+    }
+
+    private function syncLocalStatusAfterPaymentChange(?Invoice $invoice = null, ?CreditNote $creditNote = null): void
+    {
+        if ($invoice) {
+            $invoice->refresh();
+            if ($invoice->isFullyPaid()) {
+                if ($invoice->status !== 'paid') {
+                    $invoice->update(['status' => 'paid']);
+                }
+            } elseif ($invoice->status === 'paid') {
+                $invoice->update(['status' => 'sent']);
+            }
+        }
+
+        if ($creditNote) {
+            $creditNote->refresh();
+            $remaining = max(0, round((float) $creditNote->total - (float) $creditNote->payments()->sum('amount'), 2));
+            $creditNote->update(['remaining_credit' => $remaining]);
+
+            if ($creditNote->status !== 'voided') {
+                if ($creditNote->invoice_id && in_array($creditNote->status, ['draft', 'submitted'], true)) {
+                    $creditNote->update(['status' => 'authorised']);
+                }
+
+                if ($remaining <= 0.01 && $creditNote->status !== 'paid') {
+                    $creditNote->update(['status' => 'paid']);
+                }
+
+                if ($remaining > 0.01 && $creditNote->status === 'paid') {
+                    $creditNote->update(['status' => 'authorised']);
+                }
+            }
+        }
+    }
+
 
     /**
      * Sync payments for a specific invoice FROM Xero
@@ -4490,22 +4690,40 @@ class XeroService
                     continue;
                 }
 
-                // Check if payment already exists (match by invoice, amount, and date)
-                $existingPayment = null;
                 $xeroPaymentId = $xeroPayment['PaymentID'] ?? null;
-                if ($xeroPaymentId) {
-                    $existingPayment = Payment::where('invoice_id', $invoice->id)
-                        ->where('xero_payment_id', $xeroPaymentId)
-                        ->first();
-                }
-                if (!$existingPayment) {
-                    $existingPayment = Payment::where('invoice_id', $invoice->id)
-                        ->where('amount', $amount)
-                        ->whereDate('payment_date', $paymentDate->format('Y-m-d'))
-                        ->first();
+                $xeroPaymentStatus = strtoupper((string) ($xeroPayment['Status'] ?? ''));
+                $existingPayment = $this->findExistingPaymentForImport(
+                    $invoice->id,
+                    null,
+                    $xeroPaymentId,
+                    (float) $amount,
+                    $paymentDate
+                );
+
+                if ($xeroPaymentStatus === 'DELETED') {
+                    if ($existingPayment && !$existingPayment->trashed()) {
+                        $existingPayment->delete();
+                        $this->syncLocalStatusAfterPaymentChange($invoice, null);
+                    }
+
+                    Log::info('Payment deletion reconciled from Xero invoice sync', [
+                        'invoice_id' => $invoice->id,
+                        'xero_payment_id' => $xeroPaymentId,
+                        'had_local_match' => (bool) $existingPayment,
+                    ]);
+                    continue;
                 }
 
                 if ($existingPayment) {
+                    if ($existingPayment->trashed()) {
+                        Log::info('Skipping Xero payment re-import because payment was intentionally deleted locally', [
+                            'invoice_id' => $invoice->id,
+                            'xero_payment_id' => $xeroPaymentId,
+                            'payment_id' => $existingPayment->id,
+                        ]);
+                        continue;
+                    }
+
                     if (!empty($xeroPayment['PaymentID']) && empty($existingPayment->xero_payment_id)) {
                         $existingPayment->update([
                             'xero_payment_id' => $xeroPayment['PaymentID'],
@@ -4771,22 +4989,43 @@ class XeroService
                     $amount = $xeroPayment['Amount'] ?? 0;
                     $existingPayment = null;
                     $xeroPaymentId = $xeroPayment['PaymentID'] ?? null;
-                    if ($xeroPaymentId) {
-                        $existingPayment = Payment::where('xero_payment_id', $xeroPaymentId)->first();
-                    }
-                    if (!$existingPayment) {
-                        $paymentQuery = Payment::query()->where('amount', $amount)
-                            ->whereDate('payment_date', $paymentDate->format('Y-m-d'));
-                        if ($invoice) {
-                            $paymentQuery->where('invoice_id', $invoice->id);
+                    $xeroPaymentStatus = strtoupper((string) ($xeroPayment['Status'] ?? ''));
+                    $existingPayment = $this->findExistingPaymentForImport(
+                        $invoice?->id,
+                        $creditNote?->id,
+                        $xeroPaymentId,
+                        (float) $amount,
+                        $paymentDate
+                    );
+
+                    if ($xeroPaymentStatus === 'DELETED') {
+                        if ($existingPayment && !$existingPayment->trashed()) {
+                            $deletedInvoice = $existingPayment->invoice;
+                            $deletedCreditNote = $existingPayment->creditNote;
+                            $existingPayment->delete();
+                            $this->syncLocalStatusAfterPaymentChange($deletedInvoice, $deletedCreditNote);
                         }
-                        if ($creditNote) {
-                            $paymentQuery->where('credit_note_id', $creditNote->id);
-                        }
-                        $existingPayment = $paymentQuery->first();
+
+                        Log::info('Payment deletion reconciled from Xero payments sync', [
+                            'company_id' => $currentCompany->id,
+                            'xero_payment_id' => $xeroPaymentId,
+                            'had_local_match' => (bool) $existingPayment,
+                        ]);
+                        $skippedCount++;
+                        continue;
                     }
 
                     if ($existingPayment) {
+                        if ($existingPayment->trashed()) {
+                            Log::info('Skipping Xero payment re-import because payment was intentionally deleted locally', [
+                                'company_id' => $currentCompany->id,
+                                'xero_payment_id' => $xeroPaymentId,
+                                'payment_id' => $existingPayment->id,
+                            ]);
+                            $skippedCount++;
+                            continue;
+                        }
+
                         if (!empty($xeroPayment['PaymentID']) && empty($existingPayment->xero_payment_id)) {
                             $existingPayment->update([
                                 'xero_payment_id' => $xeroPayment['PaymentID'],
@@ -5988,11 +6227,11 @@ class XeroService
 
         $lineItems = [];
         foreach ($creditNote->lineItems as $lineItem) {
-            $accountCode = '200';
+            $accountCode = '1000';
             if ($lineItem->account_id && $lineItem->account) {
-                $accountCode = $lineItem->account->account_code ?? '200';
+                $accountCode = $lineItem->account->account_code ?? '1000';
             } elseif ($lineItem->product_id && $lineItem->product) {
-                $accountCode = $lineItem->product->sales_account_code ?? '200';
+                $accountCode = $lineItem->product->sales_account_code ?? '1000';
             } else {
                 $defaultAccount = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id);
                 if ($defaultAccount) {
@@ -6472,7 +6711,17 @@ class XeroService
             $fullSyncCompletedKey = self::getInitialSyncCompletedCacheKey($currentCompany->id, 'purchase_order');
             $cursorKey = self::getInitialSyncCursorCacheKey($currentCompany->id, 'purchase_order');
             $paginationKey = self::getInitialSyncPaginationCacheKey($currentCompany->id, 'purchase_order');
-            $isBackfillMode = !$hasAnyLocalPurchaseOrders || !Cache::get($fullSyncCompletedKey, false);
+            $lastSync = $this->getLastSyncDatetimeForModule(self::SYNC_MODULE_PURCHASE_ORDERS);
+            $fullSyncCompleted = (bool) Cache::get($fullSyncCompletedKey, false);
+            if (!$fullSyncCompleted && $hasAnyLocalPurchaseOrders && !empty($lastSync)) {
+                $fullSyncCompleted = true;
+                Cache::put($fullSyncCompletedKey, true, now()->addDays(365));
+                Log::info('Rehydrated purchase order full-sync completion state from xero_sync_states', [
+                    'company_id' => $currentCompany->id,
+                    'last_sync' => $lastSync,
+                ]);
+            }
+            $isBackfillMode = !$hasAnyLocalPurchaseOrders || !$fullSyncCompleted;
             $cursor = Cache::get($cursorKey, ['page' => 1]);
 
             // Self-heal edge case where completed flag was set previously but historical data
@@ -6488,7 +6737,6 @@ class XeroService
                 $cursor = ['page' => 1];
             }
 
-            $lastSync = $this->getLastSyncDatetimeForModule(self::SYNC_MODULE_PURCHASE_ORDERS);
             // During backfill mode we intentionally avoid If-Modified-Since so older pages are not skipped.
             $ifModifiedSince = $isBackfillMode ? [] : $this->buildIfModifiedSinceHeader($lastSync);
 
@@ -6515,11 +6763,11 @@ class XeroService
             ]);
 
             do {
-                if ($processedThisRun >= $maxPurchaseOrdersPerRun) {
+                if (!$isBackfillMode && $processedThisRun >= $maxPurchaseOrdersPerRun) {
                     $stopReason = 'max_purchase_orders_per_run_reached';
                     break;
                 }
-                if ((microtime(true) - $startedAt) >= $maxSecondsPerRun) {
+                if (!$isBackfillMode && (microtime(true) - $startedAt) >= $maxSecondsPerRun) {
                     $stopReason = 'max_seconds_per_run_reached';
                     break;
                 }
@@ -6570,11 +6818,11 @@ class XeroService
                 ], now()->addDays(7));
 
                 foreach ($xeroPOs as $xeroPO) {
-                    if ($processedThisRun >= $maxPurchaseOrdersPerRun) {
+                    if (!$isBackfillMode && $processedThisRun >= $maxPurchaseOrdersPerRun) {
                         $stopReason = 'max_purchase_orders_per_run_reached';
                         break;
                     }
-                    if ((microtime(true) - $startedAt) >= $maxSecondsPerRun) {
+                    if (!$isBackfillMode && (microtime(true) - $startedAt) >= $maxSecondsPerRun) {
                         $stopReason = 'max_seconds_per_run_reached';
                         break;
                     }
@@ -6644,7 +6892,7 @@ class XeroService
 
                 $page++;
                 $pagesProcessed++;
-                if ($pagesProcessed >= $maxPagesPerRun) {
+                if (!$isBackfillMode && $pagesProcessed >= $maxPagesPerRun) {
                     $stopReason = 'max_pages_per_run_reached';
                 }
                 if ($isBackfillMode) {

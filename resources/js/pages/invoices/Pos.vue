@@ -517,7 +517,7 @@ const submit = () => {
                             :disabled="form.processing || !canCompleteSale"
                             class="w-full rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            {{ form.processing ? 'Processing...' : 'Complete POS Sale' }}
+                            {{ form.processing ? 'Processing...' : 'Complete Sale' }}
                         </button>
                     </div>
                 </div>

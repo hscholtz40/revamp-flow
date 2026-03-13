@@ -4,9 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Payment extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
         'invoice_id',
         'credit_note_id',
@@ -23,6 +26,7 @@ class Payment extends Model
         'payment_date' => 'date',
         'amount' => 'decimal:2',
         'xero_synced_at' => 'datetime',
+        'deleted_at' => 'datetime',
     ];
 
     public function invoice(): BelongsTo
