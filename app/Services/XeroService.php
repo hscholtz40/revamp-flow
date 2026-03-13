@@ -4602,7 +4602,7 @@ class XeroService
                     $creditNote->update(['status' => 'paid']);
                 }
 
-                if ($remaining > 0.01 && $creditNote->status === 'paid') {
+                if (!$creditNote->invoice_id && $remaining > 0.01 && $creditNote->status === 'paid') {
                     $creditNote->update(['status' => 'authorised']);
                 }
             }

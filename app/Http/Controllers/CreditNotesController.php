@@ -514,7 +514,9 @@ class CreditNotesController extends Controller
                 $creditNote->update(['status' => 'paid']);
             }
 
-            if ($remaining > 0.01 && $creditNote->status === 'paid') {
+            // Invoice-linked notes can legitimately stay paid when the credit has been allocated
+            // to settle the invoice, even if no refund payments exist on the note itself.
+            if (!$creditNote->invoice_id && $remaining > 0.01 && $creditNote->status === 'paid') {
                 $creditNote->update(['status' => 'authorised']);
             }
         }
