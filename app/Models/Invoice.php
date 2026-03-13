@@ -129,20 +129,25 @@ class Invoice extends Model
                     return $number;
                 }
 
-                return self::generateLegacyInvoiceNumber();
+                return self::generateLegacyInvoiceNumber($companyId);
             });
         }
 
-        return self::generateLegacyInvoiceNumber();
+        return self::generateLegacyInvoiceNumber($companyId);
     }
 
-    private static function generateLegacyInvoiceNumber(): string
+    private static function generateLegacyInvoiceNumber(?int $companyId = null): string
     {
         $year = date('Y');
         $month = date('m');
         
         // Get the last invoice number for this year/month
-        $lastInvoice = static::where('invoice_number', 'like', "INV-{$year}{$month}%")
+        $lastInvoiceQuery = static::where('invoice_number', 'like', "INV-{$year}{$month}%");
+        if ($companyId !== null) {
+            $lastInvoiceQuery->where('company_id', $companyId);
+        }
+
+        $lastInvoice = $lastInvoiceQuery
             ->orderBy('invoice_number', 'desc')
             ->first();
         

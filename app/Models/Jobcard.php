@@ -190,7 +190,8 @@ class Jobcard extends Model
         $month = date('m');
         
         // Get the last job number for this year/month
-        $lastJob = static::where('job_number', 'like', "{$prefix}{$year}{$month}%")
+        $lastJob = static::where('company_id', $companyId)
+            ->where('job_number', 'like', "{$prefix}{$year}{$month}%")
             ->orderBy('job_number', 'desc')
             ->first();
         

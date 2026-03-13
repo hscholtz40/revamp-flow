@@ -98,7 +98,8 @@ class Quote extends Model
         $month = date('m');
         
         // Get the last quote number for this year/month
-        $lastQuote = static::where('quote_number', 'like', "{$prefix}{$year}{$month}%")
+        $lastQuote = static::where('company_id', $companyId)
+            ->where('quote_number', 'like', "{$prefix}{$year}{$month}%")
             ->orderBy('quote_number', 'desc')
             ->first();
         

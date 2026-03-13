@@ -96,7 +96,8 @@ class CreditNote extends Model
         }
 
         $prefix = 'CN-' . date('Ym');
-        $lastCN = static::where('credit_note_number', 'like', $prefix . '%')
+        $lastCN = static::where('company_id', $companyId)
+            ->where('credit_note_number', 'like', $prefix . '%')
             ->orderByRaw('CAST(SUBSTRING(credit_note_number, ' . (strlen($prefix) + 1) . ') AS UNSIGNED) DESC')
             ->first();
 

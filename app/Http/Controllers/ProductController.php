@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\PurchaseOrderItem;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -141,8 +142,18 @@ class ProductController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'type' => ['required', 'in:product,service'],
-            'sku' => ['nullable', 'string', 'max:100', 'unique:products,sku'],
-            'barcode' => ['nullable', 'string', 'max:255', 'unique:products,barcode'],
+            'sku' => [
+                'nullable',
+                'string',
+                'max:100',
+                Rule::unique('products', 'sku')->where(fn ($query) => $query->where('company_id', $currentCompany->id)),
+            ],
+            'barcode' => [
+                'nullable',
+                'string',
+                'max:255',
+                Rule::unique('products', 'barcode')->where(fn ($query) => $query->where('company_id', $currentCompany->id)),
+            ],
             'price' => ['required', 'numeric', 'min:0'],
             'cost' => ['nullable', 'numeric', 'min:0'],
             'unit' => ['required', 'string', 'max:50'],
@@ -210,12 +221,28 @@ class ProductController extends Controller
      */
     public function update(Request $request, Product $product): RedirectResponse
     {
+        $currentCompany = auth()->user()->getCurrentCompany();
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'type' => ['required', 'in:product,service'],
-            'sku' => ['nullable', 'string', 'max:100', 'unique:products,sku,' . $product->id],
-            'barcode' => ['nullable', 'string', 'max:255', 'unique:products,barcode,' . $product->id],
+            'sku' => [
+                'nullable',
+                'string',
+                'max:100',
+                Rule::unique('products', 'sku')
+                    ->where(fn ($query) => $query->where('company_id', $currentCompany->id))
+                    ->ignore($product->id),
+            ],
+            'barcode' => [
+                'nullable',
+                'string',
+                'max:255',
+                Rule::unique('products', 'barcode')
+                    ->where(fn ($query) => $query->where('company_id', $currentCompany->id))
+                    ->ignore($product->id),
+            ],
             'price' => ['required', 'numeric', 'min:0'],
             'cost' => ['nullable', 'numeric', 'min:0'],
             'unit' => ['required', 'string', 'max:50'],

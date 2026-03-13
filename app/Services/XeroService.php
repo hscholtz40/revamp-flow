@@ -1804,7 +1804,6 @@ class XeroService
                             if ($invoiceNumber) {
                                 $existingInvoice = Invoice::where('company_id', $currentCompany->id)
                                     ->where('invoice_number', $invoiceNumber)
-                                    ->whereNull('xero_invoice_id')
                                     ->first();
                             }
                         }
@@ -2273,9 +2272,19 @@ class XeroService
 
             $xeroInvoice = $response->json()['Invoices'][0];
             
-            // Find local invoice by Xero invoice ID or reference
-            $invoice = Invoice::where('invoice_number', $xeroInvoice['Reference'])
-                ->orWhere('xero_invoice_id', $xeroInvoiceId)
+            $currentCompany = $this->getCompany();
+
+            // Find local invoice by Xero ID or invoice number within the active company.
+            $invoice = Invoice::where('company_id', $currentCompany->id)
+                ->where(function ($query) use ($xeroInvoice, $xeroInvoiceId) {
+                    $invoiceNumber = $xeroInvoice['Reference'] ?? $xeroInvoice['InvoiceNumber'] ?? null;
+
+                    $query->where('xero_invoice_id', $xeroInvoiceId);
+
+                    if ($invoiceNumber) {
+                        $query->orWhere('invoice_number', $invoiceNumber);
+                    }
+                })
                 ->first();
 
             if ($invoice) {
@@ -3262,7 +3271,6 @@ class XeroService
                         if (!$existingQuote) {
                             $existingQuote = Quote::where('company_id', $currentCompany->id)
                                 ->where('quote_number', $xeroQuote['QuoteNumber'])
-                                ->whereNull('xero_quote_id')
                                 ->first();
                         }
 
@@ -5913,7 +5921,6 @@ class XeroService
                         if (!$existing && !empty($xeroNote['CreditNoteNumber'])) {
                             $existing = CreditNote::where('company_id', $currentCompany->id)
                                 ->where('credit_note_number', $xeroNote['CreditNoteNumber'])
-                                ->whereNull('xero_credit_note_id')
                                 ->first();
                         }
 
@@ -6853,7 +6860,6 @@ class XeroService
                         if (!$existing && !empty($xeroPODetails['PurchaseOrderNumber'])) {
                             $existing = PurchaseOrder::where('company_id', $currentCompany->id)
                                 ->where('po_number', $xeroPODetails['PurchaseOrderNumber'])
-                                ->whereNull('xero_purchase_order_id')
                                 ->first();
                         }
 
