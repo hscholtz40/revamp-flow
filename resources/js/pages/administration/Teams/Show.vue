@@ -7,11 +7,6 @@
         { title: props.team.name, href: '#' }
     ]">
         <div class="p-4 space-y-6">
-            <!-- Flash Messages -->
-            <div v-if="$page.props.flash?.success" class="rounded-lg bg-green-100 border border-green-400 px-4 py-3 text-green-700">
-                {{ $page.props.flash.success }}
-            </div>
-
             <!-- Header -->
             <div class="rounded-lg bg-white border border-gray-200 p-6 shadow-sm">
                 <div class="flex items-center justify-between">

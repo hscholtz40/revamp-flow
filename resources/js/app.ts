@@ -1,9 +1,12 @@
 import '../css/app.css';
+import 'vue-sonner/style.css';
 
 import { createInertiaApp, router } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
+import FlashToasts from '@/components/FlashToasts.vue';
+import { Toaster } from 'vue-sonner';
 import type { DefineComponent } from 'vue';
-import { createApp, h } from 'vue';
+import { Fragment, createApp, h } from 'vue';
 import { initializeTheme } from './composables/useAppearance';
 
 const appName = import.meta.env.VITE_APP_NAME || 'JobCardOnline';
@@ -16,7 +19,19 @@ createInertiaApp({
             import.meta.glob<DefineComponent>('./pages/**/*.vue'),
         ),
     setup({ el, App, props, plugin }) {
-        createApp({ render: () => h(App, props) })
+        createApp({
+            render: () =>
+                h(Fragment, [
+                    h(App, props),
+                    h(Toaster, {
+                        closeButton: true,
+                        position: 'top-right',
+                        richColors: true,
+                        theme: 'system',
+                    }),
+                    h(FlashToasts),
+                ]),
+        })
             .use(plugin)
             .mount(el);
     },

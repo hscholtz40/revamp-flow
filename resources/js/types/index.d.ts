@@ -81,6 +81,13 @@ export type AppPageProps<
     name: string;
     quote: { message: string; author: string };
     auth: Auth;
+    flash?: {
+        success?: string | null;
+        error?: string | null;
+        warning?: string | null;
+        info?: string | null;
+        status?: string | null;
+    };
     sidebarOpen: boolean;
 };
 

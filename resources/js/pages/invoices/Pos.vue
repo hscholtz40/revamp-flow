@@ -325,10 +325,6 @@ const submit = () => {
                 <Link :href="invoices.index().url" class="rounded border px-3 py-2 text-sm">Back to Invoices</Link>
             </div>
 
-            <div v-if="($page.props.flash as any)?.success" class="rounded-lg border border-green-300 bg-green-50 px-4 py-3 text-green-800">
-                {{ ($page.props.flash as any).success }}
-            </div>
-
             <form @submit.prevent="submit" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div class="lg:col-span-2 space-y-6">
                     <div class="bg-white border rounded-lg p-5 grid grid-cols-1 md:grid-cols-4 gap-4">

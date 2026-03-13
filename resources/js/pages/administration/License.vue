@@ -35,13 +35,6 @@ const submit = () => {
         { title: 'License', href: '/administration/license' }
     ]">
         <div class="p-4">
-            <div v-if="$page.props.flash?.success" class="mb-4 rounded-lg border border-green-400 bg-green-100 px-4 py-3 text-green-700">
-                {{ $page.props.flash.success }}
-            </div>
-            <div v-if="$page.props.flash?.error" class="mb-4 rounded-lg border border-red-400 bg-red-100 px-4 py-3 text-red-700">
-                {{ $page.props.flash.error }}
-            </div>
-
             <h1 class="mb-2 text-2xl font-bold">Instance License</h1>
             <p class="mb-6 text-sm text-gray-600">
                 This instance must have a valid license key linked to this URL before normal usage is allowed.

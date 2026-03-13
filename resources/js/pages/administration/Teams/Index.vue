@@ -6,11 +6,6 @@
         { title: 'Teams', href: '#' }
     ]">
         <div class="p-4">
-            <!-- Flash Messages -->
-            <div v-if="$page.props.flash?.success" class="mb-4 rounded-lg bg-green-100 border border-green-400 px-4 py-3 text-green-700">
-                {{ $page.props.flash.success }}
-            </div>
-
             <div class="flex items-center justify-between gap-3 mb-6">
                 <h1 class="text-2xl font-bold text-gray-900">Teams</h1>
                 <Link href="/administration/teams/create" class="rounded bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors">

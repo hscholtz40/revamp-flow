@@ -38,6 +38,13 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         [$message, $author] = str(Inspiring::quotes()->random())->explode('-');
+        $sharedFlash = fn (): array => [
+            'success' => $request->session()->get('success'),
+            'error' => $request->session()->get('error'),
+            'warning' => $request->session()->get('warning'),
+            'info' => $request->session()->get('info'),
+            'status' => $request->session()->get('status'),
+        ];
 
         // Skip ALL database operations if app is not installed yet OR if we're on installer routes
         $isInstalled = file_exists(base_path('.installed'));
@@ -68,6 +75,7 @@ class HandleInertiaRequests extends Middleware
                 'quote' => ['message' => trim($message), 'author' => trim($author)],
                 'currentCompany' => null,
                 'companies' => collect(),
+                'flash' => $sharedFlash,
                 'auth' => [
                     'user' => null,
                     'abilities' => null,
@@ -154,6 +162,7 @@ class HandleInertiaRequests extends Middleware
                 'visible_modules' => $currentCompany->visible_modules,
             ] : null,
             'companies' => $companies,
+            'flash' => $sharedFlash,
             'auth' => [
                 'user' => $userData ?? $parentAuth['user'] ?? null,
                 'abilities' => $this->getUserAbilities($isInstalled, $user, $isInstallerRoute) ?? $parentAuth['abilities'] ?? null,

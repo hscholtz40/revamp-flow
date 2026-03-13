@@ -31,10 +31,6 @@ watch(search, (value) => {
             {{ props.licenseComplianceWarning }}
         </div>
 
-        <div v-if="$page.props.flash?.error" class="mx-4 mt-4 rounded border border-red-300 bg-red-50 px-4 py-3 text-red-700">
-            {{ $page.props.flash.error }}
-        </div>
-
         <div class="flex items-center justify-between gap-3 p-4">
             <input v-model="search" type="search" placeholder="Search users..." class="w-full max-w-sm rounded border px-3 py-2" />
             <Link :href="users.create().url" class="rounded bg-blue-600 px-3 py-2 text-white">New User</Link>

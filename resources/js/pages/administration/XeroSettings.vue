@@ -1,20 +1,6 @@
 <template>
     <AppLayout>
         <div class="space-y-6">
-            <!-- Flash Messages -->
-            <div v-if="$page.props.flash?.success" class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
-                {{ $page.props.flash.success }}
-            </div>
-            <div v-if="$page.props.flash?.warning" class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded">
-                {{ $page.props.flash.warning }}
-            </div>
-            <div v-if="$page.props.flash?.info" class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
-                {{ $page.props.flash.info }}
-            </div>
-            <div v-if="$page.props.flash?.error" class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-                {{ $page.props.flash.error }}
-            </div>
-            
             <!-- Authentication Issues Warning -->
             <div v-if="settings.needs_reauthorization" class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
                 <div class="flex items-center justify-between">
