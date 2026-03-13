@@ -5511,10 +5511,23 @@ class XeroService
                     if (isset($xeroAccount['Type'])) {
                         $typeMap = [
                             'ASSET' => 'Asset',
+                            'BANK' => 'Asset',
+                            'CURRASSET' => 'Asset',
+                            'FIXED' => 'Asset',
+                            'INVENTORY' => 'Asset',
+                            'PREPAYMENT' => 'Asset',
                             'EQUITY' => 'Equity',
                             'EXPENSE' => 'Expense',
+                            'DEPRECIATN' => 'Expense',
+                            'DIRECTCOSTS' => 'Expense',
+                            'OVERHEADS' => 'Expense',
                             'LIABILITY' => 'Liability',
+                            'CURRLIAB' => 'Liability',
+                            'PAYGLIABILITY' => 'Liability',
+                            'TERMLIAB' => 'Liability',
                             'REVENUE' => 'Revenue',
+                            'OTHERINCOME' => 'Revenue',
+                            'SALES' => 'Revenue',
                         ];
                         $accountType = $typeMap[$xeroAccount['Type']] ?? 'Expense';
                     }
@@ -5524,11 +5537,12 @@ class XeroService
                         ->where('xero_account_id', $xeroAccount['AccountID'])
                         ->first();
 
-                    // If not found by Xero ID, check by account code
+                    // If not found by Xero ID, check by account code so we can relink
+                    // pre-existing or previously mismatched local accounts instead of failing
+                    // on the unique account_code constraint.
                     if (!$existingAccount && !empty($accountCode)) {
                         $existingAccount = ChartOfAccount::where('company_id', $currentCompany->id)
                             ->where('account_code', $accountCode)
-                            ->whereNull('xero_account_id')
                             ->first();
                     }
 

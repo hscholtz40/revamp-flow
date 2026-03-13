@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ChartOfAccount;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -52,7 +53,13 @@ class ChartOfAccountController extends Controller
         $currentCompany = auth()->user()->getCurrentCompany();
         
         $validated = $request->validate([
-            'account_code' => ['required', 'string', 'max:50', 'unique:chart_of_accounts,account_code'],
+            'account_code' => [
+                'required',
+                'string',
+                'max:50',
+                Rule::unique('chart_of_accounts', 'account_code')
+                    ->where(fn ($query) => $query->where('company_id', $currentCompany->id)),
+            ],
             'account_name' => ['required', 'string', 'max:255'],
             'account_type' => ['required', 'in:Asset,Liability,Equity,Revenue,Expense'],
             'parent_account_id' => ['nullable', 'exists:chart_of_accounts,id'],
@@ -137,7 +144,14 @@ class ChartOfAccountController extends Controller
         }
 
         $validated = $request->validate([
-            'account_code' => ['required', 'string', 'max:50', 'unique:chart_of_accounts,account_code,' . $chartOfAccount->id],
+            'account_code' => [
+                'required',
+                'string',
+                'max:50',
+                Rule::unique('chart_of_accounts', 'account_code')
+                    ->where(fn ($query) => $query->where('company_id', $currentCompany->id))
+                    ->ignore($chartOfAccount->id),
+            ],
             'account_name' => ['required', 'string', 'max:255'],
             'account_type' => ['required', 'in:Asset,Liability,Equity,Revenue,Expense'],
             'parent_account_id' => ['nullable', 'exists:chart_of_accounts,id'],
