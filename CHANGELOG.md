@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026-03-13
+## 2026-03-13 - version 1.7.5
 
 - Added a global toast notification system for Inertia flash messages and removed page-specific flash banners so success, error, warning, info, and status messages display consistently across the app.
 - Fixed the dashboard `Your Sales Performance` revenue figures to subtract allocated, non-voided credit notes from invoice totals so sales trends reflect net invoice value.
