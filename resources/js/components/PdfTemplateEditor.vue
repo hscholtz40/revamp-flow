@@ -279,8 +279,8 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
     text-align: left;
 }
 .company-logo {
-    max-width: 200px;
-    max-height: 100px;
+    max-width: 220px;
+    max-height: 110px;
     margin-bottom: 10px;
 }
 .company-name {
@@ -658,8 +658,8 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
     text-align: left;
 }
 .company-logo {
-    max-width: 200px;
-    max-height: 100px;
+    max-width: 220px;
+    max-height: 110px;
     margin-bottom: 10px;
 }
 .company-name {
@@ -1007,8 +1007,8 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
     text-align: left;
 }
 .company-logo {
-    max-width: 200px;
-    max-height: 100px;
+    max-width: 220px;
+    max-height: 110px;
     margin-bottom: 10px;
 }
 .company-name {
@@ -1396,8 +1396,8 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
     text-align: left;
 }
 .company-logo {
-    max-width: 200px;
-    max-height: 100px;
+    max-width: 220px;
+    max-height: 110px;
     margin-bottom: 10px;
 }
 .company-name {
@@ -1745,8 +1745,8 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
     text-align: left;
 }
 .company-logo {
-    max-width: 200px;
-    max-height: 100px;
+    max-width: 220px;
+    max-height: 110px;
     margin-bottom: 10px;
 }
 .company-name {

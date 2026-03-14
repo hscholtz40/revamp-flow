@@ -284,8 +284,8 @@ body {
 }
 
 .company-logo {
-    max-width: 200px;
-    max-height: 100px;
+    max-width: 220px;
+    max-height: 110px;
     margin-bottom: 10px;
 }
 
