@@ -31,7 +31,6 @@ const paymentTermsOptions = ['COD', 'Net 7 Days', 'Net 14 Days', 'Net 30 Days', 
 const paymentMethodOptions = [
     { value: 'cash', label: 'Cash' },
     { value: 'card', label: 'Card' },
-    { value: 'eft', label: 'EFT' },
     { value: 'account', label: 'Account' },
 ];
 const showProductSuggestions = ref<Record<number, boolean>>({});

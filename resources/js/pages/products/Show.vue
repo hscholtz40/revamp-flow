@@ -43,6 +43,7 @@ interface InvoiceLineItemWithInvoice {
         id: number;
         invoice_number: string;
         customer_id: number;
+        invoice_date?: string;
         customer?: { id: number; name: string };
     };
 }
@@ -63,6 +64,8 @@ interface PaginatedInvoiceLineItems {
 interface Props {
     product: Product;
     recentInvoiceLineItems?: PaginatedInvoiceLineItems;
+    invoiceUsageSort?: string;
+    invoiceUsageDir?: 'asc' | 'desc';
 }
 
 const props = defineProps<Props>();
@@ -94,6 +97,21 @@ function deleteProduct() {
     if (confirm(`Are you sure you want to delete "${props.product.name}"?`)) {
         // This would need to be implemented with a form or router.delete
     }
+}
+
+function invoiceUsageSortUrl(column: string) {
+    const sort = column;
+    const dir = props.invoiceUsageSort === column && props.invoiceUsageDir === 'desc' ? 'asc' : 'desc';
+    const url = new URL(products.show(props.product.id).url, window.location.origin);
+    url.searchParams.set('invoice_usage_sort', sort);
+    url.searchParams.set('invoice_usage_dir', dir);
+    url.searchParams.set('invoice_usage_page', '1'); // Reset to page 1 when sorting
+    return url.pathname + url.search;
+}
+
+function invoiceUsageSortIndicator(column: string) {
+    if (props.invoiceUsageSort !== column) return '↕';
+    return props.invoiceUsageDir === 'asc' ? '↑' : '↓';
 }
 </script>
 
@@ -455,9 +473,26 @@ function deleteProduct() {
                     <table class="w-full">
                         <thead class="bg-gray-50 border-b border-gray-200">
                             <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
-                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Unit Price</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    <Link :href="invoiceUsageSortUrl('invoice_number')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                        Invoice <span>{{ invoiceUsageSortIndicator('invoice_number') }}</span>
+                                    </Link>
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    <Link :href="invoiceUsageSortUrl('customer')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                        Customer <span>{{ invoiceUsageSortIndicator('customer') }}</span>
+                                    </Link>
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    <Link :href="invoiceUsageSortUrl('date')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                        Date <span>{{ invoiceUsageSortIndicator('date') }}</span>
+                                    </Link>
+                                </th>
+                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    <Link :href="invoiceUsageSortUrl('unit_price')" class="inline-flex items-center gap-1 hover:text-gray-700 justify-end">
+                                        Unit Price <span>{{ invoiceUsageSortIndicator('unit_price') }}</span>
+                                    </Link>
+                                </th>
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
@@ -472,6 +507,9 @@ function deleteProduct() {
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     {{ item.invoice?.customer?.name || '—' }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    {{ item.invoice?.invoice_date ? new Date(item.invoice.invoice_date).toLocaleDateString() : '—' }}
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
                                     R{{ Number(item.unit_price).toFixed(2) }}

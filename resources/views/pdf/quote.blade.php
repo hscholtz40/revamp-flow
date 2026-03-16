@@ -67,8 +67,8 @@
         }
         
         .company-logo {
-            max-width: 280px;
-            max-height: 160px;
+            max-width: 360px;
+            max-height: 240px;
             margin-bottom: 10px;
         }
         
@@ -164,7 +164,7 @@
             display: table-cell;
             width: 25%;
             border: 1px solid #000;
-            padding: 8px;
+            padding: 2px;
             text-align: center;
             font-size: 11px;
         }
@@ -475,14 +475,13 @@
         </div>
     </div>
     
-    <div class="terms-section">
+    <div class="terms-section" style="text-align: center;">
         @if($quote->notes)
             <h4>Notes</h4>
             <p>{{ $quote->notes }}</p>
         @endif
         <h4>Terms & Conditions</h4>
-        <p>This quote is valid for 30 days from the date of issue.</p>
-        <p>Prices are subject to change without notice.</p>
+        <p>This quote is valid for 30 days from the date of issue. Prices are subject to change without notice.</p>
         @if($quote->terms_conditions)
             <p>{{ $quote->terms_conditions }}</p>
         @endif

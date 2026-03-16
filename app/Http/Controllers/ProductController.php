@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Category;
 use App\Models\Company;
+use App\Models\Invoice;
 use App\Models\InvoiceLineItem;
 use App\Models\Product;
 use App\Models\PurchaseOrderItem;
@@ -192,18 +193,48 @@ class ProductController extends Controller
     {
         $product->load('supplier', 'batches', 'serialNumbers');
 
-        $invoiceLineItemsQuery = InvoiceLineItem::where('product_id', $product->id)
+        $sortBy = $request->input('invoice_usage_sort', 'date');
+        $sortDir = $request->input('invoice_usage_dir', 'desc') === 'asc' ? 'asc' : 'desc';
+        $sortable = ['date', 'invoice_number', 'customer', 'unit_price'];
+        if (! in_array($sortBy, $sortable, true)) {
+            $sortBy = 'date';
+        }
+
+        $invoiceLineItemsQuery = InvoiceLineItem::where('invoice_line_items.product_id', $product->id)
             ->whereHas('invoice', fn ($q) => $q->where('company_id', $product->company_id))
-            ->with(['invoice:id,invoice_number,customer_id', 'invoice.customer:id,name'])
-            ->orderBy('id', 'desc');
+            ->with(['invoice:id,invoice_number,customer_id,invoice_date', 'invoice.customer:id,name']);
+
+        match ($sortBy) {
+            'date' => $invoiceLineItemsQuery->orderBy(
+                Invoice::select('invoice_date')->whereColumn('invoices.id', 'invoice_line_items.invoice_id')->limit(1),
+                $sortDir
+            )->orderBy('invoice_line_items.id', $sortDir),
+            'invoice_number' => $invoiceLineItemsQuery->orderBy(
+                Invoice::select('invoice_number')->whereColumn('invoices.id', 'invoice_line_items.invoice_id')->limit(1),
+                $sortDir
+            )->orderBy('invoice_line_items.id', $sortDir),
+            'customer' => $invoiceLineItemsQuery
+                ->join('invoices', 'invoice_line_items.invoice_id', '=', 'invoices.id')
+                ->leftJoin('customers', 'invoices.customer_id', '=', 'customers.id')
+                ->orderBy('customers.name', $sortDir)
+                ->orderBy('invoice_line_items.id', $sortDir),
+            'unit_price' => $invoiceLineItemsQuery->orderBy('invoice_line_items.unit_price', $sortDir)->orderBy('invoice_line_items.id', $sortDir),
+            default => $invoiceLineItemsQuery->orderBy('invoice_line_items.id', 'desc'),
+        };
 
         $recentInvoiceLineItems = $invoiceLineItemsQuery
-            ->paginate(10, ['id', 'invoice_id', 'product_id', 'description', 'quantity', 'unit_price', 'total'], 'invoice_usage_page')
-            ->withQueryString();
+            ->paginate(10, ['invoice_line_items.id', 'invoice_line_items.invoice_id', 'invoice_line_items.product_id', 'invoice_line_items.description', 'invoice_line_items.quantity', 'invoice_line_items.unit_price', 'invoice_line_items.total'], 'invoice_usage_page')
+            ->withQueryString()
+            ->appends([
+                'invoice_usage_sort' => $sortBy,
+                'invoice_usage_dir' => $sortDir,
+            ]);
 
         return Inertia::render('products/Show', [
             'product' => $product,
             'recentInvoiceLineItems' => $recentInvoiceLineItems,
+            'invoiceUsageSort' => $sortBy,
+            'invoiceUsageDir' => $sortDir,
         ]);
     }
 
