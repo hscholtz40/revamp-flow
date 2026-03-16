@@ -228,9 +228,12 @@ class Quote extends Model
                 'description' => $lineItem->description,
                 'quantity' => $lineItem->quantity,
                 'unit_price' => $lineItem->unit_price,
+                'discount_amount' => $lineItem->discount_amount ?? 0,
+                'discount_percentage' => $lineItem->discount_percentage ?? 0,
                 'total' => $lineItem->total,
                 'tax_rate_id' => $lineItem->tax_rate_id,
                 'tax_amount' => $lineItem->tax_amount,
+                'account_id' => $lineItem->account_id,
                 'sort_order' => $lineItem->sort_order,
             ]);
         }
@@ -279,9 +282,12 @@ class Quote extends Model
                 'description' => $lineItem->description,
                 'quantity' => $lineItem->quantity,
                 'unit_price' => $lineItem->unit_price,
+                'discount_amount' => $lineItem->discount_amount ?? 0,
+                'discount_percentage' => $lineItem->discount_percentage ?? 0,
                 'total' => $lineItem->total,
                 'tax_rate_id' => $lineItem->tax_rate_id,
                 'tax_amount' => $lineItem->tax_amount,
+                'account_id' => $lineItem->account_id,
                 'sort_order' => $lineItem->sort_order,
             ]);
         }

@@ -10,7 +10,6 @@
             line-height: 1.4;
             color: #000;
             margin: 0;
-            padding: 14px;
             font-size: 12px;
             background: white;
         }
@@ -67,8 +66,8 @@
         }
         
         .company-logo {
-            max-width: 360px;
-            max-height: 240px;
+            max-width: 380px;
+            max-height: 260px;
             margin-bottom: 10px;
         }
         
@@ -187,8 +186,7 @@
         
         .line-items-table th,
         .line-items-table td {
-            border-bottom: 1px solid #000;
-            padding: 4px;
+            padding: 2px;
             font-size: 11px;
         }
         
@@ -304,7 +302,6 @@
             @endif
             
             <div class="company-details">
-                <p><strong>{{ $company->legal_name ?? $company->name }}</strong></p>
                 @if($company->address)
                     <p>{{ $company->address }}</p>
                 @endif
@@ -312,16 +309,16 @@
                     <p>{{ $company->city }}</p>
                 @endif
                 @if($company->vat_number)
-                    <p>VAT Number {{ $company->vat_number }}</p>
+                    <p>VAT Number:   {{ $company->vat_number }}</p>
                 @endif
                 @if($company->phone)
-                    <p>Telephone {{ $company->phone }}</p>
+                    <p>Telephone:   {{ $company->phone }}</p>
                 @endif
                 @if($company->email)
-                    <p>Email {{ $company->email }}</p>
+                    <p>Email:   {{ $company->email }}</p>
                 @endif
                 @if($company->fax)
-                    <p>Fax {{ $company->fax }}</p>
+                    <p>Fax:   {{ $company->fax }}</p>
                 @endif
             </div>
         </div>
