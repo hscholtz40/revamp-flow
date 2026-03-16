@@ -32,6 +32,7 @@
 - Fixed quote/jobcard-to-invoice conversion to persist the currently logged-in user as `salesperson_id` on the created invoice.
 - Updated document list defaults to sort by `created_at` descending (newest first) for quotes, invoices, jobcards, purchase orders, and credit notes.
 - Updated invoice line fallback account selection to prefer account code `1000` whenever no account is selected, with default sales account as a secondary fallback.
+- Fixed invoice list sort persistence by sending resolved sort filters back from the controller and adding a sortable `Created` column in the invoices table.
 
 ## 2026-03-13 - version 1.7.5
 

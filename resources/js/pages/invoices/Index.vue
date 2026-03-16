@@ -126,6 +126,12 @@
                                     </button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    <button @click="toggleSort('created_at')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                        Created
+                                        <span>{{ sortIndicator('created_at') }}</span>
+                                    </button>
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Actions
                                 </th>
                             </tr>
@@ -166,6 +172,9 @@
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="text-sm font-medium text-gray-900">{{ formatCurrency(invoice.total) }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="text-sm text-gray-900">{{ formatDate(invoice.created_at) }}</div>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" @click.stop>
                                     <div class="flex items-center gap-2">
@@ -283,6 +292,7 @@ interface Invoice {
     };
     invoice_date: string;
     due_date: string;
+    created_at: string;
     status: string;
     total: number;
 }
@@ -334,7 +344,7 @@ const search = ref(props.filters.search || '');
 const status = ref(props.filters.status || '');
 const customerId = ref(props.filters.customer_id || '');
 const showPaid = ref(props.filters.show_paid || false);
-const sortBy = ref(props.filters.sort_by || 'invoice_number');
+const sortBy = ref(props.filters.sort_by || 'created_at');
 const sortDir = ref<'asc' | 'desc'>(props.filters.sort_dir || 'desc');
 
 // Helper functions for edit/delete permissions
