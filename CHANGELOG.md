@@ -27,6 +27,7 @@
 - Fixed invoice PDFs so the Description block renders when only `description` is populated (without requiring `notes` or `terms`).
 - Allowed negative line-item unit amounts/costs across quotes, jobcards, invoices, credit notes, and purchase orders by removing positive-only validation/UI constraints and preserving negative totals in calculations.
 - Added the customer VAT number to the customer detail view so VAT/tax registration information is visible on the show page.
+- Fixed POS invoice creation to consistently persist the currently logged-in user as `salesperson_id`.
 
 ## 2026-03-13 - version 1.7.5
 

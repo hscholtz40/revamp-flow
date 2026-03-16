@@ -250,13 +250,15 @@ class InvoicesController extends Controller
             ? trim((string) $validated['terms'])
             : ((string) ($customer->terms ?: 'COD'));
 
-        $created = DB::transaction(function () use ($validated, $currentCompany, $invoiceNumber, $dueDate, $terms, $invoiceDate, $defaultTaxRateId, $defaultTaxRateRate, $defaultAccountId) {
+        $salespersonId = auth()->id();
+
+        $created = DB::transaction(function () use ($validated, $currentCompany, $invoiceNumber, $dueDate, $terms, $invoiceDate, $defaultTaxRateId, $defaultTaxRateRate, $defaultAccountId, $salespersonId) {
             $invoice = Invoice::create([
                 'invoice_number' => $invoiceNumber,
                 'title' => $invoiceNumber,
                 'description' => 'POS Sale',
                 'customer_id' => $validated['customer_id'],
-                'salesperson_id' => auth()->id(),
+                'salesperson_id' => $salespersonId,
                 'company_id' => $currentCompany->id,
                 'status' => 'sent',
                 'invoice_date' => $invoiceDate->toDateString(),
@@ -265,6 +267,11 @@ class InvoicesController extends Controller
                 'notes' => $validated['notes'] ?? null,
                 'terms' => $terms,
             ]);
+
+            // POS invoices should always retain the currently logged-in user as salesperson.
+            if (!$invoice->salesperson_id && $salespersonId) {
+                $invoice->update(['salesperson_id' => $salespersonId]);
+            }
 
             $stockService = new StockService();
             foreach ($validated['line_items'] as $index => $lineItemData) {
