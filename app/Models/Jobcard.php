@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Facades\DB;
 
 class Jobcard extends Model
@@ -100,6 +101,11 @@ class Jobcard extends Model
     public function lineItems(): HasMany
     {
         return $this->hasMany(JobcardLineItem::class)->orderBy('sort_order');
+    }
+
+    public function lineGroups(): MorphMany
+    {
+        return $this->morphMany(LineGroup::class, 'line_groupable')->orderBy('sort_order');
     }
 
     public function timeEntries(): HasMany
@@ -321,11 +327,32 @@ class Jobcard extends Model
             'source_id' => $this->id,
         ]);
 
-        // Copy line items
+        $this->load('lineItems.lineGroup', 'lineGroups');
+        $groupMap = [];
+        foreach ($this->lineGroups as $group) {
+            $newGroup = LineGroup::create([
+                'line_groupable_type' => Invoice::class,
+                'line_groupable_id' => $invoice->id,
+                'name' => $group->name,
+                'sort_order' => $group->sort_order,
+            ]);
+            $groupMap[$group->id] = $newGroup->id;
+        }
+        if (empty($groupMap)) {
+            $defaultGroup = LineGroup::createDefaultFor($invoice);
+            $defaultGroupId = $defaultGroup->id;
+        } else {
+            $defaultGroupId = $groupMap[$this->lineGroups->first()?->id] ?? reset($groupMap);
+        }
+
         $sortOrder = 0;
         foreach ($this->lineItems as $lineItem) {
+            $groupId = ($lineItem->line_group_id && isset($groupMap[$lineItem->line_group_id]))
+                ? $groupMap[$lineItem->line_group_id]
+                : $defaultGroupId;
             InvoiceLineItem::create([
                 'invoice_id' => $invoice->id,
+                'line_group_id' => $groupId,
                 'product_id' => $lineItem->product_id,
                 'description' => $lineItem->description,
                 'quantity' => $lineItem->quantity,
@@ -400,6 +427,7 @@ class Jobcard extends Model
                 
                 $lineItem = InvoiceLineItem::create([
                     'invoice_id' => $invoice->id,
+                    'line_group_id' => $defaultGroupId,
                     'product_id' => null,
                     'description' => $description,
                     'quantity' => $totalHours,

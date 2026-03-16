@@ -70,7 +70,7 @@ const moduleVariables: Record<string, Array<{ label: string; value: string; cate
         { label: 'Customer Phone', value: '{{invoice.customer.phone}}', category: 'Customer' },
         { label: 'Customer VAT Number', value: '{{invoice.customer.vat_number}}', category: 'Customer' },
         // Line Items
-        { label: 'Line Items Loop', value: '{{#each invoice.lineItems}}{{this.description}}{{/each}}', category: 'Line Items' },
+        { label: 'Line Items Loop', value: '{{#each invoice.lineItems}}{{this.description_with_code}}{{/each}}', category: 'Line Items' },
     ],
     quote: [
         // Company variables (same as invoice)
@@ -104,7 +104,7 @@ const moduleVariables: Record<string, Array<{ label: string; value: string; cate
         { label: 'Customer Phone', value: '{{quote.customer.phone}}', category: 'Customer' },
         { label: 'Customer VAT Number', value: '{{quote.customer.vat_number}}', category: 'Customer' },
         // Line Items
-        { label: 'Line Items Loop', value: '{{#each quote.lineItems}}{{this.description}}{{/each}}', category: 'Line Items' },
+        { label: 'Line Items Loop', value: '{{#each quote.lineItems}}{{this.description_with_code}}{{/each}}', category: 'Line Items' },
     ],
     jobcard: [
         // Company variables
@@ -149,7 +149,7 @@ const moduleVariables: Record<string, Array<{ label: string; value: string; cate
         { label: 'Customer Phone', value: '{{jobcard.customer.phone}}', category: 'Customer' },
         { label: 'Customer VAT Number', value: '{{jobcard.customer.vat_number}}', category: 'Customer' },
         // Line Items
-        { label: 'Line Items Loop', value: '{{#each jobcard.lineItems}}{{this.description}}{{/each}}', category: 'Line Items' },
+        { label: 'Line Items Loop', value: '{{#each jobcard.lineItems}}{{this.description_with_code}}{{/each}}', category: 'Line Items' },
     ],
     'proforma-invoice': [
         // Same as quote
@@ -183,7 +183,7 @@ const moduleVariables: Record<string, Array<{ label: string; value: string; cate
         { label: 'Customer Phone', value: '{{quote.customer.phone}}', category: 'Customer' },
         { label: 'Customer VAT Number', value: '{{quote.customer.vat_number}}', category: 'Customer' },
         // Line Items
-        { label: 'Line Items Loop', value: '{{#each quote.lineItems}}{{this.description}}{{/each}}', category: 'Line Items' },
+        { label: 'Line Items Loop', value: '{{#each quote.lineItems}}{{this.description_with_code}}{{/each}}', category: 'Line Items' },
     ],
     'purchase-order': [
         // Company variables
@@ -220,7 +220,7 @@ const moduleVariables: Record<string, Array<{ label: string; value: string; cate
         { label: 'Supplier Phone', value: '{{purchaseOrder.supplier.phone}}', category: 'Supplier' },
         { label: 'Supplier Email', value: '{{purchaseOrder.supplier.email}}', category: 'Supplier' },
         // Line Items
-        { label: 'Line Items Loop', value: '{{#each purchaseOrder.items}}{{this.description}}{{/each}}', category: 'Line Items' },
+        { label: 'Line Items Loop', value: '{{#each purchaseOrder.items}}{{this.description_with_code}}{{/each}}', category: 'Line Items' },
     ],
 };
 
@@ -572,7 +572,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
     </thead>
     <tbody><tr data-handlebars-loop-start="{{#each invoice.lineItems}}" data-handlebars-loop-end="{{/each}}">
             <td>{{this.product.sku}}</td>
-            <td>{{this.description}}</td>
+            <td>{{this.description_with_code}}</td>
             <td class="text-right">{{this.quantity}}</td>
             <td class="text-right">R{{this.unit_price}}</td>
             <td class="text-right">{{this.discount_percentage}}%</td>
@@ -850,6 +850,28 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
     font-size: 11px;
     line-height: 1.4;
 }
+.signature-section {
+    clear: both;
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid #000;
+}
+.signature-row {
+    display: table;
+    width: 100%;
+    margin-bottom: 15px;
+}
+.signature-item {
+    display: table-cell;
+    width: 33.33%;
+    text-align: left;
+    font-size: 11px;
+}
+.signature-line {
+    border-bottom: 1px dashed #000;
+    height: 20px;
+    margin-top: 5px;
+}
 .footer {
     position: fixed;
     bottom: 20px;
@@ -943,7 +965,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
         </tr>
     </thead>
     <tbody><!-- {{#each quote.lineItems}} --><tr>
-            <td>{{this.description}}</td>
+            <td>{{this.description_with_code}}</td>
             <td class="text-right">{{this.quantity}}</td>
             <td class="text-right">R{{this.unit_price}}</td>
             <td class="text-right">{{this.discount_percentage}}%</td>
@@ -991,6 +1013,22 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
     <p>Prices are subject to change without notice.</p>
     <p>Payment terms: Net 30 days from invoice date.</p>
     <p>{{quote.terms_conditions}}</p>
+</div>
+<div class="signature-section">
+    <div class="signature-row">
+        <div class="signature-item">
+            <div>Received by</div>
+            <div class="signature-line"></div>
+        </div>
+        <div class="signature-item">
+            <div>Date</div>
+            <div class="signature-line"></div>
+        </div>
+        <div class="signature-item">
+            <div>Signature</div>
+            <div class="signature-line"></div>
+        </div>
+    </div>
 </div>
 <div class="footer">
     <div class="footer-left">
@@ -1325,7 +1363,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
     <tbody>
         <tr data-handlebars-loop-start="{{#each jobcard.lineItems}}" data-handlebars-loop-end="{{/each}}">
             <td>{{this.product.sku}}</td>
-            <td>{{this.description}}</td>
+            <td>{{this.description_with_code}}</td>
             <td class="text-right">{{this.quantity}}</td>
             <td class="text-right">R{{this.unit_price}}</td>
             <td class="text-right">{{this.hours}}</td>
@@ -1598,6 +1636,28 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
     font-size: 11px;
     line-height: 1.4;
 }
+.signature-section {
+    clear: both;
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid #000;
+}
+.signature-row {
+    display: table;
+    width: 100%;
+    margin-bottom: 15px;
+}
+.signature-item {
+    display: table-cell;
+    width: 33.33%;
+    text-align: left;
+    font-size: 11px;
+}
+.signature-line {
+    border-bottom: 1px dashed #000;
+    height: 20px;
+    margin-top: 5px;
+}
 .footer {
     position: fixed;
     bottom: 20px;
@@ -1691,7 +1751,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
         </tr>
     </thead>
     <tbody><!-- {{#each quote.lineItems}} --><tr>
-            <td>{{this.description}}</td>
+            <td>{{this.description_with_code}}</td>
             <td class="text-right">{{this.quantity}}</td>
             <td class="text-right">R{{this.unit_price}}</td>
             <td class="text-right">{{this.discount_percentage}}%</td>
@@ -1738,6 +1798,22 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
     <p>This is a proforma invoice and does not constitute a request for payment.</p>
     <p>Prices are subject to change without notice.</p>
     <p>{{quote.terms_conditions}}</p>
+</div>
+<div class="signature-section">
+    <div class="signature-row">
+        <div class="signature-item">
+            <div>Received by</div>
+            <div class="signature-line"></div>
+        </div>
+        <div class="signature-item">
+            <div>Date</div>
+            <div class="signature-line"></div>
+        </div>
+        <div class="signature-item">
+            <div>Signature</div>
+            <div class="signature-line"></div>
+        </div>
+    </div>
 </div>
 <div class="footer">
     <div class="footer-left">
@@ -2000,7 +2076,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
     </thead>
     <tbody><!-- {{#each purchaseOrder.items}} --><tr>
             <td>{{this.product.sku}}</td>
-            <td>{{this.description}}</td>
+            <td>{{this.description_with_code}}</td>
             <td class="text-right">{{this.quantity}}</td>
             <td class="text-right">R{{this.unit_cost}}</td>
             <td class="text-right">{{#if this.taxRate}}R {{this.tax_amount}}{{else}}—{{/if}}</td>

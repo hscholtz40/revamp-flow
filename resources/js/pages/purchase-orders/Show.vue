@@ -334,12 +334,10 @@ const sendEmail = () => {
                                                             :href="products.show(item.product.id).url"
                                                             class="text-blue-600 hover:text-blue-800 hover:underline"
                                                         >
-                                                            {{ item.product.name }}
+                                                            {{ item.description || item.product.name }}{{ (item.product?.sku || item.product?.barcode) ? ` (${item.product.sku || item.product.barcode})` : '' }}
                                                         </Link>
-                                                        <span v-else>{{ item.product.name }}</span>
+                                                        <span v-else>{{ item.description || item.product?.name }}{{ (item.product?.sku || item.product?.barcode) ? ` (${item.product.sku || item.product.barcode})` : '' }}</span>
                                                     </div>
-                                                    <div v-if="item.product.sku" class="text-xs text-gray-500">{{ item.product.sku }}</div>
-                                                    <div v-if="item.description" class="text-xs text-gray-500">{{ item.description }}</div>
                                                 </div>
                                             </div>
                                         </td>

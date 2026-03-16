@@ -21,7 +21,7 @@
 
             <!-- Filters -->
             <div class="bg-white rounded-lg border p-4 mb-6">
-                <div class="grid grid-cols-1 md:grid-cols-6 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-7 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Search</label>
                         <input
@@ -70,6 +70,16 @@
                         </select>
                     </div>
                     <div class="flex items-end">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input
+                                v-model="showClosed"
+                                type="checkbox"
+                                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span class="text-sm font-medium text-gray-700">Show closed</span>
+                        </label>
+                    </div>
+                    <div class="flex items-end">
                         <button
                             @click="clearFilters"
                             class="w-full rounded border border-gray-300 px-3 py-2 text-gray-700 hover:bg-gray-50"
@@ -103,6 +113,9 @@
                                         Customer
                                         <span>{{ sortIndicator('customer_name') }}</span>
                                     </button>
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Invoice
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Assigned To
@@ -149,6 +162,17 @@
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="text-sm text-gray-900">{{ jobcard.customer.name }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <Link
+                                        v-if="jobcard.invoice"
+                                        :href="invoices.show(jobcard.invoice.id).url"
+                                        @click.stop
+                                        class="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                                    >
+                                        {{ jobcard.invoice.invoice_number }}
+                                    </Link>
+                                    <span v-else class="text-sm text-gray-400">—</span>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div v-if="jobcard.assigned_user" class="flex items-center gap-1.5">
@@ -252,6 +276,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { ref, computed, watch, nextTick } from 'vue';
 import jobcards from '@/routes/jobcards';
+import invoices from '@/routes/invoices';
 
 const page = usePage();
 const isLimitedUser = computed(() => (page.props.auth as any)?.user?.user_type === 'limited');
@@ -277,6 +302,7 @@ interface Jobcard {
         id: number;
         name: string;
     };
+    invoice: { id: number; invoice_number: string } | null;
     assigned_user: AppUser | null;
     assigned_team: TeamOption | null;
 }
@@ -303,6 +329,7 @@ interface Props {
         assigned_to_user_id?: string;
         assigned_to_team_id?: string;
         search?: string;
+        show_closed?: boolean;
         sort_by?: string;
         sort_dir?: 'asc' | 'desc';
     };
@@ -320,6 +347,7 @@ const status = ref(props.filters?.status || '');
 const customerId = ref(props.filters?.customer_id || '');
 const assignedToUserId = ref(props.filters?.assigned_to_user_id || '');
 const assignedToTeamId = ref(props.filters?.assigned_to_team_id || '');
+const showClosed = ref(props.filters?.show_closed ?? false);
 const sortBy = ref(props.filters?.sort_by || 'job_number');
 const sortDir = ref<'asc' | 'desc'>(props.filters?.sort_dir || 'desc');
 
@@ -337,6 +365,7 @@ const clearFilters = () => {
     customerId.value = '';
     assignedToUserId.value = '';
     assignedToTeamId.value = '';
+    showClosed.value = false;
     
     // Navigate to clean URL without filters
     router.get(jobcards.index().url, {}, {
@@ -359,6 +388,7 @@ const toggleSort = (field: string) => {
     if (customerId.value && customerId.value.trim()) params.customer_id = customerId.value.trim();
     if (assignedToUserId.value && assignedToUserId.value.trim()) params.assigned_to_user_id = assignedToUserId.value.trim();
     if (assignedToTeamId.value && assignedToTeamId.value.trim()) params.assigned_to_team_id = assignedToTeamId.value.trim();
+    if (showClosed.value) params.show_closed = '1';
     params.sort_by = sortBy.value;
     params.sort_dir = sortDir.value;
 
@@ -429,7 +459,7 @@ const formatDate = (date: string) => {
 };
 
 // Watch for filter changes and update URL
-watch([search, status, customerId, assignedToUserId, assignedToTeamId], () => {
+watch([search, status, customerId, assignedToUserId, assignedToTeamId, showClosed], () => {
     // Skip if component is not fully initialized
     if (!isInitialized || !props.filters) return;
     
@@ -440,6 +470,7 @@ watch([search, status, customerId, assignedToUserId, assignedToTeamId], () => {
     if (customerId.value && customerId.value.trim()) params.customer_id = customerId.value.trim();
     if (assignedToUserId.value && assignedToUserId.value.trim()) params.assigned_to_user_id = assignedToUserId.value.trim();
     if (assignedToTeamId.value && assignedToTeamId.value.trim()) params.assigned_to_team_id = assignedToTeamId.value.trim();
+    if (showClosed.value) params.show_closed = '1';
     params.sort_by = sortBy.value;
     params.sort_dir = sortDir.value;
     

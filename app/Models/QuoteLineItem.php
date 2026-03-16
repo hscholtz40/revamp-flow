@@ -12,6 +12,7 @@ class QuoteLineItem extends Model
 
     protected $fillable = [
         'quote_id',
+        'line_group_id',
         'product_id',
         'description',
         'quantity',
@@ -43,6 +44,11 @@ class QuoteLineItem extends Model
     public function quote(): BelongsTo
     {
         return $this->belongsTo(Quote::class);
+    }
+
+    public function lineGroup(): BelongsTo
+    {
+        return $this->belongsTo(LineGroup::class);
     }
 
     public function product(): BelongsTo

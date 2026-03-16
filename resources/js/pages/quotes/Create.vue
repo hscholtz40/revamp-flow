@@ -251,6 +251,41 @@
                         <h2 class="text-lg font-semibold text-gray-900">Line Items</h2>
                     </div>
 
+                    <div class="mb-4 rounded border border-gray-200 p-3">
+                        <div class="mb-2 flex items-center justify-between">
+                            <h3 class="text-sm font-medium text-gray-800">Line Groups</h3>
+                            <button
+                                type="button"
+                                @click="addLineGroup"
+                                class="rounded border px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                            >
+                                + Add Group
+                            </button>
+                        </div>
+                        <div class="space-y-2">
+                            <div
+                                v-for="(group, groupIndex) in form.line_groups"
+                                :key="groupIndex"
+                                class="flex items-center gap-2"
+                            >
+                                <input
+                                    v-model="group.name"
+                                    type="text"
+                                    class="w-full rounded border px-2 py-1 text-sm"
+                                    placeholder="Group name"
+                                />
+                                <button
+                                    type="button"
+                                    @click="removeLineGroup(groupIndex)"
+                                    class="rounded border px-2 py-1 text-xs text-gray-500 hover:text-red-600"
+                                    :disabled="form.line_groups.length === 1"
+                                >
+                                    Remove
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                     <div v-if="form.errors.line_items" class="text-red-500 text-sm mb-4">
                         {{ form.errors.line_items }}
                     </div>
@@ -267,17 +302,47 @@
                         <div></div>
                     </div>
 
-                    <div class="divide-y divide-gray-100">
+                    <div class="space-y-4">
                         <div
-                            v-for="(item, index) in form.line_items"
-                            :key="index"
-                            class="grid grid-cols-1 md:grid-cols-[3.5rem_1fr_6.5rem_9rem_8rem_5.5rem_8rem_2rem] gap-2 items-start py-3 px-1"
+                            v-for="groupBlock in groupedLineItems"
+                            :key="groupBlock.groupId"
+                            class="rounded border border-gray-200 transition-colors"
+                            :class="{ 'border-blue-300 bg-blue-50/30': dragOverGroupId === groupBlock.groupId && dragOverItemIndex === null }"
+                            @dragover="onDragOver"
+                            @dragenter.prevent="onDragEnterGroup(groupBlock.groupId)"
+                            @dragleave="onDragLeaveGroup(groupBlock.groupId)"
+                            @drop="onDropInGroup(groupBlock.groupId)"
                         >
+                            <div class="flex items-center justify-between bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700">
+                                <span>{{ groupBlock.group.name || `Group ${groupBlock.groupIndex + 1}` }}</span>
+                                <button
+                                    type="button"
+                                    @click.stop="addLineItem(groupBlock.groupIndex)"
+                                    class="rounded border px-2 py-1 text-xs text-gray-700 hover:bg-white"
+                                >
+                                    + Add line item
+                                </button>
+                            </div>
+
+                            <div
+                                v-for="groupedItem in groupBlock.items"
+                                :key="groupedItem.itemIndex"
+                                class="grid grid-cols-1 md:grid-cols-[3.5rem_1fr_6.5rem_9rem_8rem_5.5rem_8rem_2rem] gap-2 items-start py-3 px-1 border-t border-gray-100 transition-colors"
+                                :class="{ 'bg-blue-50/60': dragOverItemIndex === groupedItem.itemIndex, 'opacity-60': activeDragIndex === groupedItem.itemIndex }"
+                                draggable="true"
+                                @dragstart="onDragStart(groupedItem.itemIndex, $event)"
+                                @dragend="onDragEnd"
+                                @dragover="onDragOver"
+                                @dragenter.prevent="onDragEnterItem(groupedItem.itemIndex)"
+                                @dragleave="onDragLeaveItem(groupedItem.itemIndex)"
+                                @drop.stop="onDropOnItem(groupedItem.itemIndex, groupBlock.groupId)"
+                            >
+                            <template v-if="groupedItem.item">
                             <!-- Qty -->
                             <div>
                                 <label class="block text-xs text-gray-500 mb-1 md:hidden">Qty</label>
                                 <input
-                                    v-model.number="item.quantity"
+                                    v-model.number="groupedItem.item.quantity"
                                     type="number"
                                     min="1"
                                     class="w-full rounded border border-gray-300 px-2 py-1.5 text-sm text-center focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
@@ -290,34 +355,34 @@
                                 <label class="block text-xs text-gray-500 mb-1 md:hidden">Description</label>
                                 <div class="flex items-center gap-1">
                                     <input
-                                        v-model="item.description"
-                                        @input="handleDescriptionInput(index)"
-                                        @focus="showProductSuggestions[index] = true"
-                                        @blur="handleDescriptionBlur(index)"
+                                        v-model="groupedItem.item.description"
+                                        @input="handleDescriptionInput(groupedItem.itemIndex)"
+                                        @focus="showProductSuggestions[groupedItem.itemIndex] = true"
+                                        @blur="handleDescriptionBlur(groupedItem.itemIndex)"
                                         type="text"
                                         placeholder="Type description or search products..."
                                         class="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                                        :class="{ 'border-red-500': form.errors[`line_items.${index}.description`] }"
+                                        :class="{ 'border-red-500': form.errors[`line_items.${groupedItem.itemIndex}.description`] }"
                                         required
                                     />
                                     <span
-                                        v-if="item.product_id"
+                                        v-if="groupedItem.item.product_id"
                                         class="flex-shrink-0 inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700 border border-blue-200"
-                                        :title="getProductName(item.product_id)"
+                                        :title="getProductName(groupedItem.item.product_id)"
                                     >
                                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
-                                        <button type="button" @click="unlinkProduct(index)" class="ml-0.5 text-blue-400 hover:text-blue-600">&times;</button>
+                                        <button type="button" @click="unlinkProduct(groupedItem.itemIndex)" class="ml-0.5 text-blue-400 hover:text-blue-600">&times;</button>
                                     </span>
                                 </div>
                                 <!-- Product Suggestions Dropdown -->
                                 <div
-                                    v-if="showProductSuggestions[index] && productSuggestions(index).length > 0"
+                                    v-if="showProductSuggestions[groupedItem.itemIndex] && productSuggestions(groupedItem.itemIndex).length > 0"
                                     class="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-auto"
                                 >
                                     <div
-                                        v-for="product in productSuggestions(index)"
+                                        v-for="product in productSuggestions(groupedItem.itemIndex)"
                                         :key="product.id"
-                                        @mousedown.prevent="selectProductSuggestion(index, product)"
+                                        @mousedown.prevent="selectProductSuggestion(groupedItem.itemIndex, product)"
                                         class="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm border-b border-gray-50 last:border-b-0"
                                     >
                                         <div class="flex items-center justify-between">
@@ -329,8 +394,8 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div v-if="form.errors[`line_items.${index}.description`]" class="text-red-500 text-xs mt-0.5">
-                                    {{ form.errors[`line_items.${index}.description`] }}
+                                <div v-if="form.errors[`line_items.${groupedItem.itemIndex}.description`]" class="text-red-500 text-xs mt-0.5">
+                                    {{ form.errors[`line_items.${groupedItem.itemIndex}.description`] }}
                                 </div>
                             </div>
 
@@ -338,7 +403,7 @@
                             <div>
                                 <label class="block text-xs text-gray-500 mb-1 md:hidden">Price</label>
                                 <input
-                                    v-model.number="item.unit_price"
+                                    v-model.number="groupedItem.item.unit_price"
                                     type="number"
                                     step="0.01"
                                     class="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
@@ -351,18 +416,18 @@
                                 <label class="block text-xs text-gray-500 mb-1 md:hidden">Discount</label>
                                 <div class="flex">
                                     <input
-                                        :value="getDiscountValue(index)"
-                                        @input="setDiscountValue(index, $event)"
+                                        :value="getDiscountValue(groupedItem.itemIndex)"
+                                        @input="setDiscountValue(groupedItem.itemIndex, $event)"
                                         type="number"
                                         step="0.01"
                                         min="0"
-                                        :max="discountTypes[index] === 'percentage' ? 100 : undefined"
+                                        :max="discountTypes[groupedItem.itemIndex] === 'percentage' ? 100 : undefined"
                                         class="w-full min-w-0 rounded-l border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                         placeholder="0"
                                     />
                                     <select
-                                        :value="discountTypes[index] || 'amount'"
-                                        @change="handleDiscountTypeChange(index, $event)"
+                                        :value="discountTypes[groupedItem.itemIndex] || 'amount'"
+                                        @change="handleDiscountTypeChange(groupedItem.itemIndex, $event)"
                                         class="rounded-r border border-l-0 border-gray-300 bg-gray-50 px-1 py-1.5 text-xs font-medium text-gray-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                     >
                                         <option value="amount">R</option>
@@ -375,7 +440,7 @@
                             <div>
                                 <label class="block text-xs text-gray-500 mb-1 md:hidden">Tax</label>
                                 <select
-                                    v-model="item.tax_rate_id"
+                                    v-model="groupedItem.item.tax_rate_id"
                                     class="w-full rounded border border-gray-300 px-1 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                 >
                                     <option :value="null">None</option>
@@ -389,7 +454,7 @@
                             <div>
                                 <label class="block text-xs text-gray-500 mb-1 md:hidden">Account</label>
                                 <select
-                                    v-model="item.account_id"
+                                    v-model="groupedItem.item.account_id"
                                     class="w-full rounded border border-gray-300 px-1 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                 >
                                     <option :value="null">None</option>
@@ -403,15 +468,23 @@
                             <div>
                                 <label class="block text-xs text-gray-500 mb-1 md:hidden">Total</label>
                                 <div class="text-right text-sm font-medium text-gray-700 py-1.5">
-                                    R{{ calculateLineTotalValue(item).toFixed(2) }}
+                                    R{{ calculateLineTotalValue(groupedItem.item).toFixed(2) }}
                                 </div>
                             </div>
 
                             <!-- Remove -->
-                            <div class="flex items-center justify-center md:pt-1.5">
+                            <div class="flex items-center justify-center gap-2 md:pt-1.5">
+                                <svg class="h-5 w-5 cursor-grab rounded border border-gray-300 bg-gray-100 p-0.5 text-gray-600" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                    <circle cx="6" cy="5" r="1.2" />
+                                    <circle cx="6" cy="10" r="1.2" />
+                                    <circle cx="6" cy="15" r="1.2" />
+                                    <circle cx="12" cy="5" r="1.2" />
+                                    <circle cx="12" cy="10" r="1.2" />
+                                    <circle cx="12" cy="15" r="1.2" />
+                                </svg>
                                 <button
                                     type="button"
-                                    @click="removeLineItem(index)"
+                                    @click="removeLineItem(groupedItem.itemIndex)"
                                     class="text-gray-400 hover:text-red-600 transition-colors"
                                     :disabled="form.line_items.length === 1"
                                     :class="{ 'opacity-30 cursor-not-allowed': form.line_items.length === 1 }"
@@ -421,13 +494,15 @@
                                     </svg>
                                 </button>
                             </div>
+                            </template>
                         </div>
+                    </div>
                     </div>
 
                     <!-- Add Line Item button -->
                     <button
                         type="button"
-                        @click="addLineItem"
+                        @click="addLineItem(0)"
                         class="mt-3 w-full rounded border-2 border-dashed border-gray-300 py-2 text-sm text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors"
                     >
                         + Add Line Item
@@ -553,6 +628,7 @@ interface Company {
 
 interface LineItem {
     product_id: string | null;
+    line_group_id?: number | null;
     description: string;
     quantity: number;
     unit_price: number;
@@ -561,6 +637,12 @@ interface LineItem {
     tax_rate_id?: number | null;
     account_id?: number | null;
     total: number;
+}
+
+interface LineGroup {
+    id?: number;
+    name: string;
+    sort_order: number;
 }
 
 const props = defineProps<{
@@ -577,6 +659,10 @@ const props = defineProps<{
 
 const showProductSuggestions = ref<Record<number, boolean>>({});
 const discountTypes = ref<Record<number, 'amount' | 'percentage'>>({});
+const draggedItemIndex = ref<number | null>(null);
+const dragOverItemIndex = ref<number | null>(null);
+const dragOverGroupId = ref<number | null>(null);
+const activeDragIndex = ref<number | null>(null);
 
 // Customer search
 const customerSearchQuery = ref('');
@@ -619,9 +705,13 @@ const form = useForm({
     discount_percentage: 0,
     notes: '',
     terms_conditions: props.defaultTerms || '',
+    line_groups: [
+        { name: 'Items', sort_order: 0 },
+    ] as LineGroup[],
     line_items: [
         {
             product_id: null,
+            line_group_id: 1,
             description: '',
             quantity: 1,
             unit_price: 0,
@@ -645,9 +735,24 @@ if (props.defaultSalesCustomerId) {
     }
 }
 
-const addLineItem = () => {
+const normalizeLineItemOrder = () => {
+    const ordered: LineItem[] = [];
+    for (let groupIndex = 0; groupIndex < form.line_groups.length; groupIndex++) {
+        const groupId = groupIndex + 1;
+        const groupItems = form.line_items.filter((item) => (item.line_group_id ?? 1) === groupId);
+        ordered.push(...groupItems);
+    }
+
+    const ungroupedItems = form.line_items.filter((item) => !item.line_group_id || item.line_group_id > form.line_groups.length);
+    ordered.push(...ungroupedItems.map((item) => ({ ...item, line_group_id: 1 })));
+    form.line_items = ordered;
+};
+
+const addLineItem = (groupIndex = 0) => {
+    const defaultGroupId = getDefaultGroupId(groupIndex);
     form.line_items.push({
         product_id: null,
+        line_group_id: defaultGroupId,
         description: '',
         quantity: 1,
         unit_price: 0,
@@ -657,13 +762,166 @@ const addLineItem = () => {
         account_id: props.defaultSalesAccountId || null,
         total: 0,
     });
+    normalizeLineItemOrder();
+};
+
+const getDefaultGroupId = (groupIndex = 0) => {
+    if (form.line_groups.length === 0) {
+        return null;
+    }
+
+    return groupIndex + 1;
+};
+
+const groupedLineItems = computed(() =>
+    form.line_groups.map((group, groupIndex) => {
+        const groupId = groupIndex + 1;
+        const items = form.line_items
+            .map((item, itemIndex) => ({ item, itemIndex }))
+            .filter(({ item }) => (item.line_group_id ?? 1) === groupId);
+
+        return { group, groupIndex, groupId, items };
+    }),
+);
+
+const addLineGroup = () => {
+    const nextSortOrder = form.line_groups.length;
+    form.line_groups.push({
+        name: `Group ${nextSortOrder + 1}`,
+        sort_order: nextSortOrder,
+    });
+};
+
+const removeLineGroup = (index: number) => {
+    if (form.line_groups.length <= 1) {
+        return;
+    }
+
+    const removedGroupId = index + 1;
+    form.line_groups.splice(index, 1);
+    form.line_groups.forEach((group, idx) => {
+        group.sort_order = idx;
+    });
+
+    const fallbackGroupId = 1;
+    form.line_items.forEach((item) => {
+        if (item.line_group_id === removedGroupId || !item.line_group_id) {
+            item.line_group_id = fallbackGroupId;
+        } else if (item.line_group_id > removedGroupId) {
+            item.line_group_id -= 1;
+        }
+    });
+    normalizeLineItemOrder();
 };
 
 const removeLineItem = (index: number) => {
     if (form.line_items.length > 1) {
         form.line_items.splice(index, 1);
-        calculateTotals();
+        normalizeLineItemOrder();
     }
+};
+
+const onDragStart = (itemIndex: number, event: DragEvent) => {
+    draggedItemIndex.value = itemIndex;
+    activeDragIndex.value = itemIndex;
+    if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', String(itemIndex));
+        const preview = document.createElement('div');
+        preview.textContent = 'Moving line item';
+        preview.className = 'pointer-events-none rounded border border-blue-300 bg-blue-50 px-2 py-1 text-xs text-blue-700 shadow';
+        document.body.appendChild(preview);
+        event.dataTransfer.setDragImage(preview, 10, 10);
+        requestAnimationFrame(() => preview.remove());
+    }
+};
+
+const onDragEnd = () => {
+    draggedItemIndex.value = null;
+    dragOverItemIndex.value = null;
+    dragOverGroupId.value = null;
+    activeDragIndex.value = null;
+};
+
+const onDragOver = (event: DragEvent) => {
+    event.preventDefault();
+};
+
+const onDragEnterItem = (itemIndex: number) => {
+    dragOverItemIndex.value = itemIndex;
+    dragOverGroupId.value = null;
+};
+
+const onDragLeaveItem = (itemIndex: number) => {
+    if (dragOverItemIndex.value === itemIndex) {
+        dragOverItemIndex.value = null;
+    }
+};
+
+const onDragEnterGroup = (groupId: number) => {
+    dragOverGroupId.value = groupId;
+};
+
+const onDragLeaveGroup = (groupId: number) => {
+    if (dragOverGroupId.value === groupId) {
+        dragOverGroupId.value = null;
+    }
+};
+
+const moveItem = (sourceIndex: number, targetIndex: number, targetGroupId: number) => {
+    if (sourceIndex === targetIndex || sourceIndex < 0 || targetIndex < 0) {
+        return;
+    }
+
+    const moved = form.line_items[sourceIndex];
+    if (!moved) {
+        return;
+    }
+
+    form.line_items.splice(sourceIndex, 1);
+    moved.line_group_id = targetGroupId;
+    const adjustedTarget = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+    form.line_items.splice(adjustedTarget, 0, moved);
+    normalizeLineItemOrder();
+};
+
+const onDropOnItem = (targetItemIndex: number, targetGroupId: number) => {
+    if (draggedItemIndex.value === null) {
+        return;
+    }
+    moveItem(draggedItemIndex.value, targetItemIndex, targetGroupId);
+    draggedItemIndex.value = null;
+    dragOverItemIndex.value = null;
+    dragOverGroupId.value = null;
+    activeDragIndex.value = null;
+};
+
+const onDropInGroup = (groupId: number) => {
+    if (draggedItemIndex.value === null) {
+        return;
+    }
+
+    const sourceIndex = draggedItemIndex.value;
+    const moved = form.line_items[sourceIndex];
+    if (!moved) {
+        draggedItemIndex.value = null;
+        return;
+    }
+
+    form.line_items.splice(sourceIndex, 1);
+    moved.line_group_id = groupId;
+
+    const lastIndexInGroup = form.line_items.reduce((lastIndex, item, idx) => {
+        return (item.line_group_id ?? 1) === groupId ? idx : lastIndex;
+    }, -1);
+
+    const insertIndex = lastIndexInGroup >= 0 ? lastIndexInGroup + 1 : form.line_items.length;
+    form.line_items.splice(insertIndex, 0, moved);
+    normalizeLineItemOrder();
+    draggedItemIndex.value = null;
+    dragOverItemIndex.value = null;
+    dragOverGroupId.value = null;
+    activeDragIndex.value = null;
 };
 
 // Product suggestions based on description text
@@ -929,7 +1187,18 @@ const formatCurrency = (value: number | null | undefined) => {
 };
 
 const submit = () => {
-    form.transform((data) => ({ ...data, contact_id: form.contact_id ?? null }))
+    form.transform((data) => ({
+        ...data,
+        contact_id: form.contact_id ?? null,
+        line_groups: data.line_groups.map((group, index) => ({
+            name: group.name,
+            sort_order: index,
+        })),
+        line_items: data.line_items.map((item) => ({
+            ...item,
+            line_group_id: item.line_group_id ?? 1,
+        })),
+    }))
         .post(quotes.store().url);
 };
 </script>

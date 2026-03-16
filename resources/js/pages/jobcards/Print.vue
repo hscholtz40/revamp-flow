@@ -51,7 +51,7 @@
                 </thead>
                 <tbody>
                     <tr v-for="item in props.jobcard.line_items" :key="item.id">
-                        <td>{{ item.description }}</td>
+                        <td>{{ item.description }}{{ (item.product?.sku || item.product?.barcode) ? ` (${item.product.sku || item.product.barcode})` : '' }}</td>
                         <td class="text-right">{{ item.quantity }}</td>
                         <td class="text-right">R{{ Number(item.unit_price).toFixed(2) }}</td>
                         <td class="text-right">R{{ Number(item.total).toFixed(2) }}</td>

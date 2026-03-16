@@ -1316,7 +1316,14 @@ class XeroService
             ->where(function ($query) {
                 $query->whereNull('xero_invoice_id')
                     ->orWhereNull('xero_updated_at')
-                    ->orWhereColumn('updated_at', '>', 'xero_updated_at');
+                    ->orWhereColumn('updated_at', '>', 'xero_updated_at')
+                    ->orWhereHas('payments', function ($paymentQuery) {
+                        $paymentQuery->where(function ($unsyncedPaymentQuery) {
+                            $unsyncedPaymentQuery->whereNull('payments.xero_payment_id')
+                                ->orWhereNull('payments.xero_synced_at')
+                                ->orWhereColumn('payments.updated_at', '>', 'payments.xero_synced_at');
+                        });
+                    });
             })
             ->orderByDesc('updated_at')
             ->limit($maxInvoicesPerRun)
@@ -1996,6 +2003,8 @@ class XeroService
             // Use the line item's total field which already includes discount
             // This ensures consistency with what's stored in the database
             $lineAmount = (float) $lineItem->total;
+            $quantity = (float) $lineItem->quantity;
+            $unitAmount = (float) $lineItem->unit_price;
             
             // Log discount information for debugging
             $discountAmount = (float) ($lineItem->discount_amount ?? 0);
@@ -2007,7 +2016,7 @@ class XeroService
             }
             
             // Calculate expected subtotal (Quantity * UnitAmount)
-            $expectedSubtotal = $lineItem->quantity * $lineItem->unit_price;
+            $expectedSubtotal = $quantity * $unitAmount;
             
             // Verify LineAmount matches expected calculation
             $calculatedLineAmount = $expectedSubtotal;
@@ -2038,14 +2047,32 @@ class XeroService
                 ]);
                 $lineAmount = round($calculatedLineAmount, 2);
             }
+
+            // Xero validates LineAmount against Quantity * UnitAmount.
+            // For non-discounted lines, align outbound UnitAmount to the stored line total
+            // when totals differ (common on explicit rounding adjustment rows).
+            if (!$hasDiscount && abs(($quantity * $unitAmount) - $lineAmount) > 0.01) {
+                $unitAmount = $quantity != 0.0
+                    ? round($lineAmount / $quantity, 4)
+                    : round($lineAmount, 4);
+
+                Log::info('Adjusted invoice unit amount for Xero line validation', [
+                    'invoice_id' => $invoice->id,
+                    'line_item_id' => $lineItem->id,
+                    'quantity' => $quantity,
+                    'original_unit_amount' => (float) $lineItem->unit_price,
+                    'adjusted_unit_amount' => $unitAmount,
+                    'line_amount' => $lineAmount,
+                ]);
+            }
             
             Log::debug('Processing invoice line item for Xero', [
                 'invoice_id' => $invoice->id,
                 'line_item_id' => $lineItem->id,
                 'product_id' => $lineItem->product_id,
                 'account_code' => $accountCode,
-                'quantity' => $lineItem->quantity,
-                'unit_price' => $lineItem->unit_price,
+                'quantity' => $quantity,
+                'unit_price' => $unitAmount,
                 'discount_amount' => $discountAmount,
                 'discount_percentage' => $discountPercentage,
                 'line_item_total' => $lineAmount,
@@ -2055,9 +2082,9 @@ class XeroService
             
             $lineItemData = [
                 'Description' => $lineItem->description ?? 'Item',
-                'Quantity' => $lineItem->quantity,
-                'UnitAmount' => $lineItem->unit_price,
-                'LineAmount' => $lineAmount,
+                'Quantity' => $quantity,
+                'UnitAmount' => $unitAmount,
+                'LineAmount' => round($lineAmount, 2),
                 'AccountCode' => $accountCode,
                 'TaxType' => $defaultTaxCode,
             ];
@@ -4416,14 +4443,14 @@ class XeroService
             ];
         }
 
-        // Cap payment amount to the amount due (never exceed outstanding balance)
-        $jcoAmountDue = (float) $invoice->remaining_balance;
+        // Cap payment amount to Xero AmountDue when available (never exceed outstanding balance in Xero).
+        // Do not cap by local remaining_balance here: for fully paid local invoices this is 0,
+        // which incorrectly blocks outbound payment creation.
         $xeroAmountDue = $amountDue !== null ? (float) $amountDue : null;
         $amountToSend = (float) $payment->amount;
         if ($xeroAmountDue !== null && $xeroAmountDue >= 0) {
             $amountToSend = min($amountToSend, $xeroAmountDue);
         }
-        $amountToSend = min($amountToSend, $jcoAmountDue);
         $amountToSend = round($amountToSend, 2);
 
         if ($amountToSend <= 0) {
@@ -4431,14 +4458,13 @@ class XeroService
                 'invoice_id' => $invoice->id,
                 'payment_id' => $payment->id,
                 'payment_amount' => $payment->amount,
-                'jco_amount_due' => $jcoAmountDue,
                 'xero_amount_due' => $xeroAmountDue,
             ]);
             return [
                 'payment_id' => $payment->id,
                 'amount' => $payment->amount,
                 'status' => 'skipped',
-                'message' => 'No amount due on invoice (JCO: ' . $jcoAmountDue . ', payment: ' . $payment->amount . ')',
+                'message' => 'No amount due on invoice in Xero (Xero: ' . ($xeroAmountDue ?? 'unknown') . ', payment: ' . $payment->amount . ')',
             ];
         }
 

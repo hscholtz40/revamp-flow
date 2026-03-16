@@ -12,6 +12,7 @@ class JobcardLineItem extends Model
 
     protected $fillable = [
         'jobcard_id',
+        'line_group_id',
         'product_id',
         'description',
         'quantity',
@@ -43,6 +44,11 @@ class JobcardLineItem extends Model
     public function jobcard(): BelongsTo
     {
         return $this->belongsTo(Jobcard::class);
+    }
+
+    public function lineGroup(): BelongsTo
+    {
+        return $this->belongsTo(LineGroup::class);
     }
 
     public function product(): BelongsTo

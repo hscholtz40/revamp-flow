@@ -7,6 +7,7 @@ use App\Models\Contact;
 use App\Models\Customer;
 use App\Models\Jobcard;
 use App\Models\JobcardLineItem;
+use App\Models\LineGroup;
 use App\Models\Product;
 use App\Models\TaxRate;
 use App\Models\ChartOfAccount;
@@ -34,8 +35,14 @@ class JobcardController extends Controller
         $sortBy = $request->input('sort_by', 'created_at');
         $sortDir = $request->input('sort_dir', 'desc') === 'asc' ? 'asc' : 'desc';
         
-        $query = Jobcard::with(['customer', 'assignedUser', 'assignedTeam'])
+        $query = Jobcard::with(['customer', 'assignedUser', 'assignedTeam', 'invoice'])
             ->where('company_id', $currentCompany->id);
+
+        // Hide closed (completed/cancelled) jobcards unless "show closed" is checked
+        $showClosed = filter_var($request->input('show_closed', false), FILTER_VALIDATE_BOOLEAN);
+        if (!$showClosed) {
+            $query->whereNotIn('status', ['completed', 'cancelled']);
+        }
 
         // Limited users can only see jobcards assigned to them or their teams
         if (auth()->user()->isLimitedUser()) {
@@ -108,6 +115,7 @@ class JobcardController extends Controller
                 'assigned_to_user_id' => $request->input('assigned_to_user_id', ''),
                 'assigned_to_team_id' => $request->input('assigned_to_team_id', ''),
                 'search' => $request->input('search', ''),
+                'show_closed' => $showClosed,
                 'sort_by' => $sortBy,
                 'sort_dir' => $sortDir,
             ],
@@ -177,6 +185,9 @@ class JobcardController extends Controller
             'discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'notes' => ['nullable', 'string'],
             'terms_conditions' => ['nullable', 'string'],
+            'line_groups' => ['nullable', 'array', 'min:1'],
+            'line_groups.*.id' => ['nullable', 'integer'],
+            'line_groups.*.name' => ['required_with:line_groups', 'string', 'max:255'],
             'line_items' => ['required', 'array', 'min:1'],
             'line_items.*.product_id' => ['nullable', 'exists:products,id'],
             'line_items.*.description' => ['required', 'string', 'max:255'],
@@ -185,6 +196,7 @@ class JobcardController extends Controller
             'line_items.*.discount_amount' => ['nullable', 'numeric', 'min:0'],
             'line_items.*.discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'line_items.*.tax_rate_id' => ['nullable', 'exists:tax_rates,id'],
+            'line_items.*.line_group_id' => ['nullable', 'integer'],
         ]);
 
         $validated['company_id'] = $currentCompany->id;
@@ -194,13 +206,27 @@ class JobcardController extends Controller
         $validated['email'] = $validated['email'] ?? null;
         $validated['phone'] = $validated['phone'] ?? null;
         $validated['tax_rate'] = $validated['tax_rate'] ?? 0;
+        $groupPayload = $validated['line_groups'] ?? [['name' => 'Items']];
+        $lineItemsPayload = $validated['line_items'] ?? [];
+        unset($validated['line_groups'], $validated['line_items']);
 
         $jobcard = Jobcard::create($validated);
 
+        $groupMap = [];
+        foreach (array_values($groupPayload) as $groupIndex => $groupData) {
+            $group = $jobcard->lineGroups()->create([
+                'name' => $groupData['name'] ?: 'Items',
+                'sort_order' => $groupIndex,
+            ]);
+            $groupMap[(string) ($groupData['id'] ?? ($groupIndex + 1))] = $group->id;
+        }
+        $defaultGroupId = reset($groupMap);
+
         // Create line items and deduct stock
         $stockService = new StockService();
-        foreach ($validated['line_items'] as $index => $lineItemData) {
+        foreach ($lineItemsPayload as $index => $lineItemData) {
             $lineItem = new JobcardLineItem([
+                'line_group_id' => $groupMap[(string) ($lineItemData['line_group_id'] ?? '')] ?? $defaultGroupId,
                 'product_id' => $lineItemData['product_id'] ?? null,
                 'description' => $lineItemData['description'],
                 'quantity' => $lineItemData['quantity'],
@@ -273,7 +299,7 @@ class JobcardController extends Controller
             }
         }
 
-        $jobcard->load(['customer', 'contact', 'assignedUser', 'assignedTeam', 'lineItems.product', 'lineItems.taxRate', 'invoice', 'timeEntries.user']);
+        $jobcard->load(['customer', 'contact', 'assignedUser', 'assignedTeam', 'lineItems.product', 'lineItems.taxRate', 'lineItems.lineGroup', 'lineGroups', 'invoice', 'timeEntries.user']);
 
         $currentCompany = auth()->user()->getCurrentCompany();
         
@@ -331,7 +357,7 @@ class JobcardController extends Controller
         $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
         $chartOfAccounts = ChartOfAccount::where('company_id', $currentCompany->id)->where('is_active', true)->ordered()->get(['id', 'account_code', 'account_name', 'account_type', 'is_default_sales']);
         $defaultSalesAccount = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id);
-        $jobcard->load(['customer', 'contact', 'lineItems.product']);
+        $jobcard->load(['customer', 'contact', 'lineItems.product', 'lineItems.lineGroup', 'lineGroups']);
 
         return Inertia::render('jobcards/Edit', [
             'jobcard' => $jobcard->toArray(),
@@ -372,6 +398,9 @@ class JobcardController extends Controller
             'discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'notes' => ['nullable', 'string'],
             'terms_conditions' => ['nullable', 'string'],
+            'line_groups' => ['nullable', 'array', 'min:1'],
+            'line_groups.*.id' => ['nullable', 'integer'],
+            'line_groups.*.name' => ['required_with:line_groups', 'string', 'max:255'],
             'line_items' => ['required', 'array', 'min:1'],
             'line_items.*.id' => ['nullable', 'exists:jobcard_line_items,id'],
             'line_items.*.product_id' => ['nullable', 'exists:products,id'],
@@ -382,19 +411,35 @@ class JobcardController extends Controller
             'line_items.*.discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'line_items.*.tax_rate_id' => ['nullable', 'exists:tax_rates,id'],
             'line_items.*.account_id' => ['nullable', 'exists:chart_of_accounts,id'],
+            'line_items.*.line_group_id' => ['nullable', 'integer'],
         ]);
 
         $validated['tax_rate'] = $validated['tax_rate'] ?? 0;
+        $groupPayload = $validated['line_groups'] ?? [['name' => 'Items']];
+        $lineItemsPayload = $validated['line_items'] ?? [];
+        unset($validated['line_groups'], $validated['line_items']);
 
         $jobcard->update($validated);
+        $jobcard->lineGroups()->delete();
+        $groupMap = [];
+        foreach (array_values($groupPayload) as $groupIndex => $groupData) {
+            $group = $jobcard->lineGroups()->create([
+                'name' => $groupData['name'] ?: 'Items',
+                'sort_order' => $groupIndex,
+            ]);
+            $groupMap[(string) ($groupData['id'] ?? ($groupIndex + 1))] = $group->id;
+        }
+        $defaultGroupId = reset($groupMap);
 
         // Update line items
         $existingLineItemIds = [];
-        foreach ($validated['line_items'] as $index => $lineItemData) {
+        foreach ($lineItemsPayload as $index => $lineItemData) {
             if (isset($lineItemData['id'])) {
                 // Update existing line item
                 $lineItem = JobcardLineItem::find($lineItemData['id']);
+                $groupId = $groupMap[(string) ($lineItemData['line_group_id'] ?? '')] ?? $defaultGroupId;
                 $lineItem->update([
+                    'line_group_id' => $groupId,
                     'product_id' => $lineItemData['product_id'] ?? null,
                     'description' => $lineItemData['description'],
                     'quantity' => $lineItemData['quantity'],
@@ -411,6 +456,7 @@ class JobcardController extends Controller
             } else {
                 // Create new line item
                 $lineItem = new JobcardLineItem([
+                    'line_group_id' => $groupMap[(string) ($lineItemData['line_group_id'] ?? '')] ?? $defaultGroupId,
                     'product_id' => $lineItemData['product_id'] ?? null,
                     'description' => $lineItemData['description'],
                     'quantity' => $lineItemData['quantity'],
@@ -523,7 +569,7 @@ class JobcardController extends Controller
             abort(403, 'Unauthorized access to jobcard.');
         }
 
-        $jobcard->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'company']);
+        $jobcard->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company']);
         $templateId = $request->get('template_id');
 
         $pdfService = new \App\Services\PdfGenerationService();
@@ -594,7 +640,7 @@ class JobcardController extends Controller
                 'to_email' => $emails,
             ]);
 
-            $jobcard->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'company']);
+            $jobcard->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company']);
 
             $subject = $validated['subject'] ?? "Jobcard #{$jobcard->job_number} - {$jobcard->title}";
             $fromEmail = $user->smtp_from_email ?? $user->email;

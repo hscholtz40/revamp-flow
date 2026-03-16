@@ -21,7 +21,7 @@
 
             <!-- Filters -->
             <div class="bg-white rounded-lg border p-4 mb-6">
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Search</label>
                         <input
@@ -50,6 +50,16 @@
                                 {{ customer.name }}
                             </option>
                         </select>
+                    </div>
+                    <div class="flex items-end">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input
+                                v-model="showClosed"
+                                type="checkbox"
+                                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span class="text-sm font-medium text-gray-700">Show closed</span>
+                        </label>
                     </div>
                     <div class="flex items-end">
                         <button
@@ -277,6 +287,7 @@ const props = defineProps<{
         status: string;
         customer_id: string;
         search: string;
+        show_closed: boolean;
         sort_by?: string;
         sort_dir?: 'asc' | 'desc';
     };
@@ -287,6 +298,7 @@ const props = defineProps<{
 const search = ref(props.filters.search);
 const status = ref(props.filters.status);
 const customerId = ref(props.filters.customer_id);
+const showClosed = ref(props.filters.show_closed ?? false);
 const sortBy = ref(props.filters.sort_by || 'quote_number');
 const sortDir = ref<'asc' | 'desc'>(props.filters.sort_dir || 'desc');
 
@@ -309,6 +321,7 @@ const clearFilters = () => {
     search.value = '';
     status.value = '';
     customerId.value = '';
+    showClosed.value = false;
 };
 
 const deleteQuote = (quote: Quote) => {
@@ -333,11 +346,12 @@ const formatDate = (dateString: string) => {
 };
 
 // Watch for filter changes and update URL
-watch([search, status, customerId], () => {
+watch([search, status, customerId, showClosed], () => {
     router.get(quotes.index().url, {
         search: search.value,
         status: status.value,
         customer_id: customerId.value,
+        show_closed: showClosed.value ? '1' : '',
         sort_by: sortBy.value,
         sort_dir: sortDir.value,
     }, {
@@ -358,6 +372,7 @@ const toggleSort = (field: string) => {
         search: search.value,
         status: status.value,
         customer_id: customerId.value,
+        show_closed: showClosed.value ? '1' : '',
         sort_by: sortBy.value,
         sort_dir: sortDir.value,
     }, {

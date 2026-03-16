@@ -161,6 +161,28 @@
                     </div>
                     <div v-if="form.errors.line_items" class="text-red-500 text-sm mb-4">{{ form.errors.line_items }}</div>
 
+                    <div class="mb-4 rounded border border-gray-200 p-3">
+                        <div class="mb-2 flex items-center justify-between">
+                            <h3 class="text-sm font-medium text-gray-800">Line Groups</h3>
+                            <button type="button" @click="addLineGroup" class="rounded border px-2 py-1 text-xs text-gray-700 hover:bg-gray-50">
+                                + Add Group
+                            </button>
+                        </div>
+                        <div class="space-y-2">
+                            <div v-for="(group, groupIndex) in (form as any).line_groups" :key="group.id || groupIndex" class="flex items-center gap-2">
+                                <input v-model="group.name" type="text" class="w-full rounded border px-2 py-1 text-sm" />
+                                <button
+                                    type="button"
+                                    @click="removeLineGroup(groupIndex)"
+                                    class="rounded border px-2 py-1 text-xs text-gray-500 hover:text-red-600"
+                                    :disabled="((form as any).line_groups || []).length === 1"
+                                >
+                                    Remove
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="hidden md:grid md:grid-cols-[3.5rem_1fr_6.5rem_9rem_8rem_5.5rem_8rem_5.5rem_2rem] gap-2 px-3 pb-2 text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
                         <div>Qty</div>
                         <div>Description</div>
@@ -172,8 +194,41 @@
                         <div></div>
                     </div>
 
-                    <div class="divide-y divide-gray-100">
-                        <div v-for="(item, index) in form.line_items" :key="index" class="py-3 px-1">
+                    <div class="space-y-4">
+                        <div
+                            v-for="groupBlock in groupedLineItems"
+                            :key="groupBlock.groupId"
+                            class="rounded border border-gray-200 transition-colors"
+                            :class="{ 'border-blue-300 bg-blue-50/30': dragOverGroupId === groupBlock.groupId && dragOverItemIndex === null }"
+                            @dragover="onDragOver"
+                            @dragenter.prevent="onDragEnterGroup(groupBlock.groupId)"
+                            @dragleave="onDragLeaveGroup(groupBlock.groupId)"
+                            @drop="onDropInGroup(groupBlock.groupId)"
+                        >
+                            <div class="flex items-center justify-between bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700">
+                                <span>{{ groupBlock.group.name || `Group ${groupBlock.groupIndex + 1}` }}</span>
+                                <button
+                                    type="button"
+                                    @click.stop="addLineItem(groupBlock.groupIndex)"
+                                    class="rounded border px-2 py-1 text-xs text-gray-700 hover:bg-white"
+                                >
+                                    + Add line item
+                                </button>
+                            </div>
+
+                            <div
+                                v-for="({ item, index }) in groupBlock.items"
+                                :key="index"
+                                class="border-t border-gray-100 py-3 px-1 transition-colors"
+                                :class="{ 'bg-blue-50/60': dragOverItemIndex === index, 'opacity-60': activeDragIndex === index }"
+                                draggable="true"
+                                @dragstart="onDragStart(index, $event)"
+                                @dragend="onDragEnd"
+                                @dragover="onDragOver"
+                                @dragenter.prevent="onDragEnterItem(index)"
+                                @dragleave="onDragLeaveItem(index)"
+                                @drop.stop="onDropOnItem(index, groupBlock.groupId)"
+                            >
                             <div class="grid grid-cols-1 md:grid-cols-[3.5rem_1fr_6.5rem_9rem_8rem_5.5rem_8rem_5.5rem_2rem] gap-2 items-start">
                                 <div>
                                     <label class="block text-xs text-gray-500 mb-1 md:hidden">Qty</label>
@@ -269,7 +324,15 @@
                                     </div>
                                 </div>
 
-                                <div class="flex items-center justify-center md:pt-1.5">
+                                <div class="flex items-center justify-center gap-2 md:pt-1.5">
+                                    <svg class="h-5 w-5 cursor-grab rounded border border-gray-300 bg-gray-100 p-0.5 text-gray-600" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                        <circle cx="6" cy="5" r="1.2" />
+                                        <circle cx="6" cy="10" r="1.2" />
+                                        <circle cx="6" cy="15" r="1.2" />
+                                        <circle cx="12" cy="5" r="1.2" />
+                                        <circle cx="12" cy="10" r="1.2" />
+                                        <circle cx="12" cy="15" r="1.2" />
+                                    </svg>
                                     <button
                                         type="button"
                                         @click="removeLineItem(index)"
@@ -284,7 +347,7 @@
                         </div>
                     </div>
 
-                    <button type="button" @click="addLineItem" class="mt-3 w-full rounded-lg border-2 border-dashed border-gray-300 py-2 text-sm text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors">
+                    <button type="button" @click="addLineItem(0)" class="mt-3 w-full rounded-lg border-2 border-dashed border-gray-300 py-2 text-sm text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors">
                         <Plus class="w-4 h-4 inline mr-1" />
                         Add Line Item
                     </button>
@@ -396,9 +459,15 @@ const form = useForm({
     credit_note_date: typeof props.creditNote.credit_note_date === 'string' ? props.creditNote.credit_note_date.split('T')[0] : props.creditNote.credit_note_date,
     reference: props.creditNote.reference ?? '',
     notes: props.creditNote.notes ?? '',
+    line_groups: ((props.creditNote as any).line_groups ?? (props.creditNote as any).lineGroups ?? []).map((group: any, index: number) => ({
+        id: group.id,
+        name: group.name || `Group ${index + 1}`,
+        sort_order: Number(group.sort_order ?? index),
+    })),
     line_items: rawLineItems.value.length > 0
         ? rawLineItems.value.map((li: any) => ({
               product_id: li.product_id ?? null,
+              line_group_id: li.line_group_id != null ? Number(li.line_group_id) : 1,
               tax_rate_id: li.tax_rate_id ?? null,
               description: li.description ?? '',
               quantity: Number(li.quantity) || 1,
@@ -411,6 +480,7 @@ const form = useForm({
         : [
               {
                   product_id: null,
+                  line_group_id: 1,
                   description: '',
                   quantity: 1,
                   unit_price: 0,
@@ -423,6 +493,10 @@ const form = useForm({
           ],
 });
 
+if ((form as any).line_groups.length === 0) {
+    (form as any).line_groups = [{ name: 'Items', sort_order: 0 }];
+}
+
 const selectedCustomer = ref<{ id: number; name: string } | null>(props.customers.find(c => c.id === props.creditNote.customer_id) ?? null);
 const customerSearchQuery = ref(selectedCustomer.value?.name ?? '');
 const customerSearchFocused = ref(false);
@@ -430,6 +504,10 @@ const filteredCustomers = ref<typeof props.customers>([]);
 const showQuickCreateModal = ref(false);
 const showProductSuggestions = ref<Record<number, boolean>>({});
 const discountTypes = ref<Record<number, 'amount' | 'percentage'>>({});
+const draggedItemIndex = ref<number | null>(null);
+const dragOverItemIndex = ref<number | null>(null);
+const dragOverGroupId = ref<number | null>(null);
+const activeDragIndex = ref<number | null>(null);
 
 const quickCreateForm = useForm({
     name: customerSearchQuery.value,
@@ -505,10 +583,39 @@ async function quickCreateCustomer() {
     }
 }
 
-function addLineItem() {
+function normalizeLineItemOrder() {
+    const ordered: typeof form.line_items = [];
+    const groups = (form as any).line_groups as Array<{ id?: number; name: string; sort_order: number }>;
+    for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
+        const groupId = getGroupValueByIndex(groupIndex);
+        const groupItems = form.line_items.filter((item: any) => (item.line_group_id ?? getGroupValueByIndex(0)) === groupId);
+        ordered.push(...groupItems);
+    }
+
+    const fallbackGroupId = getGroupValueByIndex(0);
+    const ungroupedItems = form.line_items.filter((item: any) => {
+        return !groups.some((_, idx) => (item.line_group_id ?? fallbackGroupId) === getGroupValueByIndex(idx));
+    });
+    ordered.push(...ungroupedItems.map((item: any) => ({ ...item, line_group_id: fallbackGroupId })));
+    (form.line_items as any) = ordered;
+}
+
+const groupedLineItems = computed(() => {
+    const groups = (form as any).line_groups as Array<{ id?: number; name: string; sort_order: number }>;
+    return groups.map((group, groupIndex) => {
+        const groupId = getGroupValueByIndex(groupIndex);
+        const items = form.line_items
+            .map((item, index) => ({ item, index }))
+            .filter(({ item }: any) => (item.line_group_id ?? getGroupValueByIndex(0)) === groupId);
+        return { group, groupIndex, groupId, items };
+    });
+});
+
+function addLineItem(groupIndex = 0) {
     const nextIndex = form.line_items.length;
     form.line_items.push({
         product_id: null,
+        line_group_id: getGroupValueByIndex(groupIndex),
         tax_rate_id: props.defaultSalesTaxRateId ?? null,
         description: '',
         quantity: 1,
@@ -519,10 +626,138 @@ function addLineItem() {
         account_id: props.defaultSalesAccountId ?? null,
     });
     discountTypes.value[nextIndex] = 'amount';
+    normalizeLineItemOrder();
+}
+
+function getGroupValueByIndex(index: number) {
+    return Number((form as any).line_groups[index]?.id) || index + 1;
+}
+
+normalizeLineItemOrder();
+
+function addLineGroup() {
+    const groups = (form as any).line_groups as Array<{ name: string; sort_order: number }>;
+    const nextSortOrder = groups.length;
+    groups.push({
+        name: `Group ${nextSortOrder + 1}`,
+        sort_order: nextSortOrder,
+    });
+}
+
+function removeLineGroup(index: number) {
+    const groups = (form as any).line_groups as Array<{ id?: number; name: string; sort_order: number }>;
+    if (groups.length <= 1) return;
+    const removedGroupId = getGroupValueByIndex(index);
+    groups.splice(index, 1);
+    groups.forEach((group, idx) => {
+        group.sort_order = idx;
+    });
+    form.line_items.forEach((item: any) => {
+        if (item.line_group_id === removedGroupId || !item.line_group_id) {
+            item.line_group_id = getGroupValueByIndex(0);
+        }
+    });
+    normalizeLineItemOrder();
 }
 
 function removeLineItem(index: number) {
-    if (form.line_items.length > 1) form.line_items.splice(index, 1);
+    if (form.line_items.length > 1) {
+        form.line_items.splice(index, 1);
+        normalizeLineItemOrder();
+    }
+}
+
+function onDragStart(itemIndex: number, event: DragEvent) {
+    draggedItemIndex.value = itemIndex;
+    activeDragIndex.value = itemIndex;
+    if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', String(itemIndex));
+        const preview = document.createElement('div');
+        preview.textContent = 'Moving line item';
+        preview.className = 'pointer-events-none rounded border border-blue-300 bg-blue-50 px-2 py-1 text-xs text-blue-700 shadow';
+        document.body.appendChild(preview);
+        event.dataTransfer.setDragImage(preview, 10, 10);
+        requestAnimationFrame(() => preview.remove());
+    }
+}
+
+function onDragEnd() {
+    draggedItemIndex.value = null;
+    dragOverItemIndex.value = null;
+    dragOverGroupId.value = null;
+    activeDragIndex.value = null;
+}
+
+function onDragOver(event: DragEvent) {
+    event.preventDefault();
+}
+
+function onDragEnterItem(itemIndex: number) {
+    dragOverItemIndex.value = itemIndex;
+    dragOverGroupId.value = null;
+}
+
+function onDragLeaveItem(itemIndex: number) {
+    if (dragOverItemIndex.value === itemIndex) {
+        dragOverItemIndex.value = null;
+    }
+}
+
+function onDragEnterGroup(groupId: number) {
+    dragOverGroupId.value = groupId;
+}
+
+function onDragLeaveGroup(groupId: number) {
+    if (dragOverGroupId.value === groupId) {
+        dragOverGroupId.value = null;
+    }
+}
+
+function moveItem(sourceIndex: number, targetIndex: number, targetGroupId: number) {
+    if (sourceIndex === targetIndex || sourceIndex < 0 || targetIndex < 0) return;
+    const moved = form.line_items[sourceIndex];
+    if (!moved) return;
+
+    form.line_items.splice(sourceIndex, 1);
+    (moved as any).line_group_id = targetGroupId;
+    const adjustedTarget = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+    form.line_items.splice(adjustedTarget, 0, moved);
+    normalizeLineItemOrder();
+}
+
+function onDropOnItem(targetItemIndex: number, targetGroupId: number) {
+    if (draggedItemIndex.value === null) return;
+    moveItem(draggedItemIndex.value, targetItemIndex, targetGroupId);
+    draggedItemIndex.value = null;
+    dragOverItemIndex.value = null;
+    dragOverGroupId.value = null;
+    activeDragIndex.value = null;
+}
+
+function onDropInGroup(groupId: number) {
+    if (draggedItemIndex.value === null) return;
+    const sourceIndex = draggedItemIndex.value;
+    const moved = form.line_items[sourceIndex];
+    if (!moved) {
+        draggedItemIndex.value = null;
+        return;
+    }
+
+    form.line_items.splice(sourceIndex, 1);
+    (moved as any).line_group_id = groupId;
+
+    const fallbackGroupId = getGroupValueByIndex(0);
+    const lastIndexInGroup = form.line_items.reduce((lastIndex, item: any, idx) => {
+        return (item.line_group_id ?? fallbackGroupId) === groupId ? idx : lastIndex;
+    }, -1);
+    const insertIndex = lastIndexInGroup >= 0 ? lastIndexInGroup + 1 : form.line_items.length;
+    form.line_items.splice(insertIndex, 0, moved);
+    normalizeLineItemOrder();
+    draggedItemIndex.value = null;
+    dragOverItemIndex.value = null;
+    dragOverGroupId.value = null;
+    activeDragIndex.value = null;
 }
 
 function productSuggestions(index: number) {
@@ -638,6 +873,17 @@ function formatCurrency(amount: number) {
 }
 
 function submit() {
-    form.put(`/credit-notes/${props.creditNote.id}`);
+    form.transform((data: any) => ({
+        ...data,
+        line_groups: (data.line_groups || []).map((group: any, index: number) => ({
+            id: group.id,
+            name: group.name,
+            sort_order: index,
+        })),
+        line_items: data.line_items.map((item: any) => ({
+            ...item,
+            line_group_id: item.line_group_id ?? getGroupValueByIndex(0),
+        })),
+    })).put(`/credit-notes/${props.creditNote.id}`);
 }
 </script>

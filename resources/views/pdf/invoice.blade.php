@@ -67,8 +67,8 @@
         }
         
         .company-logo {
-            max-width: 280px;
-            max-height: 160px;
+            max-width: 380px;
+            max-height: 260px;
             margin-bottom: 10px;
         }
         
@@ -451,7 +451,6 @@
     <table class="line-items-table">
         <thead>
             <tr>
-                <th>Item Code</th>
                 <th>Item Description</th>
                 <th class="text-right">QTY</th>
                 <th class="text-right">Price (Ex)</th>
@@ -461,11 +460,47 @@
             </tr>
         </thead>
         <tbody>
-            @foreach($invoice->lineItems ?? [] as $item)
+            @php
+                $lineGroups = $invoice->lineGroups ?? collect();
+                $items = $invoice->lineItems ?? collect();
+                $resolvedGroups = collect();
+                $renderedItemIds = collect();
+
+                foreach ($lineGroups->sortBy('sort_order') as $group) {
+                    $groupItems = $items->where('line_group_id', $group->id);
+                    if ($groupItems->isNotEmpty()) {
+                        $resolvedGroups->push((object) [
+                            'name' => $group->name,
+                            'items' => $groupItems,
+                        ]);
+                        $renderedItemIds = $renderedItemIds->merge($groupItems->pluck('id'));
+                    }
+                }
+
+                $ungroupedItems = $items->filter(function ($item) use ($renderedItemIds) {
+                    return !$renderedItemIds->contains($item->id);
+                });
+
+                if ($resolvedGroups->isEmpty() && $items->isNotEmpty()) {
+                    $resolvedGroups->push((object) [
+                        'name' => 'Items',
+                        'items' => $items,
+                    ]);
+                } elseif ($ungroupedItems->isNotEmpty()) {
+                    $resolvedGroups->push((object) [
+                        'name' => 'Items',
+                        'items' => $ungroupedItems,
+                    ]);
+                }
+            @endphp
+            @foreach($resolvedGroups as $group)
+                    @if($group->name)
+                        <tr class="group-header"><td colspan="6" style="font-weight: bold; background: #f5f5f5; padding: 4px 2px;">{{ $group->name }}</td></tr>
+                    @endif
+                    @foreach($group->items->sortBy('sort_order') as $item)
                 <tr>
-                    <td>{{ $item->product->sku ?? $item->product->barcode ?? '' }}</td>
                     <td>
-                        <div>{{ $item->description ?? 'Item Description' }}</div>
+                        <div>{{ $item->description ?? 'Item Description' }}{{ ($item->product && ($item->product->sku ?? $item->product->barcode)) ? ' (' . ($item->product->sku ?? $item->product->barcode) . ')' : '' }}</div>
                         @if(!empty($item->serialNumbers) && $item->serialNumbers->count() > 0)
                             <div style="margin-top: 4px; font-size: 9px; color: #666;">
                                 <strong>Serial Numbers:</strong>
@@ -489,13 +524,13 @@
                     <td class="text-right">
                         @if($item->taxRate)
                             R{{ number_format($item->tax_amount ?? 0, 2) }}
-                            <div style="font-size: 9px; color: #666;">{{ $item->taxRate->name }} ({{ $item->taxRate->rate }}%)</div>
                         @else
                             —
                         @endif
                     </td>
                     <td class="text-right">R{{ number_format($item->total ?? 0, 2) }}</td>
                 </tr>
+                    @endforeach
             @endforeach
         </tbody>
     </table>

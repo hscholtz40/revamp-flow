@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CreditNote;
 use App\Models\CreditNoteLineItem;
+use App\Models\LineGroup;
 use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\Payment;
@@ -150,6 +151,9 @@ class CreditNotesController extends Controller
             'credit_note_date' => 'required|date',
             'reference' => 'nullable|string|max:255',
             'notes' => 'nullable|string',
+            'line_groups' => 'nullable|array|min:1',
+            'line_groups.*.id' => 'nullable|integer',
+            'line_groups.*.name' => 'required_with:line_groups|string|max:255',
             'line_items' => 'required|array|min:1',
             'line_items.*.product_id' => 'nullable|exists:products,id',
             'line_items.*.description' => 'required|string',
@@ -160,6 +164,7 @@ class CreditNotesController extends Controller
             'line_items.*.tax_rate_id' => 'nullable|exists:tax_rates,id',
             'line_items.*.account_id' => 'nullable|exists:chart_of_accounts,id',
             'line_items.*.account_code' => 'nullable|string',
+            'line_items.*.line_group_id' => 'nullable|integer',
         ]);
 
         $creditNote = CreditNote::create([
@@ -174,6 +179,17 @@ class CreditNotesController extends Controller
             'notes' => $validated['notes'] ?? null,
             'status' => 'draft',
         ]);
+
+        $groupPayload = $validated['line_groups'] ?? [['name' => 'Items']];
+        $groupMap = [];
+        foreach (array_values($groupPayload) as $groupIndex => $groupData) {
+            $group = $creditNote->lineGroups()->create([
+                'name' => $groupData['name'] ?: 'Items',
+                'sort_order' => $groupIndex,
+            ]);
+            $groupMap[(string) ($groupData['id'] ?? ($groupIndex + 1))] = $group->id;
+        }
+        $defaultGroupId = reset($groupMap);
 
         foreach ($validated['line_items'] as $index => $itemData) {
             $quantity = $itemData['quantity'];
@@ -199,6 +215,7 @@ class CreditNotesController extends Controller
 
             CreditNoteLineItem::create([
                 'credit_note_id' => $creditNote->id,
+                'line_group_id' => $groupMap[(string) ($itemData['line_group_id'] ?? '')] ?? $defaultGroupId,
                 'product_id' => $itemData['product_id'] ?? null,
                 'tax_rate_id' => $itemData['tax_rate_id'] ?? null,
                 'account_id' => $itemData['account_id'] ?? null,
@@ -229,6 +246,8 @@ class CreditNotesController extends Controller
             'invoice',
             'lineItems.product',
             'lineItems.taxRate',
+            'lineItems.lineGroup',
+            'lineGroups',
             'company',
             'payments',
         ]);
@@ -245,7 +264,7 @@ class CreditNotesController extends Controller
     {
         $currentCompany = auth()->user()->getCurrentCompany();
 
-        $creditNote->load(['customer', 'invoice', 'lineItems.product', 'lineItems.taxRate']);
+        $creditNote->load(['customer', 'invoice', 'lineItems.product', 'lineItems.taxRate', 'lineItems.lineGroup', 'lineGroups']);
 
         $customers = Customer::where('company_id', $currentCompany->id)
             ->orderBy('name')
@@ -299,6 +318,9 @@ class CreditNotesController extends Controller
             'credit_note_date' => 'required|date',
             'reference' => 'nullable|string|max:255',
             'notes' => 'nullable|string',
+            'line_groups' => 'nullable|array|min:1',
+            'line_groups.*.id' => 'nullable|integer',
+            'line_groups.*.name' => 'required_with:line_groups|string|max:255',
             'line_items' => 'required|array|min:1',
             'line_items.*.product_id' => 'nullable|exists:products,id',
             'line_items.*.description' => 'required|string',
@@ -309,6 +331,7 @@ class CreditNotesController extends Controller
             'line_items.*.tax_rate_id' => 'nullable|exists:tax_rates,id',
             'line_items.*.account_id' => 'nullable|exists:chart_of_accounts,id',
             'line_items.*.account_code' => 'nullable|string',
+            'line_items.*.line_group_id' => 'nullable|integer',
         ]);
 
         $creditNote->update([
@@ -322,6 +345,17 @@ class CreditNotesController extends Controller
         ]);
 
         $creditNote->lineItems()->delete();
+        $creditNote->lineGroups()->delete();
+        $groupPayload = $validated['line_groups'] ?? [['name' => 'Items']];
+        $groupMap = [];
+        foreach (array_values($groupPayload) as $groupIndex => $groupData) {
+            $group = $creditNote->lineGroups()->create([
+                'name' => $groupData['name'] ?: 'Items',
+                'sort_order' => $groupIndex,
+            ]);
+            $groupMap[(string) ($groupData['id'] ?? ($groupIndex + 1))] = $group->id;
+        }
+        $defaultGroupId = reset($groupMap);
 
         foreach ($validated['line_items'] as $index => $itemData) {
             $quantity = $itemData['quantity'];
@@ -347,6 +381,7 @@ class CreditNotesController extends Controller
 
             CreditNoteLineItem::create([
                 'credit_note_id' => $creditNote->id,
+                'line_group_id' => $groupMap[(string) ($itemData['line_group_id'] ?? '')] ?? $defaultGroupId,
                 'product_id' => $itemData['product_id'] ?? null,
                 'tax_rate_id' => $itemData['tax_rate_id'] ?? null,
                 'account_id' => $itemData['account_id'] ?? null,

@@ -282,6 +282,43 @@
                         <h2 class="text-lg font-semibold text-gray-900">Line Items</h2>
                     </div>
 
+                    <div class="mb-4 rounded border border-gray-200 p-3">
+                        <div class="mb-2 flex items-center justify-between">
+                            <h3 class="text-sm font-medium text-gray-800">Line Groups</h3>
+                            <button
+                                type="button"
+                                @click="addLineGroup"
+                                class="rounded border px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                                :disabled="!canEdit"
+                            >
+                                + Add Group
+                            </button>
+                        </div>
+                        <div class="space-y-2">
+                            <div
+                                v-for="(group, groupIndex) in form.line_groups"
+                                :key="group.id || groupIndex"
+                                class="flex items-center gap-2"
+                            >
+                                <input
+                                    v-model="group.name"
+                                    type="text"
+                                    class="w-full rounded border px-2 py-1 text-sm"
+                                    :disabled="!canEdit"
+                                    placeholder="Group name"
+                                />
+                                <button
+                                    type="button"
+                                    @click="removeLineGroup(groupIndex)"
+                                    class="rounded border px-2 py-1 text-xs text-gray-500 hover:text-red-600"
+                                    :disabled="!canEdit || form.line_groups.length === 1"
+                                >
+                                    Remove
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                     <div v-if="form.errors.line_items" class="text-red-500 text-sm mb-4">
                         {{ form.errors.line_items }}
                     </div>
@@ -298,12 +335,42 @@
                         <div></div>
                     </div>
 
-                    <div class="divide-y divide-gray-100">
+                    <div class="space-y-4">
                         <div
-                            v-for="(item, index) in form.line_items"
-                            :key="index"
-                            class="py-3 px-1"
+                            v-for="groupBlock in groupedLineItems"
+                            :key="groupBlock.groupId"
+                            class="rounded border border-gray-200 transition-colors"
+                            :class="{ 'border-blue-300 bg-blue-50/30': dragOverGroupId === groupBlock.groupId && dragOverItemIndex === null }"
+                            @dragover="onDragOver"
+                            @dragenter.prevent="onDragEnterGroup(groupBlock.groupId)"
+                            @dragleave="onDragLeaveGroup(groupBlock.groupId)"
+                            @drop="onDropInGroup(groupBlock.groupId)"
                         >
+                            <div class="flex items-center justify-between bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700">
+                                <span>{{ groupBlock.group.name || `Group ${groupBlock.groupIndex + 1}` }}</span>
+                                <button
+                                    type="button"
+                                    @click.stop="addLineItem(groupBlock.groupIndex)"
+                                    class="rounded border px-2 py-1 text-xs text-gray-700 hover:bg-white"
+                                    :disabled="!canEdit"
+                                >
+                                    + Add line item
+                                </button>
+                            </div>
+
+                            <div
+                                v-for="({ item, index }) in groupBlock.items"
+                                :key="index"
+                                class="border-t border-gray-100 py-3 px-1 transition-colors"
+                                :class="{ 'bg-blue-50/60': dragOverItemIndex === index, 'opacity-60': activeDragIndex === index }"
+                                :draggable="canEdit"
+                                @dragstart="onDragStart(index, $event)"
+                                @dragend="onDragEnd"
+                                @dragover="onDragOver"
+                                @dragenter.prevent="onDragEnterItem(index)"
+                                @dragleave="onDragLeaveItem(index)"
+                                @drop.stop="onDropOnItem(index, groupBlock.groupId)"
+                            >
                             <div class="grid grid-cols-1 md:grid-cols-[3.5rem_1fr_6.5rem_9rem_8rem_8rem_5.5rem_2rem] gap-2 items-start">
                                 <!-- Qty -->
                                 <div>
@@ -448,7 +515,15 @@
                                 </div>
 
                                 <!-- Remove -->
-                                <div class="flex items-center justify-center md:pt-1.5">
+                                <div class="flex items-center justify-center gap-2 md:pt-1.5">
+                                    <svg class="h-5 w-5 cursor-grab rounded border border-gray-300 bg-gray-100 p-0.5 text-gray-600" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                        <circle cx="6" cy="5" r="1.2" />
+                                        <circle cx="6" cy="10" r="1.2" />
+                                        <circle cx="6" cy="15" r="1.2" />
+                                        <circle cx="12" cy="5" r="1.2" />
+                                        <circle cx="12" cy="10" r="1.2" />
+                                        <circle cx="12" cy="15" r="1.2" />
+                                    </svg>
                                     <button
                                         type="button"
                                         @click="removeLineItem(index)"
@@ -498,11 +573,12 @@
                             </div>
                         </div>
                     </div>
+                    </div>
 
                     <!-- Add Line Item button -->
                     <button
                         type="button"
-                        @click="addLineItem"
+                        @click="addLineItem(0)"
                         :disabled="!canEdit"
                         class="mt-3 w-full rounded border-2 border-dashed border-gray-300 py-2 text-sm text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
@@ -648,6 +724,7 @@ interface Company {
 
 interface LineItem {
     product_id: string | null;
+    line_group_id?: number | null;
     description: string;
     quantity: number;
     unit_price: number;
@@ -657,6 +734,12 @@ interface LineItem {
     serial_number_ids?: number[];
     tax_rate_id?: number | null;
     account_id?: number | null;
+}
+
+interface LineGroup {
+    id?: number;
+    name: string;
+    sort_order: number;
 }
 
 interface Invoice {
@@ -675,6 +758,8 @@ interface Invoice {
     notes?: string;
     terms?: string;
     line_items: LineItem[];
+    line_groups?: LineGroup[];
+    lineGroups?: LineGroup[];
 }
 
 interface Props {
@@ -697,6 +782,10 @@ const paymentTermsOptions = ['COD', 'Net 7 Days', 'Net 14 Days', 'Net 30 Days', 
 // Track product suggestions and discount types for each line item
 const showProductSuggestions = ref<Record<number, boolean>>({});
 const discountTypes = ref<Record<number, 'amount' | 'percentage'>>({});
+const draggedItemIndex = ref<number | null>(null);
+const dragOverItemIndex = ref<number | null>(null);
+const dragOverGroupId = ref<number | null>(null);
+const activeDragIndex = ref<number | null>(null);
 
 // Customer search
 const customerSearchQuery = ref('');
@@ -750,8 +839,14 @@ const form = useForm({
     discount_percentage: props.invoice.discount_percentage || 0,
     notes: props.invoice.notes || '',
     terms: props.invoice.terms || '',
+    line_groups: ((props.invoice.line_groups ?? props.invoice.lineGroups ?? []) as any[]).map((group: any, index: number) => ({
+        id: group.id,
+        name: group.name || `Group ${index + 1}`,
+        sort_order: Number(group.sort_order ?? index),
+    })),
     line_items: props.invoice.line_items.map(item => ({
         product_id: item.product_id?.toString() || null,
+        line_group_id: (item as any).line_group_id != null ? Number((item as any).line_group_id) : 1,
         description: item.description,
         quantity: item.quantity,
         unit_price: item.unit_price,
@@ -763,6 +858,10 @@ const form = useForm({
         account_id: (item as any).account_id ?? null,
     })) as LineItem[],
 });
+
+if (form.line_groups.length === 0) {
+    form.line_groups = [{ name: 'Items', sort_order: 0 }];
+}
 
 // Initialize discount types from existing line items
 props.invoice.line_items.forEach((item: any, index: number) => {
@@ -992,10 +1091,38 @@ watch(() => lineItemDiscountsTotal.value, (newTotal) => {
     form.discount_percentage = 0; // Clear percentage since we're using amount from line items
 });
 
-const addLineItem = () => {
+const normalizeLineItemOrder = () => {
+    const ordered: LineItem[] = [];
+    for (let groupIndex = 0; groupIndex < form.line_groups.length; groupIndex++) {
+        const groupId = getGroupValueByIndex(groupIndex);
+        const groupItems = form.line_items.filter((item) => (item.line_group_id ?? getGroupValueByIndex(0)) === groupId);
+        ordered.push(...groupItems);
+    }
+
+    const fallbackGroupId = getGroupValueByIndex(0);
+    const ungroupedItems = form.line_items.filter((item) => {
+        return !form.line_groups.some((_, idx) => (item.line_group_id ?? fallbackGroupId) === getGroupValueByIndex(idx));
+    });
+    ordered.push(...ungroupedItems.map((item) => ({ ...item, line_group_id: fallbackGroupId })));
+    form.line_items = ordered;
+};
+
+const groupedLineItems = computed(() =>
+    form.line_groups.map((group, groupIndex) => {
+        const groupId = getGroupValueByIndex(groupIndex);
+        const items = form.line_items
+            .map((item, index) => ({ item, index }))
+            .filter(({ item }) => (item.line_group_id ?? getGroupValueByIndex(0)) === groupId);
+
+        return { group, groupIndex, groupId, items };
+    }),
+);
+
+const addLineItem = (groupIndex = 0) => {
     const newIndex = form.line_items.length;
     form.line_items.push({
         product_id: null,
+        line_group_id: getGroupValueByIndex(groupIndex),
         description: '',
         quantity: 1,
         unit_price: 0,
@@ -1007,12 +1134,145 @@ const addLineItem = () => {
         account_id: props.defaultSalesAccountId || null,
     });
     discountTypes.value[newIndex] = 'amount';
+    normalizeLineItemOrder();
+};
+
+const getGroupValueByIndex = (index: number) => Number(form.line_groups[index]?.id) || index + 1;
+
+normalizeLineItemOrder();
+
+const addLineGroup = () => {
+    const nextSortOrder = form.line_groups.length;
+    form.line_groups.push({
+        name: `Group ${nextSortOrder + 1}`,
+        sort_order: nextSortOrder,
+    });
+};
+
+const removeLineGroup = (index: number) => {
+    if (form.line_groups.length <= 1) {
+        return;
+    }
+
+    const removedGroupId = getGroupValueByIndex(index);
+    form.line_groups.splice(index, 1);
+    form.line_groups.forEach((group, idx) => {
+        group.sort_order = idx;
+    });
+
+    const fallbackGroupId = getGroupValueByIndex(0);
+    form.line_items.forEach((item) => {
+        if (item.line_group_id === removedGroupId || !item.line_group_id) {
+            item.line_group_id = fallbackGroupId;
+        }
+    });
+    normalizeLineItemOrder();
 };
 
 const removeLineItem = (index: number) => {
     if (form.line_items.length > 1) {
         form.line_items.splice(index, 1);
+        normalizeLineItemOrder();
     }
+};
+
+const onDragStart = (itemIndex: number, event: DragEvent) => {
+    if (!canEdit.value) return;
+    draggedItemIndex.value = itemIndex;
+    activeDragIndex.value = itemIndex;
+    if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', String(itemIndex));
+        const preview = document.createElement('div');
+        preview.textContent = 'Moving line item';
+        preview.className = 'pointer-events-none rounded border border-blue-300 bg-blue-50 px-2 py-1 text-xs text-blue-700 shadow';
+        document.body.appendChild(preview);
+        event.dataTransfer.setDragImage(preview, 10, 10);
+        requestAnimationFrame(() => preview.remove());
+    }
+};
+
+const onDragEnd = () => {
+    draggedItemIndex.value = null;
+    dragOverItemIndex.value = null;
+    dragOverGroupId.value = null;
+    activeDragIndex.value = null;
+};
+
+const onDragOver = (event: DragEvent) => {
+    event.preventDefault();
+};
+
+const onDragEnterItem = (itemIndex: number) => {
+    if (!canEdit.value) return;
+    dragOverItemIndex.value = itemIndex;
+    dragOverGroupId.value = null;
+};
+
+const onDragLeaveItem = (itemIndex: number) => {
+    if (dragOverItemIndex.value === itemIndex) {
+        dragOverItemIndex.value = null;
+    }
+};
+
+const onDragEnterGroup = (groupId: number) => {
+    if (!canEdit.value) return;
+    dragOverGroupId.value = groupId;
+};
+
+const onDragLeaveGroup = (groupId: number) => {
+    if (dragOverGroupId.value === groupId) {
+        dragOverGroupId.value = null;
+    }
+};
+
+const moveItem = (sourceIndex: number, targetIndex: number, targetGroupId: number) => {
+    if (sourceIndex === targetIndex || sourceIndex < 0 || targetIndex < 0) return;
+
+    const moved = form.line_items[sourceIndex];
+    if (!moved) return;
+
+    form.line_items.splice(sourceIndex, 1);
+    moved.line_group_id = targetGroupId;
+    const adjustedTarget = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+    form.line_items.splice(adjustedTarget, 0, moved);
+    normalizeLineItemOrder();
+};
+
+const onDropOnItem = (targetItemIndex: number, targetGroupId: number) => {
+    if (!canEdit.value || draggedItemIndex.value === null) return;
+    moveItem(draggedItemIndex.value, targetItemIndex, targetGroupId);
+    draggedItemIndex.value = null;
+    dragOverItemIndex.value = null;
+    dragOverGroupId.value = null;
+    activeDragIndex.value = null;
+};
+
+const onDropInGroup = (groupId: number) => {
+    if (!canEdit.value || draggedItemIndex.value === null) return;
+
+    const sourceIndex = draggedItemIndex.value;
+    const moved = form.line_items[sourceIndex];
+    if (!moved) {
+        draggedItemIndex.value = null;
+        return;
+    }
+
+    form.line_items.splice(sourceIndex, 1);
+    moved.line_group_id = groupId;
+
+    const fallbackGroupId = getGroupValueByIndex(0);
+    const lastIndexInGroup = form.line_items.reduce((lastIndex, item, idx) => {
+        return (item.line_group_id ?? fallbackGroupId) === groupId ? idx : lastIndex;
+    }, -1);
+
+    const insertIndex = lastIndexInGroup >= 0 ? lastIndexInGroup + 1 : form.line_items.length;
+    form.line_items.splice(insertIndex, 0, moved);
+    normalizeLineItemOrder();
+    draggedItemIndex.value = null;
+    dragOverItemIndex.value = null;
+    dragOverGroupId.value = null;
+    activeDragIndex.value = null;
 };
 
 const calculateLineTotalValue = (item: LineItem) => {
@@ -1112,7 +1372,19 @@ const formatCurrency = (amount: number) => {
 };
 
 const submit = () => {
-    form.transform((data) => ({ ...data, contact_id: form.contact_id ?? null }))
+    form.transform((data) => ({
+        ...data,
+        contact_id: form.contact_id ?? null,
+        line_groups: data.line_groups.map((group, index) => ({
+            id: group.id,
+            name: group.name,
+            sort_order: index,
+        })),
+        line_items: data.line_items.map((item) => ({
+            ...item,
+            line_group_id: item.line_group_id ?? getGroupValueByIndex(0),
+        })),
+    }))
         .put(invoices.update(props.invoice.id).url);
 };
 </script>

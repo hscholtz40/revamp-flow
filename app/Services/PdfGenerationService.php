@@ -230,7 +230,15 @@ class PdfGenerationService
                     if (!is_array($item)) {
                         continue;
                     }
-                    
+
+                    // Add description_with_code: "Description (SKU)" when product has sku/barcode
+                    $itemCode = null;
+                    if (!empty($item['product'])) {
+                        $product = is_array($item['product']) ? $item['product'] : [];
+                        $itemCode = $product['sku'] ?? $product['barcode'] ?? null;
+                    }
+                    $item['description_with_code'] = ($item['description'] ?? '') . ($itemCode ? " ({$itemCode})" : '');
+
                     $itemHtml = $content;
                     // Replace {{this.property}} with item values
                     $itemHtml = preg_replace_callback(

@@ -12,6 +12,7 @@ class InvoiceLineItem extends Model
 
     protected $fillable = [
         'invoice_id',
+        'line_group_id',
         'product_id',
         'description',
         'quantity',
@@ -43,6 +44,11 @@ class InvoiceLineItem extends Model
     public function invoice(): BelongsTo
     {
         return $this->belongsTo(Invoice::class);
+    }
+
+    public function lineGroup(): BelongsTo
+    {
+        return $this->belongsTo(LineGroup::class);
     }
 
     /**

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Facades\DB;
 
 class Quote extends Model
@@ -74,6 +75,11 @@ class Quote extends Model
     public function lineItems(): HasMany
     {
         return $this->hasMany(QuoteLineItem::class)->orderBy('sort_order');
+    }
+
+    public function lineGroups(): MorphMany
+    {
+        return $this->morphMany(LineGroup::class, 'line_groupable')->orderBy('sort_order');
     }
 
     public function invoice(): BelongsTo
@@ -220,10 +226,31 @@ class Quote extends Model
             'terms_conditions' => $this->terms_conditions,
         ]);
 
-        // Copy line items
+        $this->load('lineItems.lineGroup', 'lineGroups');
+        $groupMap = [];
+        foreach ($this->lineGroups as $group) {
+            $newGroup = LineGroup::create([
+                'line_groupable_type' => Jobcard::class,
+                'line_groupable_id' => $jobcard->id,
+                'name' => $group->name,
+                'sort_order' => $group->sort_order,
+            ]);
+            $groupMap[$group->id] = $newGroup->id;
+        }
+        if (empty($groupMap)) {
+            $defaultGroup = LineGroup::createDefaultFor($jobcard);
+            $defaultGroupId = $defaultGroup->id;
+        } else {
+            $defaultGroupId = $groupMap[$this->lineGroups->first()?->id] ?? reset($groupMap);
+        }
+
         foreach ($this->lineItems as $lineItem) {
+            $groupId = ($lineItem->line_group_id && isset($groupMap[$lineItem->line_group_id]))
+                ? $groupMap[$lineItem->line_group_id]
+                : $defaultGroupId;
             JobcardLineItem::create([
                 'jobcard_id' => $jobcard->id,
+                'line_group_id' => $groupId,
                 'product_id' => $lineItem->product_id,
                 'description' => $lineItem->description,
                 'quantity' => $lineItem->quantity,
@@ -237,6 +264,8 @@ class Quote extends Model
                 'sort_order' => $lineItem->sort_order,
             ]);
         }
+
+        $this->update(['status' => 'accepted']);
 
         return $jobcard;
     }
@@ -274,10 +303,31 @@ class Quote extends Model
             'source_id' => $this->id,
         ]);
 
-        // Copy line items
+        $this->load('lineItems.lineGroup', 'lineGroups');
+        $groupMap = [];
+        foreach ($this->lineGroups as $group) {
+            $newGroup = LineGroup::create([
+                'line_groupable_type' => Invoice::class,
+                'line_groupable_id' => $invoice->id,
+                'name' => $group->name,
+                'sort_order' => $group->sort_order,
+            ]);
+            $groupMap[$group->id] = $newGroup->id;
+        }
+        if (empty($groupMap)) {
+            $defaultGroup = LineGroup::createDefaultFor($invoice);
+            $defaultGroupId = $defaultGroup->id;
+        } else {
+            $defaultGroupId = $groupMap[$this->lineGroups->first()?->id] ?? reset($groupMap);
+        }
+
         foreach ($this->lineItems as $lineItem) {
+            $groupId = ($lineItem->line_group_id && isset($groupMap[$lineItem->line_group_id]))
+                ? $groupMap[$lineItem->line_group_id]
+                : $defaultGroupId;
             InvoiceLineItem::create([
                 'invoice_id' => $invoice->id,
+                'line_group_id' => $groupId,
                 'product_id' => $lineItem->product_id,
                 'description' => $lineItem->description,
                 'quantity' => $lineItem->quantity,
@@ -291,6 +341,8 @@ class Quote extends Model
                 'sort_order' => $lineItem->sort_order,
             ]);
         }
+
+        $this->update(['status' => 'accepted']);
 
         return $invoice;
     }

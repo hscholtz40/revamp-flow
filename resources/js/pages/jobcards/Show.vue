@@ -219,9 +219,9 @@
                                                     :href="products.show(item.product_id).url"
                                                     class="text-blue-600 hover:text-blue-800 hover:underline"
                                                 >
-                                                    {{ item.description }}
+                                                    {{ item.description }}{{ (item.product?.sku || item.product?.barcode) ? ` (${item.product.sku || item.product.barcode})` : '' }}
                                                 </Link>
-                                                <span v-else>{{ item.description }}</span>
+                                                <span v-else>{{ item.description }}{{ (item.product?.sku || item.product?.barcode) ? ` (${item.product.sku || item.product.barcode})` : '' }}</span>
                                             </td>
                                             <td v-if="!isLimitedUser" class="px-3 py-3 whitespace-nowrap text-sm text-gray-900 text-right">
                                                 {{ item.formatted_unit_price }}

@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Facades\DB;
 
 class CreditNote extends Model
@@ -68,6 +69,11 @@ class CreditNote extends Model
     public function lineItems(): HasMany
     {
         return $this->hasMany(CreditNoteLineItem::class)->orderBy('sort_order');
+    }
+
+    public function lineGroups(): MorphMany
+    {
+        return $this->morphMany(LineGroup::class, 'line_groupable')->orderBy('sort_order');
     }
 
     public function payments(): HasMany

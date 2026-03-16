@@ -133,10 +133,7 @@
                                 <tbody class="divide-y divide-gray-200 bg-white">
                                     <tr v-for="item in creditNote.line_items" :key="item.id">
                                         <td class="px-3 py-3 text-sm text-gray-900">
-                                            <span>{{ item.description }}</span>
-                                            <span v-if="item.product" class="ml-1 text-xs text-gray-500">
-                                                {{ item.product.sku ? `(${item.product.sku})` : '' }}
-                                            </span>
+                                            <span>{{ item.description }}{{ (item.product?.sku || item.product?.barcode) ? ` (${item.product.sku || item.product.barcode})` : '' }}</span>
                                         </td>
                                         <td class="px-3 py-3 text-center text-sm text-gray-900">{{ item.quantity }}</td>
                                         <td class="whitespace-nowrap px-3 py-3 text-right text-sm text-gray-900">{{ formatCurrency(item.unit_price) }}</td>

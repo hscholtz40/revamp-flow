@@ -12,6 +12,7 @@ class PurchaseOrderItem extends Model
 
     protected $fillable = [
         'purchase_order_id',
+        'line_group_id',
         'product_id',
         'quantity',
         'unit_cost',
@@ -40,6 +41,11 @@ class PurchaseOrderItem extends Model
     public function purchaseOrder(): BelongsTo
     {
         return $this->belongsTo(PurchaseOrder::class);
+    }
+
+    public function lineGroup(): BelongsTo
+    {
+        return $this->belongsTo(LineGroup::class);
     }
 
     /**

@@ -1,7 +1,27 @@
 # Changelog
 
+## 2026-03-17 - version 1.7.7
+
+- Added line groups to all document line items: quotes, jobcards, invoices, credit notes, and purchase orders. Each document gets a default "Items" group when created; line groups are displayed on PDFs with group headers. Document conversions (quote→jobcard, quote→invoice, jobcard→invoice) copy line groups and assign line items to the corresponding groups.
+- Added line group controls to document create/edit forms (quotes, invoices, jobcards, credit notes, and purchase orders): users can add/remove group names and assign each line item to a group from the form UI.
+- Updated PDF rendering for historical documents so line items still print when line groups are missing or mismatched; ungrouped items now fall back into an "Items" section.
+- Reworked quote line-group editing UX in Create/Edit: line items now render under their group sections (no per-line group dropdown), and dragging a line item between positions/groups updates both order and group assignment.
+- Applied the same grouped line-item + drag/drop UX to invoice, jobcard, credit note, and purchase order forms so line items are managed directly within each group and can be reordered or moved between groups by drop position.
+- Fixed edit screens for historic documents so line items with missing/invalid `line_group_id` are auto-assigned to the default group on load and no longer disappear.
+- Added drag/drop UI affordances in grouped line-item editors (quotes, invoices, jobcards, credit notes, and purchase orders): visible grab handles plus highlighted drop targets for clearer reordering/move feedback.
+- Improved grouped line-item drag UX: custom drag preview chip now appears while dragging, rows get active drag styling, and grab handles use higher-contrast bordered badges for better visibility.
+- Fixed Xero invoice export validation for rounding adjustment lines by reconciling outbound `UnitAmount` with stored `LineAmount` on non-discounted lines when totals differ, preventing "line total does not match expected line total" sync failures.
+- Simplified PDF line-item tax columns across invoice, quote, proforma invoice, jobcard, and purchase order templates by removing the secondary tax name/rate text under each tax amount.
+- Fixed Xero payment export for fully paid local invoices: removed an incorrect cap that used JCO `remaining_balance` (0 on paid invoices), and expanded invoice export selection to include invoices with unsynced payment records so payment sync retries are not skipped.
+
 ## 2026-03-16 - version 1.7.6
 
+- Document line items: show item code (SKU/barcode) in brackets with product name/description in PDFs, Show pages, and PDF template editor presets.
+- Jobcards list: hide completed and cancelled jobcards by default; add "Show closed" checkbox in filters to include them.
+- Mark quote as accepted when converted to jobcard or invoice.
+- Quotes list: hide accepted/rejected quotes by default; add "Show closed" checkbox in filters to include them.
+- Added Invoice column to jobcards list view (after Customer) showing linked invoice number with link when jobcard was converted to an invoice.
+- Added approval row at bottom of quote and proforma invoice PDFs with Received by, Date, and Signature fields (dashed lines for handwritten completion).
 - Fixed quote and jobcard Edit pages so line item tax rate and account selections are retained when editing: pass document as array to ensure tax_rate_id and account_id are included, and coerce values to numbers for correct select binding.
 - Retained tax_rate_id and account_id on line items when converting quote→jobcard, quote→invoice, and jobcard→invoice; also copy discount_amount and discount_percentage for consistency.
 - Added Job Card column to invoices list (after Customer) showing linked jobcard number when invoice was converted from a jobcard.

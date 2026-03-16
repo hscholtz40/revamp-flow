@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Product;
+use App\Models\LineGroup;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
 use App\Models\ChartOfAccount;
@@ -126,12 +127,16 @@ class PurchaseOrdersController extends Controller
             'expected_delivery_date' => ['nullable', 'date'],
             'notes' => ['nullable', 'string'],
             'terms' => ['nullable', 'string'],
+            'line_groups' => ['nullable', 'array', 'min:1'],
+            'line_groups.*.id' => ['nullable', 'integer'],
+            'line_groups.*.name' => ['required_with:line_groups', 'string', 'max:255'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'exists:products,id'],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
             'items.*.unit_cost' => ['required', 'numeric'],
             'items.*.description' => ['nullable', 'string'],
             'items.*.tax_rate_id' => ['nullable', 'exists:tax_rates,id'],
+            'items.*.line_group_id' => ['nullable', 'integer'],
         ]);
 
         $supplier = Supplier::findOrFail($validated['supplier_id']);
@@ -152,9 +157,21 @@ class PurchaseOrdersController extends Controller
             'user_id' => auth()->id(),
         ]);
 
+        $groupPayload = $validated['line_groups'] ?? [['name' => 'Items']];
+        $groupMap = [];
+        foreach (array_values($groupPayload) as $groupIndex => $groupData) {
+            $group = $po->lineGroups()->create([
+                'name' => $groupData['name'] ?: 'Items',
+                'sort_order' => $groupIndex,
+            ]);
+            $groupMap[(string) ($groupData['id'] ?? ($groupIndex + 1))] = $group->id;
+        }
+        $defaultGroupId = reset($groupMap);
+
         foreach ($validated['items'] as $item) {
             PurchaseOrderItem::create([
                 'purchase_order_id' => $po->id,
+                'line_group_id' => $groupMap[(string) ($item['line_group_id'] ?? '')] ?? $defaultGroupId,
                 'product_id' => $item['product_id'],
                 'quantity' => $item['quantity'],
                 'unit_cost' => $item['unit_cost'],
@@ -407,7 +424,7 @@ class PurchaseOrdersController extends Controller
             abort(403, 'Unauthorized access to purchase order.');
         }
 
-        $purchaseOrder->load(['supplier', 'items.product', 'items.taxRate', 'company']);
+        $purchaseOrder->load(['supplier', 'items.product', 'items.taxRate', 'items.lineGroup', 'lineGroups', 'company']);
         
         $company = $purchaseOrder->company;
         $templateId = $request->get('template_id');
@@ -439,7 +456,7 @@ class PurchaseOrdersController extends Controller
             'customMessage' => 'nullable|string',
         ]);
 
-        $purchaseOrder->load(['supplier', 'items.product', 'items.taxRate', 'company']);
+        $purchaseOrder->load(['supplier', 'items.product', 'items.taxRate', 'items.lineGroup', 'lineGroups', 'company']);
         
         // Get user's SMTP settings
         $user = auth()->user();

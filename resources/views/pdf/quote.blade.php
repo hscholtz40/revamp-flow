@@ -260,6 +260,32 @@
             line-height: 1.4;
         }
         
+        .signature-section {
+            clear: both;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #000;
+        }
+        
+        .signature-row {
+            display: table;
+            width: 100%;
+            margin-bottom: 15px;
+        }
+        
+        .signature-item {
+            display: table-cell;
+            width: 33.33%;
+            text-align: left;
+            font-size: 11px;
+        }
+        
+        .signature-line {
+            border-bottom: 1px dashed #000;
+            height: 20px;
+            margin-top: 5px;
+        }
+        
         .footer {
             position: fixed;
             bottom: 20px;
@@ -421,9 +447,46 @@
             </tr>
         </thead>
         <tbody>
-            @foreach($quote->lineItems ?? [] as $item)
+            @php
+                $lineGroups = $quote->lineGroups ?? collect();
+                $items = $quote->lineItems ?? collect();
+                $resolvedGroups = collect();
+                $renderedItemIds = collect();
+
+                foreach ($lineGroups->sortBy('sort_order') as $group) {
+                    $groupItems = $items->where('line_group_id', $group->id);
+                    if ($groupItems->isNotEmpty()) {
+                        $resolvedGroups->push((object) [
+                            'name' => $group->name,
+                            'items' => $groupItems,
+                        ]);
+                        $renderedItemIds = $renderedItemIds->merge($groupItems->pluck('id'));
+                    }
+                }
+
+                $ungroupedItems = $items->filter(function ($item) use ($renderedItemIds) {
+                    return !$renderedItemIds->contains($item->id);
+                });
+
+                if ($resolvedGroups->isEmpty() && $items->isNotEmpty()) {
+                    $resolvedGroups->push((object) [
+                        'name' => 'Items',
+                        'items' => $items,
+                    ]);
+                } elseif ($ungroupedItems->isNotEmpty()) {
+                    $resolvedGroups->push((object) [
+                        'name' => 'Items',
+                        'items' => $ungroupedItems,
+                    ]);
+                }
+            @endphp
+            @foreach($resolvedGroups as $group)
+                    @if($group->name)
+                        <tr class="group-header"><td colspan="6" style="font-weight: bold; background: #f5f5f5; padding: 4px 2px;">{{ $group->name }}</td></tr>
+                    @endif
+                    @foreach($group->items->sortBy('sort_order') as $item)
                 <tr>
-                    <td>{{ $item->description ?? 'Item Description' }}</td>
+                    <td>{{ $item->description ?? 'Item Description' }}{{ ($item->product && ($item->product->sku ?? $item->product->barcode)) ? ' (' . ($item->product->sku ?? $item->product->barcode) . ')' : '' }}</td>
                     <td class="text-right">{{ number_format($item->quantity ?? 0, 2) }}</td>
                     <td class="text-right">R{{ number_format($item->unit_price ?? 0, 2) }}</td>
                     <td class="text-right">
@@ -438,13 +501,13 @@
                     <td class="text-right">
                         @if($item->taxRate)
                             R{{ number_format($item->tax_amount ?? 0, 2) }}
-                            <div style="font-size: 9px; color: #666;">{{ $item->taxRate->name }} ({{ $item->taxRate->rate }}%)</div>
                         @else
                             —
                         @endif
                     </td>
                     <td class="text-right">R{{ number_format($item->total ?? 0, 2) }}</td>
                 </tr>
+                    @endforeach
             @endforeach
         </tbody>
     </table>
@@ -482,6 +545,23 @@
         @if($quote->terms_conditions)
             <p>{{ $quote->terms_conditions }}</p>
         @endif
+    </div>
+    
+    <div class="signature-section">
+        <div class="signature-row">
+            <div class="signature-item">
+                <div>Received by</div>
+                <div class="signature-line"></div>
+            </div>
+            <div class="signature-item">
+                <div>Date</div>
+                <div class="signature-line"></div>
+            </div>
+            <div class="signature-item">
+                <div>Signature</div>
+                <div class="signature-line"></div>
+            </div>
+        </div>
     </div>
     
     <div class="footer">

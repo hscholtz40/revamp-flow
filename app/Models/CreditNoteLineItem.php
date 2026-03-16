@@ -12,6 +12,7 @@ class CreditNoteLineItem extends Model
 
     protected $fillable = [
         'credit_note_id',
+        'line_group_id',
         'product_id',
         'tax_rate_id',
         'description',
@@ -38,6 +39,11 @@ class CreditNoteLineItem extends Model
     public function creditNote(): BelongsTo
     {
         return $this->belongsTo(CreditNote::class);
+    }
+
+    public function lineGroup(): BelongsTo
+    {
+        return $this->belongsTo(LineGroup::class);
     }
 
     public function product(): BelongsTo

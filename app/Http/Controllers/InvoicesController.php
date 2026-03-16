@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\InvoiceLineItem;
+use App\Models\LineGroup;
 use App\Models\Product;
 use App\Models\Quote;
 use App\Models\Jobcard;
@@ -282,6 +283,8 @@ class InvoicesController extends Controller
                 $invoice->update(['salesperson_id' => $salespersonId]);
             }
 
+            $defaultGroup = LineGroup::createDefaultFor($invoice);
+
             $stockService = new StockService();
             foreach ($validated['line_items'] as $index => $lineItemData) {
                 $quantity = (int) ($lineItemData['quantity'] ?? 0);
@@ -302,6 +305,7 @@ class InvoicesController extends Controller
 
                 InvoiceLineItem::create([
                     'invoice_id' => $invoice->id,
+                    'line_group_id' => $defaultGroup->id,
                     'product_id' => $lineItemData['product_id'],
                     'description' => $lineItemData['description'],
                     'quantity' => $quantity,
@@ -406,6 +410,9 @@ class InvoicesController extends Controller
             'discount_percentage' => 'nullable|numeric|min:0|max:100',
             'notes' => 'nullable|string',
             'terms' => 'nullable|string',
+            'line_groups' => 'nullable|array|min:1',
+            'line_groups.*.id' => 'nullable|integer',
+            'line_groups.*.name' => 'required_with:line_groups|string|max:255',
             'line_items' => 'required|array|min:1',
             'line_items.*.product_id' => 'nullable|exists:products,id',
             'line_items.*.description' => 'required|string',
@@ -415,6 +422,7 @@ class InvoicesController extends Controller
             'line_items.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
             'line_items.*.tax_rate_id' => 'nullable|exists:tax_rates,id',
             'line_items.*.account_id' => 'nullable|exists:chart_of_accounts,id',
+            'line_items.*.line_group_id' => 'nullable|integer',
             'line_items.*.serial_number_ids' => 'nullable|array',
             'line_items.*.serial_number_ids.*' => 'exists:product_serial_numbers,id',
         ]);
@@ -448,6 +456,17 @@ class InvoicesController extends Controller
             'terms' => $validated['terms'],
         ]);
 
+        $groupPayload = $validated['line_groups'] ?? [['name' => 'Items']];
+        $groupMap = [];
+        foreach (array_values($groupPayload) as $groupIndex => $groupData) {
+            $group = $invoice->lineGroups()->create([
+                'name' => $groupData['name'] ?: 'Items',
+                'sort_order' => $groupIndex,
+            ]);
+            $groupMap[(string) ($groupData['id'] ?? ($groupIndex + 1))] = $group->id;
+        }
+        $defaultGroupId = reset($groupMap);
+
         // Create line items and deduct stock
         $stockService = new StockService();
         foreach ($validated['line_items'] as $index => $lineItemData) {
@@ -478,6 +497,7 @@ class InvoicesController extends Controller
 
             $lineItem = InvoiceLineItem::create([
                 'invoice_id' => $invoice->id,
+                'line_group_id' => $groupMap[(string) ($lineItemData['line_group_id'] ?? '')] ?? $defaultGroupId,
                 'product_id' => $lineItemData['product_id'],
                 'description' => $lineItemData['description'],
                 'quantity' => $quantity,
@@ -624,7 +644,7 @@ class InvoicesController extends Controller
     {
         $currentCompany = auth()->user()->getCurrentCompany();
         
-        $invoice->load(['customer', 'contact', 'lineItems.product']);
+        $invoice->load(['customer', 'contact', 'lineItems.product', 'lineItems.lineGroup', 'lineGroups']);
 
         $customers = Customer::where('company_id', $currentCompany->id)
             ->orderBy('name')
@@ -720,6 +740,9 @@ class InvoicesController extends Controller
             'discount_percentage' => 'nullable|numeric|min:0|max:100',
             'notes' => 'nullable|string',
             'terms' => 'nullable|string',
+            'line_groups' => 'nullable|array|min:1',
+            'line_groups.*.id' => 'nullable|integer',
+            'line_groups.*.name' => 'required_with:line_groups|string|max:255',
             'line_items' => 'required|array|min:1',
             'line_items.*.product_id' => 'nullable|exists:products,id',
             'line_items.*.description' => 'required|string',
@@ -729,6 +752,7 @@ class InvoicesController extends Controller
             'line_items.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
             'line_items.*.tax_rate_id' => 'nullable|exists:tax_rates,id',
             'line_items.*.account_id' => 'nullable|exists:chart_of_accounts,id',
+            'line_items.*.line_group_id' => 'nullable|integer',
             'line_items.*.serial_number_ids' => 'nullable|array',
             'line_items.*.serial_number_ids.*' => 'exists:product_serial_numbers,id',
         ]);
@@ -826,6 +850,17 @@ class InvoicesController extends Controller
 
         // Delete existing line items
         $invoice->lineItems()->delete();
+        $invoice->lineGroups()->delete();
+        $groupPayload = $validated['line_groups'] ?? [['name' => 'Items']];
+        $groupMap = [];
+        foreach (array_values($groupPayload) as $groupIndex => $groupData) {
+            $group = $invoice->lineGroups()->create([
+                'name' => $groupData['name'] ?: 'Items',
+                'sort_order' => $groupIndex,
+            ]);
+            $groupMap[(string) ($groupData['id'] ?? ($groupIndex + 1))] = $group->id;
+        }
+        $defaultGroupId = reset($groupMap);
 
         // Create new line items and deduct stock (if invoice is not cancelled)
         foreach ($validated['line_items'] as $index => $lineItemData) {
@@ -856,6 +891,7 @@ class InvoicesController extends Controller
 
             $lineItem = InvoiceLineItem::create([
                 'invoice_id' => $invoice->id,
+                'line_group_id' => $groupMap[(string) ($lineItemData['line_group_id'] ?? '')] ?? $defaultGroupId,
                 'product_id' => $lineItemData['product_id'],
                 'description' => $lineItemData['description'],
                 'quantity' => $quantity,
@@ -1097,7 +1133,7 @@ class InvoicesController extends Controller
      */
     public function downloadPdf(Request $request, Invoice $invoice)
     {
-        $invoice->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'company', 'source']);
+        $invoice->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company', 'source']);
         
         // Load serial numbers for line items that have serial_number_ids
         foreach ($invoice->lineItems as $lineItem) {
@@ -1128,7 +1164,7 @@ class InvoicesController extends Controller
      */
     public function printPdf(Request $request, Invoice $invoice)
     {
-        $invoice->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'company', 'source']);
+        $invoice->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company', 'source']);
         
         foreach ($invoice->lineItems as $lineItem) {
             if (!empty($lineItem->serial_number_ids)) {

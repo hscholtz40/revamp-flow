@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Company;
 use App\Models\Customer;
+use App\Models\LineGroup;
 use App\Models\Quote;
 use App\Models\QuoteLineItem;
 use App\Models\Product;
@@ -32,6 +33,12 @@ class QuotesController extends Controller
         
         $query = Quote::with(['customer'])
             ->where('company_id', $currentCompany->id);
+
+        // Hide closed (accepted/rejected) quotes unless "show closed" is checked
+        $showClosed = filter_var($request->input('show_closed', false), FILTER_VALIDATE_BOOLEAN);
+        if (!$showClosed) {
+            $query->whereNotIn('status', ['accepted', 'rejected']);
+        }
 
         // Apply filters
         if ($request->filled('status')) {
@@ -77,6 +84,7 @@ class QuotesController extends Controller
                 'status' => $request->input('status', ''),
                 'customer_id' => $request->input('customer_id', ''),
                 'search' => $request->input('search', ''),
+                'show_closed' => $showClosed,
                 'sort_by' => $sortBy,
                 'sort_dir' => $sortDir,
             ],
@@ -138,6 +146,9 @@ class QuotesController extends Controller
             'discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'notes' => ['nullable', 'string'],
             'terms_conditions' => ['nullable', 'string'],
+            'line_groups' => ['nullable', 'array', 'min:1'],
+            'line_groups.*.id' => ['nullable', 'integer'],
+            'line_groups.*.name' => ['required_with:line_groups', 'string', 'max:255'],
             'line_items' => ['required', 'array', 'min:1'],
             'line_items.*.description' => ['required', 'string', 'max:255'],
             'line_items.*.quantity' => ['required', 'integer', 'min:1'],
@@ -147,6 +158,7 @@ class QuotesController extends Controller
             'line_items.*.product_id' => ['nullable', 'exists:products,id'],
             'line_items.*.tax_rate_id' => ['nullable', 'exists:tax_rates,id'],
             'line_items.*.account_id' => ['nullable', 'exists:chart_of_accounts,id'],
+            'line_items.*.line_group_id' => ['nullable', 'integer'],
         ]);
 
         // Create the quote
@@ -169,11 +181,23 @@ class QuotesController extends Controller
             'terms_conditions' => $validated['terms_conditions'],
         ]);
 
+        $groupPayload = $validated['line_groups'] ?? [['name' => 'Items']];
+        $groupMap = [];
+        foreach (array_values($groupPayload) as $groupIndex => $groupData) {
+            $group = $quote->lineGroups()->create([
+                'name' => $groupData['name'] ?: 'Items',
+                'sort_order' => $groupIndex,
+            ]);
+            $groupMap[(string) ($groupData['id'] ?? ($groupIndex + 1))] = $group->id;
+        }
+        $defaultGroupId = reset($groupMap);
+
         // Create line items
         $defaultSalesAccountId = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id)?->id;
         foreach ($validated['line_items'] as $index => $lineItemData) {
             $lineItem = new QuoteLineItem([
                 'quote_id' => $quote->id,
+                'line_group_id' => $groupMap[(string) ($lineItemData['line_group_id'] ?? '')] ?? $defaultGroupId,
                 'product_id' => $lineItemData['product_id'] ?? null,
                 'description' => $lineItemData['description'],
                 'quantity' => $lineItemData['quantity'],
@@ -214,7 +238,7 @@ class QuotesController extends Controller
      */
     public function show(Quote $quote): Response
     {
-        $quote->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'company', 'invoice']);
+        $quote->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineItems.lineGroup', 'lineGroups', 'company', 'invoice']);
         
         $currentCompany = auth()->user()->getCurrentCompany();
         
@@ -245,7 +269,7 @@ class QuotesController extends Controller
     public function edit(Quote $quote): Response
     {
         $currentCompany = auth()->user()->getCurrentCompany();
-        $quote->load(['customer', 'contact', 'lineItems.product']);
+        $quote->load(['customer', 'contact', 'lineItems.product', 'lineItems.lineGroup', 'lineGroups']);
         $customers = Customer::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name', 'email', 'phone', 'account_code']);
         $products = Product::where('company_id', $currentCompany->id)
             ->where('is_active', true)
@@ -293,6 +317,9 @@ class QuotesController extends Controller
             'discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'notes' => ['nullable', 'string'],
             'terms_conditions' => ['nullable', 'string'],
+            'line_groups' => ['nullable', 'array', 'min:1'],
+            'line_groups.*.id' => ['nullable', 'integer'],
+            'line_groups.*.name' => ['required_with:line_groups', 'string', 'max:255'],
             'line_items' => ['required', 'array', 'min:1'],
             'line_items.*.description' => ['required', 'string', 'max:255'],
             'line_items.*.quantity' => ['required', 'integer', 'min:1'],
@@ -302,6 +329,7 @@ class QuotesController extends Controller
             'line_items.*.product_id' => ['nullable', 'exists:products,id'],
             'line_items.*.tax_rate_id' => ['nullable', 'exists:tax_rates,id'],
             'line_items.*.account_id' => ['nullable', 'exists:chart_of_accounts,id'],
+            'line_items.*.line_group_id' => ['nullable', 'integer'],
         ]);
 
         // Check if user can edit completed quotes (accepted status)
@@ -334,12 +362,24 @@ class QuotesController extends Controller
 
         // Delete existing line items
         $quote->lineItems()->delete();
+        $quote->lineGroups()->delete();
+        $groupPayload = $validated['line_groups'] ?? [['name' => 'Items']];
+        $groupMap = [];
+        foreach (array_values($groupPayload) as $groupIndex => $groupData) {
+            $group = $quote->lineGroups()->create([
+                'name' => $groupData['name'] ?: 'Items',
+                'sort_order' => $groupIndex,
+            ]);
+            $groupMap[(string) ($groupData['id'] ?? ($groupIndex + 1))] = $group->id;
+        }
+        $defaultGroupId = reset($groupMap);
 
         // Create new line items
         $defaultSalesAccountId = ChartOfAccount::getDefaultSalesForCompany($quote->company_id)?->id;
         foreach ($validated['line_items'] as $index => $lineItemData) {
             $lineItem = new QuoteLineItem([
                 'quote_id' => $quote->id,
+                'line_group_id' => $groupMap[(string) ($lineItemData['line_group_id'] ?? '')] ?? $defaultGroupId,
                 'product_id' => $lineItemData['product_id'] ?? null,
                 'description' => $lineItemData['description'],
                 'quantity' => $lineItemData['quantity'],
@@ -440,7 +480,7 @@ class QuotesController extends Controller
      */
     public function downloadPDF(Request $request, Quote $quote)
     {
-        $quote->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'company']);
+        $quote->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company']);
         
         // Update status to sent when PDF is downloaded
         if ($quote->status === 'draft') {
@@ -482,7 +522,7 @@ class QuotesController extends Controller
             return redirect()->back()->withErrors(['email' => 'At least one valid email is required.']);
         }
 
-        $quote->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'company']);
+        $quote->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company']);
         
         // Get user's SMTP settings
         $user = auth()->user();

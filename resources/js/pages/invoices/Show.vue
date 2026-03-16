@@ -200,7 +200,7 @@
                                                                 :href="products.show(item.product.id).url"
                                                                 class="text-blue-600 hover:text-blue-800 hover:underline"
                                                             >
-                                                                {{ item.description }}
+                                                                {{ item.description }}{{ (item.product?.sku || item.product?.barcode) ? ` (${item.product.sku || item.product.barcode})` : '' }}
                                                             </Link>
                                                         </template>
                                                         <template v-else-if="item.product_id">
@@ -208,11 +208,11 @@
                                                                 :href="products.show(item.product_id).url"
                                                                 class="text-blue-600 hover:text-blue-800 hover:underline"
                                                             >
-                                                                {{ item.description }}
+                                                                {{ item.description }}{{ (item.product?.sku || item.product?.barcode) ? ` (${item.product.sku || item.product.barcode})` : '' }}
                                                             </Link>
                                                         </template>
                                                         <template v-else>
-                                                            <span>{{ item.description }}</span>
+                                                            <span>{{ item.description }}{{ (item.product?.sku || item.product?.barcode) ? ` (${item.product.sku || item.product.barcode})` : '' }}</span>
                                                         </template>
                                                     </div>
                                                     <div v-if="item.serialNumbers && item.serialNumbers.length > 0" class="mt-1">

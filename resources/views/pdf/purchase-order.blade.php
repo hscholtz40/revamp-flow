@@ -337,7 +337,6 @@
     <table class="line-items-table">
         <thead>
             <tr>
-                <th>Item Code</th>
                 <th>Item Description</th>
                 <th class="text-right">QTY</th>
                 <th class="text-right">Price (Ex)</th>
@@ -346,22 +345,58 @@
             </tr>
         </thead>
         <tbody>
-            @foreach($purchaseOrder->items as $item)
+            @php
+                $lineGroups = $purchaseOrder->lineGroups ?? collect();
+                $items = $purchaseOrder->items ?? collect();
+                $resolvedGroups = collect();
+                $renderedItemIds = collect();
+
+                foreach ($lineGroups->sortBy('sort_order') as $group) {
+                    $groupItems = $items->where('line_group_id', $group->id);
+                    if ($groupItems->isNotEmpty()) {
+                        $resolvedGroups->push((object) [
+                            'name' => $group->name,
+                            'items' => $groupItems,
+                        ]);
+                        $renderedItemIds = $renderedItemIds->merge($groupItems->pluck('id'));
+                    }
+                }
+
+                $ungroupedItems = $items->filter(function ($item) use ($renderedItemIds) {
+                    return !$renderedItemIds->contains($item->id);
+                });
+
+                if ($resolvedGroups->isEmpty() && $items->isNotEmpty()) {
+                    $resolvedGroups->push((object) [
+                        'name' => 'Items',
+                        'items' => $items,
+                    ]);
+                } elseif ($ungroupedItems->isNotEmpty()) {
+                    $resolvedGroups->push((object) [
+                        'name' => 'Items',
+                        'items' => $ungroupedItems,
+                    ]);
+                }
+            @endphp
+            @foreach($resolvedGroups as $group)
+                    @if($group->name)
+                        <tr class="group-header"><td colspan="5" style="font-weight: bold; background: #f5f5f5; padding: 4px 2px;">{{ $group->name }}</td></tr>
+                    @endif
+                    @foreach($group->items->sortBy('id') as $item)
                 <tr>
-                    <td>{{ $item->product->sku ?? $item->product->barcode ?? '' }}</td>
-                    <td>{{ $item->description ?? $item->product->name ?? 'Item Description' }}</td>
+                    <td>{{ $item->description ?? $item->product->name ?? 'Item Description' }}{{ ($item->product && ($item->product->sku ?? $item->product->barcode)) ? ' (' . ($item->product->sku ?? $item->product->barcode) . ')' : '' }}</td>
                     <td class="text-right">{{ number_format($item->quantity ?? 0, 2) }}</td>
                     <td class="text-right">R{{ number_format($item->unit_cost ?? 0, 2) }}</td>
                     <td class="text-right">
                         @if($item->taxRate)
                             R{{ number_format($item->tax_amount ?? 0, 2) }}
-                            <div style="font-size: 9px; color: #666;">{{ $item->taxRate->name }} ({{ $item->taxRate->rate }}%)</div>
                         @else
                             —
                         @endif
                     </td>
                     <td class="text-right">R{{ number_format($item->total ?? 0, 2) }}</td>
                 </tr>
+                    @endforeach
             @endforeach
         </tbody>
     </table>
