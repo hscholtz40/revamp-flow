@@ -154,7 +154,7 @@ class CreditNotesController extends Controller
             'line_items.*.product_id' => 'nullable|exists:products,id',
             'line_items.*.description' => 'required|string',
             'line_items.*.quantity' => 'required|integer|min:1',
-            'line_items.*.unit_price' => 'required|numeric|min:0',
+            'line_items.*.unit_price' => 'required|numeric',
             'line_items.*.discount_amount' => 'nullable|numeric|min:0',
             'line_items.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
             'line_items.*.tax_rate_id' => 'nullable|exists:tax_rates,id',
@@ -187,7 +187,7 @@ class CreditNotesController extends Controller
                 $discountAmount = $subtotal * ($discountPercentage / 100);
             }
 
-            $total = max(0, $subtotal - $discountAmount);
+            $total = $subtotal - $discountAmount;
 
             $lineTaxAmount = 0;
             if (!empty($itemData['tax_rate_id'])) {
@@ -303,7 +303,7 @@ class CreditNotesController extends Controller
             'line_items.*.product_id' => 'nullable|exists:products,id',
             'line_items.*.description' => 'required|string',
             'line_items.*.quantity' => 'required|integer|min:1',
-            'line_items.*.unit_price' => 'required|numeric|min:0',
+            'line_items.*.unit_price' => 'required|numeric',
             'line_items.*.discount_amount' => 'nullable|numeric|min:0',
             'line_items.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
             'line_items.*.tax_rate_id' => 'nullable|exists:tax_rates,id',
@@ -335,7 +335,7 @@ class CreditNotesController extends Controller
                 $discountAmount = $subtotal * ($discountPercentage / 100);
             }
 
-            $total = max(0, $subtotal - $discountAmount);
+            $total = $subtotal - $discountAmount;
 
             $lineTaxAmount = 0;
             if (!empty($itemData['tax_rate_id'])) {

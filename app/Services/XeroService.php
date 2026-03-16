@@ -775,7 +775,7 @@ class XeroService
     /**
      * Sync customers from Xero (import existing Xero customers to app)
      */
-    public function syncCustomersFromXero(Company $company = null): array
+    public function syncCustomersFromXero(Company $company = null, bool $forceFullFetch = false): array
     {
         if (!$this->settings->sync_customers_from_xero) {
             return ['skipped' => true, 'message' => 'Customer sync from Xero is disabled'];
@@ -786,7 +786,7 @@ class XeroService
         $syncStartedAt = now();
 
         try {
-            $xeroContacts = $this->fetchXeroContacts(self::SYNC_MODULE_CUSTOMERS);
+            $xeroContacts = $this->fetchXeroContacts(self::SYNC_MODULE_CUSTOMERS, $forceFullFetch);
             
             foreach ($xeroContacts as $xeroContact) {
                 try {
@@ -2528,23 +2528,29 @@ class XeroService
      * Fetch contacts from Xero with caching and If-Modified-Since.
      * Shared by customer and supplier syncs to avoid duplicate API calls.
      */
-    private function fetchXeroContacts(string $module): array
+    private function fetchXeroContacts(string $module, bool $forceFullFetch = false): array
     {
-        if (array_key_exists($module, $this->cachedXeroContacts)) {
-            return $this->cachedXeroContacts[$module];
+        $cacheKeySuffix = $forceFullFetch ? 'full' : 'delta';
+        $cacheKey = "{$module}:{$cacheKeySuffix}";
+
+        if (array_key_exists($cacheKey, $this->cachedXeroContacts)) {
+            return $this->cachedXeroContacts[$cacheKey];
         }
 
         $companyId = $this->getCompany()->id;
         $cacheTtlSeconds = max(60, (int) config('services.xero.contacts_cache_ttl_seconds', 300));
-        $cacheKey = "xero_contacts_cache_company_{$companyId}_module_{$module}";
-        $cached = Cache::get($cacheKey);
+        $persistentCacheKey = "xero_contacts_cache_company_{$companyId}_module_{$module}_{$cacheKeySuffix}";
+        $cached = $forceFullFetch ? null : Cache::get($persistentCacheKey);
         if (is_array($cached) && array_key_exists('contacts', $cached) && is_array($cached['contacts'])) {
-            $this->cachedXeroContacts[$module] = $cached['contacts'];
-            return $this->cachedXeroContacts[$module];
+            $this->cachedXeroContacts[$cacheKey] = $cached['contacts'];
+            return $this->cachedXeroContacts[$cacheKey];
         }
 
-        $lastSync = $this->getLastSyncDatetimeForModule($module);
-        $headers = $this->buildIfModifiedSinceHeader($lastSync);
+        $headers = [];
+        if (!$forceFullFetch) {
+            $lastSync = $this->getLastSyncDatetimeForModule($module);
+            $headers = $this->buildIfModifiedSinceHeader($lastSync);
+        }
 
         $response = $this->makeXeroRequest(
             'get',
@@ -2568,16 +2574,16 @@ class XeroService
                     'company_id' => $companyId,
                     'status' => $statusCode,
                 ]);
-                $this->cachedXeroContacts[$module] = $cached['contacts'];
-                return $this->cachedXeroContacts[$module];
+                $this->cachedXeroContacts[$cacheKey] = $cached['contacts'];
+                return $this->cachedXeroContacts[$cacheKey];
             }
 
             throw new \Exception('Failed to fetch contacts from Xero: ' . $errorBody);
         }
 
-        $this->cachedXeroContacts[$module] = $response->json()['Contacts'] ?? [];
-        Cache::put($cacheKey, ['contacts' => $this->cachedXeroContacts[$module]], now()->addSeconds($cacheTtlSeconds));
-        return $this->cachedXeroContacts[$module];
+        $this->cachedXeroContacts[$cacheKey] = $response->json()['Contacts'] ?? [];
+        Cache::put($persistentCacheKey, ['contacts' => $this->cachedXeroContacts[$cacheKey]], now()->addSeconds($cacheTtlSeconds));
+        return $this->cachedXeroContacts[$cacheKey];
     }
 
     /**

@@ -10,7 +10,7 @@
             line-height: 1.4;
             color: #000;
             margin: 0;
-            padding: 20px;
+            padding: 14px;
             font-size: 12px;
             background: white;
         }
@@ -19,13 +19,13 @@
             text-align: right;
             font-size: 10px;
             color: #666;
-            margin-bottom: 10px;
+            margin-bottom: 6px;
         }
         
         .header-row {
             display: table;
             width: 100%;
-            margin-bottom: 20px;
+            margin-bottom: 12px;
         }
         
         .header-logo {
@@ -48,9 +48,9 @@
         .company-section {
             display: table;
             width: 100%;
-            margin-bottom: 20px;
+            margin-bottom: 12px;
             border: 1px solid #000;
-            padding: 15px;
+            padding: 10px;
         }
         
         .company-left {
@@ -113,7 +113,7 @@
         .customer-section {
             display: table;
             width: 100%;
-            margin-bottom: 20px;
+            margin-bottom: 12px;
         }
         
         .customer-left {
@@ -151,13 +151,13 @@
         
         .separator-line {
             border-top: 1px solid #000;
-            margin: 15px 0;
+            margin: 10px 0;
         }
         
         .quote-details {
             display: table;
             width: 100%;
-            margin-bottom: 20px;
+            margin-bottom: 12px;
         }
         
         .quote-detail {
@@ -182,13 +182,13 @@
         .line-items-table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 20px;
+            margin-bottom: 12px;
         }
         
         .line-items-table th,
         .line-items-table td {
             border-bottom: 1px solid #000;
-            padding: 6px;
+            padding: 4px;
             font-size: 11px;
         }
         
@@ -467,7 +467,6 @@
         <h4>Terms & Conditions</h4>
         <p>This is a proforma invoice and does not constitute a request for payment.</p>
         <p>Prices are subject to change without notice.</p>
-        <p>Payment terms: Net 30 days from invoice date.</p>
         @if($quote->terms_conditions)
             <p>{{ $quote->terms_conditions }}</p>
         @endif

@@ -22,6 +22,10 @@
 - Added `order_number` fields to quotes, jobcards, and invoices, surfaced them in the create/edit/show UIs and PDFs, and preserved the value when converting quotes or jobcards into downstream documents.
 - Default the jobcard create form to the company's default sales customer when one is configured, matching the existing quote creation flow.
 - Fixed company switching for non-admin users by moving the switch endpoint out of the admin-only route group while keeping the controller's per-company access check in place.
+- Reduced quote and proforma PDF header spacing and line-item table padding/margins so more document content fits on a single page before overflowing.
+- Added a customer "Resync All from Xero" action in Xero settings that bypasses `If-Modified-Since` and refreshes all Xero customer records into JobCardOnline.
+- Fixed invoice PDFs so the Description block renders when only `description` is populated (without requiring `notes` or `terms`).
+- Allowed negative line-item unit amounts/costs across quotes, jobcards, invoices, credit notes, and purchase orders by removing positive-only validation/UI constraints and preserving negative totals in calculations.
 
 ## 2026-03-13 - version 1.7.5
 

@@ -215,7 +215,7 @@
 
                                 <div>
                                     <label class="block text-xs text-gray-500 mb-1 md:hidden">Price</label>
-                                    <input v-model.number="item.unit_price" type="number" step="0.01" min="0" class="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500" required />
+                                    <input v-model.number="item.unit_price" type="number" step="0.01" class="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500" required />
                                 </div>
 
                                 <div>
@@ -595,7 +595,7 @@ function calculateLineTotalValue(item: (typeof form.line_items)[0]) {
     const sub = qty * price;
     let disc = item.discount_amount ?? 0;
     if ((item.discount_percentage ?? 0) > 0) disc = sub * (item.discount_percentage! / 100);
-    return Math.max(0, sub - disc);
+    return sub - disc;
 }
 
 const subtotalBeforeDiscount = computed(() =>
@@ -624,7 +624,7 @@ const taxAmount = computed(() =>
         const discPct = Number(item.discount_percentage) || 0;
         let lineSub = qty * price;
         if (discPct > 0) discAmt = lineSub * (discPct / 100);
-        const lineTotal = Math.max(0, lineSub - discAmt);
+        const lineTotal = lineSub - discAmt;
         const tr = props.taxRates.find(t => t.id === item.tax_rate_id);
         if (tr) return sum + Math.ceil(lineTotal * (tr.rate / 100) * 100) / 100;
         return sum;

@@ -574,6 +574,14 @@
                             {{ syncing === 'customers-from-xero' ? 'Importing...' : 'Import Customers from Xero' }}
                         </button>
                         <button
+                            v-if="form.sync_customers_from_xero"
+                            @click="resyncCustomersFromXero"
+                            :disabled="syncing"
+                            class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 disabled:opacity-50"
+                        >
+                            {{ syncing === 'customers-resync-from-xero' ? 'Resyncing...' : 'Resync All Customers from Xero' }}
+                        </button>
+                        <button
                             v-if="form.sync_products_from_xero"
                             @click="syncProductsFromXero"
                             :disabled="syncing"
@@ -920,6 +928,27 @@ const syncCustomersFromXero = () => {
     
     const syncForm = useForm({});
     syncForm.post('/xero/sync/customers-from-xero', {
+        onSuccess: () => {
+            syncing.value = null;
+        },
+        onError: () => {
+            syncing.value = null;
+        },
+        onFinish: () => {
+            syncing.value = null;
+        }
+    });
+};
+
+const resyncCustomersFromXero = () => {
+    if (!confirm('Resync all customers from Xero? This will ignore last modified dates and refresh all customer records in JobCardOnline.')) {
+        return;
+    }
+
+    syncing.value = 'customers-resync-from-xero';
+
+    const syncForm = useForm({});
+    syncForm.post('/xero/sync/customers-from-xero/resync', {
         onSuccess: () => {
             syncing.value = null;
         },

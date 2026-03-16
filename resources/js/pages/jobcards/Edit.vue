@@ -421,7 +421,6 @@
                                     v-model.number="item.unit_price"
                                     type="number"
                                     step="0.01"
-                                    min="0"
                                     class="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                     required
                                 />
@@ -970,7 +969,7 @@ const calculateLineTotal = (item: LineItem) => {
         finalDiscount = subtotal * (discountPercentage / 100);
     }
     
-    return Math.max(0, subtotal - finalDiscount);
+    return subtotal - finalDiscount;
 };
 
 

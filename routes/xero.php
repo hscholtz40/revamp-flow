@@ -84,6 +84,26 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
         
         return redirect()->back()->with('success', "Successfully imported {$createdCount} customers and updated {$updatedCount} customers from Xero.");
     })->name('xero.sync.customers-from-xero');
+
+    Route::post('/xero/sync/customers-from-xero/resync', function () {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        $xeroService = new \App\Services\XeroService($currentCompany);
+        $results = $xeroService->syncCustomersFromXero($currentCompany, true);
+
+        if (isset($results['skipped']) && $results['skipped']) {
+            return redirect()->back()->with('info', $results['message']);
+        }
+
+        $createdCount = collect($results)->where('status', 'created')->count();
+        $updatedCount = collect($results)->where('status', 'updated')->count();
+        $errorCount = collect($results)->where('status', 'error')->count();
+
+        if ($errorCount > 0) {
+            return redirect()->back()->with('warning', "Resync imported {$createdCount} customers, updated {$updatedCount} customers, {$errorCount} failed. Check logs for details.");
+        }
+
+        return redirect()->back()->with('success', "Successfully resynced all customers from Xero ({$createdCount} imported, {$updatedCount} updated).");
+    })->name('xero.sync.customers-from-xero.resync');
     
     Route::post('/xero/sync/products-from-xero', function () {
         $currentCompany = auth()->user()->getCurrentCompany();

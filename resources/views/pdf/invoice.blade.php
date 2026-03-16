@@ -513,7 +513,7 @@
         </div>
     </div>
 
-    @if($invoice->notes || $invoice->terms)
+    @if($invoice->description || $invoice->notes || $invoice->terms)
     <div class="terms-section">
         @if($invoice->description)
             <h4>Description</h4>

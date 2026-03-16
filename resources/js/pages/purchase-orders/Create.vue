@@ -382,7 +382,6 @@ function submit() {
                                                 @input="calculateItemTotal(index)"
                                                 type="number"
                                                 step="0.01"
-                                                min="0"
                                                 required
                                                 class="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                             />

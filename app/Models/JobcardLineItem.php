@@ -77,13 +77,13 @@ class JobcardLineItem extends Model
             $discountAmount = $subtotal * ($discountPercentage / 100);
         }
         
-        $this->total = max(0, $subtotal - $discountAmount);
+        $this->total = number_format((float) ($subtotal - $discountAmount), 2, '.', '');
 
         // Calculate tax amount based on associated tax rate
         if ($this->tax_rate_id && $this->taxRate) {
-            $this->tax_amount = ceil(($this->total * ($this->taxRate->rate / 100)) * 100) / 100;
+            $this->tax_amount = number_format((float) (ceil(($this->total * ($this->taxRate->rate / 100)) * 100) / 100), 2, '.', '');
         } else {
-            $this->tax_amount = 0;
+            $this->tax_amount = '0.00';
         }
     }
 

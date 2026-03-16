@@ -129,7 +129,7 @@ class PurchaseOrdersController extends Controller
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'exists:products,id'],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
-            'items.*.unit_cost' => ['required', 'numeric', 'min:0'],
+            'items.*.unit_cost' => ['required', 'numeric'],
             'items.*.description' => ['nullable', 'string'],
             'items.*.tax_rate_id' => ['nullable', 'exists:tax_rates,id'],
         ]);

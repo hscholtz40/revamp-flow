@@ -193,7 +193,7 @@ const lineTotal = (item: any) => {
     const subtotal = qty * price;
     const discPct = Number(item.discount_percentage) || 0;
     const discAmt = discPct > 0 ? subtotal * (discPct / 100) : (Number(item.discount_amount) || 0);
-    return Math.max(0, subtotal - discAmt);
+    return subtotal - discAmt;
 };
 
 const subtotal = computed(() => form.line_items.reduce((sum, i) => sum + lineTotal(i), 0));
@@ -454,7 +454,7 @@ const submit = () => {
                             </div>
                             <div>
                                 <label class="text-xs text-gray-500">Price</label>
-                                <input v-model.number="item.unit_price" type="number" step="0.01" min="0" class="w-full rounded border px-2 py-1.5" required />
+                                <input v-model.number="item.unit_price" type="number" step="0.01" class="w-full rounded border px-2 py-1.5" required />
                             </div>
                             <div class="flex items-center justify-between gap-2">
                                 <span class="text-sm font-medium">{{ formatCurrency(lineTotal(item)) }}</span>

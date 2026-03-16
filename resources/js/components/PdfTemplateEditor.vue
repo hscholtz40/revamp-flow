@@ -1737,7 +1737,6 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
     <h4>Terms & Conditions</h4>
     <p>This is a proforma invoice and does not constitute a request for payment.</p>
     <p>Prices are subject to change without notice.</p>
-    <p>Payment terms: Net 30 days from invoice date.</p>
     <p>{{quote.terms_conditions}}</p>
 </div>
 <div class="footer">
