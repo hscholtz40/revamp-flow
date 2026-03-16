@@ -326,7 +326,15 @@ function getStockStatus(product: Product) {
                 <div
                     v-for="product in filteredProducts"
                     :key="product.id"
-                    class="rounded-lg border bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
+                    :class="[
+                        'rounded-lg border bg-white p-6 shadow-sm transition-shadow hover:shadow-md',
+                        $page.props.auth?.abilities?.products?.view ? 'cursor-pointer focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500' : '',
+                    ]"
+                    :tabindex="$page.props.auth?.abilities?.products?.view ? 0 : undefined"
+                    :role="$page.props.auth?.abilities?.products?.view ? 'link' : undefined"
+                    @click="$page.props.auth?.abilities?.products?.view && router.visit(products.show(product.id).url)"
+                    @keydown.enter.prevent="$page.props.auth?.abilities?.products?.view && router.visit(products.show(product.id).url)"
+                    @keydown.space.prevent="$page.props.auth?.abilities?.products?.view && router.visit(products.show(product.id).url)"
                 >
                     <!-- Product Header -->
                     <div class="mb-4 flex items-start justify-between">
@@ -394,15 +402,7 @@ function getStockStatus(product: Product) {
                     </div>
 
                     <!-- Actions -->
-                    <div class="flex items-center gap-2">
-                        <Link
-                            v-if="$page.props.auth?.abilities?.products?.view"
-                            :href="products.show(product.id).url"
-                            class="flex items-center gap-1 rounded border px-3 py-1 text-sm text-gray-700 hover:bg-gray-50"
-                        >
-                            <Eye class="h-3 w-3" />
-                            View
-                        </Link>
+                    <div class="flex items-center gap-2" @click.stop>
                         <Link
                             v-if="$page.props.auth?.abilities?.products?.edit"
                             :href="products.edit(product.id).url"
@@ -456,7 +456,20 @@ function getStockStatus(product: Product) {
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
-                            <tr v-for="product in filteredProducts" :key="product.id" class="hover:bg-gray-50">
+                            <tr
+                                v-for="product in filteredProducts"
+                                :key="product.id"
+                                :class="[
+                                    $page.props.auth?.abilities?.products?.view
+                                        ? 'cursor-pointer hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500'
+                                        : '',
+                                ]"
+                                :tabindex="$page.props.auth?.abilities?.products?.view ? 0 : undefined"
+                                :role="$page.props.auth?.abilities?.products?.view ? 'link' : undefined"
+                                @click="$page.props.auth?.abilities?.products?.view && router.visit(products.show(product.id).url)"
+                                @keydown.enter.prevent="$page.props.auth?.abilities?.products?.view && router.visit(products.show(product.id).url)"
+                                @keydown.space.prevent="$page.props.auth?.abilities?.products?.view && router.visit(products.show(product.id).url)"
+                            >
                                 <td class="px-6 py-4">
                                     <div class="flex items-start gap-3">
                                         <component
@@ -507,16 +520,8 @@ function getStockStatus(product: Product) {
                                         {{ product.is_active ? 'Active' : 'Inactive' }}
                                     </span>
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" @click.stop>
                                     <div class="flex items-center gap-2">
-                                        <Link
-                                            v-if="$page.props.auth?.abilities?.products?.view"
-                                            :href="products.show(product.id).url"
-                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200"
-                                        >
-                                            <Eye class="h-3 w-3 mr-1" />
-                                            View
-                                        </Link>
                                         <Link
                                             v-if="$page.props.auth?.abilities?.products?.edit"
                                             :href="products.edit(product.id).url"

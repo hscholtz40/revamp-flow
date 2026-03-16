@@ -585,6 +585,10 @@ class XeroService
                 if ($customer->account_code) {
                     $contactData['AccountNumber'] = $customer->account_code;
                 }
+
+                if ($customer->vat_number) {
+                    $contactData['TaxNumber'] = $customer->vat_number;
+                }
                 
                 if ($customer->xero_contact_id) {
                     $contactData['ContactID'] = $customer->xero_contact_id;
@@ -879,6 +883,11 @@ class XeroService
         // Add AccountNumber if account_code exists
         if ($customer->account_code) {
             $contactData['AccountNumber'] = $customer->account_code;
+        }
+
+        // Add TaxNumber if vat_number exists
+        if ($customer->vat_number) {
+            $contactData['TaxNumber'] = $customer->vat_number;
         }
 
         // Add ContactID if customer already exists in Xero
@@ -2631,6 +2640,11 @@ class XeroService
             $updateData['account_code'] = $xeroCustomer['AccountNumber'];
         }
 
+        // Update VAT number from Xero TaxNumber if available
+        if (isset($xeroCustomer['TaxNumber']) && !empty($xeroCustomer['TaxNumber'])) {
+            $updateData['vat_number'] = $xeroCustomer['TaxNumber'];
+        }
+
         // Update phone if available
         if (isset($xeroCustomer['Phones']) && !empty($xeroCustomer['Phones'])) {
             $phone = collect($xeroCustomer['Phones'])->first();
@@ -2669,6 +2683,11 @@ class XeroService
         // Add account_code from Xero AccountNumber if available
         if (isset($xeroContact['AccountNumber']) && !empty($xeroContact['AccountNumber'])) {
             $customerData['account_code'] = $xeroContact['AccountNumber'];
+        }
+
+        // Add VAT number from Xero TaxNumber if available
+        if (isset($xeroContact['TaxNumber']) && !empty($xeroContact['TaxNumber'])) {
+            $customerData['vat_number'] = $xeroContact['TaxNumber'];
         }
 
         // Add phone if available
@@ -2908,6 +2927,10 @@ class XeroService
             ] : [],
         ];
 
+        if ($supplier->vat_number) {
+            $contactData['TaxNumber'] = $supplier->vat_number;
+        }
+
         if ($supplier->xero_contact_id) {
             $contactData['ContactID'] = $supplier->xero_contact_id;
         }
@@ -2935,6 +2958,10 @@ class XeroService
             'xero_contact_id' => $xeroSupplier['ContactID'] ?? $supplier->xero_contact_id,
             ...$this->getXeroTimestamps($xeroSupplier),
         ];
+
+        if (isset($xeroSupplier['TaxNumber']) && !empty($xeroSupplier['TaxNumber'])) {
+            $updateData['vat_number'] = $xeroSupplier['TaxNumber'];
+        }
 
         // Update phone if available
         if (isset($xeroSupplier['Phones']) && !empty($xeroSupplier['Phones'])) {
@@ -2978,6 +3005,10 @@ class XeroService
             'xero_contact_id' => $xeroContact['ContactID'],
             ...$this->getXeroTimestamps($xeroContact),
         ];
+
+        if (isset($xeroContact['TaxNumber']) && !empty($xeroContact['TaxNumber'])) {
+            $supplierData['vat_number'] = $xeroContact['TaxNumber'];
+        }
 
         // Add phone if available
         if (isset($xeroContact['Phones']) && !empty($xeroContact['Phones'])) {

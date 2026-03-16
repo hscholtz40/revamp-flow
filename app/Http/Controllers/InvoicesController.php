@@ -233,8 +233,8 @@ class InvoicesController extends Controller
             'line_items.*.unit_price' => 'required|numeric|min:0',
             'line_items.*.discount_amount' => 'nullable|numeric|min:0',
             'line_items.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
-            'payment_method' => 'required|in:cash,card,eft',
-            'amount_paid' => 'required|numeric|min:0.01',
+            'payment_method' => 'required|in:cash,card,eft,account',
+            'amount_paid' => 'nullable|numeric|min:0',
             'tendered_amount' => 'nullable|numeric|min:0',
         ]);
 
@@ -326,31 +326,38 @@ class InvoicesController extends Controller
             $invoice->calculateTotals();
             $invoice->refresh();
 
-            $amountPaid = (float) $validated['amount_paid'];
-            if ($amountPaid > (float) $invoice->total) {
-                abort(422, 'Payment amount cannot exceed invoice total.');
-            }
-
-            if (($validated['payment_method'] ?? '') === 'cash') {
-                $tendered = (float) ($validated['tendered_amount'] ?? 0);
-                if ($tendered < $amountPaid) {
-                    abort(422, 'Tendered cash must be greater than or equal to amount paid.');
+            $isAccountSale = ($validated['payment_method'] ?? '') === 'account';
+            if (! $isAccountSale) {
+                $amountPaid = (float) ($validated['amount_paid'] ?? 0);
+                if ($amountPaid <= 0) {
+                    abort(422, 'Payment amount is required for this payment method.');
                 }
-            }
 
-            Payment::create([
-                'invoice_id' => $invoice->id,
-                'company_id' => $currentCompany->id,
-                'amount' => $amountPaid,
-                'payment_method' => $validated['payment_method'],
-                'payment_date' => $invoiceDate->toDateString(),
-                'notes' => $validated['notes'] ?? null,
-            ]);
+                if ($amountPaid > (float) $invoice->total) {
+                    abort(422, 'Payment amount cannot exceed invoice total.');
+                }
 
-            $invoice->refresh();
-            $invoice->load('payments');
-            if ($invoice->isFullyPaid()) {
-                $invoice->update(['status' => 'paid']);
+                if (($validated['payment_method'] ?? '') === 'cash') {
+                    $tendered = (float) ($validated['tendered_amount'] ?? 0);
+                    if ($tendered < $amountPaid) {
+                        abort(422, 'Tendered cash must be greater than or equal to amount paid.');
+                    }
+                }
+
+                Payment::create([
+                    'invoice_id' => $invoice->id,
+                    'company_id' => $currentCompany->id,
+                    'amount' => $amountPaid,
+                    'payment_method' => $validated['payment_method'],
+                    'payment_date' => $invoiceDate->toDateString(),
+                    'notes' => $validated['notes'] ?? null,
+                ]);
+
+                $invoice->refresh();
+                $invoice->load('payments');
+                if ($invoice->isFullyPaid()) {
+                    $invoice->update(['status' => 'paid']);
+                }
             }
 
             return $invoice;
@@ -371,6 +378,9 @@ class InvoicesController extends Controller
             'title' => 'nullable|string|max:255',
             'description' => 'nullable|string',
             'customer_id' => 'required|exists:customers,id',
+            'email' => 'nullable|email|max:255',
+            'phone' => 'nullable|string|max:255',
+            'order_number' => 'nullable|string|max:255',
             'salesperson_id' => 'nullable|exists:users,id',
             'invoice_date' => 'required|date',
             'due_date' => 'nullable|date|after_or_equal:invoice_date',
@@ -404,9 +414,12 @@ class InvoicesController extends Controller
         // Create invoice
         $invoice = Invoice::create([
             'invoice_number' => $invoiceNumber,
+            'order_number' => $validated['order_number'] ?? null,
             'title' => !empty(trim((string) ($validated['title'] ?? ''))) ? trim((string) $validated['title']) : $invoiceNumber,
             'description' => $validated['description'],
             'customer_id' => $validated['customer_id'],
+            'email' => $validated['email'] ?? null,
+            'phone' => $validated['phone'] ?? null,
             'salesperson_id' => $salespersonId,
             'company_id' => $currentCompany->id,
             'invoice_date' => $validated['invoice_date'],
@@ -676,6 +689,9 @@ class InvoicesController extends Controller
             'title' => 'nullable|string|max:255',
             'description' => 'nullable|string',
             'customer_id' => 'required|exists:customers,id',
+            'email' => 'nullable|email|max:255',
+            'phone' => 'nullable|string|max:255',
+            'order_number' => 'nullable|string|max:255',
             'salesperson_id' => 'nullable|exists:users,id',
             'invoice_date' => 'required|date',
             'due_date' => 'required|date|after_or_equal:invoice_date',
@@ -715,6 +731,9 @@ class InvoicesController extends Controller
             'title' => !empty(trim((string) ($validated['title'] ?? ''))) ? trim((string) $validated['title']) : $invoice->invoice_number,
             'description' => $validated['description'],
             'customer_id' => $validated['customer_id'],
+            'email' => $validated['email'] ?? null,
+            'phone' => $validated['phone'] ?? null,
+            'order_number' => $validated['order_number'] ?? null,
             'invoice_date' => $validated['invoice_date'],
             'due_date' => $validated['due_date'],
             'tax_rate' => $validated['tax_rate'],
@@ -1056,7 +1075,7 @@ class InvoicesController extends Controller
      */
     public function downloadPdf(Request $request, Invoice $invoice)
     {
-        $invoice->load(['customer', 'lineItems.product', 'lineItems.taxRate', 'company']);
+        $invoice->load(['customer', 'lineItems.product', 'lineItems.taxRate', 'company', 'source']);
         
         // Load serial numbers for line items that have serial_number_ids
         foreach ($invoice->lineItems as $lineItem) {
@@ -1087,7 +1106,7 @@ class InvoicesController extends Controller
      */
     public function printPdf(Request $request, Invoice $invoice)
     {
-        $invoice->load(['customer', 'lineItems.product', 'lineItems.taxRate', 'company']);
+        $invoice->load(['customer', 'lineItems.product', 'lineItems.taxRate', 'company', 'source']);
         
         foreach ($invoice->lineItems as $lineItem) {
             if (!empty($lineItem->serial_number_ids)) {
@@ -1188,9 +1207,12 @@ class InvoicesController extends Controller
         // Generate invoice number
         $invoiceNumber = Invoice::create([
             'invoice_number' => Invoice::generateInvoiceNumber($currentCompany->id),
+            'order_number' => $quote->order_number,
             'title' => $quote->title,
             'description' => $quote->description,
             'customer_id' => $quote->customer_id,
+            'email' => $quote->email,
+            'phone' => $quote->phone,
             'company_id' => $currentCompany->id,
             'invoice_date' => now()->toDateString(),
             'due_date' => $this->resolveInvoiceDueDateFromCustomerTerms(
@@ -1240,9 +1262,12 @@ class InvoicesController extends Controller
         // Generate invoice number
         $invoiceNumber = Invoice::create([
             'invoice_number' => Invoice::generateInvoiceNumber($currentCompany->id),
+            'order_number' => $jobcard->order_number,
             'title' => $jobcard->title,
             'description' => $jobcard->description,
             'customer_id' => $jobcard->customer_id,
+            'email' => $jobcard->email,
+            'phone' => $jobcard->phone,
             'company_id' => $currentCompany->id,
             'invoice_date' => now()->toDateString(),
             'due_date' => $this->resolveInvoiceDueDateFromCustomerTerms(

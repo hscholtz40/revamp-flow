@@ -41,10 +41,13 @@ class Jobcard extends Model
     protected $fillable = [
         'company_id',
         'customer_id',
+        'email',
+        'phone',
         'assigned_to_user_id',
         'assigned_to_team_id',
         'invoice_id',
         'job_number',
+        'order_number',
         'title',
         'description',
         'status',
@@ -72,6 +75,8 @@ class Jobcard extends Model
     ];
 
     protected $appends = [
+        'recipient_email',
+        'recipient_phone',
         'formatted_total',
         'status_color',
     ];
@@ -267,6 +272,16 @@ class Jobcard extends Model
         };
     }
 
+    public function getRecipientEmailAttribute(): ?string
+    {
+        return $this->email ?: $this->customer?->email;
+    }
+
+    public function getRecipientPhoneAttribute(): ?string
+    {
+        return $this->phone ?: $this->customer?->phone;
+    }
+
     /**
      * Convert jobcard to invoice
      */
@@ -278,7 +293,10 @@ class Jobcard extends Model
         $invoice = Invoice::create([
             'company_id' => $this->company_id,
             'customer_id' => $this->customer_id,
+            'email' => $this->email,
+            'phone' => $this->phone,
             'invoice_number' => Invoice::generateInvoiceNumber($this->company_id),
+            'order_number' => $this->order_number,
             'title' => $this->title,
             'description' => $this->description,
             'status' => 'draft',

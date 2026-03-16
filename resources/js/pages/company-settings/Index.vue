@@ -96,7 +96,12 @@ function switchToCompany(company: Company) {
                 <div
                     v-for="company in props.companies"
                     :key="company.id"
-                    class="rounded-lg border bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
+                    class="cursor-pointer rounded-lg border bg-white p-6 shadow-sm transition-shadow hover:shadow-md focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                    tabindex="0"
+                    role="link"
+                    @click="router.visit(companySettings.show(company.id).url)"
+                    @keydown.enter.prevent="router.visit(companySettings.show(company.id).url)"
+                    @keydown.space.prevent="router.visit(companySettings.show(company.id).url)"
                 >
                     <!-- Company Header -->
                     <div class="mb-4 flex items-start justify-between">
@@ -134,7 +139,7 @@ function switchToCompany(company: Company) {
                         </div>
                         <div v-if="company.website" class="flex items-center gap-2">
                             <span class="font-medium">Website:</span>
-                            <a :href="company.website" target="_blank" class="text-blue-600 hover:underline">
+                            <a :href="company.website" target="_blank" class="text-blue-600 hover:underline" @click.stop>
                                 {{ company.website }}
                             </a>
                         </div>
@@ -146,7 +151,7 @@ function switchToCompany(company: Company) {
                     </p>
 
                     <!-- Actions -->
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-2" @click.stop>
                         <button
                             v-if="props.currentCompany && props.currentCompany.id !== company.id"
                             @click="switchToCompany(company)"
@@ -155,13 +160,6 @@ function switchToCompany(company: Company) {
                             <Building2 class="h-3 w-3" />
                             Switch To
                         </button>
-                        <Link
-                            :href="companySettings.show(company.id).url"
-                            class="flex items-center gap-1 rounded border px-3 py-1 text-sm text-gray-700 hover:bg-gray-50"
-                        >
-                            <Eye class="h-3 w-3" />
-                            View
-                        </Link>
                         <Link
                             :href="companySettings.edit(company.id).url"
                             class="flex items-center gap-1 rounded border px-3 py-1 text-sm text-gray-700 hover:bg-gray-50"

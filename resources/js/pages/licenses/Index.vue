@@ -202,7 +202,16 @@ function formatDate(dateString: string | null): string {
                     </thead>
                     <tbody class="divide-y divide-gray-200 bg-white">
                         <template v-if="hasLicenses">
-                            <tr v-for="license in licensesData.data" :key="license.id" class="hover:bg-gray-50">
+                            <tr
+                                v-for="license in licensesData.data"
+                                :key="license.id"
+                                class="cursor-pointer hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                                tabindex="0"
+                                role="link"
+                                @click="router.visit(licenses.show(license.id).url)"
+                                @keydown.enter.prevent="router.visit(licenses.show(license.id).url)"
+                                @keydown.space.prevent="router.visit(licenses.show(license.id).url)"
+                            >
                                 <td class="whitespace-nowrap px-6 py-4">
                                     <div class="flex items-center gap-2">
                                         <Key class="h-4 w-4 text-gray-400" />
@@ -243,14 +252,8 @@ function formatDate(dateString: string | null): string {
                                 <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
                                     {{ formatDate(license.created_at) }}
                                 </td>
-                                <td class="whitespace-nowrap px-6 py-4 text-right text-sm font-medium">
+                                <td class="whitespace-nowrap px-6 py-4 text-right text-sm font-medium" @click.stop>
                                     <div class="flex items-center justify-end gap-2">
-                                        <Link
-                                            :href="licenses.show(license.id).url"
-                                            class="text-blue-600 hover:text-blue-900"
-                                        >
-                                            <Eye class="h-4 w-4" />
-                                        </Link>
                                         <Link
                                             :href="licenses.edit(license.id).url"
                                             class="text-indigo-600 hover:text-indigo-900"

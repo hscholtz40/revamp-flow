@@ -339,6 +339,7 @@
 
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
+import { matchesProductSearch } from '@/composables/productSearch';
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import { computed, ref, watch, onMounted } from 'vue';
 import { Plus, X, Trash2, Package } from 'lucide-vue-next';
@@ -525,9 +526,8 @@ function removeLineItem(index: number) {
 }
 
 function productSuggestions(index: number) {
-    const q = (form.line_items[index]?.description ?? '').toLowerCase();
-    if (q.length < 2) return [];
-    return props.products.filter(p => (p.name?.toLowerCase().includes(q) || p.sku?.toLowerCase().includes(q))).slice(0, 8);
+    const query = form.line_items[index]?.description || '';
+    return props.products.filter(product => matchesProductSearch(product, query)).slice(0, 8);
 }
 
 function handleDescriptionInput(index: number) {

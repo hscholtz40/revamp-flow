@@ -201,7 +201,16 @@ const setDefaultSales = (customer: Customer) => {
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
-                            <tr v-for="c in props.customers.data" :key="c.id" class="hover:bg-gray-50">
+                            <tr
+                                v-for="c in props.customers.data"
+                                :key="c.id"
+                                class="cursor-pointer hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                                tabindex="0"
+                                role="link"
+                                @click="router.visit(customers.show(c.id).url)"
+                                @keydown.enter.prevent="router.visit(customers.show(c.id).url)"
+                                @keydown.space.prevent="router.visit(customers.show(c.id).url)"
+                            >
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="text-sm font-medium text-gray-900 flex items-center gap-2">
                                         <span>{{ c.name }}</span>
@@ -217,14 +226,8 @@ const setDefaultSales = (customer: Customer) => {
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     {{ c.account_code || '-' }}
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" @click.stop>
                                     <div class="flex items-center gap-2">
-                                        <Link
-                                            :href="customers.show(c.id).url"
-                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                                        >
-                                            View
-                                        </Link>
                                         <Link
                                             :href="customers.edit(c.id).url"
                                             class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"

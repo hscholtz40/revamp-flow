@@ -39,7 +39,7 @@
             width: 50%;
             text-align: right;
             vertical-align: middle;
-            font-size: 28px;
+            font-size: 24px;
             font-weight: bold;
             color: #000;
             text-transform: uppercase;
@@ -67,8 +67,8 @@
         }
         
         .company-logo {
-            max-width: 220px;
-            max-height: 110px;
+            max-width: 240px;
+            max-height: 120px;
             margin-bottom: 10px;
         }
         
@@ -162,7 +162,7 @@
         
         .quote-detail {
             display: table-cell;
-            width: 33.33%;
+            width: 25%;
             border: 1px solid #000;
             padding: 8px;
             text-align: center;
@@ -188,7 +188,7 @@
         .line-items-table th,
         .line-items-table td {
             border-bottom: 1px solid #000;
-            padding: 8px;
+            padding: 6px;
             font-size: 11px;
         }
         
@@ -380,6 +380,10 @@
             <span class="quote-detail-value">{{ $quote->created_at ? \Carbon\Carbon::parse($quote->created_at)->format('Y/m/d') : date('Y/m/d') }}</span>
         </div>
         <div class="quote-detail">
+            <span class="quote-detail-label">Order No</span>
+            <span class="quote-detail-value">{{ $quote->order_number ?? '' }}</span>
+        </div>
+        <div class="quote-detail">
             <span class="quote-detail-label">Proforma Invoice No</span>
             <span class="quote-detail-value">{{ $quote->quote_number ?? 'N/A' }}</span>
         </div>
@@ -388,7 +392,6 @@
     <table class="line-items-table">
         <thead>
             <tr>
-                <th>Item Code</th>
                 <th>Item Description</th>
                 <th class="text-right">QTY</th>
                 <th class="text-right">Price (Ex)</th>
@@ -400,7 +403,6 @@
         <tbody>
             @foreach($quote->lineItems ?? [] as $item)
                 <tr>
-                    <td>{{ $item->product->code ?? 'N/A' }}</td>
                     <td>{{ $item->description ?? 'Item Description' }}</td>
                     <td class="text-right">{{ number_format($item->quantity ?? 0, 2) }}</td>
                     <td class="text-right">R{{ number_format($item->unit_price ?? 0, 2) }}</td>
@@ -451,6 +453,14 @@
     </div>
     
     <div class="terms-section">
+        @if($quote->description)
+            <h4>Description</h4>
+            <p>{{ $quote->description }}</p>
+        @endif
+        @if($quote->notes)
+            <h4>Notes</h4>
+            <p>{{ $quote->notes }}</p>
+        @endif
         <h4>Terms & Conditions</h4>
         <p>This is a proforma invoice and does not constitute a request for payment.</p>
         <p>Prices are subject to change without notice.</p>

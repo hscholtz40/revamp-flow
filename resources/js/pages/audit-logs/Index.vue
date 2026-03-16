@@ -256,7 +256,12 @@ function formatModelType(type: string): string {
                         <tr
                             v-for="log in auditLogs.data"
                             :key="log.id"
-                            class="hover:bg-gray-50"
+                            class="cursor-pointer hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                            tabindex="0"
+                            role="link"
+                            @click="router.visit(`/audit-logs/${log.id}`)"
+                            @keydown.enter.prevent="router.visit(`/audit-logs/${log.id}`)"
+                            @keydown.space.prevent="router.visit(`/audit-logs/${log.id}`)"
                         >
                             <td class="whitespace-nowrap px-6 py-4">
                                 <div class="flex items-center gap-2">
@@ -296,13 +301,7 @@ function formatModelType(type: string): string {
                                     {{ log.ip_address || 'N/A' }}
                                 </span>
                             </td>
-                            <td class="whitespace-nowrap px-6 py-4 text-sm">
-                                <Link
-                                    :href="`/audit-logs/${log.id}`"
-                                    class="text-blue-600 hover:text-blue-900 hover:underline"
-                                >
-                                    <Eye class="h-4 w-4" />
-                                </Link>
+                            <td class="whitespace-nowrap px-6 py-4 text-sm" @click.stop>
                             </td>
                         </tr>
                     </tbody>

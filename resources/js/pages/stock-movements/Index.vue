@@ -226,7 +226,16 @@ function getTypeColor(type: string) {
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200 bg-white">
-                        <tr v-for="movement in (movements?.data || [])" :key="movement.id" class="hover:bg-gray-50">
+                        <tr
+                            v-for="movement in (movements?.data || [])"
+                            :key="movement.id"
+                            class="cursor-pointer hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                            tabindex="0"
+                            role="link"
+                            @click="router.visit(stockMovements.show(movement.id).url)"
+                            @keydown.enter.prevent="router.visit(stockMovements.show(movement.id).url)"
+                            @keydown.space.prevent="router.visit(stockMovements.show(movement.id).url)"
+                        >
                             <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
                                 {{ new Date(movement.created_at).toLocaleDateString() }}
                                 <div class="text-xs text-gray-500">{{ new Date(movement.created_at).toLocaleTimeString() }}</div>
@@ -256,13 +265,7 @@ function getTypeColor(type: string) {
                             <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
                                 {{ movement.user?.name || 'System' }}
                             </td>
-                            <td class="whitespace-nowrap px-6 py-4 text-right text-sm font-medium">
-                                <Link
-                                    :href="stockMovements.show(movement.id).url"
-                                    class="text-blue-600 hover:text-blue-900"
-                                >
-                                    <Eye class="h-4 w-4" />
-                                </Link>
+                            <td class="whitespace-nowrap px-6 py-4 text-right text-sm font-medium" @click.stop>
                             </td>
                         </tr>
                         <tr v-if="!movements?.data || movements.data.length === 0">

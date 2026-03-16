@@ -39,7 +39,7 @@
             width: 50%;
             text-align: right;
             vertical-align: middle;
-            font-size: 28px;
+            font-size: 24px;
             font-weight: bold;
             color: #000;
             text-transform: uppercase;
@@ -67,8 +67,8 @@
         }
         
         .company-logo {
-            max-width: 220px;
-            max-height: 110px;
+            max-width: 240px;
+            max-height: 120px;
             margin-bottom: 10px;
         }
         
@@ -188,7 +188,7 @@
         .line-items-table th,
         .line-items-table td {
             border-bottom: 1px solid #000;
-            padding: 8px;
+            padding: 6px;
             font-size: 11px;
         }
         
@@ -238,6 +238,28 @@
             border-top: 1px solid #000;
             padding-top: 8px;
             margin-top: 8px;
+        }
+
+        .terms-section {
+            clear: both;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #000;
+            font-size: 11px;
+            text-align: left;
+        }
+
+        .terms-section h4 {
+            margin: 0 0 10px 0;
+            font-size: 12px;
+            font-weight: bold;
+            color: #000;
+        }
+
+        .terms-section p {
+            margin: 0 0 8px 0;
+            font-size: 11px;
+            line-height: 1.4;
         }
         
         .signature-section {
@@ -367,6 +389,16 @@
                 @if($invoice->customer->postal_code)
                     <p>{{ $invoice->customer->postal_code }}</p>
                 @endif
+                @if($invoice->email)
+                    <p>{{ $invoice->email }}</p>
+                @elseif($invoice->customer->email)
+                    <p>{{ $invoice->customer->email }}</p>
+                @endif
+                @if($invoice->phone)
+                    <p>{{ $invoice->phone }}</p>
+                @elseif($invoice->customer->phone)
+                    <p>{{ $invoice->customer->phone }}</p>
+                @endif
             </div>
         </div>
         
@@ -418,7 +450,7 @@
         <tbody>
             @foreach($invoice->lineItems ?? [] as $item)
                 <tr>
-                    <td>{{ $item->product->code ?? 'N/A' }}</td>
+                    <td>{{ $item->product->sku ?? $item->product->barcode ?? '' }}</td>
                     <td>
                         <div>{{ $item->description ?? 'Item Description' }}</div>
                         @if(!empty($item->serialNumbers) && $item->serialNumbers->count() > 0)
@@ -477,6 +509,23 @@
             <span>R{{ number_format($invoice->total ?? 0, 2) }}</span>
         </div>
     </div>
+
+    @if($invoice->notes || $invoice->terms)
+    <div class="terms-section">
+        @if($invoice->description)
+            <h4>Description</h4>
+            <p>{{ $invoice->description }}</p>
+        @endif
+        @if($invoice->notes)
+            <h4>Notes</h4>
+            <p>{{ $invoice->notes }}</p>
+        @endif
+        @if($invoice->terms)
+            <h4>Terms & Conditions</h4>
+            <p>{{ $invoice->terms }}</p>
+        @endif
+    </div>
+    @endif
     
     <div class="signature-section">
         <div class="signature-row">

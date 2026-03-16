@@ -103,7 +103,16 @@
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
-                            <tr v-for="cn in (props.creditNotes?.data || [])" :key="cn.id" class="hover:bg-gray-50">
+                            <tr
+                                v-for="cn in (props.creditNotes?.data || [])"
+                                :key="cn.id"
+                                class="cursor-pointer hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                                tabindex="0"
+                                role="link"
+                                @click="router.visit(`/credit-notes/${cn.id}`)"
+                                @keydown.enter.prevent="router.visit(`/credit-notes/${cn.id}`)"
+                                @keydown.space.prevent="router.visit(`/credit-notes/${cn.id}`)"
+                            >
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="text-sm font-medium text-gray-900">{{ cn.credit_note_number }}</div>
                                     <div class="text-sm text-gray-500">{{ cn.title || '-' }}</div>
@@ -128,14 +137,8 @@
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="text-sm text-gray-900">{{ formatCurrency(cn.remaining_credit) }}</div>
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" @click.stop>
                                     <div class="flex items-center gap-2">
-                                        <Link
-                                            :href="`/credit-notes/${cn.id}`"
-                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200"
-                                        >
-                                            View
-                                        </Link>
                                         <Link
                                             :href="`/credit-notes/${cn.id}/edit`"
                                             class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200"

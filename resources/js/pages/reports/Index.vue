@@ -195,7 +195,16 @@ const deleteTemplate = (templateId: number, event: Event) => {
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
-                            <tr v-for="report in props.reports.data" :key="report.id" class="hover:bg-gray-50">
+                            <tr
+                                v-for="report in props.reports.data"
+                                :key="report.id"
+                                class="cursor-pointer hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                                tabindex="0"
+                                role="link"
+                                @click="router.visit(`/reports/${report.id}`)"
+                                @keydown.enter.prevent="router.visit(`/reports/${report.id}`)"
+                                @keydown.space.prevent="router.visit(`/reports/${report.id}`)"
+                            >
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="text-sm font-medium text-gray-900">{{ report.name }}</div>
                                 </td>
@@ -219,14 +228,8 @@ const deleteTemplate = (templateId: number, event: Event) => {
                                         {{ new Date(report.created_at).toLocaleDateString() }}
                                     </div>
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium" @click.stop>
                                     <div class="flex items-center justify-end gap-2">
-                                        <Link
-                                            :href="`/reports/${report.id}`"
-                                            class="text-blue-600 hover:text-blue-900"
-                                        >
-                                            <Eye class="w-4 h-4" />
-                                        </Link>
                                         <Link
                                             :href="`/reports/${report.id}/edit`"
                                             class="text-gray-600 hover:text-gray-900"

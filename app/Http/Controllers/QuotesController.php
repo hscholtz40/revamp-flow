@@ -68,7 +68,7 @@ class QuotesController extends Controller
         }
 
         $quotes = $query->paginate(15)->withQueryString();
-        $customers = Customer::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name']);
+        $customers = Customer::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name', 'email', 'phone', 'account_code']);
 
         return Inertia::render('quotes/Index', [
             'quotes' => $quotes,
@@ -95,7 +95,7 @@ class QuotesController extends Controller
         $products = Product::where('company_id', $currentCompany->id)
             ->where('is_active', true)
             ->orderBy('name')
-            ->get(['id', 'name', 'price', 'type']);
+            ->get(['id', 'name', 'sku', 'price', 'type']);
 
         $taxRates = TaxRate::where('company_id', $currentCompany->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'rate', 'is_default_sales']);
         $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
@@ -125,6 +125,9 @@ class QuotesController extends Controller
         
         $validated = $request->validate([
             'customer_id' => ['required', 'exists:customers,id'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:255'],
+            'order_number' => ['nullable', 'string', 'max:255'],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'status' => ['required', 'in:draft,sent,accepted,rejected,expired'],
@@ -149,7 +152,10 @@ class QuotesController extends Controller
         $quote = Quote::create([
             'company_id' => $currentCompany->id,
             'customer_id' => $validated['customer_id'],
+            'email' => $validated['email'] ?? null,
+            'phone' => $validated['phone'] ?? null,
             'quote_number' => Quote::generateQuoteNumber($currentCompany->id),
+            'order_number' => $validated['order_number'] ?? null,
             'title' => $validated['title'],
             'description' => $validated['description'],
             'status' => $validated['status'],
@@ -238,11 +244,11 @@ class QuotesController extends Controller
     {
         $currentCompany = auth()->user()->getCurrentCompany();
         $quote->load(['lineItems.product']);
-        $customers = Customer::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name']);
+        $customers = Customer::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name', 'email', 'phone', 'account_code']);
         $products = Product::where('company_id', $currentCompany->id)
             ->where('is_active', true)
             ->orderBy('name')
-            ->get(['id', 'name', 'price', 'type']);
+            ->get(['id', 'name', 'sku', 'price', 'type']);
 
         $taxRates = TaxRate::where('company_id', $currentCompany->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'rate', 'is_default_sales']);
         $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
@@ -269,6 +275,9 @@ class QuotesController extends Controller
     {
         $validated = $request->validate([
             'customer_id' => ['required', 'exists:customers,id'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:255'],
+            'order_number' => ['nullable', 'string', 'max:255'],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'status' => ['required', 'in:draft,sent,accepted,rejected,expired'],
@@ -302,6 +311,9 @@ class QuotesController extends Controller
         // Update the quote
         $quote->update([
             'customer_id' => $validated['customer_id'],
+            'email' => $validated['email'] ?? null,
+            'phone' => $validated['phone'] ?? null,
+            'order_number' => $validated['order_number'] ?? null,
             'title' => $validated['title'],
             'description' => $validated['description'],
             'status' => $validated['status'],

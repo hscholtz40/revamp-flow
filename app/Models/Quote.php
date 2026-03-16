@@ -16,8 +16,11 @@ class Quote extends Model
     protected $fillable = [
         'company_id',
         'customer_id',
+        'email',
+        'phone',
         'invoice_id',
         'quote_number',
+        'order_number',
         'xero_quote_id',
         'title',
         'description',
@@ -46,6 +49,8 @@ class Quote extends Model
     ];
 
     protected $appends = [
+        'recipient_email',
+        'recipient_phone',
         'formatted_total',
         'status_color',
     ];
@@ -175,6 +180,16 @@ class Quote extends Model
         };
     }
 
+    public function getRecipientEmailAttribute(): ?string
+    {
+        return $this->email ?: $this->customer?->email;
+    }
+
+    public function getRecipientPhoneAttribute(): ?string
+    {
+        return $this->phone ?: $this->customer?->phone;
+    }
+
     /**
      * Convert quote to jobcard
      */
@@ -183,7 +198,10 @@ class Quote extends Model
         $jobcard = Jobcard::create([
             'company_id' => $this->company_id,
             'customer_id' => $this->customer_id,
+            'email' => $this->email,
+            'phone' => $this->phone,
             'job_number' => Jobcard::generateJobNumber($this->company_id),
+            'order_number' => $this->order_number,
             'title' => $this->title,
             'description' => $this->description,
             'status' => 'draft',
@@ -224,7 +242,10 @@ class Quote extends Model
         $invoice = Invoice::create([
             'company_id' => $this->company_id,
             'customer_id' => $this->customer_id,
+            'email' => $this->email,
+            'phone' => $this->phone,
             'invoice_number' => Invoice::generateInvoiceNumber($this->company_id),
+            'order_number' => $this->order_number,
             'title' => $this->title,
             'description' => $this->description,
             'status' => 'draft',

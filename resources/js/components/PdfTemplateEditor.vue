@@ -52,6 +52,7 @@ const moduleVariables: Record<string, Array<{ label: string; value: string; cate
         // Invoice variables
         { label: 'Invoice Number', value: '{{invoice.invoice_number}}', category: 'Invoice' },
         { label: 'Invoice Title', value: '{{invoice.title}}', category: 'Invoice' },
+        { label: 'Invoice Description', value: '{{invoice.description}}', category: 'Invoice' },
         { label: 'Invoice Date', value: '{{invoice.invoice_date}}', category: 'Invoice' },
         { label: 'Due Date', value: '{{invoice.due_date}}', category: 'Invoice' },
         { label: 'Invoice Status', value: '{{invoice.status}}', category: 'Invoice' },
@@ -85,6 +86,7 @@ const moduleVariables: Record<string, Array<{ label: string; value: string; cate
         // Quote variables
         { label: 'Quote Number', value: '{{quote.quote_number}}', category: 'Quote' },
         { label: 'Quote Title', value: '{{quote.title}}', category: 'Quote' },
+        { label: 'Quote Description', value: '{{quote.description}}', category: 'Quote' },
         { label: 'Quote Date', value: '{{quote.quote_date}}', category: 'Quote' },
         { label: 'Expiry Date', value: '{{quote.expiry_date}}', category: 'Quote' },
         { label: 'Quote Status', value: '{{quote.status}}', category: 'Quote' },
@@ -92,7 +94,7 @@ const moduleVariables: Record<string, Array<{ label: string; value: string; cate
         { label: 'Tax Amount', value: '{{quote.tax_amount}}', category: 'Quote' },
         { label: 'Total', value: '{{quote.total}}', category: 'Quote' },
         { label: 'Notes', value: '{{quote.notes}}', category: 'Quote' },
-        { label: 'Terms', value: '{{quote.terms}}', category: 'Quote' },
+        { label: 'Terms', value: '{{quote.terms_conditions}}', category: 'Quote' },
         // Customer variables
         { label: 'Customer Name', value: '{{quote.customer.name}}', category: 'Customer' },
         { label: 'Customer Account Code', value: '{{quote.customer.account_code}}', category: 'Customer' },
@@ -136,7 +138,8 @@ const moduleVariables: Record<string, Array<{ label: string; value: string; cate
         { label: 'Subtotal', value: '{{jobcard.subtotal}}', category: 'Jobcard' },
         { label: 'Tax Amount', value: '{{jobcard.tax_amount}}', category: 'Jobcard' },
         { label: 'Total', value: '{{jobcard.total}}', category: 'Jobcard' },
-        { label: 'Work Notes', value: '{{jobcard.work_notes}}', category: 'Jobcard' },
+        { label: 'Jobcard Notes', value: '{{jobcard.notes}}', category: 'Jobcard' },
+        { label: 'Jobcard Terms', value: '{{jobcard.terms_conditions}}', category: 'Jobcard' },
         // Customer variables
         { label: 'Customer Name', value: '{{jobcard.customer.name}}', category: 'Customer' },
         { label: 'Customer Account Code', value: '{{jobcard.customer.account_code}}', category: 'Customer' },
@@ -162,6 +165,7 @@ const moduleVariables: Record<string, Array<{ label: string; value: string; cate
         // Quote variables (proforma uses quote data)
         { label: 'Quote Number', value: '{{quote.quote_number}}', category: 'Quote' },
         { label: 'Quote Title', value: '{{quote.title}}', category: 'Quote' },
+        { label: 'Quote Description', value: '{{quote.description}}', category: 'Quote' },
         { label: 'Quote Date', value: '{{quote.quote_date}}', category: 'Quote' },
         { label: 'Expiry Date', value: '{{quote.expiry_date}}', category: 'Quote' },
         { label: 'Quote Status', value: '{{quote.status}}', category: 'Quote' },
@@ -169,7 +173,7 @@ const moduleVariables: Record<string, Array<{ label: string; value: string; cate
         { label: 'Tax Amount', value: '{{quote.tax_amount}}', category: 'Quote' },
         { label: 'Total', value: '{{quote.total}}', category: 'Quote' },
         { label: 'Notes', value: '{{quote.notes}}', category: 'Quote' },
-        { label: 'Terms', value: '{{quote.terms}}', category: 'Quote' },
+        { label: 'Terms', value: '{{quote.terms_conditions}}', category: 'Quote' },
         // Customer variables
         { label: 'Customer Name', value: '{{quote.customer.name}}', category: 'Customer' },
         { label: 'Customer Account Code', value: '{{quote.customer.account_code}}', category: 'Customer' },
@@ -421,6 +425,25 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
     padding-top: 8px;
     margin-top: 8px;
 }
+.terms-section {
+    clear: both;
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid #000;
+    font-size: 11px;
+    text-align: left;
+}
+.terms-section h4 {
+    margin: 0 0 10px 0;
+    font-size: 12px;
+    font-weight: bold;
+    color: #000;
+}
+.terms-section p {
+    margin: 0 0 8px 0;
+    font-size: 11px;
+    line-height: 1.4;
+}
 .signature-section {
     clear: both;
     margin-top: 40px;
@@ -548,7 +571,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
         </tr>
     </thead>
     <tbody><tr data-handlebars-loop-start="{{#each invoice.lineItems}}" data-handlebars-loop-end="{{/each}}">
-            <td>{{this.product.code}}</td>
+            <td>{{this.product.sku}}</td>
             <td>{{this.description}}</td>
             <td class="text-right">{{this.quantity}}</td>
             <td class="text-right">R{{this.unit_price}}</td>
@@ -586,6 +609,14 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
         <span>Total (Incl):</span>
         <span>R{{invoice.total}}</span>
     </div>
+</div>
+<div class="terms-section">
+    <h4>Description</h4>
+    <p>{{invoice.description}}</p>
+    <h4>Notes</h4>
+    <p>{{invoice.notes}}</p>
+    <h4>Terms & Conditions</h4>
+    <p>{{invoice.terms}}</p>
 </div>
 <div class="signature-section">
     <div class="signature-row">
@@ -736,7 +767,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
 }
 .quote-detail {
     display: table-cell;
-    width: 33.33%;
+    width: 25%;
     border: 1px solid #000;
     padding: 8px;
     text-align: center;
@@ -892,6 +923,10 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
         <span class="quote-detail-value">{{quote.created_at}}</span>
     </div>
     <div class="quote-detail">
+        <span class="quote-detail-label">Order No</span>
+        <span class="quote-detail-value">{{quote.order_number}}</span>
+    </div>
+    <div class="quote-detail">
         <span class="quote-detail-label">Quote No</span>
         <span class="quote-detail-value">{{quote.quote_number}}</span>
     </div>
@@ -899,7 +934,6 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
 <table class="line-items-table">
     <thead>
         <tr>
-            <th>Item Code</th>
             <th>Item Description</th>
             <th class="text-right">QTY</th>
             <th class="text-right">Price (Ex)</th>
@@ -909,7 +943,6 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
         </tr>
     </thead>
     <tbody><!-- {{#each quote.lineItems}} --><tr>
-            <td>{{this.product.code}}</td>
             <td>{{this.description}}</td>
             <td class="text-right">{{this.quantity}}</td>
             <td class="text-right">R{{this.unit_price}}</td>
@@ -949,11 +982,15 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
     </div>
 </div>
 <div class="terms-section">
+    <h4>Description</h4>
+    <p>{{quote.description}}</p>
+    <h4>Notes</h4>
+    <p>{{quote.notes}}</p>
     <h4>Terms & Conditions</h4>
     <p>This quote is valid for 30 days from the date of issue.</p>
     <p>Prices are subject to change without notice.</p>
     <p>Payment terms: Net 30 days from invoice date.</p>
-    <p>{{quote.terms}}</p>
+    <p>{{quote.terms_conditions}}</p>
 </div>
 <div class="footer">
     <div class="footer-left">
@@ -1085,7 +1122,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
 }
 .jobcard-detail {
     display: table-cell;
-    width: 25%;
+    width: 20%;
     border: 1px solid #000;
     padding: 8px;
     text-align: center;
@@ -1262,6 +1299,10 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
         <span class="jobcard-detail-value">{{jobcard.created_at}}</span>
     </div>
     <div class="jobcard-detail">
+        <span class="jobcard-detail-label">Order No</span>
+        <span class="jobcard-detail-value">{{jobcard.order_number}}</span>
+    </div>
+    <div class="jobcard-detail">
         <span class="jobcard-detail-label">Job No</span>
         <span class="jobcard-detail-value">{{jobcard.job_number}}</span>
     </div>
@@ -1283,7 +1324,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
     </thead>
     <tbody>
         <tr data-handlebars-loop-start="{{#each jobcard.lineItems}}" data-handlebars-loop-end="{{/each}}">
-            <td>{{this.product.code}}</td>
+            <td>{{this.product.sku}}</td>
             <td>{{this.description}}</td>
             <td class="text-right">{{this.quantity}}</td>
             <td class="text-right">R{{this.unit_price}}</td>
@@ -1474,7 +1515,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
 }
 .quote-detail {
     display: table-cell;
-    width: 33.33%;
+    width: 25%;
     border: 1px solid #000;
     padding: 8px;
     text-align: center;
@@ -1630,6 +1671,10 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
         <span class="quote-detail-value">{{quote.created_at}}</span>
     </div>
     <div class="quote-detail">
+        <span class="quote-detail-label">Order No</span>
+        <span class="quote-detail-value">{{quote.order_number}}</span>
+    </div>
+    <div class="quote-detail">
         <span class="quote-detail-label">Proforma Invoice No</span>
         <span class="quote-detail-value">{{quote.quote_number}}</span>
     </div>
@@ -1637,7 +1682,6 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
 <table class="line-items-table">
     <thead>
         <tr>
-            <th>Item Code</th>
             <th>Item Description</th>
             <th class="text-right">QTY</th>
             <th class="text-right">Price (Ex)</th>
@@ -1647,7 +1691,6 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
         </tr>
     </thead>
     <tbody><!-- {{#each quote.lineItems}} --><tr>
-            <td>{{this.product.code}}</td>
             <td>{{this.description}}</td>
             <td class="text-right">{{this.quantity}}</td>
             <td class="text-right">R{{this.unit_price}}</td>
@@ -1687,11 +1730,15 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
     </div>
 </div>
 <div class="terms-section">
+    <h4>Description</h4>
+    <p>{{quote.description}}</p>
+    <h4>Notes</h4>
+    <p>{{quote.notes}}</p>
     <h4>Terms & Conditions</h4>
     <p>This is a proforma invoice and does not constitute a request for payment.</p>
     <p>Prices are subject to change without notice.</p>
     <p>Payment terms: Net 30 days from invoice date.</p>
-    <p>{{quote.terms}}</p>
+    <p>{{quote.terms_conditions}}</p>
 </div>
 <div class="footer">
     <div class="footer-left">

@@ -387,6 +387,7 @@
 </template>
 
 <script setup lang="ts">
+import { matchesProductSearch } from '@/composables/productSearch';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, watch, ref, onMounted } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -585,11 +586,8 @@ function removeLineItem(index: number) {
 }
 
 function productSuggestions(index: number) {
-    const query = form.line_items[index]?.description?.toLowerCase() || '';
-    if (query.length < 2) return [];
-    return props.products.filter(p =>
-        p.name?.toLowerCase().includes(query) || p.sku?.toLowerCase().includes(query)
-    ).slice(0, 8);
+    const query = form.line_items[index]?.description || '';
+    return props.products.filter(product => matchesProductSearch(product, query)).slice(0, 8);
 }
 
 function handleDescriptionInput(index: number) {

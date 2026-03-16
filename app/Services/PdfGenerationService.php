@@ -323,6 +323,20 @@ class PdfGenerationService
                     $result[$key] = $value;
                 }
             }
+
+            // Backwards-compatible aliases for older PDF templates.
+            if (!isset($result['code']) && !empty($result['sku'])) {
+                $result['code'] = $result['sku'];
+            }
+
+            if (!isset($result['terms']) && !empty($result['terms_conditions'])) {
+                $result['terms'] = $result['terms_conditions'];
+            }
+
+            if (!isset($result['work_notes']) && !empty($result['notes'])) {
+                $result['work_notes'] = $result['notes'];
+            }
+
             return $result;
         }
         

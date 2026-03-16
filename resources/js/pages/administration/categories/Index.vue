@@ -77,7 +77,12 @@ function deleteCategory(category: Category) {
                 <div
                     v-for="category in props.categories"
                     :key="category.id"
-                    class="rounded-lg border bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
+                    class="cursor-pointer rounded-lg border bg-white p-6 shadow-sm transition-shadow hover:shadow-md focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                    tabindex="0"
+                    role="link"
+                    @click="router.visit(administration.categories.show(category.id).url)"
+                    @keydown.enter.prevent="router.visit(administration.categories.show(category.id).url)"
+                    @keydown.space.prevent="router.visit(administration.categories.show(category.id).url)"
                 >
                     <!-- Category Header -->
                     <div class="mb-4 flex items-start justify-between">
@@ -112,14 +117,7 @@ function deleteCategory(category: Category) {
                     </div>
 
                     <!-- Actions -->
-                    <div class="flex items-center gap-2">
-                        <Link
-                            :href="administration.categories.show(category.id).url"
-                            class="flex items-center gap-1 rounded border px-3 py-1 text-sm text-gray-700 hover:bg-gray-50"
-                        >
-                            <Eye class="h-3 w-3" />
-                            View
-                        </Link>
+                    <div class="flex items-center gap-2" @click.stop>
                         <Link
                             :href="administration.categories.edit(category.id).url"
                             class="flex items-center gap-1 rounded border px-3 py-1 text-sm text-gray-700 hover:bg-gray-50"

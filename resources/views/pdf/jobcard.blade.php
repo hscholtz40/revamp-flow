@@ -39,7 +39,7 @@
             width: 50%;
             text-align: right;
             vertical-align: middle;
-            font-size: 28px;
+            font-size: 24px;
             font-weight: bold;
             color: #000;
             text-transform: uppercase;
@@ -67,8 +67,8 @@
         }
         
         .company-logo {
-            max-width: 220px;
-            max-height: 110px;
+            max-width: 240px;
+            max-height: 120px;
             margin-bottom: 10px;
         }
         
@@ -162,7 +162,7 @@
         
         .jobcard-detail {
             display: table-cell;
-            width: 25%;
+            width: 20%;
             border: 1px solid #000;
             padding: 8px;
             text-align: center;
@@ -188,7 +188,7 @@
         .line-items-table th,
         .line-items-table td {
             border-bottom: 1px solid #000;
-            padding: 8px;
+            padding: 6px;
             font-size: 11px;
         }
         
@@ -380,6 +380,16 @@
                 @if($jobcard->customer->postal_code)
                     <p>{{ $jobcard->customer->postal_code }}</p>
                 @endif
+                @if($jobcard->email)
+                    <p>{{ $jobcard->email }}</p>
+                @elseif($jobcard->customer->email)
+                    <p>{{ $jobcard->customer->email }}</p>
+                @endif
+                @if($jobcard->phone)
+                    <p>{{ $jobcard->phone }}</p>
+                @elseif($jobcard->customer->phone)
+                    <p>{{ $jobcard->customer->phone }}</p>
+                @endif
             </div>
         </div>
         
@@ -403,6 +413,10 @@
         <div class="jobcard-detail">
             <span class="jobcard-detail-label">Date</span>
             <span class="jobcard-detail-value">{{ $jobcard->created_at ? \Carbon\Carbon::parse($jobcard->created_at)->format('Y/m/d') : date('Y/m/d') }}</span>
+        </div>
+        <div class="jobcard-detail">
+            <span class="jobcard-detail-label">Order No</span>
+            <span class="jobcard-detail-value">{{ $jobcard->order_number ?? '' }}</span>
         </div>
         <div class="jobcard-detail">
             <span class="jobcard-detail-label">Job No</span>
@@ -429,7 +443,7 @@
         <tbody>
             @foreach($jobcard->lineItems ?? [] as $item)
                 <tr>
-                    <td>{{ $item->product->code ?? 'N/A' }}</td>
+                    <td>{{ $item->product->sku ?? $item->product->barcode ?? '' }}</td>
                     <td>{{ $item->description ?? 'Work Description' }}</td>
                     <td class="text-right">{{ number_format($item->quantity ?? 0, 2) }}</td>
                     <td class="text-right">R{{ number_format($item->unit_price ?? 0, 2) }}</td>

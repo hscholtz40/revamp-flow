@@ -197,6 +197,45 @@
                         </div>
 
                         <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Order Number</label>
+                            <input
+                                v-model="form.order_number"
+                                type="text"
+                                class="w-full rounded border px-3 py-2"
+                                :class="{ 'border-red-500': form.errors.order_number }"
+                            />
+                            <div v-if="form.errors.order_number" class="text-red-500 text-sm mt-1">
+                                {{ form.errors.order_number }}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                            <input
+                                v-model="form.email"
+                                type="email"
+                                class="w-full rounded border px-3 py-2"
+                                :class="{ 'border-red-500': form.errors.email }"
+                            />
+                            <div v-if="form.errors.email" class="text-red-500 text-sm mt-1">
+                                {{ form.errors.email }}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+                            <input
+                                v-model="form.phone"
+                                type="text"
+                                class="w-full rounded border px-3 py-2"
+                                :class="{ 'border-red-500': form.errors.phone }"
+                            />
+                            <div v-if="form.errors.phone" class="text-red-500 text-sm mt-1">
+                                {{ form.errors.phone }}
+                            </div>
+                        </div>
+
+                        <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Invoice Date *</label>
                             <input v-model="form.invoice_date" type="date" class="w-full rounded border px-3 py-2"
                                 :class="{ 'border-red-500': form.errors.invoice_date }" required />
@@ -554,6 +593,7 @@
 </template>
 
 <script setup lang="ts">
+import { matchesProductSearch } from '@/composables/productSearch';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, watch, ref } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -611,9 +651,12 @@ interface LineItem {
 interface Invoice {
     id: number;
     invoice_number: string;
+    order_number?: string | null;
     title: string;
     description?: string;
     customer_id: number;
+    email?: string | null;
+    phone?: string | null;
     salesperson_id?: number;
     invoice_date: string;
     due_date: string;
@@ -684,6 +727,9 @@ const form = useForm({
     title: props.invoice.title,
     description: props.invoice.description || '',
     customer_id: props.invoice.customer_id,
+    email: props.invoice.email || '',
+    phone: props.invoice.phone || '',
+    order_number: props.invoice.order_number || '',
     salesperson_id: props.invoice.salesperson_id || '',
     invoice_date: props.invoice.invoice_date ? new Date(props.invoice.invoice_date).toISOString().split('T')[0] : '',
     due_date: props.invoice.due_date ? new Date(props.invoice.due_date).toISOString().split('T')[0] : '',
@@ -848,6 +894,8 @@ const handleCustomerBlur = () => {
 const selectCustomer = (customer: Customer) => {
     selectedCustomer.value = customer;
     form.customer_id = customer.id;
+    form.email = customer.email || '';
+    form.phone = customer.phone || '';
     customerSearchQuery.value = customer.name;
     customerSearchFocused.value = false;
     
@@ -859,6 +907,8 @@ const selectCustomer = (customer: Customer) => {
 const clearCustomer = () => {
     selectedCustomer.value = null;
     form.customer_id = 0;
+    form.email = '';
+    form.phone = '';
     customerSearchQuery.value = '';
     filteredCustomers.value = [];
     applyDueDateFromTerms(true);
@@ -962,13 +1012,8 @@ const calculateLineTotalValue = (item: LineItem) => {
 
 // Product suggestions based on description text
 const productSuggestions = (index: number) => {
-    const query = form.line_items[index]?.description?.toLowerCase() || '';
-    if (query.length < 2) return [];
-    return props.products.filter(product => {
-        const nameMatch = product.name?.toLowerCase().includes(query);
-        const skuMatch = product.sku?.toLowerCase().includes(query);
-        return nameMatch || skuMatch;
-    }).slice(0, 8);
+    const query = form.line_items[index]?.description || '';
+    return props.products.filter(product => matchesProductSearch(product, query)).slice(0, 8);
 };
 
 const handleDescriptionInput = (index: number) => {

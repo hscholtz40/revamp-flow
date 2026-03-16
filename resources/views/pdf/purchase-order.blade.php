@@ -39,7 +39,7 @@
             width: 50%;
             text-align: right;
             vertical-align: middle;
-            font-size: 28px;
+            font-size: 24px;
             font-weight: bold;
             color: #000;
             text-transform: uppercase;
@@ -67,8 +67,8 @@
         }
         
         .company-logo {
-            max-width: 220px;
-            max-height: 110px;
+            max-width: 240px;
+            max-height: 120px;
             margin-bottom: 10px;
         }
         
@@ -152,7 +152,7 @@
         
         .line-items-table th {
             background-color: #f0f0f0;
-            padding: 8px;
+            padding: 6px;
             text-align: left;
             border-bottom: 2px solid #000;
             font-size: 11px;
@@ -160,7 +160,7 @@
         }
         
         .line-items-table td {
-            padding: 8px;
+            padding: 6px;
             border-bottom: 1px solid #ccc;
             font-size: 11px;
         }

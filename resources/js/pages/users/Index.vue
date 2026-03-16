@@ -48,7 +48,16 @@ watch(search, (value) => {
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="u in props.users.data" :key="u.id" class="border-t">
+                        <tr
+                            v-for="u in props.users.data"
+                            :key="u.id"
+                            class="cursor-pointer border-t hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                            tabindex="0"
+                            role="link"
+                            @click="router.visit(users.show(u.id).url)"
+                            @keydown.enter.prevent="router.visit(users.show(u.id).url)"
+                            @keydown.space.prevent="router.visit(users.show(u.id).url)"
+                        >
                             <td class="p-2">{{ u.name }}</td>
                             <td class="p-2">{{ u.email }}</td>
                             <td class="p-2">
@@ -63,9 +72,8 @@ watch(search, (value) => {
                                     {{ u.user_type || 'standard' }}
                                 </span>
                             </td>
-                            <td class="p-2 text-right">
-                                <Link :href="users.show(u.id).url" class="rounded border px-2 py-1">View</Link>
-                                <Link :href="users.edit(u.id).url" class="ml-2 rounded bg-gray-200 px-2 py-1">Edit</Link>
+                            <td class="p-2 text-right" @click.stop>
+                                <Link :href="users.edit(u.id).url" class="rounded bg-gray-200 px-2 py-1">Edit</Link>
                             </td>
                         </tr>
                     </tbody>

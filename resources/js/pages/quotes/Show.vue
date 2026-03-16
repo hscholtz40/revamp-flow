@@ -163,11 +163,11 @@
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-500">Email</label>
-                                    <p class="mt-1 text-sm text-gray-900">{{ props.quote.customer?.email || '-' }}</p>
+                                    <p class="mt-1 text-sm text-gray-900">{{ props.quote.email || props.quote.customer?.email || '-' }}</p>
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-500">Phone</label>
-                                    <p class="mt-1 text-sm text-gray-900">{{ props.quote.customer?.phone || '-' }}</p>
+                                    <p class="mt-1 text-sm text-gray-900">{{ props.quote.phone || props.quote.customer?.phone || '-' }}</p>
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-500">Address</label>
@@ -273,6 +273,10 @@
                             <div>
                                 <label class="block text-sm font-medium text-gray-500">Quote Number</label>
                                 <p class="mt-1 text-sm text-gray-900">{{ props.quote.quote_number }}</p>
+                            </div>
+                            <div v-if="props.quote.order_number">
+                                <label class="block text-sm font-medium text-gray-500">Order Number</label>
+                                <p class="mt-1 text-sm text-gray-900">{{ props.quote.order_number }}</p>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-500">Created Date</label>
@@ -499,6 +503,9 @@ interface Quote {
     id: number;
     invoice_id?: number;
     quote_number: string;
+    order_number?: string | null;
+    email?: string | null;
+    phone?: string | null;
     title: string;
     description?: string;
     status: string;
@@ -548,7 +555,7 @@ const canEditQuote = computed(() => {
 });
 
 const emailForm = useForm({
-    email: props.quote.customer?.email || '',
+    email: props.quote.email || props.quote.customer?.email || '',
     message: '',
     type: 'quotation',
     template_id: null as number | null,

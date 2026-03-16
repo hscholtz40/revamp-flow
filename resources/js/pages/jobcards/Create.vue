@@ -166,6 +166,45 @@
                         </div>
 
                         <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Order Number</label>
+                            <input
+                                v-model="form.order_number"
+                                type="text"
+                                class="w-full rounded border px-3 py-2"
+                                :class="{ 'border-red-500': form.errors.order_number }"
+                            />
+                            <div v-if="form.errors.order_number" class="text-red-500 text-sm mt-1">
+                                {{ form.errors.order_number }}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                            <input
+                                v-model="form.email"
+                                type="email"
+                                class="w-full rounded border px-3 py-2"
+                                :class="{ 'border-red-500': form.errors.email }"
+                            />
+                            <div v-if="form.errors.email" class="text-red-500 text-sm mt-1">
+                                {{ form.errors.email }}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+                            <input
+                                v-model="form.phone"
+                                type="text"
+                                class="w-full rounded border px-3 py-2"
+                                :class="{ 'border-red-500': form.errors.phone }"
+                            />
+                            <div v-if="form.errors.phone" class="text-red-500 text-sm mt-1">
+                                {{ form.errors.phone }}
+                            </div>
+                        </div>
+
+                        <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Status *</label>
                             <select
                                 v-model="form.status"
@@ -566,6 +605,7 @@
 
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
+import { matchesProductSearch } from '@/composables/productSearch';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import jobcards from '@/routes/jobcards';
@@ -617,6 +657,7 @@ interface Props {
         name: string;
     };
     defaultTerms?: string;
+    defaultSalesCustomerId?: number | null;
     taxRates: { id: number; name: string; rate: number; is_default_sales: boolean }[];
     defaultSalesTaxRateId: number | null;
     chartOfAccounts: { id: number; account_code: string; account_name: string; account_type: string }[];
@@ -631,9 +672,12 @@ const discountTypes = ref<Record<number, 'amount' | 'percentage'>>({});
 const assignmentType = ref<'none' | 'user' | 'team'>('none');
 
 const form = useForm({
-    customer_id: '',
+    customer_id: props.defaultSalesCustomerId ? props.defaultSalesCustomerId.toString() : '',
+    email: '',
+    phone: '',
     assigned_to_user_id: null as number | null,
     assigned_to_team_id: null as number | null,
+    order_number: '',
     title: '',
     description: '',
     status: 'draft',
@@ -670,6 +714,17 @@ const quickCreateForm = useForm({
     phone: '',
 });
 
+if (props.defaultSalesCustomerId) {
+    const defaultCustomer = props.customers.find(c => c.id === props.defaultSalesCustomerId);
+    if (defaultCustomer) {
+        selectedCustomer.value = defaultCustomer;
+        customerSearchQuery.value = defaultCustomer.name;
+        form.email = defaultCustomer.email || '';
+        form.phone = defaultCustomer.phone || '';
+        form.title = defaultCustomer.name;
+    }
+}
+
 // Customer search functions
 const handleCustomerSearch = async () => {
     if (!customerSearchQuery.value.trim()) {
@@ -705,6 +760,8 @@ const handleCustomerBlur = () => {
 const selectCustomer = (customer: Customer) => {
     selectedCustomer.value = customer;
     form.customer_id = customer.id.toString();
+    form.email = customer.email || '';
+    form.phone = customer.phone || '';
     customerSearchQuery.value = customer.name;
     customerSearchFocused.value = false;
     
@@ -715,6 +772,8 @@ const selectCustomer = (customer: Customer) => {
 const clearCustomer = () => {
     selectedCustomer.value = null;
     form.customer_id = '';
+    form.email = '';
+    form.phone = '';
     customerSearchQuery.value = '';
     filteredCustomers.value = [];
 };
@@ -789,13 +848,8 @@ const removeLineItem = (index: number) => {
 
 // Product suggestions based on description text
 const productSuggestions = (index: number) => {
-    const query = form.line_items[index]?.description?.toLowerCase() || '';
-    if (query.length < 2) return [];
-    return props.products.filter(product => {
-        const nameMatch = product.name?.toLowerCase().includes(query);
-        const skuMatch = product.sku?.toLowerCase().includes(query);
-        return nameMatch || skuMatch;
-    }).slice(0, 8);
+    const query = form.line_items[index]?.description || '';
+    return props.products.filter(product => matchesProductSearch(product, query)).slice(0, 8);
 };
 
 const handleDescriptionInput = (index: number) => {

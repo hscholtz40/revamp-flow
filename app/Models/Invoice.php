@@ -16,9 +16,12 @@ class Invoice extends Model
 
     protected $fillable = [
         'invoice_number',
+        'order_number',
         'title',
         'description',
         'customer_id',
+        'email',
+        'phone',
         'salesperson_id',
         'company_id',
         'status',
@@ -51,6 +54,9 @@ class Invoice extends Model
     ];
 
     protected $appends = [
+        'job_number',
+        'recipient_email',
+        'recipient_phone',
         'total_paid',
         'total_credited',
         'remaining_balance',
@@ -230,6 +236,32 @@ class Invoice extends Model
     public function getDaysUntilDueAttribute(): int
     {
         return now()->diffInDays($this->due_date, false);
+    }
+
+    public function getJobNumberAttribute(): ?string
+    {
+        if ($this->source_type !== 'jobcard') {
+            return null;
+        }
+
+        if ($this->relationLoaded('source')) {
+            return $this->source?->job_number;
+        }
+
+        /** @var \App\Models\Jobcard|null $jobcard */
+        $jobcard = $this->source()->first();
+
+        return $jobcard?->job_number;
+    }
+
+    public function getRecipientEmailAttribute(): ?string
+    {
+        return $this->email ?: $this->customer?->email;
+    }
+
+    public function getRecipientPhoneAttribute(): ?string
+    {
+        return $this->phone ?: $this->customer?->phone;
     }
 
     /**

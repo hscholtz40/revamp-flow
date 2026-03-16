@@ -133,11 +133,11 @@
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Email</label>
-                                    <p class="text-sm text-gray-900">{{ props.invoice.customer?.email || '-' }}</p>
+                                    <p class="text-sm text-gray-900">{{ props.invoice.email || props.invoice.customer?.email || '-' }}</p>
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Phone</label>
-                                    <p class="text-sm text-gray-900">{{ props.invoice.customer?.phone || '-' }}</p>
+                                    <p class="text-sm text-gray-900">{{ props.invoice.phone || props.invoice.customer?.phone || '-' }}</p>
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Address</label>
@@ -263,6 +263,10 @@
                             <div>
                                 <label class="block text-sm font-medium text-gray-500">Invoice Number</label>
                                 <p class="mt-1 text-sm text-gray-900">{{ props.invoice.invoice_number }}</p>
+                            </div>
+                            <div v-if="props.invoice.order_number">
+                                <label class="block text-sm font-medium text-gray-500">Order Number</label>
+                                <p class="mt-1 text-sm text-gray-900">{{ props.invoice.order_number }}</p>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-500">Invoice Date</label>
@@ -735,6 +739,8 @@ interface Payment {
 interface Invoice {
     id: number;
     invoice_number: string;
+    order_number?: string | null;
+    job_number?: string | null;
     title: string;
     description?: string;
     status: string;
@@ -747,6 +753,8 @@ interface Invoice {
     total_paid?: number;
     total_credited?: number;
     remaining_balance?: number;
+    email?: string | null;
+    phone?: string | null;
     notes?: string;
     terms?: string;
     source_type?: string;
@@ -793,7 +801,7 @@ const canEditInvoice = computed(() => {
 });
 
 const emailForm = useForm({
-    email: props.invoice.customer?.email || '',
+    email: props.invoice.email || props.invoice.customer?.email || '',
     customMessage: '',
     template_id: null as number | null,
 });

@@ -131,7 +131,16 @@
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
-                            <tr v-for="invoice in (props.invoices?.data || [])" :key="invoice.id" class="hover:bg-gray-50">
+                            <tr
+                                v-for="invoice in (props.invoices?.data || [])"
+                                :key="invoice.id"
+                                class="cursor-pointer hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                                tabindex="0"
+                                role="link"
+                                @click="router.visit(invoices.show(invoice.id).url)"
+                                @keydown.enter.prevent="router.visit(invoices.show(invoice.id).url)"
+                                @keydown.space.prevent="router.visit(invoices.show(invoice.id).url)"
+                            >
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div>
                                         <div class="text-sm font-medium text-gray-900">{{ invoice.invoice_number }}</div>
@@ -158,14 +167,8 @@
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="text-sm font-medium text-gray-900">{{ formatCurrency(invoice.total) }}</div>
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" @click.stop>
                                     <div class="flex items-center gap-2">
-                                        <Link
-                                            :href="invoices.show(invoice.id).url"
-                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                                        >
-                                            View
-                                        </Link>
                                         <Link
                                             v-if="canEditInvoice(invoice)"
                                             :href="invoices.edit(invoice.id).url"

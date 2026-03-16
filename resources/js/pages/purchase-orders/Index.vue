@@ -99,7 +99,16 @@
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
-                            <tr v-for="po in (props.purchaseOrders?.data || [])" :key="po.id" class="hover:bg-gray-50">
+                            <tr
+                                v-for="po in (props.purchaseOrders?.data || [])"
+                                :key="po.id"
+                                class="cursor-pointer hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                                tabindex="0"
+                                role="link"
+                                @click="router.visit(purchaseOrders.show(po.id).url)"
+                                @keydown.enter.prevent="router.visit(purchaseOrders.show(po.id).url)"
+                                @keydown.space.prevent="router.visit(purchaseOrders.show(po.id).url)"
+                            >
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="text-sm font-medium text-gray-900">{{ po.po_number }}</div>
                                 </td>
@@ -120,15 +129,7 @@
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="text-sm font-medium text-gray-900">{{ formatCurrency(po.total) }}</div>
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                    <div class="flex items-center gap-2">
-                                        <Link
-                                            :href="purchaseOrders.show(po.id).url"
-                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200"
-                                        >
-                                            View
-                                        </Link>
-                                    </div>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" @click.stop>
                                 </td>
                             </tr>
                         </tbody>

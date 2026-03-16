@@ -131,7 +131,16 @@
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
-                            <tr v-for="jobcard in props.jobcards.data" :key="jobcard.id" class="hover:bg-gray-50">
+                            <tr
+                                v-for="jobcard in props.jobcards.data"
+                                :key="jobcard.id"
+                                class="cursor-pointer hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                                tabindex="0"
+                                role="link"
+                                @click="router.visit(jobcards.show(jobcard.id).url)"
+                                @keydown.enter.prevent="router.visit(jobcards.show(jobcard.id).url)"
+                                @keydown.space.prevent="router.visit(jobcards.show(jobcard.id).url)"
+                            >
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="text-sm font-medium text-gray-900">{{ jobcard.job_number }}</div>
                                 </td>
@@ -171,14 +180,8 @@
                                 <td v-if="!isLimitedUser" class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     {{ jobcard.formatted_total || 'R0.00' }}
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" @click.stop>
                                     <div class="flex items-center gap-2">
-                                        <Link
-                                            :href="jobcards.show(jobcard.id).url"
-                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                                        >
-                                            View
-                                        </Link>
                                         <template v-if="!isLimitedUser">
                                             <Link
                                                 v-if="canEditJobcard(jobcard)"

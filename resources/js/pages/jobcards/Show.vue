@@ -144,11 +144,11 @@
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Email</label>
-                                    <p class="text-sm text-gray-900">{{ props.jobcard.customer.email }}</p>
+                                    <p class="text-sm text-gray-900">{{ props.jobcard.email || props.jobcard.customer.email || '-' }}</p>
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Phone</label>
-                                    <p class="text-sm text-gray-900">{{ props.jobcard.customer.phone || '-' }}</p>
+                                    <p class="text-sm text-gray-900">{{ props.jobcard.phone || props.jobcard.customer.phone || '-' }}</p>
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Address</label>
@@ -259,6 +259,10 @@
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Job Number</label>
                                     <p class="text-sm text-gray-900 font-mono">{{ props.jobcard.job_number }}</p>
+                                </div>
+                                <div v-if="props.jobcard.order_number">
+                                    <label class="block text-sm font-medium text-gray-700">Order Number</label>
+                                    <p class="text-sm text-gray-900">{{ props.jobcard.order_number }}</p>
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Status</label>
@@ -589,6 +593,9 @@ interface Jobcard {
     id: number;
     invoice_id?: number;
     job_number: string;
+    order_number?: string | null;
+    email?: string | null;
+    phone?: string | null;
     title: string;
     description: string | null;
     status: string;
@@ -730,7 +737,7 @@ const emailResult = ref({
 });
 
 const emailForm = useForm({
-    email: props.jobcard.customer?.email || '',
+    email: props.jobcard.email || props.jobcard.customer?.email || '',
     message: '',
     template_id: null as number | null,
 });

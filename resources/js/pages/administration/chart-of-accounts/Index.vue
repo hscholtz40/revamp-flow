@@ -96,7 +96,16 @@ function getAccountTypeColor(type: string): string {
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200 bg-white">
-                        <tr v-for="account in props.accounts" :key="account.id" class="hover:bg-gray-50">
+                        <tr
+                            v-for="account in props.accounts"
+                            :key="account.id"
+                            class="cursor-pointer hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                            tabindex="0"
+                            role="link"
+                            @click="router.visit(administration.chartOfAccounts.show(account.id).url)"
+                            @keydown.enter.prevent="router.visit(administration.chartOfAccounts.show(account.id).url)"
+                            @keydown.space.prevent="router.visit(administration.chartOfAccounts.show(account.id).url)"
+                        >
                             <td class="whitespace-nowrap px-6 py-4">
                                 <div class="font-mono text-sm font-medium text-gray-900">{{ account.account_code }}</div>
                             </td>
@@ -138,14 +147,8 @@ function getAccountTypeColor(type: string): string {
                                     {{ account.is_active ? 'Active' : 'Inactive' }}
                                 </span>
                             </td>
-                            <td class="whitespace-nowrap px-6 py-4 text-right text-sm font-medium">
+                            <td class="whitespace-nowrap px-6 py-4 text-right text-sm font-medium" @click.stop>
                                 <div class="flex items-center justify-end gap-2">
-                                    <Link
-                                        :href="administration.chartOfAccounts.show(account.id).url"
-                                        class="text-blue-600 hover:text-blue-900"
-                                    >
-                                        <Eye class="h-4 w-4" />
-                                    </Link>
                                     <Link
                                         :href="administration.chartOfAccounts.edit(account.id).url"
                                         class="text-indigo-600 hover:text-indigo-900"

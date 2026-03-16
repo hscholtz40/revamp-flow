@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
+import { matchesProductSearch } from '@/composables/productSearch';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import invoices from '@/routes/invoices';
@@ -31,6 +32,7 @@ const paymentMethodOptions = [
     { value: 'cash', label: 'Cash' },
     { value: 'card', label: 'Card' },
     { value: 'eft', label: 'EFT' },
+    { value: 'account', label: 'Account' },
 ];
 const showProductSuggestions = ref<Record<number, boolean>>({});
 const pendingPrintWindow = ref<Window | null>(null);
@@ -156,13 +158,8 @@ const onProductChange = (index: number) => {
 };
 
 const productSuggestions = (index: number) => {
-    const query = String(form.line_items[index]?.description || '').toLowerCase().trim();
-    if (query.length < 2) return [];
-    return props.products.filter((product) => {
-        const nameMatch = product.name?.toLowerCase().includes(query);
-        const skuMatch = product.sku?.toLowerCase().includes(query);
-        return nameMatch || skuMatch;
-    }).slice(0, 8);
+    const query = form.line_items[index]?.description || '';
+    return props.products.filter(product => matchesProductSearch(product, query)).slice(0, 8);
 };
 
 const handleDescriptionInput = (index: number) => {
@@ -207,6 +204,12 @@ const taxAmount = computed(() => subtotal.value * (defaultTaxRate.value / 100));
 const total = computed(() => subtotal.value + taxAmount.value);
 
 watch(total, (newTotal) => {
+    if (form.payment_method === 'account') {
+        form.amount_paid = 0;
+        form.tendered_amount = 0;
+        return;
+    }
+
     form.amount_paid = Number(newTotal.toFixed(2));
     if (form.payment_method === 'cash' && form.tendered_amount < form.amount_paid) {
         form.tendered_amount = form.amount_paid;
@@ -214,6 +217,13 @@ watch(total, (newTotal) => {
 }, { immediate: true });
 
 watch(() => form.payment_method, (method) => {
+    if (method === 'account') {
+        form.amount_paid = 0;
+        form.tendered_amount = 0;
+        return;
+    }
+
+    form.amount_paid = Number(total.value.toFixed(2));
     if (method === 'cash' && form.tendered_amount < form.amount_paid) {
         form.tendered_amount = form.amount_paid;
     }
@@ -240,7 +250,7 @@ const canCompleteSale = computed(() =>
     Boolean(form.invoice_date) &&
     Boolean(form.due_date) &&
     Boolean((form.terms || '').trim()) &&
-    Number(form.amount_paid) > 0 &&
+    (form.payment_method === 'account' || Number(form.amount_paid) > 0) &&
     hasAtLeastOneLineItem.value &&
     areLineItemsValid.value
 );
@@ -466,7 +476,7 @@ const submit = () => {
                         <div class="font-semibold">Payment</div>
                         <div>
                             <label class="block text-sm mb-1">Payment Method *</label>
-                            <div class="grid grid-cols-3 gap-2">
+                            <div class="grid grid-cols-4 gap-2">
                                 <button
                                     v-for="method in paymentMethodOptions"
                                     :key="method.value"
@@ -483,9 +493,12 @@ const submit = () => {
                                 </button>
                             </div>
                         </div>
-                        <div>
+                        <div v-if="form.payment_method !== 'account'">
                             <label class="block text-sm mb-1">Amount Paid *</label>
                             <input v-model.number="form.amount_paid" type="number" step="0.01" min="0.01" class="w-full rounded border px-3 py-2" required />
+                        </div>
+                        <div v-else class="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+                            Account sale selected. No payment will be recorded.
                         </div>
                         <div v-if="form.payment_method === 'cash'">
                             <label class="block text-sm mb-1">Cash Tendered</label>

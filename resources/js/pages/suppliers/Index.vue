@@ -189,7 +189,16 @@ function deleteSupplier(supplier: Supplier) {
                     </thead>
                     <tbody class="divide-y divide-gray-200 bg-white">
                         <template v-if="hasSuppliers">
-                            <tr v-for="supplier in suppliersData.data" :key="supplier.id" class="hover:bg-gray-50">
+                            <tr
+                                v-for="supplier in suppliersData.data"
+                                :key="supplier.id"
+                                class="cursor-pointer hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                                tabindex="0"
+                                role="link"
+                                @click="router.visit(suppliers.show(supplier.id).url)"
+                                @keydown.enter.prevent="router.visit(suppliers.show(supplier.id).url)"
+                                @keydown.space.prevent="router.visit(suppliers.show(supplier.id).url)"
+                            >
                                 <td class="whitespace-nowrap px-6 py-4">
                                     <div class="flex items-center">
                                         <Building2 class="mr-2 h-5 w-5 text-gray-400" />
@@ -226,14 +235,8 @@ function deleteSupplier(supplier: Supplier) {
                                         {{ supplier.is_active ? 'Active' : 'Inactive' }}
                                     </span>
                                 </td>
-                                <td class="whitespace-nowrap px-6 py-4 text-right text-sm font-medium">
+                                <td class="whitespace-nowrap px-6 py-4 text-right text-sm font-medium" @click.stop>
                                     <div class="flex items-center justify-end gap-2">
-                                        <Link
-                                            :href="suppliers.show(supplier.id).url"
-                                            class="text-blue-600 hover:text-blue-900"
-                                        >
-                                            <Eye class="h-4 w-4" />
-                                        </Link>
                                         <Link
                                             :href="suppliers.edit(supplier.id).url"
                                             class="text-indigo-600 hover:text-indigo-900"

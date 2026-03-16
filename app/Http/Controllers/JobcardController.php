@@ -90,7 +90,7 @@ class JobcardController extends Controller
         }
 
         $jobcards = $query->paginate(15)->withQueryString();
-        $customers = Customer::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name']);
+        $customers = Customer::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name', 'email', 'phone', 'account_code']);
         $users = User::whereHas('companies', function ($q) use ($currentCompany) {
             $q->where('company_id', $currentCompany->id);
         })->orWhereDoesntHave('companies')->orderBy('name')->get(['id', 'name']);
@@ -125,7 +125,7 @@ class JobcardController extends Controller
         $products = Product::where('company_id', $currentCompany->id)
             ->where('is_active', true)
             ->orderBy('name')
-            ->get(['id', 'name', 'price', 'type']);
+            ->get(['id', 'name', 'sku', 'price', 'type']);
         $users = User::whereHas('companies', function ($q) use ($currentCompany) {
             $q->where('company_id', $currentCompany->id);
         })->orWhereDoesntHave('companies')->orderBy('name')->get(['id', 'name']);
@@ -134,6 +134,7 @@ class JobcardController extends Controller
         $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
         $chartOfAccounts = ChartOfAccount::where('company_id', $currentCompany->id)->where('is_active', true)->ordered()->get(['id', 'account_code', 'account_name', 'account_type', 'is_default_sales']);
         $defaultSalesAccount = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id);
+        $defaultSalesCustomer = Customer::getDefaultSalesForCompany($currentCompany->id);
 
         return Inertia::render('jobcards/Create', [
             'customers' => $customers,
@@ -144,6 +145,7 @@ class JobcardController extends Controller
             'defaultSalesTaxRateId' => $defaultSalesTaxRate?->id,
             'chartOfAccounts' => $chartOfAccounts,
             'defaultSalesAccountId' => $defaultSalesAccount?->id,
+            'defaultSalesCustomerId' => $defaultSalesCustomer?->id,
             'currentCompany' => $currentCompany,
             'defaultTerms' => $currentCompany->default_jobcard_terms,
         ]);
@@ -158,8 +160,11 @@ class JobcardController extends Controller
         
         $validated = $request->validate([
             'customer_id' => ['required', 'exists:customers,id'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:255'],
             'assigned_to_user_id' => ['nullable', 'exists:users,id'],
             'assigned_to_team_id' => ['nullable', 'exists:teams,id'],
+            'order_number' => ['nullable', 'string', 'max:255'],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'status' => ['required', 'in:draft,pending,in_progress,completed,cancelled'],
@@ -182,6 +187,9 @@ class JobcardController extends Controller
 
         $validated['company_id'] = $currentCompany->id;
         $validated['job_number'] = Jobcard::generateJobNumber($currentCompany->id);
+        $validated['order_number'] = $validated['order_number'] ?? null;
+        $validated['email'] = $validated['email'] ?? null;
+        $validated['phone'] = $validated['phone'] ?? null;
         $validated['tax_rate'] = $validated['tax_rate'] ?? 0;
 
         $jobcard = Jobcard::create($validated);
@@ -307,11 +315,11 @@ class JobcardController extends Controller
         }
 
         $currentCompany = auth()->user()->getCurrentCompany();
-        $customers = Customer::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name']);
+        $customers = Customer::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name', 'email', 'phone', 'account_code']);
         $products = Product::where('company_id', $currentCompany->id)
             ->where('is_active', true)
             ->orderBy('name')
-            ->get(['id', 'name', 'price', 'type']);
+            ->get(['id', 'name', 'sku', 'price', 'type']);
         $users = User::whereHas('companies', function ($q) use ($currentCompany) {
             $q->where('company_id', $currentCompany->id);
         })->orWhereDoesntHave('companies')->orderBy('name')->get(['id', 'name']);
@@ -344,8 +352,11 @@ class JobcardController extends Controller
     {
         $validated = $request->validate([
             'customer_id' => ['required', 'exists:customers,id'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:255'],
             'assigned_to_user_id' => ['nullable', 'exists:users,id'],
             'assigned_to_team_id' => ['nullable', 'exists:teams,id'],
+            'order_number' => ['nullable', 'string', 'max:255'],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'status' => ['required', 'in:draft,pending,in_progress,completed,cancelled'],
