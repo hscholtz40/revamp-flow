@@ -90,7 +90,7 @@
         }
         
         .company-details-table {
-            width: auto;
+            width: 90%;
             max-width: 100%;
             border-collapse: collapse;
             table-layout: auto;
