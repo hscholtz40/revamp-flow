@@ -230,6 +230,7 @@ class InvoicesController extends Controller
 
         $validated = $request->validate([
             'customer_id' => 'required|exists:customers,id',
+            'order_number' => 'nullable|string|max:255',
             'invoice_date' => 'required|date',
             'notes' => 'nullable|string',
             'terms' => 'nullable|string|max:255',
@@ -262,6 +263,7 @@ class InvoicesController extends Controller
         $created = DB::transaction(function () use ($validated, $currentCompany, $invoiceNumber, $dueDate, $terms, $invoiceDate, $defaultTaxRateId, $defaultTaxRateRate, $defaultAccountId, $salespersonId) {
             $invoice = Invoice::create([
                 'invoice_number' => $invoiceNumber,
+                'order_number' => $validated['order_number'] ?? null,
                 'title' => $invoiceNumber,
                 'description' => 'POS Sale',
                 'customer_id' => $validated['customer_id'],

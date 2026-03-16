@@ -43,6 +43,7 @@ const selectedCustomer = ref<Customer | null>(props.selectedCustomer || null);
 
 const form = useForm({
     customer_id: props.selectedCustomer?.id ? String(props.selectedCustomer.id) : '',
+    order_number: '',
     invoice_date: new Date().toISOString().split('T')[0],
     due_date: new Date().toISOString().split('T')[0],
     terms: (props.selectedCustomer?.terms || 'COD').trim() || 'COD',
@@ -278,6 +279,7 @@ const resetSale = () => {
     showProductSuggestions.value = {};
 
     form.customer_id = defaultCustomer?.id ? String(defaultCustomer.id) : '';
+    form.order_number = '';
     form.invoice_date = new Date().toISOString().split('T')[0];
     form.terms = (defaultCustomer?.terms || 'COD').trim() || 'COD';
     form.notes = '';
@@ -337,7 +339,7 @@ const submit = () => {
 
             <form @submit.prevent="submit" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div class="lg:col-span-2 space-y-6">
-                    <div class="bg-white border rounded-lg p-5 grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div class="bg-white border rounded-lg p-5 grid grid-cols-1 md:grid-cols-5 gap-4">
                         <div class="relative">
                             <label class="block text-sm mb-1">Customer *</label>
                             <div class="relative">
@@ -380,6 +382,15 @@ const submit = () => {
                         <div>
                             <label class="block text-sm mb-1">Invoice Date *</label>
                             <input v-model="form.invoice_date" type="date" class="w-full rounded border px-3 py-2" required />
+                        </div>
+                        <div>
+                            <label class="block text-sm mb-1">Order Number</label>
+                            <input
+                                v-model="form.order_number"
+                                type="text"
+                                class="w-full rounded border px-3 py-2"
+                                placeholder="Optional"
+                            />
                         </div>
                         <div>
                             <label class="block text-sm mb-1">Payment Terms</label>

@@ -34,6 +34,7 @@
 - Updated invoice line fallback account selection to prefer account code `1000` whenever no account is selected, with default sales account as a secondary fallback.
 - Fixed invoice list sort persistence by sending resolved sort filters back from the controller and adding a sortable `Created` column in the invoices table.
 - Fixed Xero sales-document exports (invoices/quotes/credit notes) to default missing line account codes to `1000`/default-sales-account instead of product-level fallback values like archived `200`, and aligned imported product sales-account fallback to `1000`.
+- Added an optional `Order Number` field to POS invoice creation and persist it on the generated invoice.
 
 ## 2026-03-13 - version 1.7.5
 
