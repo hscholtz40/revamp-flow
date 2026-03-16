@@ -21,6 +21,7 @@
 - Refreshed the app sidebar visual styling with a more modern look (softer card-like header, improved section label/menu item hierarchy, and updated hover/active states) while keeping existing navigation behavior intact.
 - Updated the app theme sidebar base color to a clearer light grey for better visual separation from main page content.
 - Replaced the credit-note invoice dropdown on Create/Edit with a searchable select-style picker (matching customer lookup behavior) while intentionally excluding quick-create actions for invoices.
+- Improved credit-note Create/Edit load performance by removing large preloaded invoice/product datasets from Inertia props and switching to debounced server-side invoice/product search endpoints.
 - Fixed Xero payment export for fully paid local invoices: removed an incorrect cap that used JCO `remaining_balance` (0 on paid invoices), and expanded invoice export selection to include invoices with unsynced payment records so payment sync retries are not skipped.
 - Fixed Vue template parse errors (`Element is missing end tag`) in credit-note edit and purchase-order create pages by restoring missing closing wrapper divs in grouped line-item sections.
 

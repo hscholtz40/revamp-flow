@@ -122,7 +122,8 @@
                             <div class="relative">
                                 <input
                                     v-model="invoiceSearchQuery"
-                                    @focus="invoiceSearchFocused = true"
+                                    @input="handleInvoiceSearch"
+                                    @focus="invoiceSearchFocused = true; handleInvoiceSearch()"
                                     @blur="handleInvoiceBlur"
                                     type="text"
                                     :placeholder="selectedInvoiceOption ? selectedInvoiceLabel(selectedInvoiceOption) : 'Search invoice by number or title...'"
@@ -282,7 +283,7 @@
                                             :class="{ 'border-red-500': form.errors[`line_items.${index}.description`] }"
                                             required
                                         />
-                                        <span v-if="item.product_id" class="flex-shrink-0 inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700 border border-blue-200" :title="getProductName(item.product_id)">
+                                        <span v-if="item.product_id" class="flex-shrink-0 inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700 border border-blue-200" :title="item.description">
                                             <Package class="w-3 h-3" />
                                             <button type="button" @click="unlinkProduct(index)" class="ml-0.5 text-blue-400 hover:text-blue-600">&times;</button>
                                         </span>
@@ -436,8 +437,7 @@
 
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
-import { matchesProductSearch } from '@/composables/productSearch';
-import { Head, Link, useForm, router } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, ref, watch, onMounted } from 'vue';
 import { Plus, X, Trash2, Package } from 'lucide-vue-next';
 
@@ -446,6 +446,7 @@ interface Props {
         id: number;
         credit_note_number: string;
         customer_id: number;
+        customer?: { id: number; name: string } | null;
         invoice_id: number | null;
         title: string | null;
         description: string | null;
@@ -468,14 +469,35 @@ interface Props {
             tax_rate: { id: number; name: string; rate: number } | null;
         }>;
     };
-    customers: Array<{ id: number; name: string; email?: string; phone?: string; account_code?: string }>;
-    products: Array<{ id: number; name: string; sku: string; price: number }>;
-    invoices: Array<{ id: number; invoice_number: string; title: string; customer_id: number; total: number; status: string }>;
     taxRates: Array<{ id: number; name: string; rate: number; is_default_sales: boolean }>;
     defaultSalesTaxRateId: number | null;
     chartOfAccounts: { id: number; account_code: string; account_name: string; account_type: string; is_default_sales: boolean }[];
     defaultSalesAccountId: number | null;
     currentCompany: { id: number; name: string };
+}
+
+interface CustomerOption {
+    id: number;
+    name: string;
+    email?: string;
+    phone?: string;
+    account_code?: string;
+}
+
+interface InvoiceOption {
+    id: number;
+    invoice_number: string;
+    title: string;
+    customer_id: number;
+    total: number;
+    customer?: { id: number; name: string };
+}
+
+interface ProductOption {
+    id: number;
+    name: string;
+    sku: string | null;
+    price: number;
 }
 
 const props = defineProps<Props>();
@@ -531,12 +553,20 @@ if ((form as any).line_groups.length === 0) {
     (form as any).line_groups = [{ name: 'Items', sort_order: 0 }];
 }
 
-const selectedCustomer = ref<{ id: number; name: string } | null>(props.customers.find(c => c.id === props.creditNote.customer_id) ?? null);
+const selectedCustomer = ref<{ id: number; name: string } | null>(
+    props.creditNote.customer_id ? { id: props.creditNote.customer_id, name: props.creditNote.customer?.name ?? '' } : null
+);
 const customerSearchQuery = ref(selectedCustomer.value?.name ?? '');
 const customerSearchFocused = ref(false);
-const filteredCustomers = ref<typeof props.customers>([]);
+const filteredCustomers = ref<CustomerOption[]>([]);
 const invoiceSearchQuery = ref('');
 const invoiceSearchFocused = ref(false);
+const invoiceSearchResults = ref<InvoiceOption[]>([]);
+const selectedInvoiceOption = ref<InvoiceOption | null>(null);
+const productSearchResults = ref<Record<number, ProductOption[]>>({});
+const customerSearchDebounce = ref<ReturnType<typeof setTimeout> | null>(null);
+const invoiceSearchDebounce = ref<ReturnType<typeof setTimeout> | null>(null);
+const productSearchDebounce = ref<Record<number, ReturnType<typeof setTimeout>>>({});
 const showQuickCreateModal = ref(false);
 const showProductSuggestions = ref<Record<number, boolean>>({});
 const discountTypes = ref<Record<number, 'amount' | 'percentage'>>({});
@@ -551,26 +581,14 @@ const quickCreateForm = useForm({
     phone: '',
 });
 
-const invoicesForCustomer = computed(() => props.invoices.filter(inv => inv.customer_id === Number(form.customer_id)));
-const selectedInvoiceOption = computed(() =>
-    props.invoices.find((inv) => inv.id === Number(form.invoice_id)) ?? null
-);
-const filteredInvoiceOptions = computed(() => {
-    const query = invoiceSearchQuery.value.trim().toLowerCase();
-    if (!query) return invoicesForCustomer.value;
-    return invoicesForCustomer.value.filter((inv) =>
-        inv.invoice_number.toLowerCase().includes(query)
-        || (inv.title ?? '').toLowerCase().includes(query)
-    );
-});
+const filteredInvoiceOptions = computed(() => invoiceSearchResults.value);
 
 onMounted(() => {
     form.line_items.forEach((item, index) => {
         discountTypes.value[index] = (item.discount_percentage ?? 0) > 0 ? 'percentage' : 'amount';
     });
-    const inv = props.invoices.find(i => i.id === Number(form.invoice_id));
-    if (inv) {
-        invoiceSearchQuery.value = selectedInvoiceLabel(inv);
+    if (form.invoice_id) {
+        handleInvoiceSearch();
     }
 });
 
@@ -583,17 +601,17 @@ watch(
     (invoiceId) => {
         if (!invoiceId) {
             invoiceSearchQuery.value = '';
+            selectedInvoiceOption.value = null;
             return;
         }
-        const inv = props.invoices.find((i) => i.id === Number(invoiceId));
+        const inv = selectedInvoiceOption.value;
         if (inv) {
             invoiceSearchQuery.value = selectedInvoiceLabel(inv);
             if (Number(form.customer_id) !== inv.customer_id) {
                 form.customer_id = inv.customer_id;
-                const customer = props.customers.find(c => c.id === inv.customer_id);
-                if (customer) {
-                    selectedCustomer.value = customer;
-                    customerSearchQuery.value = customer.name;
+                if (inv.customer) {
+                    selectedCustomer.value = { id: inv.customer.id, name: inv.customer.name };
+                    customerSearchQuery.value = inv.customer.name;
                 }
             }
         }
@@ -602,27 +620,37 @@ watch(
 
 watch(
     () => form.customer_id,
-    (customerId) => {
+    (customerId, previousCustomerId) => {
         if (!form.invoice_id) return;
-        const selectedInvoice = props.invoices.find((inv) => inv.id === Number(form.invoice_id));
+        const selectedInvoice = selectedInvoiceOption.value;
         if (!selectedInvoice) return;
-        if (!customerId || Number(customerId) !== selectedInvoice.customer_id) {
+        if (
+            previousCustomerId
+            && customerId
+            && Number(customerId) !== Number(previousCustomerId)
+            && Number(customerId) !== selectedInvoice.customer_id
+        ) {
             clearInvoice();
         }
     },
 );
 
 function handleCustomerSearch() {
+    if (customerSearchDebounce.value) {
+        clearTimeout(customerSearchDebounce.value);
+    }
     if (!customerSearchQuery.value.trim()) {
         filteredCustomers.value = [];
         return;
     }
-    fetch(`/customers/search?q=${encodeURIComponent(customerSearchQuery.value)}`, {
-        headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-    })
-        .then(r => (r.ok ? r.json() : []))
-        .then(data => (filteredCustomers.value = data))
-        .catch(() => (filteredCustomers.value = []));
+    customerSearchDebounce.value = setTimeout(() => {
+        fetch(`/customers/search?q=${encodeURIComponent(customerSearchQuery.value)}`, {
+            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        })
+            .then(r => (r.ok ? r.json() : []))
+            .then(data => (filteredCustomers.value = data))
+            .catch(() => (filteredCustomers.value = []));
+    }, 250);
 }
 
 function handleCustomerBlur() {
@@ -647,20 +675,61 @@ function selectedInvoiceLabel(inv: { invoice_number: string; title: string; tota
     return `${inv.invoice_number} - ${inv.title || 'No title'} (${formatCurrency(inv.total)})`;
 }
 
+function handleInvoiceSearch() {
+    if (invoiceSearchDebounce.value) {
+        clearTimeout(invoiceSearchDebounce.value);
+    }
+    invoiceSearchDebounce.value = setTimeout(() => {
+        const params = new URLSearchParams();
+        if (invoiceSearchQuery.value.trim()) {
+            params.set('q', invoiceSearchQuery.value.trim());
+        }
+        if (form.customer_id) {
+            params.set('customer_id', String(form.customer_id));
+        }
+        if (form.invoice_id) {
+            params.set('invoice_id', String(form.invoice_id));
+        }
+        fetch(`/credit-notes/search/invoices?${params.toString()}`, {
+            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        })
+            .then(r => (r.ok ? r.json() : []))
+            .then(data => {
+                invoiceSearchResults.value = data;
+                if (form.invoice_id && !selectedInvoiceOption.value) {
+                    const selected = (data as InvoiceOption[]).find((inv) => inv.id === Number(form.invoice_id));
+                    if (selected) {
+                        selectedInvoiceOption.value = selected;
+                        invoiceSearchQuery.value = selectedInvoiceLabel(selected);
+                    }
+                }
+            })
+            .catch(() => (invoiceSearchResults.value = []));
+    }, 250);
+}
+
 function handleInvoiceBlur() {
     setTimeout(() => (invoiceSearchFocused.value = false), 200);
 }
 
-function selectInvoice(inv: { id: number; invoice_number: string; title: string; total: number; customer_id: number }) {
+function selectInvoice(inv: InvoiceOption) {
+    selectedInvoiceOption.value = inv;
     form.invoice_id = inv.id as any;
     invoiceSearchQuery.value = selectedInvoiceLabel(inv);
     invoiceSearchFocused.value = false;
+    if (inv.customer) {
+        selectedCustomer.value = { id: inv.customer.id, name: inv.customer.name };
+        form.customer_id = inv.customer.id;
+        customerSearchQuery.value = inv.customer.name;
+    }
 }
 
 function clearInvoice() {
+    selectedInvoiceOption.value = null;
     form.invoice_id = null as any;
     invoiceSearchQuery.value = '';
     invoiceSearchFocused.value = false;
+    invoiceSearchResults.value = [];
 }
 
 async function quickCreateCustomer() {
@@ -866,31 +935,41 @@ function onDropInGroup(groupId: number) {
 }
 
 function productSuggestions(index: number) {
-    const query = form.line_items[index]?.description || '';
-    return props.products.filter(product => matchesProductSearch(product, query)).slice(0, 8);
+    return productSearchResults.value[index] ?? [];
 }
 
 function handleDescriptionInput(index: number) {
     showProductSuggestions.value[index] = true;
+    const query = form.line_items[index]?.description || '';
+    if (productSearchDebounce.value[index]) {
+        clearTimeout(productSearchDebounce.value[index]);
+    }
+    productSearchDebounce.value[index] = setTimeout(() => {
+        if (!query.trim()) {
+            productSearchResults.value[index] = [];
+            return;
+        }
+        fetch(`/credit-notes/search/products?q=${encodeURIComponent(query.trim())}`, {
+            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        })
+            .then(r => (r.ok ? r.json() : []))
+            .then(data => (productSearchResults.value[index] = data))
+            .catch(() => (productSearchResults.value[index] = []));
+    }, 250);
 }
 
 function handleDescriptionBlur(index: number) {
     setTimeout(() => (showProductSuggestions.value[index] = false), 200);
 }
 
-function selectProductSuggestion(index: number, product: { id: number; name: string; price: number }) {
+function selectProductSuggestion(index: number, product: ProductOption) {
     const item = form.line_items[index];
     if (!item) return;
     item.product_id = product.id;
     item.description = product.name;
     item.unit_price = product.price;
     showProductSuggestions.value[index] = false;
-}
-
-function getProductName(productId: number | string | null) {
-    if (productId == null) return '';
-    const p = props.products.find(x => x.id === Number(productId));
-    return p ? p.name : '';
+    productSearchResults.value[index] = [];
 }
 
 function unlinkProduct(index: number) {

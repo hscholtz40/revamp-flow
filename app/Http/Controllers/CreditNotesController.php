@@ -12,6 +12,7 @@ use App\Models\Product;
 use App\Models\ChartOfAccount;
 use App\Models\TaxRate;
 use App\Services\XeroService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -86,26 +87,6 @@ class CreditNotesController extends Controller
     {
         $currentCompany = auth()->user()->getCurrentCompany();
 
-        $customers = Customer::where('company_id', $currentCompany->id)
-            ->orderBy('name')
-            ->get();
-
-        $products = Product::where('company_id', $currentCompany->id)
-            ->orderBy('name')
-            ->get()
-            ->map(fn($p) => [
-                'id' => $p->id,
-                'name' => $p->name,
-                'sku' => $p->sku,
-                'price' => $p->price,
-            ]);
-
-        $invoices = Invoice::where('company_id', $currentCompany->id)
-            ->whereNotIn('status', ['cancelled'])
-            ->with('customer')
-            ->orderBy('created_at', 'desc')
-            ->get(['id', 'invoice_number', 'title', 'customer_id', 'total', 'status']);
-
         $taxRates = TaxRate::where('company_id', $currentCompany->id)
             ->where('is_active', true)
             ->orderBy('name')
@@ -126,9 +107,6 @@ class CreditNotesController extends Controller
         }
 
         return Inertia::render('credit-notes/Create', [
-            'customers' => $customers,
-            'products' => $products,
-            'invoices' => $invoices,
             'taxRates' => $taxRates,
             'defaultSalesTaxRateId' => $defaultSalesTaxRate?->id,
             'chartOfAccounts' => $chartOfAccounts,
@@ -266,26 +244,6 @@ class CreditNotesController extends Controller
 
         $creditNote->load(['customer', 'invoice', 'lineItems.product', 'lineItems.taxRate', 'lineItems.lineGroup', 'lineGroups']);
 
-        $customers = Customer::where('company_id', $currentCompany->id)
-            ->orderBy('name')
-            ->get();
-
-        $products = Product::where('company_id', $currentCompany->id)
-            ->orderBy('name')
-            ->get()
-            ->map(fn($p) => [
-                'id' => $p->id,
-                'name' => $p->name,
-                'sku' => $p->sku,
-                'price' => $p->price,
-            ]);
-
-        $invoices = Invoice::where('company_id', $currentCompany->id)
-            ->whereNotIn('status', ['cancelled'])
-            ->with('customer')
-            ->orderBy('created_at', 'desc')
-            ->get(['id', 'invoice_number', 'title', 'customer_id', 'total', 'status']);
-
         $taxRates = TaxRate::where('company_id', $currentCompany->id)
             ->where('is_active', true)
             ->orderBy('name')
@@ -297,15 +255,65 @@ class CreditNotesController extends Controller
 
         return Inertia::render('credit-notes/Edit', [
             'creditNote' => $creditNote,
-            'customers' => $customers,
-            'products' => $products,
-            'invoices' => $invoices,
             'taxRates' => $taxRates,
             'defaultSalesTaxRateId' => $defaultSalesTaxRate?->id,
             'chartOfAccounts' => $chartOfAccounts,
             'defaultSalesAccountId' => $defaultSalesAccount?->id,
             'currentCompany' => $currentCompany,
         ]);
+    }
+
+    public function searchInvoices(Request $request): JsonResponse
+    {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        $search = trim((string) $request->string('q', ''));
+        $customerId = $request->integer('customer_id');
+        $invoiceId = $request->integer('invoice_id');
+
+        $invoices = Invoice::query()
+            ->where('company_id', $currentCompany->id)
+            ->whereNotIn('status', ['cancelled'])
+            ->when(
+                $invoiceId,
+                fn ($query) => $query->where('id', $invoiceId),
+                function ($query) use ($customerId, $search) {
+                    $query
+                        ->when($customerId, fn ($subQuery) => $subQuery->where('customer_id', $customerId))
+                        ->when($search !== '', function ($subQuery) use ($search) {
+                            $subQuery->where(function ($q) use ($search) {
+                                $q->where('invoice_number', 'like', "%{$search}%")
+                                    ->orWhere('title', 'like', "%{$search}%");
+                            });
+                        });
+                }
+            )
+            ->with('customer:id,name')
+            ->orderByDesc('created_at')
+            ->limit(20)
+            ->get(['id', 'invoice_number', 'title', 'customer_id', 'total']);
+
+        return response()->json($invoices);
+    }
+
+    public function searchProducts(Request $request): JsonResponse
+    {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        $search = trim((string) $request->string('q', ''));
+
+        $products = Product::query()
+            ->where('company_id', $currentCompany->id)
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                        ->orWhere('sku', 'like', "%{$search}%")
+                        ->orWhere('barcode', 'like', "%{$search}%");
+                });
+            })
+            ->orderBy('name')
+            ->limit(20)
+            ->get(['id', 'name', 'sku', 'price']);
+
+        return response()->json($products);
     }
 
     public function update(Request $request, CreditNote $creditNote): RedirectResponse

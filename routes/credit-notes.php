@@ -4,6 +4,8 @@ use App\Http\Controllers\CreditNotesController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/credit-notes/search/invoices', [CreditNotesController::class, 'searchInvoices'])->name('credit-notes.search.invoices');
+    Route::get('/credit-notes/search/products', [CreditNotesController::class, 'searchProducts'])->name('credit-notes.search.products');
     Route::get('/credit-notes', [CreditNotesController::class, 'index'])->middleware('module.permission:credit-notes,list')->name('credit-notes.index');
     Route::get('/credit-notes/create', [CreditNotesController::class, 'create'])->middleware('module.permission:credit-notes,create')->name('credit-notes.create');
     Route::post('/credit-notes', [CreditNotesController::class, 'store'])->middleware('module.permission:credit-notes,create')->name('credit-notes.store');
