@@ -1984,6 +1984,13 @@ class XeroService
                 ? $defaultTaxRate->code 
                 : 'TAX002');
         
+        $fallbackSalesAccountCode = ChartOfAccount::where('company_id', $currentCompany->id)
+            ->where('is_active', true)
+            ->where('account_code', '1000')
+            ->value('account_code')
+            ?? ChartOfAccount::getDefaultSalesForCompany($currentCompany->id)?->account_code
+            ?? '1000';
+
         $lineItems = [];
         foreach ($invoice->lineItems as $lineItem) {
             // Use the line item's total field which already includes discount
@@ -1994,16 +2001,9 @@ class XeroService
             $discountAmount = (float) ($lineItem->discount_amount ?? 0);
             $discountPercentage = (float) ($lineItem->discount_percentage ?? 0);
             
-            $accountCode = '1000';
-            if ($lineItem->account_id && $lineItem->account) {
-                $accountCode = $lineItem->account->account_code ?? '1000';
-            } elseif ($lineItem->product_id && $lineItem->product) {
-                $accountCode = $lineItem->product->sales_account_code ?? '1000';
-            } else {
-                $defaultAccount = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id);
-                if ($defaultAccount) {
-                    $accountCode = $defaultAccount->account_code;
-                }
+            $accountCode = $fallbackSalesAccountCode;
+            if ($lineItem->account_id && $lineItem->account && !empty($lineItem->account->account_code)) {
+                $accountCode = $lineItem->account->account_code;
             }
             
             // Calculate expected subtotal (Quantity * UnitAmount)
@@ -3446,18 +3446,18 @@ class XeroService
                 ? $defaultTaxRate->code 
                 : 'OUTPUT3');
         
+        $fallbackSalesAccountCode = ChartOfAccount::where('company_id', $currentCompany->id)
+            ->where('is_active', true)
+            ->where('account_code', '1000')
+            ->value('account_code')
+            ?? ChartOfAccount::getDefaultSalesForCompany($currentCompany->id)?->account_code
+            ?? '1000';
+
         $lineItems = [];
         foreach ($quote->lineItems as $lineItem) {
-            $accountCode = '1000';
-            if ($lineItem->account_id && $lineItem->account) {
-                $accountCode = $lineItem->account->account_code ?? '1000';
-            } elseif ($lineItem->product_id && $lineItem->product) {
-                $accountCode = $lineItem->product->sales_account_code ?? '1000';
-            } else {
-                $defaultAccount = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id);
-                if ($defaultAccount) {
-                    $accountCode = $defaultAccount->account_code;
-                }
+            $accountCode = $fallbackSalesAccountCode;
+            if ($lineItem->account_id && $lineItem->account && !empty($lineItem->account->account_code)) {
+                $accountCode = $lineItem->account->account_code;
             }
             
             $lineItems[] = [
@@ -4306,7 +4306,7 @@ class XeroService
             'description' => $xeroItem['Description'] ?? null,
             'sku' => $xeroItem['Code'] ?? null,
             'xero_item_id' => $xeroItem['ItemID'],
-            'sales_account_code' => $xeroItem['SalesDetails']['AccountCode'] ?? 200,
+            'sales_account_code' => $xeroItem['SalesDetails']['AccountCode'] ?? '1000',
             'purchase_account_code' => $xeroItem['PurchaseDetails']['AccountCode'] ?? null,
             ...$this->getXeroTimestamps($xeroItem),
             'price' => 0
@@ -6283,18 +6283,18 @@ class XeroService
             ? $defaultTaxRate->xero_tax_rate_id
             : ($defaultTaxRate && $defaultTaxRate->code ? $defaultTaxRate->code : 'TAX002');
 
+        $fallbackSalesAccountCode = ChartOfAccount::where('company_id', $currentCompany->id)
+            ->where('is_active', true)
+            ->where('account_code', '1000')
+            ->value('account_code')
+            ?? ChartOfAccount::getDefaultSalesForCompany($currentCompany->id)?->account_code
+            ?? '1000';
+
         $lineItems = [];
         foreach ($creditNote->lineItems as $lineItem) {
-            $accountCode = '1000';
-            if ($lineItem->account_id && $lineItem->account) {
-                $accountCode = $lineItem->account->account_code ?? '1000';
-            } elseif ($lineItem->product_id && $lineItem->product) {
-                $accountCode = $lineItem->product->sales_account_code ?? '1000';
-            } else {
-                $defaultAccount = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id);
-                if ($defaultAccount) {
-                    $accountCode = $defaultAccount->account_code;
-                }
+            $accountCode = $fallbackSalesAccountCode;
+            if ($lineItem->account_id && $lineItem->account && !empty($lineItem->account->account_code)) {
+                $accountCode = $lineItem->account->account_code;
             }
 
             $lineAmount = (float) $lineItem->total;
