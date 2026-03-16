@@ -30,7 +30,7 @@ class JobcardController extends Controller
     public function index(Request $request): Response
     {
         $currentCompany = auth()->user()->getCurrentCompany();
-        $sortBy = $request->input('sort_by', 'job_number');
+        $sortBy = $request->input('sort_by', 'created_at');
         $sortDir = $request->input('sort_dir', 'desc') === 'asc' ? 'asc' : 'desc';
         
         $query = Jobcard::with(['customer', 'assignedUser', 'assignedTeam'])
@@ -77,7 +77,7 @@ class JobcardController extends Controller
 
         $sortableFields = ['job_number', 'title', 'customer_name', 'status', 'due_date', 'total', 'created_at'];
         if (!in_array($sortBy, $sortableFields, true)) {
-            $sortBy = 'job_number';
+            $sortBy = 'created_at';
         }
 
         if ($sortBy === 'customer_name') {

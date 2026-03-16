@@ -22,7 +22,7 @@ class CreditNotesController extends Controller
     public function index(Request $request): Response
     {
         $currentCompany = auth()->user()->getCurrentCompany();
-        $sortBy = $request->input('sort_by', 'credit_note_number');
+        $sortBy = $request->input('sort_by', 'created_at');
         $sortDir = $request->input('sort_dir', 'desc') === 'asc' ? 'asc' : 'desc';
 
         $query = CreditNote::with(['customer', 'invoice'])
@@ -50,7 +50,7 @@ class CreditNotesController extends Controller
 
         $sortableFields = ['credit_note_number', 'customer_name', 'invoice_number', 'credit_note_date', 'status', 'total', 'remaining_credit', 'created_at'];
         if (!in_array($sortBy, $sortableFields, true)) {
-            $sortBy = 'credit_note_number';
+            $sortBy = 'created_at';
         }
 
         if ($sortBy === 'customer_name') {

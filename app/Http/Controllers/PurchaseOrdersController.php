@@ -29,7 +29,7 @@ class PurchaseOrdersController extends Controller
     public function index(Request $request): Response
     {
         $currentCompany = auth()->user()->getCurrentCompany();
-        $sortBy = $request->input('sort_by', 'po_number');
+        $sortBy = $request->input('sort_by', 'created_at');
         $sortDir = $request->input('sort_dir', 'desc') === 'asc' ? 'asc' : 'desc';
         
         $query = PurchaseOrder::where('company_id', $currentCompany->id)
@@ -47,7 +47,7 @@ class PurchaseOrdersController extends Controller
 
         $sortableFields = ['po_number', 'supplier_name', 'order_date', 'expected_delivery_date', 'status', 'total', 'created_at'];
         if (!in_array($sortBy, $sortableFields, true)) {
-            $sortBy = 'po_number';
+            $sortBy = 'created_at';
         }
 
         if ($sortBy === 'supplier_name') {

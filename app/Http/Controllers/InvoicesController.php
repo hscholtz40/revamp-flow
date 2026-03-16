@@ -34,7 +34,7 @@ class InvoicesController extends Controller
     public function index(Request $request): Response
     {
         $currentCompany = auth()->user()->getCurrentCompany();
-        $sortBy = $request->input('sort_by', 'invoice_number');
+        $sortBy = $request->input('sort_by', 'created_at');
         $sortDir = $request->input('sort_dir', 'desc') === 'asc' ? 'asc' : 'desc';
         
         $query = Invoice::with(['customer', 'payments', 'creditNotes'])
@@ -67,7 +67,7 @@ class InvoicesController extends Controller
 
         $sortableFields = ['invoice_number', 'customer_name', 'salesperson_name', 'invoice_date', 'due_date', 'status', 'total', 'created_at'];
         if (!in_array($sortBy, $sortableFields, true)) {
-            $sortBy = 'invoice_number';
+            $sortBy = 'created_at';
         }
 
         $invoicesQuery = $query->with(['customer', 'salesperson']);
@@ -151,7 +151,7 @@ class InvoicesController extends Controller
         $taxRates = TaxRate::where('company_id', $currentCompany->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'rate', 'is_default_sales']);
         $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
         $chartOfAccounts = ChartOfAccount::where('company_id', $currentCompany->id)->where('is_active', true)->ordered()->get(['id', 'account_code', 'account_name', 'account_type', 'is_default_sales']);
-        $defaultSalesAccount = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id);
+        $defaultSalesAccount = $this->resolveInvoiceFallbackAccount($currentCompany->id);
 
         return Inertia::render('invoices/Create', [
             'customers' => $customers,
@@ -194,7 +194,7 @@ class InvoicesController extends Controller
         }
 
         $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
-        $defaultSalesAccount = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id);
+        $defaultSalesAccount = $this->resolveInvoiceFallbackAccount($currentCompany->id);
 
         return Inertia::render('invoices/Pos', [
             'customers' => $customers,
@@ -245,7 +245,7 @@ class InvoicesController extends Controller
         $defaultTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
         $defaultTaxRateId = $defaultTaxRate?->id;
         $defaultTaxRateRate = (float) ($defaultTaxRate?->rate ?? 0);
-        $defaultAccountId = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id)?->id;
+        $defaultAccountId = $this->resolveInvoiceFallbackAccountId($currentCompany->id);
         $terms = !empty(trim((string) ($validated['terms'] ?? '')))
             ? trim((string) $validated['terms'])
             : ((string) ($customer->terms ?: 'COD'));
@@ -414,6 +414,7 @@ class InvoicesController extends Controller
         $customer = Customer::where('company_id', $currentCompany->id)->findOrFail($validated['customer_id']);
         $invoiceDate = Carbon::parse($validated['invoice_date'])->startOfDay();
         $dueDate = $this->resolveInvoiceDueDateFromCustomerTerms($customer, $invoiceDate);
+        $defaultAccountId = $this->resolveInvoiceFallbackAccountId($currentCompany->id);
 
         // Set default salesperson to current user if not provided
         $salespersonId = $validated['salesperson_id'] ?? auth()->id();
@@ -475,7 +476,7 @@ class InvoicesController extends Controller
                 'total' => $total,
                 'tax_rate_id' => $taxRateId,
                 'tax_amount' => $lineTaxAmount,
-                'account_id' => $lineItemData['account_id'] ?? null,
+                'account_id' => $lineItemData['account_id'] ?? $defaultAccountId,
                 'sort_order' => $index,
                 'serial_number_ids' => $lineItemData['serial_number_ids'] ?? null,
             ]);
@@ -671,7 +672,7 @@ class InvoicesController extends Controller
         $taxRates = TaxRate::where('company_id', $currentCompany->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'rate', 'is_default_sales']);
         $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
         $chartOfAccounts = ChartOfAccount::where('company_id', $currentCompany->id)->where('is_active', true)->ordered()->get(['id', 'account_code', 'account_name', 'account_type', 'is_default_sales']);
-        $defaultSalesAccount = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id);
+        $defaultSalesAccount = $this->resolveInvoiceFallbackAccount($currentCompany->id);
 
         return Inertia::render('invoices/Edit', [
             'invoice' => $invoiceData,
@@ -755,6 +756,7 @@ class InvoicesController extends Controller
 
         // Update invoice
         $invoice->update($updateData);
+        $defaultAccountId = $this->resolveInvoiceFallbackAccountId($invoice->company_id);
 
         // Handle stock adjustments for invoice updates
         // Only adjust stock if invoice is not cancelled (cancelled invoices don't affect stock)
@@ -850,7 +852,7 @@ class InvoicesController extends Controller
                 'total' => $total,
                 'tax_rate_id' => $taxRateId,
                 'tax_amount' => $lineTaxAmount,
-                'account_id' => $lineItemData['account_id'] ?? null,
+                'account_id' => $lineItemData['account_id'] ?? $defaultAccountId,
                 'sort_order' => $index,
                 'serial_number_ids' => $lineItemData['serial_number_ids'] ?? null,
             ]);
@@ -1215,6 +1217,7 @@ class InvoicesController extends Controller
     {
         $currentCompany = auth()->user()->getCurrentCompany();
         $salespersonId = auth()->id();
+        $defaultAccountId = $this->resolveInvoiceFallbackAccountId($currentCompany->id);
         
         // Generate invoice number
         $invoiceNumber = Invoice::create([
@@ -1254,7 +1257,7 @@ class InvoicesController extends Controller
                 'total' => $quoteLineItem->total,
                 'tax_rate_id' => $quoteLineItem->tax_rate_id,
                 'tax_amount' => $quoteLineItem->tax_amount,
-                'account_id' => $quoteLineItem->account_id,
+                'account_id' => $quoteLineItem->account_id ?? $defaultAccountId,
                 'sort_order' => $quoteLineItem->sort_order,
             ]);
         }
@@ -1276,6 +1279,7 @@ class InvoicesController extends Controller
     {
         $currentCompany = auth()->user()->getCurrentCompany();
         $salespersonId = auth()->id();
+        $defaultAccountId = $this->resolveInvoiceFallbackAccountId($currentCompany->id);
         
         // Generate invoice number
         $invoiceNumber = Invoice::create([
@@ -1315,7 +1319,7 @@ class InvoicesController extends Controller
                 'total' => $jobcardLineItem->total,
                 'tax_rate_id' => $jobcardLineItem->tax_rate_id,
                 'tax_amount' => $jobcardLineItem->tax_amount,
-                'account_id' => $jobcardLineItem->account_id,
+                'account_id' => $jobcardLineItem->account_id ?? $defaultAccountId,
                 'sort_order' => $jobcardLineItem->sort_order,
             ]);
         }
@@ -1391,6 +1395,20 @@ class InvoicesController extends Controller
         }
 
         return 0;
+    }
+
+    private function resolveInvoiceFallbackAccount(int $companyId): ?ChartOfAccount
+    {
+        return ChartOfAccount::where('company_id', $companyId)
+            ->where('is_active', true)
+            ->where('account_code', '1000')
+            ->first()
+            ?? ChartOfAccount::getDefaultSalesForCompany($companyId);
+    }
+
+    private function resolveInvoiceFallbackAccountId(int $companyId): ?int
+    {
+        return $this->resolveInvoiceFallbackAccount($companyId)?->id;
     }
 
 }
