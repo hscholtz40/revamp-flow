@@ -531,7 +531,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
     <div class="customer-right">
         <div class="vat-number">
             <label>Customer Vat Number</label>
-            <div style="border: 1px solid #000; height: 20px; margin-top: 5px;"></div>
+            <div style="border: 1px solid #000; min-height: 20px; margin-top: 5px; padding: 2px 4px;">{{invoice.customer.vat_number}}</div>
         </div>
     </div>
 </div>
