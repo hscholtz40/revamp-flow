@@ -331,10 +331,10 @@ class JobcardController extends Controller
         $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
         $chartOfAccounts = ChartOfAccount::where('company_id', $currentCompany->id)->where('is_active', true)->ordered()->get(['id', 'account_code', 'account_name', 'account_type', 'is_default_sales']);
         $defaultSalesAccount = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id);
-        $jobcard->load(['customer', 'contact', 'lineItems']);
+        $jobcard->load(['customer', 'contact', 'lineItems.product']);
 
         return Inertia::render('jobcards/Edit', [
-            'jobcard' => $jobcard,
+            'jobcard' => $jobcard->toArray(),
             'customers' => $customers,
             'products' => $products,
             'users' => $users,

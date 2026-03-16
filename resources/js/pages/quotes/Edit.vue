@@ -599,7 +599,8 @@ interface Quote {
     discount_percentage?: number;
     notes?: string;
     terms_conditions?: string;
-    line_items: LineItem[];
+    line_items?: LineItem[];
+    lineItems?: LineItem[];
 }
 
 const props = defineProps<{
@@ -610,6 +611,8 @@ const props = defineProps<{
     canEditCompleted: boolean;
     taxRates: { id: number; name: string; rate: number; is_default_sales: boolean }[];
     defaultSalesTaxRateId: number | null;
+    chartOfAccounts: { id: number; account_code: string; account_name: string; account_type: string; is_default_sales: boolean }[];
+    defaultSalesAccountId: number | null;
 }>();
 
 // Check if quote is completed (accepted status)
@@ -662,22 +665,22 @@ const form = useForm({
     discount_percentage: props.quote.discount_percentage || 0,
     notes: props.quote.notes || '',
     terms_conditions: props.quote.terms_conditions || '',
-    line_items: props.quote.line_items.map(item => ({
+    line_items: (props.quote.line_items ?? props.quote.lineItems ?? []).map((item: any) => ({
         id: item.id,
         product_id: item.product_id?.toString() || null,
         description: item.description,
         quantity: item.quantity,
         unit_price: item.unit_price,
-        discount_amount: (item as any).discount_amount || 0,
-        discount_percentage: (item as any).discount_percentage || 0,
-        tax_rate_id: (item as any).tax_rate_id || null,
-        account_id: (item as any).account_id ?? props.defaultSalesAccountId ?? null,
+        discount_amount: item.discount_amount ?? 0,
+        discount_percentage: item.discount_percentage ?? 0,
+        tax_rate_id: item.tax_rate_id != null ? Number(item.tax_rate_id) : null,
+        account_id: item.account_id != null ? Number(item.account_id) : (props.defaultSalesAccountId ?? null),
         total: item.total,
     })) as LineItem[],
 });
 
 // Initialize discount types from existing line items
-props.quote.line_items.forEach((item: any, index: number) => {
+(props.quote.line_items ?? props.quote.lineItems ?? []).forEach((item: any, index: number) => {
     if (item.discount_percentage && item.discount_percentage > 0) {
         discountTypes.value[index] = 'percentage';
     } else {

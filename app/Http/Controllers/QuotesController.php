@@ -257,8 +257,11 @@ class QuotesController extends Controller
         $chartOfAccounts = ChartOfAccount::where('company_id', $currentCompany->id)->where('is_active', true)->ordered()->get(['id', 'account_code', 'account_name', 'account_type', 'is_default_sales']);
         $defaultSalesAccount = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id);
 
+        // Pass quote as array to ensure line_items include tax_rate_id and account_id
+        $quoteData = $quote->toArray();
+
         return Inertia::render('quotes/Edit', [
-            'quote' => $quote,
+            'quote' => $quoteData,
             'customers' => $customers,
             'products' => $products,
             'currentCompany' => $currentCompany,

@@ -764,21 +764,21 @@ const form = useForm({
     discount_percentage: props.jobcard.discount_percentage || 0,
     notes: props.jobcard.notes || '',
     terms_conditions: props.jobcard.terms_conditions || '',
-    line_items: props.jobcard.line_items.map(item => ({
+    line_items: (props.jobcard.line_items ?? props.jobcard.lineItems ?? []).map((item: any) => ({
         id: item.id,
         product_id: item.product_id,
         description: item.description,
         quantity: item.quantity,
         unit_price: item.unit_price,
-        discount_amount: (item as any).discount_amount || 0,
-        discount_percentage: (item as any).discount_percentage || 0,
-        tax_rate_id: (item as any).tax_rate_id || null,
-        account_id: (item as any).account_id ?? props.defaultSalesAccountId ?? null,
+        discount_amount: item.discount_amount ?? 0,
+        discount_percentage: item.discount_percentage ?? 0,
+        tax_rate_id: item.tax_rate_id != null ? Number(item.tax_rate_id) : null,
+        account_id: item.account_id != null ? Number(item.account_id) : (props.defaultSalesAccountId ?? null),
     })),
 });
 
 // Initialize discount types from existing line items
-props.jobcard.line_items.forEach((item: any, index: number) => {
+(props.jobcard.line_items ?? props.jobcard.lineItems ?? []).forEach((item: any, index: number) => {
     if (item.discount_percentage && item.discount_percentage > 0) {
         discountTypes.value[index] = 'percentage';
     } else {

@@ -2,6 +2,7 @@
 
 ## 2026-03-16 - version 1.7.6
 
+- Fixed quote and jobcard Edit pages so line item tax rate and account selections are retained when editing: pass document as array to ensure tax_rate_id and account_id are included, and coerce values to numbers for correct select binding.
 - Retained tax_rate_id and account_id on line items when converting quote→jobcard, quote→invoice, and jobcard→invoice; also copy discount_amount and discount_percentage for consistency.
 - Added Job Card column to invoices list (after Customer) showing linked jobcard number when invoice was converted from a jobcard.
 - Added Date column and sortable columns (Invoice, Customer, Date, Unit Price) to Recent Invoice Usage panel on product Show page.
