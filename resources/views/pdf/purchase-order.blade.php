@@ -67,8 +67,8 @@
         }
         
         .company-logo {
-            max-width: 240px;
-            max-height: 120px;
+            max-width: 260px;
+            max-height: 140px;
             margin-bottom: 10px;
         }
         
