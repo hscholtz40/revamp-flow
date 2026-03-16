@@ -96,6 +96,9 @@
                                     </button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Job Card
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     <button @click="toggleSort('salesperson_name')" class="inline-flex items-center gap-1 hover:text-gray-700">
                                         Salesperson
                                         <span>{{ sortIndicator('salesperson_name') }}</span>
@@ -155,6 +158,17 @@
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="text-sm text-gray-900">{{ invoice.customer?.name }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <Link
+                                        v-if="invoice.job_number && invoice.source_type === 'jobcard' && invoice.source_id"
+                                        :href="`/jobcards/${invoice.source_id}`"
+                                        class="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                                        @click.stop
+                                    >
+                                        {{ invoice.job_number }}
+                                    </Link>
+                                    <span v-else class="text-sm text-gray-400">—</span>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="text-sm text-gray-900">{{ invoice.salesperson?.name || '-' }}</div>
@@ -290,6 +304,9 @@ interface Invoice {
     salesperson?: {
         name: string;
     };
+    job_number?: string | null;
+    source_type?: string | null;
+    source_id?: number | null;
     invoice_date: string;
     due_date: string;
     created_at: string;

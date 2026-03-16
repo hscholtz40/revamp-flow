@@ -70,7 +70,7 @@ class InvoicesController extends Controller
             $sortBy = 'created_at';
         }
 
-        $invoicesQuery = $query->with(['customer', 'salesperson']);
+        $invoicesQuery = $query->with(['customer', 'salesperson', 'source']);
         if ($sortBy === 'customer_name') {
             $invoicesQuery->orderBy(
                 Customer::select('name')->whereColumn('customers.id', 'invoices.customer_id')->limit(1),

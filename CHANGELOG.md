@@ -2,6 +2,8 @@
 
 ## 2026-03-16 - version 1.7.6
 
+- Added Job Card column to invoices list (after Customer) showing linked jobcard number when invoice was converted from a jobcard.
+- Added "Recent Invoice Usage" panel on product Show page listing latest invoice line items (invoice number, customer, unit price) where the product was used.
 - Moved document description to appear just below customer/contact information in PDFs (quote, proforma invoice, invoice, jobcard); was previously at the bottom in terms/notes section.
 - Show linked contact on quote, invoice, and jobcard Show pages (Customer Information section) with link to contact detail.
 - Fixed ContactSelector showing empty when editing a document with a contact selected: added `initialContact` prop and ensured Edit controllers load the contact relation.

@@ -4,6 +4,7 @@ import { Head, Link } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import { ArrowLeft, Edit, Trash2, Package, Wrench, DollarSign, Hash, Tag, Calendar, FileText } from 'lucide-vue-next';
 import products from '@/routes/products';
+import invoices from '@/routes/invoices';
 
 interface Product {
     id: number;
@@ -30,8 +31,25 @@ interface Product {
     updated_at: string;
 }
 
+interface InvoiceLineItemWithInvoice {
+    id: number;
+    invoice_id: number;
+    product_id: number;
+    description: string;
+    quantity: number;
+    unit_price: number;
+    total: number;
+    invoice?: {
+        id: number;
+        invoice_number: string;
+        customer_id: number;
+        customer?: { id: number; name: string };
+    };
+}
+
 interface Props {
     product: Product;
+    recentInvoiceLineItems?: InvoiceLineItemWithInvoice[];
 }
 
 const props = defineProps<Props>();
@@ -411,6 +429,43 @@ function deleteProduct() {
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Recent Invoice Line Items -->
+            <div v-if="props.recentInvoiceLineItems && props.recentInvoiceLineItems.length > 0" class="rounded-lg bg-white border border-gray-200 shadow-sm">
+                <div class="border-b border-gray-200 bg-gray-50 px-6 py-4">
+                    <h2 class="text-lg font-semibold text-gray-900">Recent Invoice Usage</h2>
+                    <p class="text-sm text-gray-600">Latest invoice line items where this product was used</p>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50 border-b border-gray-200">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
+                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Unit Price</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <tr v-for="item in props.recentInvoiceLineItems" :key="item.id">
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <Link
+                                        :href="invoices.show(item.invoice_id).url"
+                                        class="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                                    >
+                                        {{ item.invoice?.invoice_number || '—' }}
+                                    </Link>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    {{ item.invoice?.customer?.name || '—' }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
+                                    R{{ Number(item.unit_price).toFixed(2) }}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>

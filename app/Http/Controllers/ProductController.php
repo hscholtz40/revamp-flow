@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Category;
 use App\Models\Company;
+use App\Models\InvoiceLineItem;
 use App\Models\Product;
 use App\Models\PurchaseOrderItem;
 use Illuminate\Http\RedirectResponse;
@@ -190,9 +191,17 @@ class ProductController extends Controller
     public function show(Product $product): Response
     {
         $product->load('supplier', 'batches', 'serialNumbers');
-        
+
+        $recentInvoiceLineItems = InvoiceLineItem::where('product_id', $product->id)
+            ->whereHas('invoice', fn ($q) => $q->where('company_id', $product->company_id))
+            ->with(['invoice:id,invoice_number,customer_id', 'invoice.customer:id,name'])
+            ->orderBy('id', 'desc')
+            ->limit(20)
+            ->get(['id', 'invoice_id', 'product_id', 'description', 'quantity', 'unit_price', 'total']);
+
         return Inertia::render('products/Show', [
             'product' => $product,
+            'recentInvoiceLineItems' => $recentInvoiceLineItems,
         ]);
     }
 
