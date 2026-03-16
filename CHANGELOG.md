@@ -42,6 +42,7 @@
 - Fixed Xero sales-document exports (invoices/quotes/credit notes) to default missing line account codes to `1000`/default-sales-account instead of product-level fallback values like archived `200`, and aligned imported product sales-account fallback to `1000`.
 - Added an optional `Order Number` field to POS invoice creation and persist it on the generated invoice.
 - Added contact linking to quotes, invoices, and jobcards: `contact_id` stored on documents, searchable contact selector with quick-create on create/edit forms, contact info ("Attn:") in PDFs, recipient_email/recipient_phone preferring linked contact, and send-email supporting multiple comma-separated addresses.
+- Fixed Xero payment sync: treat AmountDue ≤ 0.01 as fully paid (rounding), use AmountOwing fallback, invalidate invoice cache after each successful payment so batch syncs get fresh AmountDue, and always fetch fresh invoice per payment instead of reusing stale cached data.
 - Capped Xero payment creation to the amount due on the invoice (min of JCO remaining balance and Xero AmountDue) to avoid "Payment amount exceeds the amount outstanding" validation errors.
 - Fixed contact_id not persisting on document save by explicitly including it in the form payload via transform on quote, jobcard, and invoice create/edit submits.
 

@@ -4339,7 +4339,7 @@ class XeroService
         }
 
         $results = [];
-        $xeroInvoice = $xeroInvoice ?? $this->getXeroInvoiceCached($invoice->xero_invoice_id);
+        // Do not pass cached xeroInvoice - each payment needs fresh AmountDue after prior payments in batch
         $payments = $invoice->payments()
             ->where(function ($query) {
                 $query->whereNull('xero_payment_id')
@@ -4359,7 +4359,7 @@ class XeroService
 
         foreach ($payments as $payment) {
             try {
-                $result = $this->createPaymentInXero($invoice, $payment, $xeroInvoice);
+                $result = $this->createPaymentInXero($invoice, $payment, null);
                 
                 // Use the result from createPaymentInXero (which may include 'skipped' status)
                 $results[] = $result;
@@ -4397,13 +4397,14 @@ class XeroService
             ];
         }
 
-        // Check if invoice is already fully paid in Xero
+        // Check if invoice is already fully paid in Xero (use 0.01 tolerance for rounding)
         $xeroInvoice = $xeroInvoice ?? $this->getXeroInvoiceCached($invoice->xero_invoice_id);
-        if ($xeroInvoice && isset($xeroInvoice['AmountDue']) && $xeroInvoice['AmountDue'] <= 0) {
+        $amountDue = $xeroInvoice['AmountDue'] ?? $xeroInvoice['AmountOwing'] ?? null;
+        if ($xeroInvoice && $amountDue !== null && (float) $amountDue <= 0.01) {
             Log::info('Skipping payment creation - invoice already fully paid in Xero', [
                 'invoice_id' => $invoice->id,
                 'xero_invoice_id' => $invoice->xero_invoice_id,
-                'amount_due' => $xeroInvoice['AmountDue'],
+                'amount_due' => $amountDue,
                 'payment_amount' => $payment->amount,
             ]);
             
@@ -4411,13 +4412,13 @@ class XeroService
                 'payment_id' => $payment->id,
                 'amount' => $payment->amount,
                 'status' => 'skipped',
-                'message' => 'Invoice is already fully paid in Xero (Amount Due: ' . ($xeroInvoice['AmountDue'] ?? 'N/A') . ')',
+                'message' => 'Invoice is already fully paid in Xero (Amount Due: ' . $amountDue . ')',
             ];
         }
 
         // Cap payment amount to the amount due (never exceed outstanding balance)
         $jcoAmountDue = (float) $invoice->remaining_balance;
-        $xeroAmountDue = $xeroInvoice && isset($xeroInvoice['AmountDue']) ? (float) $xeroInvoice['AmountDue'] : null;
+        $xeroAmountDue = $amountDue !== null ? (float) $amountDue : null;
         $amountToSend = (float) $payment->amount;
         if ($xeroAmountDue !== null && $xeroAmountDue >= 0) {
             $amountToSend = min($amountToSend, $xeroAmountDue);
@@ -4516,6 +4517,8 @@ class XeroService
                 'xero_payment_id' => $xeroPayment['PaymentID'],
                 'xero_synced_at' => $syncStamp,
             ]);
+            // Invalidate cache so next payment in batch gets fresh AmountDue
+            $this->invalidateXeroInvoiceCache($invoice->xero_invoice_id);
         }
 
         return [
@@ -4524,6 +4527,13 @@ class XeroService
             'status' => 'success',
             'xero_payment_id' => $xeroPayment['PaymentID'] ?? null,
         ];
+    }
+
+    private function invalidateXeroInvoiceCache(?string $xeroInvoiceId): void
+    {
+        if ($xeroInvoiceId && array_key_exists($xeroInvoiceId, $this->xeroInvoiceCache)) {
+            unset($this->xeroInvoiceCache[$xeroInvoiceId]);
+        }
     }
 
     private function getXeroInvoiceCached(?string $xeroInvoiceId): ?array
