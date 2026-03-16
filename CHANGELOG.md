@@ -26,6 +26,7 @@
 - Added a customer "Resync All from Xero" action in Xero settings that bypasses `If-Modified-Since` and refreshes all Xero customer records into JobCardOnline.
 - Fixed invoice PDFs so the Description block renders when only `description` is populated (without requiring `notes` or `terms`).
 - Allowed negative line-item unit amounts/costs across quotes, jobcards, invoices, credit notes, and purchase orders by removing positive-only validation/UI constraints and preserving negative totals in calculations.
+- Added the customer VAT number to the customer detail view so VAT/tax registration information is visible on the show page.
 
 ## 2026-03-13 - version 1.7.5
 
