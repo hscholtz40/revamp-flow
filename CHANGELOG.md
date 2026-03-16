@@ -2,6 +2,13 @@
 
 ## 2026-03-16 - version 1.7.6
 
+- Removed the purchase-order create line-item overflow wrapper that was clipping product suggestion dropdowns and raised dropdown stacking so product search results stay visible while typing.
+- Fixed purchase-order create product lookup dropdown visibility by allowing suggestion menus to overflow above the horizontal line-item scroll container.
+- Updated purchase-order create line-item UI rows to match the invoice-style line layout (compact grid columns, aligned field sizing, and consistent per-row totals/actions) instead of card-style blocks.
+- Further aligned purchase-order PDF line rows with invoice-style structure by switching to item-code + description columns and matching numeric/tax cell formatting across blade, default templates, and template editor presets.
+- Fixed remaining purchase-order line issues by improving PO product search feedback while typing (including SKU matches) and aligning purchase-order PDF/default template line-item columns and styling with invoice-style output.
+- Updated outgoing document emails to set `Reply-To` to the active company email (when configured), covering manual sends and automated reminder/confirmation emails.
+- Fixed purchase-order line-item behavior by correcting product search input binding so typed text and SKU suggestions display properly, and aligned purchase-order PDF line-item table styling with invoice table styling.
 - Added company email output to default PDF headers (invoice, quote, jobcard, proforma invoice, and purchase order) so sender contact details print from the active company profile.
 - Added an `Account` payment option to POS that creates the invoice without recording an immediate payment, while still requiring payment capture for cash/card/EFT sales.
 - Added Xero contact VAT sync so `vat_number` now maps bidirectionally with Xero `TaxNumber` for both customers and suppliers during import and export.

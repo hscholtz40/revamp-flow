@@ -499,12 +499,16 @@ class QuotesController extends Controller
             Mail::mailer('smtp')->send('emails.quote', [
                 'quote' => $quote,
                 'customMessage' => $validated['message'],
-            ], function ($message) use ($validated, $quote, $pdfContent, $filename, $subjectPrefix) {
+            ], function ($message) use ($validated, $quote, $pdfContent, $filename, $subjectPrefix, $company) {
                 $message->to($validated['email'])
                     ->subject("{$subjectPrefix} {$quote->quote_number} - {$quote->title}")
                     ->attachData($pdfContent, $filename, [
                         'mime' => 'application/pdf',
                     ]);
+
+                if (!empty($company->email)) {
+                    $message->replyTo($company->email, $company->name ?? null);
+                }
             });
 
             // Update status to sent when email is sent successfully

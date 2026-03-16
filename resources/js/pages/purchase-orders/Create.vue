@@ -78,14 +78,17 @@ function removeLineItem(index: number) {
 
 // Filter products based on search query
 function filteredProducts(index: number) {
-    const query = productSearchQueries.value[index]?.toLowerCase() || '';
+    const normalizeTerm = (value: string | null | undefined) => String(value ?? '').trim().toLocaleLowerCase();
+    const query = normalizeTerm(productSearchQueries.value[index]);
     if (!query) return [];
-    
-    return props.products.filter(product => {
-        const nameMatch = product.name?.toLowerCase().includes(query);
-        const skuMatch = product.sku?.toLowerCase().includes(query);
-        return nameMatch || skuMatch;
-    }).slice(0, 10); // Limit to 10 results
+
+    return props.products
+        .filter((product) => {
+            const nameMatch = normalizeTerm(product.name).includes(query);
+            const skuMatch = normalizeTerm(product.sku).includes(query);
+            return nameMatch || skuMatch;
+        })
+        .slice(0, 10);
 }
 
 // Get display name for selected product
@@ -118,6 +121,14 @@ function handleProductFocus(index: number) {
             productSearchQueries.value[index] = product.sku ? `${product.name} ${product.sku}` : product.name;
         }
     }
+}
+
+function getProductInputValue(index: number, item: LineItem) {
+    if (productSearchFocused.value[index]) {
+        return productSearchQueries.value[index] ?? getProductDisplayName(item.product_id);
+    }
+
+    return getProductDisplayName(item.product_id);
 }
 
 // Handle product input blur (with delay to allow click on dropdown)
@@ -296,123 +307,133 @@ function submit() {
                         No items added yet. Click "Add Item" to start.
                     </div>
 
-                    <div v-else class="space-y-4">
-                        <div
-                            v-for="(item, index) in form.items"
-                            :key="index"
-                            class="rounded-lg border border-gray-200 p-4"
-                        >
-                            <div class="grid gap-4 md:grid-cols-7">
-                                <div class="md:col-span-2">
-                                    <label class="mb-1 block text-sm font-medium text-gray-700">
-                                        Product
-                                    </label>
-                                    <div class="relative">
-                                        <input 
-                                            type="text"
-                                            :value="getProductDisplayName(item.product_id)"
-                                            @input="handleProductSearch(index, $event)"
-                                            @focus="handleProductFocus(index)"
-                                            @blur="handleProductBlur(index)"
-                                            placeholder="Search by name or SKU..."
-                                            class="w-full rounded border px-3 py-2 pr-8 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
-                                        />
-                                        <svg v-if="item.product_id" @click="clearProduct(index)" class="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 hover:text-gray-600 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                                        </svg>
-                                        <!-- Dropdown with filtered products -->
-                                        <div 
-                                            v-if="productSearchFocused[index] && productSearchQueries[index] && (filteredProducts(index).length > 0 || !item.product_id)"
-                                            class="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto"
-                                        >
-                                            <!-- Option to use custom item (shown first) -->
-                                            <div 
-                                                v-if="!item.product_id"
-                                                @mousedown.prevent="selectCustomItem(index)"
-                                                class="px-3 py-2 hover:bg-blue-50 cursor-pointer text-gray-600 italic border-b border-gray-100"
+                    <div v-else>
+                        <div class="relative">
+                            <div class="mb-2 hidden md:grid md:grid-cols-[1fr_4.5rem_7rem_8rem_11rem_7rem_2rem] gap-2 px-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                <div>Description</div>
+                                <div>Qty</div>
+                                <div>Unit Cost</div>
+                                <div>Tax</div>
+                                <div>Account</div>
+                                <div class="text-right">Total</div>
+                                <div></div>
+                            </div>
+
+                            <div class="divide-y divide-gray-100">
+                                <div
+                                    v-for="(item, index) in form.items"
+                                    :key="index"
+                                    class="py-3 px-1"
+                                >
+                                    <div class="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_4.5rem_7rem_8rem_11rem_7rem_2rem] gap-2 items-start">
+                                        <div class="relative">
+                                            <label class="mb-1 block text-xs text-gray-500 md:hidden">Description</label>
+                                            <input
+                                                type="text"
+                                                :value="getProductInputValue(index, item)"
+                                                @input="handleProductSearch(index, $event)"
+                                                @focus="handleProductFocus(index)"
+                                                @blur="handleProductBlur(index)"
+                                                placeholder="Type description or search by SKU..."
+                                                class="w-full rounded border border-gray-300 px-2 py-1.5 pr-8 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                            />
+                                            <svg v-if="item.product_id" @click="clearProduct(index)" class="absolute right-2 top-8 md:top-1/2 md:-translate-y-1/2 h-4 w-4 text-gray-400 hover:text-gray-600 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                            <div
+                                                v-if="productSearchFocused[index] && productSearchQueries[index] && (filteredProducts(index).length > 0 || !item.product_id)"
+                                                class="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto"
                                             >
-                                                Use custom item
+                                                <div
+                                                    v-if="!item.product_id"
+                                                    @mousedown.prevent="selectCustomItem(index)"
+                                                    class="px-3 py-2 hover:bg-blue-50 cursor-pointer text-gray-600 italic border-b border-gray-100"
+                                                >
+                                                    Use custom item
+                                                </div>
+                                                <div
+                                                    v-for="product in filteredProducts(index)"
+                                                    :key="product.id"
+                                                    @mousedown.prevent="selectProductFromSearch(index, product)"
+                                                    class="px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                                                >
+                                                    <div class="font-medium text-gray-900">{{ product.name }}</div>
+                                                    <div v-if="product.sku" class="text-sm text-gray-500">SKU: {{ product.sku }}</div>
+                                                </div>
                                             </div>
-                                            <!-- Filtered products -->
-                                            <div 
-                                                v-for="product in filteredProducts(index)" 
-                                                :key="product.id"
-                                                @mousedown.prevent="selectProductFromSearch(index, product)"
-                                                class="px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                                        </div>
+
+                                        <div>
+                                            <label class="mb-1 block text-xs text-gray-500 md:hidden">Qty</label>
+                                            <input
+                                                v-model.number="item.quantity"
+                                                @input="calculateItemTotal(index)"
+                                                type="number"
+                                                min="1"
+                                                required
+                                                class="w-full rounded border border-gray-300 px-2 py-1.5 text-sm text-center focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label class="mb-1 block text-xs text-gray-500 md:hidden">Unit Cost</label>
+                                            <input
+                                                v-model.number="item.unit_cost"
+                                                @input="calculateItemTotal(index)"
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                required
+                                                class="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label class="mb-1 block text-xs text-gray-500 md:hidden">Tax</label>
+                                            <select
+                                                v-model="item.tax_rate_id"
+                                                class="w-full rounded border border-gray-300 px-1 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                             >
-                                                <div class="font-medium text-gray-900">{{ product.name }}</div>
-                                                <div v-if="product.sku" class="text-sm text-gray-500">SKU: {{ product.sku }}</div>
+                                                <option :value="null">None</option>
+                                                <option v-for="tr in (props.taxRates || [])" :key="tr.id" :value="tr.id">
+                                                    {{ tr.name }} ({{ tr.rate }}%)
+                                                </option>
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label class="mb-1 block text-xs text-gray-500 md:hidden">Account</label>
+                                            <select
+                                                v-model="item.account_id"
+                                                class="w-full rounded border border-gray-300 px-1 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                            >
+                                                <option :value="null">None</option>
+                                                <option v-for="acc in props.chartOfAccounts" :key="acc.id" :value="acc.id">
+                                                    {{ acc.account_code }} - {{ acc.account_name }}
+                                                </option>
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label class="mb-1 block text-xs text-gray-500 md:hidden">Total</label>
+                                            <div class="py-1.5 text-right text-sm font-medium text-gray-900">
+                                                R{{ (item.quantity * item.unit_cost).toLocaleString('en-ZA', { minimumFractionDigits: 2 }) }}
                                             </div>
+                                        </div>
+
+                                        <div class="flex items-center justify-center md:pt-1.5">
+                                            <button
+                                                type="button"
+                                                @click="removeLineItem(index)"
+                                                class="text-gray-400 hover:text-red-600 transition-colors"
+                                                :disabled="form.items.length === 1"
+                                                :class="{ 'opacity-30 cursor-not-allowed': form.items.length === 1 }"
+                                            >
+                                                <Trash2 class="h-4 w-4" />
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
-
-                                <div>
-                                    <label class="mb-1 block text-sm font-medium text-gray-700">
-                                        Quantity <span class="text-red-500">*</span>
-                                    </label>
-                                    <input
-                                        v-model.number="item.quantity"
-                                        @input="calculateItemTotal(index)"
-                                        type="number"
-                                        min="1"
-                                        required
-                                        class="w-full rounded border px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label class="mb-1 block text-sm font-medium text-gray-700">
-                                        Unit Cost <span class="text-red-500">*</span>
-                                    </label>
-                                    <input
-                                        v-model.number="item.unit_cost"
-                                        @input="calculateItemTotal(index)"
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
-                                        required
-                                        class="w-full rounded border px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label class="mb-1 block text-xs font-medium text-gray-500">Tax Rate</label>
-                                    <select
-                                        v-model="item.tax_rate_id"
-                                        class="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                    >
-                                        <option :value="null">None</option>
-                                        <option v-for="tr in (props.taxRates || [])" :key="tr.id" :value="tr.id">
-                                            {{ tr.name }} ({{ tr.rate }}%)
-                                        </option>
-                                    </select>
-                                </div>
-
-                                <div class="flex items-end">
-                                    <button
-                                        type="button"
-                                        @click="removeLineItem(index)"
-                                        class="w-full rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
-                                    >
-                                        <Trash2 class="mx-auto h-4 w-4" />
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div class="mt-3">
-                                <label class="mb-1 block text-sm font-medium text-gray-700">
-                                    Description
-                                </label>
-                                <input
-                                    v-model="item.description"
-                                    type="text"
-                                    class="w-full rounded border px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-
-                            <div class="mt-2 text-right text-sm font-medium text-gray-900">
-                                Total: R{{ (item.quantity * item.unit_cost).toLocaleString('en-ZA', { minimumFractionDigits: 2 }) }}
                             </div>
                         </div>
                     </div>

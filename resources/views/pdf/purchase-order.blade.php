@@ -146,23 +146,24 @@
         .line-items-table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 20px;
-            border: 1px solid #000;
+            margin-bottom: 20px;
+        }
+        
+        .line-items-table th,
+        .line-items-table td {
+            border-bottom: 1px solid #000;
+            padding: 6px;
+            font-size: 11px;
         }
         
         .line-items-table th {
-            background-color: #f0f0f0;
-            padding: 6px;
+            font-weight: bold;
             text-align: left;
             border-bottom: 2px solid #000;
-            font-size: 11px;
-            font-weight: bold;
         }
-        
+
         .line-items-table td {
-            padding: 6px;
-            border-bottom: 1px solid #ccc;
-            font-size: 11px;
+            text-align: left;
         }
         
         .line-items-table .text-right {
@@ -338,36 +339,30 @@
     <table class="line-items-table">
         <thead>
             <tr>
-                <th>Description</th>
-                <th class="text-right">Quantity</th>
-                <th class="text-right">Unit Cost</th>
+                <th>Item Code</th>
+                <th>Item Description</th>
+                <th class="text-right">QTY</th>
+                <th class="text-right">Price (Ex)</th>
                 <th class="text-right">Tax</th>
-                <th class="text-right">Total</th>
+                <th class="text-right">Total (Incl)</th>
             </tr>
         </thead>
         <tbody>
             @foreach($purchaseOrder->items as $item)
                 <tr>
-                    <td>
-                        <strong>{{ $item->product->name ?? $item->description ?? 'Item' }}</strong>
-                        @if($item->product && $item->product->sku)
-                            <br><small>SKU: {{ $item->product->sku }}</small>
-                        @endif
-                        @if($item->description && $item->product)
-                            <br><small>{{ $item->description }}</small>
-                        @endif
-                    </td>
-                    <td class="text-right">{{ number_format($item->quantity, 0) }}</td>
-                    <td class="text-right">R {{ number_format($item->unit_cost, 2, '.', ',') }}</td>
+                    <td>{{ $item->product->sku ?? $item->product->barcode ?? '' }}</td>
+                    <td>{{ $item->description ?? $item->product->name ?? 'Item Description' }}</td>
+                    <td class="text-right">{{ number_format($item->quantity ?? 0, 2) }}</td>
+                    <td class="text-right">R{{ number_format($item->unit_cost ?? 0, 2) }}</td>
                     <td class="text-right">
                         @if($item->taxRate)
-                            R {{ number_format($item->tax_amount ?? 0, 2, '.', ',') }}
+                            R{{ number_format($item->tax_amount ?? 0, 2) }}
                             <div style="font-size: 9px; color: #666;">{{ $item->taxRate->name }} ({{ $item->taxRate->rate }}%)</div>
                         @else
                             —
                         @endif
                     </td>
-                    <td class="text-right">R {{ number_format($item->total, 2, '.', ',') }}</td>
+                    <td class="text-right">R{{ number_format($item->total ?? 0, 2) }}</td>
                 </tr>
             @endforeach
         </tbody>

@@ -466,12 +466,16 @@ class PurchaseOrdersController extends Controller
             \Illuminate\Support\Facades\Mail::mailer('smtp')->send('emails.purchase-order', [
                 'purchaseOrder' => $purchaseOrder,
                 'customMessage' => $validated['customMessage'],
-            ], function ($message) use ($validated, $purchaseOrder, $pdfContent) {
+            ], function ($message) use ($validated, $purchaseOrder, $pdfContent, $company) {
                 $message->to($validated['email'])
                     ->subject("Purchase Order {$purchaseOrder->po_number} - {$purchaseOrder->supplier->name}")
                     ->attachData($pdfContent, "purchase-order-{$purchaseOrder->po_number}.pdf", [
                         'mime' => 'application/pdf',
                     ]);
+
+                if (!empty($company->email)) {
+                    $message->replyTo($company->email, $company->name ?? null);
+                }
             });
 
             // Update status to sent if it was draft

@@ -1178,12 +1178,16 @@ class InvoicesController extends Controller
             Mail::mailer('smtp')->send('emails.invoice', [
                 'invoice' => $invoice,
                 'customMessage' => $validated['customMessage'],
-            ], function ($message) use ($validated, $invoice, $pdfContent) {
+            ], function ($message) use ($validated, $invoice, $pdfContent, $company) {
                 $message->to($validated['email'])
                     ->subject("Invoice {$invoice->invoice_number} - {$invoice->title}")
                     ->attachData($pdfContent, "invoice-{$invoice->invoice_number}.pdf", [
                         'mime' => 'application/pdf',
                     ]);
+
+                if (!empty($company->email)) {
+                    $message->replyTo($company->email, $company->name ?? null);
+                }
             });
 
             // Update status to sent if it was draft

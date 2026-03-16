@@ -602,13 +602,17 @@ class JobcardController extends Controller
                 'jobcard' => $jobcard,
                 'company' => $currentCompany,
                 'customMessage' => $validated['message'] ?? '',
-            ], function ($message) use ($validated, $subject, $fromEmail, $fromName, $pdf, $filename) {
+            ], function ($message) use ($validated, $subject, $fromEmail, $fromName, $pdf, $filename, $currentCompany) {
                 $message->to($validated['email'])
                     ->subject($subject)
                     ->from($fromEmail, $fromName)
                     ->attachData($pdf->output(), $filename, [
                         'mime' => 'application/pdf',
                     ]);
+
+                if (!empty($currentCompany->email)) {
+                    $message->replyTo($currentCompany->email, $currentCompany->name ?? null);
+                }
             });
 
             \Log::info('Email sent successfully', [

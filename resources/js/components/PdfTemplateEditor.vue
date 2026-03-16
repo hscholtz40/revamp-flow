@@ -258,7 +258,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
 }
 .document-title {
     text-align: center;
-    font-size: 28px;
+    font-size: 24px;
     font-weight: bold;
     color: #000;
     margin: 20px 0;
@@ -283,8 +283,8 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
     text-align: left;
 }
 .company-logo {
-    max-width: 220px;
-    max-height: 110px;
+    max-width: 240px;
+    max-height: 120px;
     margin-bottom: 10px;
 }
 .company-name {
@@ -1858,21 +1858,21 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
 .line-items-table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 20px;
-    border: 1px solid #000;
+    margin-bottom: 20px;
+}
+.line-items-table th,
+.line-items-table td {
+    border-bottom: 1px solid #000;
+    padding: 6px;
+    font-size: 11px;
 }
 .line-items-table th {
-    background-color: #f0f0f0;
-    padding: 8px;
+    font-weight: bold;
     text-align: left;
     border-bottom: 2px solid #000;
-    font-size: 11px;
-    font-weight: bold;
 }
 .line-items-table td {
-    padding: 8px;
-    border-bottom: 1px solid #ccc;
-    font-size: 11px;
+    text-align: left;
 }
 .line-items-table .text-right {
     text-align: right;
@@ -1955,6 +1955,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
             <p>{{company.city}}</p>
             <p>VAT Number {{company.vat_number}}</p>
             <p>Telephone {{company.phone}}</p>
+            <p>Email {{company.email}}</p>
         </div>
     </div>
     <div class="company-right">
@@ -1990,21 +1991,21 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
 <table class="line-items-table">
     <thead>
         <tr>
-            <th>Description</th>
-            <th class="text-right">Quantity</th>
-            <th class="text-right">Unit Cost</th>
-            <th class="text-right">Total</th>
+            <th>Item Code</th>
+            <th>Item Description</th>
+            <th class="text-right">QTY</th>
+            <th class="text-right">Price (Ex)</th>
+            <th class="text-right">Tax</th>
+            <th class="text-right">Total (Incl)</th>
         </tr>
     </thead>
     <tbody><!-- {{#each purchaseOrder.items}} --><tr>
-            <td>
-                <strong>{{this.product.name}}</strong>
-                <br><small>SKU: {{this.product.sku}}</small>
-                <br><small>{{this.description}}</small>
-            </td>
+            <td>{{this.product.sku}}</td>
+            <td>{{this.description}}</td>
             <td class="text-right">{{this.quantity}}</td>
-            <td class="text-right">R {{this.unit_cost}}</td>
-            <td class="text-right">R {{this.total}}</td>
+            <td class="text-right">R{{this.unit_cost}}</td>
+            <td class="text-right">{{#if this.taxRate}}R {{this.tax_amount}}{{else}}—{{/if}}</td>
+            <td class="text-right">R{{this.total}}</td>
         </tr><!-- {{/each}} --></tbody>
 </table>
 <div class="totals-section">

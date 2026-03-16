@@ -88,6 +88,9 @@ class ReminderService
      */
     protected function configureSmtp(Company $company): bool
     {
+        Config::set('mail.reply_to.address', $company->email ?: null);
+        Config::set('mail.reply_to.name', $company->name ?: null);
+
         // Use company SMTP settings if configured
         if ($company->hasSmtpConfigured()) {
             Config::set('mail.mailers.smtp.host', $company->smtp_host);
@@ -131,6 +134,13 @@ class ReminderService
         ]);
         
         return false;
+    }
+
+    protected function applyCompanyReplyTo($mail, Company $company): void
+    {
+        if (!empty($company->email)) {
+            $mail->replyTo($company->email, $company->name ?? null);
+        }
     }
 
     protected function getRecipientEmail($document): ?string
@@ -314,6 +324,7 @@ class ReminderService
             Mail::mailer('smtp')->raw($message, function ($mail) use ($invoice, $recipientEmail) {
                 $mail->to($recipientEmail)
                     ->subject("Reminder: Invoice {$invoice->invoice_number} is Overdue");
+                $this->applyCompanyReplyTo($mail, $invoice->company);
             });
 
             $this->logReminder($invoice->company, 'overdue_invoice', 'email', $invoice, $recipientEmail, null, $message, 'sent');
@@ -449,6 +460,7 @@ class ReminderService
             Mail::mailer('smtp')->raw($message, function ($mail) use ($quote, $recipientEmail) {
                 $mail->to($recipientEmail)
                     ->subject("Reminder: Quote {$quote->quote_number} Expires Soon");
+                $this->applyCompanyReplyTo($mail, $quote->company);
             });
 
             $this->logReminder($quote->company, 'expiring_quote', 'email', $quote, $recipientEmail, null, $message, 'sent');
@@ -739,6 +751,7 @@ class ReminderService
             Mail::mailer('smtp')->raw($message, function ($mail) use ($invoice, $recipientEmail) {
                 $mail->to($recipientEmail)
                     ->subject("New Invoice {$invoice->invoice_number}");
+                $this->applyCompanyReplyTo($mail, $invoice->company);
             });
 
             $this->logReminder($invoice->company, 'invoice_created', 'email', $invoice, $recipientEmail, null, $message, 'sent');
@@ -899,6 +912,7 @@ class ReminderService
             Mail::mailer('smtp')->raw($message, function ($mail) use ($quote, $recipientEmail) {
                 $mail->to($recipientEmail)
                     ->subject("New Quote {$quote->quote_number}");
+                $this->applyCompanyReplyTo($mail, $quote->company);
             });
 
             $this->logReminder($quote->company, 'quote_created', 'email', $quote, $recipientEmail, null, $message, 'sent');
@@ -1058,6 +1072,7 @@ class ReminderService
             Mail::mailer('smtp')->raw($message, function ($mail) use ($invoice, $recipientEmail) {
                 $mail->to($recipientEmail)
                     ->subject("Payment Received - Invoice {$invoice->invoice_number}");
+                $this->applyCompanyReplyTo($mail, $invoice->company);
             });
 
             $this->logReminder($invoice->company, 'payment_received', 'email', $payment, $recipientEmail, null, $message, 'sent');
@@ -1425,6 +1440,7 @@ class ReminderService
             Mail::mailer('smtp')->raw($message, function ($mail) use ($jobcard, $recipientEmail) {
                 $mail->to($recipientEmail)
                     ->subject("New Jobcard {$jobcard->job_number}");
+                $this->applyCompanyReplyTo($mail, $jobcard->company);
             });
 
             $this->logReminder($jobcard->company, 'jobcard_created', 'email', $jobcard, $recipientEmail, null, $message, 'sent');
@@ -1586,6 +1602,7 @@ class ReminderService
             Mail::mailer('smtp')->raw($message, function ($mail) use ($jobcard, $recipientEmail) {
                 $mail->to($recipientEmail)
                     ->subject("Jobcard {$jobcard->job_number} Status Updated");
+                $this->applyCompanyReplyTo($mail, $jobcard->company);
             });
 
             $this->logReminder($jobcard->company, 'jobcard_status_updated', 'email', $jobcard, $recipientEmail, null, $message, 'sent');

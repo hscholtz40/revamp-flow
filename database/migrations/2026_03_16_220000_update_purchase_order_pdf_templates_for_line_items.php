@@ -1,33 +1,20 @@
 <?php
 
-namespace App\Console\Commands;
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Facades\DB;
 
-use App\Models\PdfTemplate;
-use Illuminate\Console\Command;
-
-class UpdatePurchaseOrderTemplates extends Command
-{
-    protected $signature = 'templates:update-purchase-order';
-    protected $description = 'Update existing purchase order templates with correct syntax';
-
-    public function handle()
+return new class extends Migration {
+    public function up(): void
     {
-        $templates = PdfTemplate::where('module', 'purchase-order')
+        $templates = DB::table('pdf_templates')
+            ->where('module', 'purchase-order')
             ->where('is_default', true)
-            ->get();
-        
-        $this->info("Updating {$templates->count()} purchase order templates...");
-        
-        foreach ($templates as $template) {
-            /** @var \App\Models\PdfTemplate $template */
-            $html = $template->html_template;
-            $css = $template->css_styles ?? '';
-            
-            // Fix logo path references
-            $html = str_replace('{{company.getLogoPathForPdf}}', '{{company.logo_path_for_pdf}}', $html);
-            $html = str_replace('{{#if company.logo_path}}', '{{#if company.logo_path_for_pdf}}', $html);
+            ->get(['id', 'html_template', 'css_styles']);
 
-            // Keep PO defaults aligned with invoice-like line item styling.
+        foreach ($templates as $template) {
+            $html = (string) ($template->html_template ?? '');
+            $css = (string) ($template->css_styles ?? '');
+
             $css = str_replace('max-width: 200px;', 'max-width: 240px;', $css);
             $css = str_replace('max-width: 220px;', 'max-width: 240px;', $css);
             $css = str_replace('max-height: 100px;', 'max-height: 120px;', $css);
@@ -40,12 +27,12 @@ class UpdatePurchaseOrderTemplates extends Command
                 $css
             );
 
-            // Upgrade default purchase-order template line columns to include tax and company email.
             $html = str_replace(
                 '<p>Telephone {{company.phone}}</p>',
                 "<p>Telephone {{company.phone}}</p>\n            <p>Email {{company.email}}</p>",
                 $html
             );
+
             $html = str_replace(
                 '<th>Description</th>
             <th class="text-right">Quantity</th>
@@ -54,6 +41,7 @@ class UpdatePurchaseOrderTemplates extends Command
                 "<th>Item Code</th>\n            <th>Item Description</th>\n            <th class=\"text-right\">QTY</th>\n            <th class=\"text-right\">Price (Ex)</th>\n            <th class=\"text-right\">Tax</th>\n            <th class=\"text-right\">Total (Incl)</th>",
                 $html
             );
+
             $html = str_replace(
                 '<td>
                 <strong>{{this.product.name}}</strong>
@@ -70,16 +58,19 @@ class UpdatePurchaseOrderTemplates extends Command
                 "<td>{{this.product.sku}}</td>\n            <td>{{this.description}}</td>\n            <td class=\"text-right\">{{this.quantity}}</td>\n            <td class=\"text-right\">R{{this.unit_cost}}</td>\n            <td class=\"text-right\">{{#if this.taxRate}}R{{this.tax_amount}}{{else}}—{{/if}}</td>\n            <td class=\"text-right\">R{{this.total}}</td>",
                 $html
             );
-            
-            $template->html_template = $html;
-            $template->css_styles = $css;
-            $template->save();
-            
-            $this->info("Updated template: {$template->name} (ID: {$template->id})");
-        }
-        
-        $this->info("Completed!");
-        return Command::SUCCESS;
-    }
-}
 
+            DB::table('pdf_templates')
+                ->where('id', $template->id)
+                ->update([
+                    'html_template' => $html,
+                    'css_styles' => $css,
+                    'updated_at' => now(),
+                ]);
+        }
+    }
+
+    public function down(): void
+    {
+        // Intentionally left blank: this migration updates template content in place.
+    }
+};
