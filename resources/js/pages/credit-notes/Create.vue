@@ -71,23 +71,47 @@
                             </p>
                         </div>
 
-                        <div>
+                        <div class="relative">
                             <label class="block text-sm font-medium text-gray-700 mb-1">Invoice (optional)</label>
-                            <select
-                                v-model="form.invoice_id"
-                                class="w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                                :class="{ 'border-red-500': form.errors.invoice_id }"
-                            >
-                                <option value="">None</option>
-                                <option
-                                    v-for="inv in filteredInvoices"
-                                    :key="inv.id"
-                                    :value="inv.id"
+                            <div class="relative">
+                                <input
+                                    v-model="invoiceSearchQuery"
+                                    @focus="invoiceSearchFocused = true"
+                                    @blur="handleInvoiceBlur"
+                                    type="text"
+                                    :placeholder="selectedInvoiceOption ? selectedInvoiceLabel(selectedInvoiceOption) : 'Search invoice by number or title...'"
+                                    class="w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                    :class="{ 'border-red-500': form.errors.invoice_id }"
+                                />
+                                <button
+                                    v-if="form.invoice_id"
+                                    @click.prevent="clearInvoice"
+                                    type="button"
+                                    class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                                 >
-                                    {{ inv.invoice_number }} – {{ inv.title || 'Untitled' }}
-                                    ({{ formatCurrency(inv.total) }})
-                                </option>
-                            </select>
+                                    <X class="w-5 h-5" />
+                                </button>
+                            </div>
+                            <div
+                                v-if="invoiceSearchFocused && (filteredInvoiceOptions.length > 0 || invoiceSearchQuery)"
+                                class="absolute z-50 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto"
+                            >
+                                <div
+                                    @mousedown.prevent="clearInvoice"
+                                    class="px-4 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 text-sm text-gray-600"
+                                >
+                                    None
+                                </div>
+                                <div
+                                    v-for="inv in filteredInvoiceOptions"
+                                    :key="inv.id"
+                                    @mousedown.prevent="selectInvoice(inv)"
+                                    class="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                                >
+                                    <div class="font-medium">{{ inv.invoice_number }}</div>
+                                    <div class="text-xs text-gray-500">{{ inv.title || 'Untitled' }} • {{ formatCurrency(inv.total) }}</div>
+                                </div>
+                            </div>
                             <p v-if="form.errors.invoice_id" class="text-red-500 text-sm mt-1">
                                 {{ form.errors.invoice_id }}
                             </p>
@@ -518,6 +542,8 @@ const customerSearchQuery = ref('');
 const customerSearchFocused = ref(false);
 const filteredCustomers = ref<typeof props.customers>([]);
 const selectedCustomer = ref<{ id: number; name: string } | null>(null);
+const invoiceSearchQuery = ref('');
+const invoiceSearchFocused = ref(false);
 
 function buildLineItemsFromInvoice(): LineItem[] {
     const inv = props.selectedInvoice;
@@ -586,15 +612,24 @@ onMounted(() => {
     form.line_items.forEach((item, index) => {
         discountTypes.value[index] = (item.discount_percentage ?? 0) > 0 ? 'percentage' : 'amount';
     });
+
+    const inv = props.invoices.find(i => i.id === Number(form.invoice_id));
+    if (inv) {
+        invoiceSearchQuery.value = selectedInvoiceLabel(inv);
+    }
 });
 
 watch(
     () => form.invoice_id,
     (invoiceId) => {
-        if (!invoiceId) return;
+        if (!invoiceId) {
+            invoiceSearchQuery.value = '';
+            return;
+        }
         const inv = props.invoices.find((i) => i.id === parseInt(String(invoiceId)));
         if (inv) {
             form.customer_id = inv.customer_id;
+            invoiceSearchQuery.value = selectedInvoiceLabel(inv);
             const customer = props.customers.find(c => c.id === inv.customer_id);
             if (customer) {
                 selectedCustomer.value = customer;
@@ -604,10 +639,36 @@ watch(
     },
 );
 
+watch(
+    () => form.customer_id,
+    (customerId) => {
+        if (!form.invoice_id) return;
+        const selectedInvoice = props.invoices.find((inv) => inv.id === Number(form.invoice_id));
+        if (!selectedInvoice) return;
+        if (!customerId || Number(customerId) !== selectedInvoice.customer_id) {
+            clearInvoice();
+        }
+    },
+);
+
 const filteredInvoices = computed(() => {
     const customerId = form.customer_id ? parseInt(String(form.customer_id)) : null;
     if (!customerId) return props.invoices;
     return props.invoices.filter((inv) => inv.customer_id === customerId);
+});
+
+const selectedInvoiceOption = computed(() =>
+    props.invoices.find((inv) => inv.id === Number(form.invoice_id)) ?? null
+);
+
+const filteredInvoiceOptions = computed(() => {
+    const base = filteredInvoices.value;
+    const query = invoiceSearchQuery.value.trim().toLowerCase();
+    if (!query) return base;
+    return base.filter((inv) =>
+        inv.invoice_number.toLowerCase().includes(query)
+        || (inv.title ?? '').toLowerCase().includes(query)
+    );
 });
 
 function handleCustomerSearch() {
@@ -639,6 +700,26 @@ function clearCustomer() {
     form.customer_id = '' as any;
     customerSearchQuery.value = '';
     filteredCustomers.value = [];
+}
+
+function selectedInvoiceLabel(inv: { invoice_number: string; title: string; total: number }): string {
+    return `${inv.invoice_number} - ${inv.title || 'Untitled'} (${formatCurrency(inv.total)})`;
+}
+
+function handleInvoiceBlur() {
+    setTimeout(() => (invoiceSearchFocused.value = false), 200);
+}
+
+function selectInvoice(inv: { id: number; invoice_number: string; title: string; total: number; customer_id: number }) {
+    form.invoice_id = inv.id as any;
+    invoiceSearchQuery.value = selectedInvoiceLabel(inv);
+    invoiceSearchFocused.value = false;
+}
+
+function clearInvoice() {
+    form.invoice_id = '' as any;
+    invoiceSearchQuery.value = '';
+    invoiceSearchFocused.value = false;
 }
 
 function normalizeLineItemOrder() {
