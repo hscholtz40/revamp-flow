@@ -47,9 +47,22 @@ interface InvoiceLineItemWithInvoice {
     };
 }
 
+interface PaginatedInvoiceLineItems {
+    data: InvoiceLineItemWithInvoice[];
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+    from?: number;
+    to?: number;
+    links?: Array<{ url: string | null; label: string; active: boolean }>;
+    prev_page_url?: string | null;
+    next_page_url?: string | null;
+}
+
 interface Props {
     product: Product;
-    recentInvoiceLineItems?: InvoiceLineItemWithInvoice[];
+    recentInvoiceLineItems?: PaginatedInvoiceLineItems;
 }
 
 const props = defineProps<Props>();
@@ -433,7 +446,7 @@ function deleteProduct() {
             </div>
 
             <!-- Recent Invoice Line Items -->
-            <div v-if="props.recentInvoiceLineItems && props.recentInvoiceLineItems.length > 0" class="rounded-lg bg-white border border-gray-200 shadow-sm">
+            <div v-if="props.recentInvoiceLineItems && props.recentInvoiceLineItems.data?.length > 0" class="rounded-lg bg-white border border-gray-200 shadow-sm">
                 <div class="border-b border-gray-200 bg-gray-50 px-6 py-4">
                     <h2 class="text-lg font-semibold text-gray-900">Recent Invoice Usage</h2>
                     <p class="text-sm text-gray-600">Latest invoice line items where this product was used</p>
@@ -448,7 +461,7 @@ function deleteProduct() {
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
-                            <tr v-for="item in props.recentInvoiceLineItems" :key="item.id">
+                            <tr v-for="item in props.recentInvoiceLineItems.data" :key="item.id">
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <Link
                                         :href="invoices.show(item.invoice_id).url"
@@ -466,6 +479,27 @@ function deleteProduct() {
                             </tr>
                         </tbody>
                     </table>
+                </div>
+                <div v-if="props.recentInvoiceLineItems.last_page > 1" class="px-6 py-3 border-t border-gray-200 flex items-center justify-between">
+                    <p class="text-sm text-gray-700">
+                        Showing {{ props.recentInvoiceLineItems.from ?? 0 }} to {{ props.recentInvoiceLineItems.to ?? 0 }} of {{ props.recentInvoiceLineItems.total }} results
+                    </p>
+                    <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                        <Link
+                            v-if="props.recentInvoiceLineItems.prev_page_url"
+                            :href="props.recentInvoiceLineItems.prev_page_url"
+                            class="relative inline-flex items-center px-3 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 rounded-l-md"
+                        >
+                            Previous
+                        </Link>
+                        <Link
+                            v-if="props.recentInvoiceLineItems.next_page_url"
+                            :href="props.recentInvoiceLineItems.next_page_url"
+                            class="relative inline-flex items-center px-3 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 rounded-r-md"
+                        >
+                            Next
+                        </Link>
+                    </nav>
                 </div>
             </div>
         </div>

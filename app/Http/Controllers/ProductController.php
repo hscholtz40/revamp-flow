@@ -188,16 +188,18 @@ class ProductController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(Product $product): Response
+    public function show(Request $request, Product $product): Response
     {
         $product->load('supplier', 'batches', 'serialNumbers');
 
-        $recentInvoiceLineItems = InvoiceLineItem::where('product_id', $product->id)
+        $invoiceLineItemsQuery = InvoiceLineItem::where('product_id', $product->id)
             ->whereHas('invoice', fn ($q) => $q->where('company_id', $product->company_id))
             ->with(['invoice:id,invoice_number,customer_id', 'invoice.customer:id,name'])
-            ->orderBy('id', 'desc')
-            ->limit(20)
-            ->get(['id', 'invoice_id', 'product_id', 'description', 'quantity', 'unit_price', 'total']);
+            ->orderBy('id', 'desc');
+
+        $recentInvoiceLineItems = $invoiceLineItemsQuery
+            ->paginate(10, ['id', 'invoice_id', 'product_id', 'description', 'quantity', 'unit_price', 'total'], 'invoice_usage_page')
+            ->withQueryString();
 
         return Inertia::render('products/Show', [
             'product' => $product,
