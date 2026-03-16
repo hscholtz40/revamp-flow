@@ -13,6 +13,7 @@
 - Fixed Xero invoice export validation for rounding adjustment lines by reconciling outbound `UnitAmount` with stored `LineAmount` on non-discounted lines when totals differ, preventing "line total does not match expected line total" sync failures.
 - Simplified PDF line-item tax columns across invoice, quote, proforma invoice, jobcard, and purchase order templates by removing the secondary tax name/rate text under each tax amount.
 - Fixed Xero payment export for fully paid local invoices: removed an incorrect cap that used JCO `remaining_balance` (0 on paid invoices), and expanded invoice export selection to include invoices with unsynced payment records so payment sync retries are not skipped.
+- Fixed Vue template parse errors (`Element is missing end tag`) in credit-note edit and purchase-order create pages by restoring missing closing wrapper divs in grouped line-item sections.
 
 ## 2026-03-16 - version 1.7.6
 

@@ -684,6 +684,7 @@ function submit() {
                         </div>
                     </div>
                 </div>
+                </div>
 
                 <!-- Additional Information -->
                 <div class="rounded-lg border border-gray-200 bg-white p-6">
