@@ -12,6 +12,11 @@
 - Improved grouped line-item drag UX: custom drag preview chip now appears while dragging, rows get active drag styling, and grab handles use higher-contrast bordered badges for better visibility.
 - Fixed Xero invoice export validation for rounding adjustment lines by reconciling outbound `UnitAmount` with stored `LineAmount` on non-discounted lines when totals differ, preventing "line total does not match expected line total" sync failures.
 - Simplified PDF line-item tax columns across invoice, quote, proforma invoice, jobcard, and purchase order templates by removing the secondary tax name/rate text under each tax amount.
+- Updated the invoice PDF company information block to use aligned label/value rows (address, city, VAT number, phone, email, fax) for a cleaner, more consistent header layout.
+- Refined the invoice PDF company information block to use a true HTML table for label/value pairs so value alignment stays consistent across PDF renderers.
+- Adjusted the invoice PDF company details table to auto-size its columns/overall width based on content instead of forcing a fixed full-width layout.
+- Added trailing colons to invoice PDF company details labels (e.g. `Email:`) for clearer label/value separation in the table layout.
+- Applied the same auto-width, table-based company details format (with colon-suffixed labels) to quote, proforma invoice, jobcard, and purchase-order PDFs for consistent header alignment across all core documents.
 - Fixed Xero payment export for fully paid local invoices: removed an incorrect cap that used JCO `remaining_balance` (0 on paid invoices), and expanded invoice export selection to include invoices with unsynced payment records so payment sync retries are not skipped.
 - Fixed Vue template parse errors (`Element is missing end tag`) in credit-note edit and purchase-order create pages by restoring missing closing wrapper divs in grouped line-item sections.
 

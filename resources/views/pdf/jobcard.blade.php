@@ -90,8 +90,22 @@
             line-height: 1.3;
         }
         
-        .company-details p {
-            margin: 2px 0;
+        .company-details-table {
+            width: auto;
+            max-width: 100%;
+            border-collapse: collapse;
+            table-layout: auto;
+        }
+
+        .company-details-table td {
+            padding: 2px 0;
+            vertical-align: top;
+        }
+
+        .company-details-label {
+            color: #555;
+            padding-right: 8px;
+            white-space: nowrap;
         }
         
         .banking-details {
@@ -328,24 +342,44 @@
             @endif
             
             <div class="company-details">
-                @if($company->address)
-                    <p>{{ $company->address }}</p>
-                @endif
-                @if($company->city)
-                    <p>{{ $company->city }}</p>
-                @endif
-                @if($company->vat_number)
-                    <p>VAT Number: {{ $company->vat_number }}</p>
-                @endif
-                @if($company->phone)
-                    <p>Telephone: {{ $company->phone }}</p>
-                @endif
-                @if($company->email)
-                    <p>Email: {{ $company->email }}</p>
-                @endif
-                @if($company->fax)
-                    <p>Fax: {{ $company->fax }}</p>
-                @endif
+                <table class="company-details-table">
+                    @if($company->address)
+                        <tr>
+                            <td class="company-details-label">Address:</td>
+                            <td>{{ $company->address }}</td>
+                        </tr>
+                    @endif
+                    @if($company->city)
+                        <tr>
+                            <td class="company-details-label">City:</td>
+                            <td>{{ $company->city }}</td>
+                        </tr>
+                    @endif
+                    @if($company->vat_number)
+                        <tr>
+                            <td class="company-details-label">VAT Number:</td>
+                            <td>{{ $company->vat_number }}</td>
+                        </tr>
+                    @endif
+                    @if($company->phone)
+                        <tr>
+                            <td class="company-details-label">Phone:</td>
+                            <td>{{ $company->phone }}</td>
+                        </tr>
+                    @endif
+                    @if($company->email)
+                        <tr>
+                            <td class="company-details-label">Email:</td>
+                            <td>{{ $company->email }}</td>
+                        </tr>
+                    @endif
+                    @if($company->fax)
+                        <tr>
+                            <td class="company-details-label">Fax:</td>
+                            <td>{{ $company->fax }}</td>
+                        </tr>
+                    @endif
+                </table>
             </div>
         </div>
         
