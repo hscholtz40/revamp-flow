@@ -367,7 +367,7 @@
                             <td>{{ $company->phone }}</td>
                         </tr>
                     @endif
-                    @if($company->email)
+                    @if($company->email && stripos($company->email, 'sage-migration.local') === false)
                         <tr>
                             <td class="company-details-label">Email:</td>
                             <td>{{ $company->email }}</td>
@@ -418,10 +418,16 @@
                 @if($jobcard->customer->postal_code)
                     <p>{{ $jobcard->customer->postal_code }}</p>
                 @endif
-                @if($jobcard->email)
-                    <p>{{ $jobcard->email }}</p>
-                @elseif($jobcard->customer->email)
-                    <p>{{ $jobcard->customer->email }}</p>
+                @php
+                    $jobcardDisplayEmail = null;
+                    if ($jobcard->email && stripos($jobcard->email, 'sage-migration.local') === false) {
+                        $jobcardDisplayEmail = $jobcard->email;
+                    } elseif ($jobcard->customer->email && stripos($jobcard->customer->email, 'sage-migration.local') === false) {
+                        $jobcardDisplayEmail = $jobcard->customer->email;
+                    }
+                @endphp
+                @if($jobcardDisplayEmail)
+                    <p>{{ $jobcardDisplayEmail }}</p>
                 @endif
                 @if($jobcard->phone)
                     <p>{{ $jobcard->phone }}</p>

@@ -367,7 +367,7 @@
                             <td>{{ $company->phone }}</td>
                         </tr>
                     @endif
-                    @if($company->email)
+                    @if($company->email && stripos($company->email, 'sage-migration.local') === false)
                         <tr>
                             <td class="company-details-label">Email:</td>
                             <td>{{ $company->email }}</td>
@@ -418,10 +418,16 @@
                 @if($quote->customer->postal_code)
                     <p>{{ $quote->customer->postal_code }}</p>
                 @endif
-                @if($quote->email)
-                    <p>{{ $quote->email }}</p>
-                @elseif($quote->customer->email)
-                    <p>{{ $quote->customer->email }}</p>
+                @php
+                    $quoteDisplayEmail = null;
+                    if ($quote->email && stripos($quote->email, 'sage-migration.local') === false) {
+                        $quoteDisplayEmail = $quote->email;
+                    } elseif ($quote->customer->email && stripos($quote->customer->email, 'sage-migration.local') === false) {
+                        $quoteDisplayEmail = $quote->customer->email;
+                    }
+                @endphp
+                @if($quoteDisplayEmail)
+                    <p>{{ $quoteDisplayEmail }}</p>
                 @endif
                 @if($quote->phone)
                     <p>{{ $quote->phone }}</p>

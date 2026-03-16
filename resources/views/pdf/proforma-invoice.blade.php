@@ -368,7 +368,7 @@
                             <td>{{ $company->phone }}</td>
                         </tr>
                     @endif
-                    @if($company->email)
+                    @if($company->email && stripos($company->email, 'sage-migration.local') === false)
                         <tr>
                             <td class="company-details-label">Email:</td>
                             <td>{{ $company->email }}</td>

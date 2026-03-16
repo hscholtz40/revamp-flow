@@ -17,6 +17,7 @@
 - Adjusted the invoice PDF company details table to auto-size its columns/overall width based on content instead of forcing a fixed full-width layout.
 - Added trailing colons to invoice PDF company details labels (e.g. `Email:`) for clearer label/value separation in the table layout.
 - Applied the same auto-width, table-based company details format (with colon-suffixed labels) to quote, proforma invoice, jobcard, and purchase-order PDFs for consistent header alignment across all core documents.
+- Updated all core PDF templates to suppress placeholder migration emails containing `sage-migration.local` (company and document/customer/supplier email fields) so non-production addresses are hidden in printed output.
 - Fixed Xero payment export for fully paid local invoices: removed an incorrect cap that used JCO `remaining_balance` (0 on paid invoices), and expanded invoice export selection to include invoices with unsynced payment records so payment sync retries are not skipped.
 - Fixed Vue template parse errors (`Element is missing end tag`) in credit-note edit and purchase-order create pages by restoring missing closing wrapper divs in grouped line-item sections.
 
