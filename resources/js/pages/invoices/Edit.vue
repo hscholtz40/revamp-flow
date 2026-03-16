@@ -209,6 +209,17 @@
                             </div>
                         </div>
 
+                        <div v-if="form.customer_id && canEdit">
+                            <ContactSelector
+                                v-model="form.contact_id"
+                                :customer-id="form.customer_id ? parseInt(String(form.customer_id)) : null"
+                                :initial-contact="(props.invoice as any).contact ?? null"
+                                label="Contact"
+                                :error="form.errors.contact_id"
+                                @select="onContactSelect"
+                            />
+                        </div>
+
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
                             <input
@@ -592,6 +603,7 @@
 </template>
 
 <script setup lang="ts">
+import ContactSelector from '@/components/ContactSelector.vue';
 import { matchesProductSearch } from '@/composables/productSearch';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, watch, ref } from 'vue';
@@ -726,6 +738,7 @@ const form = useForm({
     title: props.invoice.title,
     description: props.invoice.description || '',
     customer_id: props.invoice.customer_id,
+    contact_id: (props.invoice as any).contact_id ?? null,
     email: props.invoice.email || '',
     phone: props.invoice.phone || '',
     order_number: props.invoice.order_number || '',
@@ -890,9 +903,17 @@ const handleCustomerBlur = () => {
     }, 200);
 };
 
+const onContactSelect = (contact: { email?: string | null; phone?: string | null } | null) => {
+    if (contact) {
+        form.email = contact.email || '';
+        form.phone = contact.phone || '';
+    }
+};
+
 const selectCustomer = (customer: Customer) => {
     selectedCustomer.value = customer;
     form.customer_id = customer.id;
+    form.contact_id = null;
     form.email = customer.email || '';
     form.phone = customer.phone || '';
     customerSearchQuery.value = customer.name;
@@ -906,6 +927,7 @@ const selectCustomer = (customer: Customer) => {
 const clearCustomer = () => {
     selectedCustomer.value = null;
     form.customer_id = 0;
+    form.contact_id = null;
     form.email = '';
     form.phone = '';
     customerSearchQuery.value = '';
@@ -1090,6 +1112,7 @@ const formatCurrency = (amount: number) => {
 };
 
 const submit = () => {
-    form.put(invoices.update(props.invoice.id).url);
+    form.transform((data) => ({ ...data, contact_id: form.contact_id ?? null }))
+        .put(invoices.update(props.invoice.id).url);
 };
 </script>

@@ -4415,6 +4415,32 @@ class XeroService
             ];
         }
 
+        // Cap payment amount to the amount due (never exceed outstanding balance)
+        $jcoAmountDue = (float) $invoice->remaining_balance;
+        $xeroAmountDue = $xeroInvoice && isset($xeroInvoice['AmountDue']) ? (float) $xeroInvoice['AmountDue'] : null;
+        $amountToSend = (float) $payment->amount;
+        if ($xeroAmountDue !== null && $xeroAmountDue >= 0) {
+            $amountToSend = min($amountToSend, $xeroAmountDue);
+        }
+        $amountToSend = min($amountToSend, $jcoAmountDue);
+        $amountToSend = round($amountToSend, 2);
+
+        if ($amountToSend <= 0) {
+            Log::info('Skipping payment creation - no amount due to apply', [
+                'invoice_id' => $invoice->id,
+                'payment_id' => $payment->id,
+                'payment_amount' => $payment->amount,
+                'jco_amount_due' => $jcoAmountDue,
+                'xero_amount_due' => $xeroAmountDue,
+            ]);
+            return [
+                'payment_id' => $payment->id,
+                'amount' => $payment->amount,
+                'status' => 'skipped',
+                'message' => 'No amount due on invoice (JCO: ' . $jcoAmountDue . ', payment: ' . $payment->amount . ')',
+            ];
+        }
+
         // Get the default bank account for the company
         // Use company from XeroSettings
         $currentCompany = $this->getCompany();
@@ -4430,7 +4456,8 @@ class XeroService
             'payment_method' => $payment->payment_method,
             'bank_account_id' => $defaultBankAccount->id,
             'xero_account_id' => $defaultBankAccount->xero_account_id,
-            'amount' => $payment->amount,
+            'amount' => $amountToSend,
+            'original_amount' => $payment->amount,
             'invoice_id' => $invoice->id,
             'xero_invoice_id' => $invoice->xero_invoice_id,
         ]);
@@ -4443,7 +4470,7 @@ class XeroService
                 'AccountID' => $defaultBankAccount->xero_account_id,
             ],
             'Date' => $payment->payment_date->format('Y-m-d'),
-            'Amount' => $payment->amount,
+            'Amount' => $amountToSend,
             'Reference' => 'Payment for ' . $invoice->invoice_number,
         ];
 

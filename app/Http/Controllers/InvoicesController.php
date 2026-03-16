@@ -394,6 +394,7 @@ class InvoicesController extends Controller
             'title' => 'nullable|string|max:255',
             'description' => 'nullable|string',
             'customer_id' => 'required|exists:customers,id',
+            'contact_id' => 'nullable|exists:contacts,id',
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:255',
             'order_number' => 'nullable|string|max:255',
@@ -435,6 +436,7 @@ class InvoicesController extends Controller
             'title' => !empty(trim((string) ($validated['title'] ?? ''))) ? trim((string) $validated['title']) : $invoiceNumber,
             'description' => $validated['description'],
             'customer_id' => $validated['customer_id'],
+            'contact_id' => $validated['contact_id'] ?? null,
             'email' => $validated['email'] ?? null,
             'phone' => $validated['phone'] ?? null,
             'salesperson_id' => $salespersonId,
@@ -570,7 +572,7 @@ class InvoicesController extends Controller
             abort(403, 'You do not have access to this invoice.');
         }
 
-        $invoice->load(['customer', 'salesperson', 'lineItems.product', 'lineItems.taxRate', 'company', 'source', 'payments', 'creditNotes']);
+        $invoice->load(['customer', 'contact', 'salesperson', 'lineItems.product', 'lineItems.taxRate', 'company', 'source', 'payments', 'creditNotes']);
         
         // Load serial numbers for line items that have serial_number_ids
         $invoice->load('lineItems');
@@ -622,7 +624,7 @@ class InvoicesController extends Controller
     {
         $currentCompany = auth()->user()->getCurrentCompany();
         
-        $invoice->load(['customer', 'lineItems.product']);
+        $invoice->load(['customer', 'contact', 'lineItems.product']);
 
         $customers = Customer::where('company_id', $currentCompany->id)
             ->orderBy('name')
@@ -706,6 +708,7 @@ class InvoicesController extends Controller
             'title' => 'nullable|string|max:255',
             'description' => 'nullable|string',
             'customer_id' => 'required|exists:customers,id',
+            'contact_id' => 'nullable|exists:contacts,id',
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:255',
             'order_number' => 'nullable|string|max:255',
@@ -748,6 +751,7 @@ class InvoicesController extends Controller
             'title' => !empty(trim((string) ($validated['title'] ?? ''))) ? trim((string) $validated['title']) : $invoice->invoice_number,
             'description' => $validated['description'],
             'customer_id' => $validated['customer_id'],
+            'contact_id' => $validated['contact_id'] ?? null,
             'email' => $validated['email'] ?? null,
             'phone' => $validated['phone'] ?? null,
             'order_number' => $validated['order_number'] ?? null,
@@ -1093,7 +1097,7 @@ class InvoicesController extends Controller
      */
     public function downloadPdf(Request $request, Invoice $invoice)
     {
-        $invoice->load(['customer', 'lineItems.product', 'lineItems.taxRate', 'company', 'source']);
+        $invoice->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'company', 'source']);
         
         // Load serial numbers for line items that have serial_number_ids
         foreach ($invoice->lineItems as $lineItem) {
@@ -1124,7 +1128,7 @@ class InvoicesController extends Controller
      */
     public function printPdf(Request $request, Invoice $invoice)
     {
-        $invoice->load(['customer', 'lineItems.product', 'lineItems.taxRate', 'company', 'source']);
+        $invoice->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'company', 'source']);
         
         foreach ($invoice->lineItems as $lineItem) {
             if (!empty($lineItem->serial_number_ids)) {
@@ -1155,11 +1159,21 @@ class InvoicesController extends Controller
     public function email(Request $request, Invoice $invoice)
     {
         $validated = $request->validate([
-            'email' => 'required|email',
+            'email' => 'required|string',
             'customMessage' => 'nullable|string',
         ]);
 
-        $invoice->load(['customer', 'lineItems.product', 'lineItems.taxRate', 'company']);
+        $emails = array_unique(array_filter(array_map('trim', explode(',', $validated['email']))));
+        foreach ($emails as $e) {
+            if (!filter_var($e, FILTER_VALIDATE_EMAIL)) {
+                return redirect()->back()->withErrors(['email' => "Invalid email address: {$e}"]);
+            }
+        }
+        if (empty($emails)) {
+            return redirect()->back()->withErrors(['email' => 'At least one valid email is required.']);
+        }
+
+        $invoice->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'company']);
         
         // Load serial numbers for line items that have serial_number_ids
         foreach ($invoice->lineItems as $lineItem) {
@@ -1196,8 +1210,8 @@ class InvoicesController extends Controller
             Mail::mailer('smtp')->send('emails.invoice', [
                 'invoice' => $invoice,
                 'customMessage' => $validated['customMessage'],
-            ], function ($message) use ($validated, $invoice, $pdfContent, $company) {
-                $message->to($validated['email'])
+            ], function ($message) use ($emails, $invoice, $pdfContent, $company) {
+                $message->to($emails)
                     ->subject("Invoice {$invoice->invoice_number} - {$invoice->title}")
                     ->attachData($pdfContent, "invoice-{$invoice->invoice_number}.pdf", [
                         'mime' => 'application/pdf',
@@ -1213,7 +1227,7 @@ class InvoicesController extends Controller
                 $invoice->update(['status' => 'sent']);
             }
 
-            return redirect()->back()->with('success', 'Invoice sent successfully to ' . $validated['email']);
+            return redirect()->back()->with('success', 'Invoice sent successfully to ' . implode(', ', $emails));
         } catch (\Exception $e) {
             return redirect()->back()->withErrors(['message' => 'Failed to send email: ' . $e->getMessage()]);
         }
@@ -1235,6 +1249,7 @@ class InvoicesController extends Controller
             'title' => $quote->title,
             'description' => $quote->description,
             'customer_id' => $quote->customer_id,
+            'contact_id' => $quote->contact_id,
             'email' => $quote->email,
             'phone' => $quote->phone,
             'salesperson_id' => $salespersonId,
@@ -1297,6 +1312,7 @@ class InvoicesController extends Controller
             'title' => $jobcard->title,
             'description' => $jobcard->description,
             'customer_id' => $jobcard->customer_id,
+            'contact_id' => $jobcard->contact_id,
             'email' => $jobcard->email,
             'phone' => $jobcard->phone,
             'salesperson_id' => $salespersonId,

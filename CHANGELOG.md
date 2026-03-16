@@ -2,6 +2,10 @@
 
 ## 2026-03-16 - version 1.7.6
 
+- Moved document description to appear just below customer/contact information in PDFs (quote, proforma invoice, invoice, jobcard); was previously at the bottom in terms/notes section.
+- Show linked contact on quote, invoice, and jobcard Show pages (Customer Information section) with link to contact detail.
+- Fixed ContactSelector showing empty when editing a document with a contact selected: added `initialContact` prop and ensured Edit controllers load the contact relation.
+- Replaced comma-separated email field in quote/invoice/jobcard email modals with a tag-style recipient list: pre-filled from document email, "Add email/contact" button to pick a contact or enter an email manually, and add/remove recipients like tags.
 - Removed the purchase-order create line-item overflow wrapper that was clipping product suggestion dropdowns and raised dropdown stacking so product search results stay visible while typing.
 - Fixed purchase-order create product lookup dropdown visibility by allowing suggestion menus to overflow above the horizontal line-item scroll container.
 - Updated purchase-order create line-item UI rows to match the invoice-style line layout (compact grid columns, aligned field sizing, and consistent per-row totals/actions) instead of card-style blocks.
@@ -35,6 +39,9 @@
 - Fixed invoice list sort persistence by sending resolved sort filters back from the controller and adding a sortable `Created` column in the invoices table.
 - Fixed Xero sales-document exports (invoices/quotes/credit notes) to default missing line account codes to `1000`/default-sales-account instead of product-level fallback values like archived `200`, and aligned imported product sales-account fallback to `1000`.
 - Added an optional `Order Number` field to POS invoice creation and persist it on the generated invoice.
+- Added contact linking to quotes, invoices, and jobcards: `contact_id` stored on documents, searchable contact selector with quick-create on create/edit forms, contact info ("Attn:") in PDFs, recipient_email/recipient_phone preferring linked contact, and send-email supporting multiple comma-separated addresses.
+- Capped Xero payment creation to the amount due on the invoice (min of JCO remaining balance and Xero AmountDue) to avoid "Payment amount exceeds the amount outstanding" validation errors.
+- Fixed contact_id not persisting on document save by explicitly including it in the form payload via transform on quote, jobcard, and invoice create/edit submits.
 
 ## 2026-03-13 - version 1.7.5
 

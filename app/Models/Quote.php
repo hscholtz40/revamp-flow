@@ -16,6 +16,7 @@ class Quote extends Model
     protected $fillable = [
         'company_id',
         'customer_id',
+        'contact_id',
         'email',
         'phone',
         'invoice_id',
@@ -63,6 +64,11 @@ class Quote extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function contact(): BelongsTo
+    {
+        return $this->belongsTo(Contact::class);
     }
 
     public function lineItems(): HasMany
@@ -182,12 +188,12 @@ class Quote extends Model
 
     public function getRecipientEmailAttribute(): ?string
     {
-        return $this->email ?: $this->customer?->email;
+        return $this->email ?: $this->contact?->email ?: $this->customer?->email;
     }
 
     public function getRecipientPhoneAttribute(): ?string
     {
-        return $this->phone ?: $this->customer?->phone;
+        return $this->phone ?: $this->contact?->phone ?: $this->customer?->phone;
     }
 
     /**
@@ -198,6 +204,7 @@ class Quote extends Model
         $jobcard = Jobcard::create([
             'company_id' => $this->company_id,
             'customer_id' => $this->customer_id,
+            'contact_id' => $this->contact_id,
             'email' => $this->email,
             'phone' => $this->phone,
             'job_number' => Jobcard::generateJobNumber($this->company_id),
@@ -242,6 +249,7 @@ class Quote extends Model
         $invoice = Invoice::create([
             'company_id' => $this->company_id,
             'customer_id' => $this->customer_id,
+            'contact_id' => $this->contact_id,
             'email' => $this->email,
             'phone' => $this->phone,
             'invoice_number' => Invoice::generateInvoiceNumber($this->company_id),

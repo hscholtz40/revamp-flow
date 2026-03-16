@@ -8,6 +8,7 @@ use App\Models\Customer;
 use App\Models\SMSSettings;
 use App\Models\SMSActivity;
 use App\Services\BulkSMSService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -15,6 +16,43 @@ use Inertia\Response;
 
 class ContactController extends Controller
 {
+    /**
+     * Search contacts by customer (for document contact selector).
+     */
+    public function search(Request $request): JsonResponse
+    {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        $customerId = $request->get('customer_id');
+        $search = $request->string('search')->toString();
+
+        $query = Contact::with('customer')
+            ->where('company_id', $currentCompany->id)
+            ->when($customerId, fn ($q) => $q->where('customer_id', $customerId))
+            ->when($search, function ($q) use ($search) {
+                $q->where(function ($q2) use ($search) {
+                    $q2->where('name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('phone', 'like', "%{$search}%")
+                        ->orWhereHas('customer', fn ($c) => $c->where('name', 'like', "%{$search}%"));
+                });
+            })
+            ->orderBy('name')
+            ->limit(20);
+
+        $contacts = $query->get(['id', 'customer_id', 'name', 'email', 'phone', 'is_primary']);
+
+        return response()->json([
+            'contacts' => $contacts->map(fn ($c) => [
+                'id' => $c->id,
+                'customer_id' => $c->customer_id,
+                'customer_name' => $c->customer?->name,
+                'name' => $c->name,
+                'email' => $c->email,
+                'phone' => $c->phone,
+                'is_primary' => $c->is_primary,
+            ]),
+        ]);
+    }
     /**
      * Display a listing of the resource.
      */
@@ -109,6 +147,43 @@ class ContactController extends Controller
 
         return redirect()->route('customers.show', $validated['customer_id'])
             ->with('success', 'Contact created successfully');
+    }
+
+    /**
+     * Quick-create a contact (e.g. from document form) - returns JSON.
+     */
+    public function quickCreate(Request $request): JsonResponse
+    {
+        $currentCompany = auth()->user()->getCurrentCompany();
+
+        $validated = $request->validate([
+            'customer_id' => ['required', 'exists:customers,id'],
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:50'],
+        ]);
+
+        $customer = \App\Models\Customer::where('company_id', $currentCompany->id)->findOrFail($validated['customer_id']);
+
+        $contact = Contact::create([
+            'company_id' => $currentCompany->id,
+            'customer_id' => $validated['customer_id'],
+            'name' => $validated['name'],
+            'email' => $validated['email'] ?? null,
+            'phone' => $validated['phone'] ?? null,
+        ]);
+
+        return response()->json([
+            'contact' => [
+                'id' => $contact->id,
+                'customer_id' => $contact->customer_id,
+                'customer_name' => $customer->name,
+                'name' => $contact->name,
+                'email' => $contact->email,
+                'phone' => $contact->phone,
+                'is_primary' => false,
+            ],
+        ]);
     }
 
     /**

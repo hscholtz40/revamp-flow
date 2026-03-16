@@ -20,6 +20,7 @@ class Invoice extends Model
         'title',
         'description',
         'customer_id',
+        'contact_id',
         'email',
         'phone',
         'salesperson_id',
@@ -68,6 +69,14 @@ class Invoice extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    /**
+     * Get the contact linked to the invoice.
+     */
+    public function contact(): BelongsTo
+    {
+        return $this->belongsTo(Contact::class);
     }
 
     /**
@@ -256,12 +265,12 @@ class Invoice extends Model
 
     public function getRecipientEmailAttribute(): ?string
     {
-        return $this->email ?: $this->customer?->email;
+        return $this->email ?: $this->contact?->email ?: $this->customer?->email;
     }
 
     public function getRecipientPhoneAttribute(): ?string
     {
-        return $this->phone ?: $this->customer?->phone;
+        return $this->phone ?: $this->contact?->phone ?: $this->customer?->phone;
     }
 
     /**

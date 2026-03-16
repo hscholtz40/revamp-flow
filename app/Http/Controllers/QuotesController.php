@@ -125,6 +125,7 @@ class QuotesController extends Controller
         
         $validated = $request->validate([
             'customer_id' => ['required', 'exists:customers,id'],
+            'contact_id' => ['nullable', 'exists:contacts,id'],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:255'],
             'order_number' => ['nullable', 'string', 'max:255'],
@@ -152,6 +153,7 @@ class QuotesController extends Controller
         $quote = Quote::create([
             'company_id' => $currentCompany->id,
             'customer_id' => $validated['customer_id'],
+            'contact_id' => $validated['contact_id'] ?? null,
             'email' => $validated['email'] ?? null,
             'phone' => $validated['phone'] ?? null,
             'quote_number' => Quote::generateQuoteNumber($currentCompany->id),
@@ -212,7 +214,7 @@ class QuotesController extends Controller
      */
     public function show(Quote $quote): Response
     {
-        $quote->load(['customer', 'lineItems.product', 'lineItems.taxRate', 'company', 'invoice']);
+        $quote->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'company', 'invoice']);
         
         $currentCompany = auth()->user()->getCurrentCompany();
         
@@ -243,7 +245,7 @@ class QuotesController extends Controller
     public function edit(Quote $quote): Response
     {
         $currentCompany = auth()->user()->getCurrentCompany();
-        $quote->load(['lineItems.product']);
+        $quote->load(['customer', 'contact', 'lineItems.product']);
         $customers = Customer::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name', 'email', 'phone', 'account_code']);
         $products = Product::where('company_id', $currentCompany->id)
             ->where('is_active', true)
@@ -275,6 +277,7 @@ class QuotesController extends Controller
     {
         $validated = $request->validate([
             'customer_id' => ['required', 'exists:customers,id'],
+            'contact_id' => ['nullable', 'exists:contacts,id'],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:255'],
             'order_number' => ['nullable', 'string', 'max:255'],
@@ -311,6 +314,7 @@ class QuotesController extends Controller
         // Update the quote
         $quote->update([
             'customer_id' => $validated['customer_id'],
+            'contact_id' => $validated['contact_id'] ?? null,
             'email' => $validated['email'] ?? null,
             'phone' => $validated['phone'] ?? null,
             'order_number' => $validated['order_number'] ?? null,
@@ -433,7 +437,7 @@ class QuotesController extends Controller
      */
     public function downloadPDF(Request $request, Quote $quote)
     {
-        $quote->load(['customer', 'lineItems.product', 'lineItems.taxRate', 'company']);
+        $quote->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'company']);
         
         // Update status to sent when PDF is downloaded
         if ($quote->status === 'draft') {
@@ -460,12 +464,22 @@ class QuotesController extends Controller
     public function emailQuote(Request $request, Quote $quote): RedirectResponse
     {
         $validated = $request->validate([
-            'email' => ['required', 'email'],
+            'email' => ['required', 'string'],
             'message' => ['nullable', 'string'],
             'type' => ['nullable', 'in:quotation,proforma-invoice'],
         ]);
 
-        $quote->load(['customer', 'lineItems.product', 'lineItems.taxRate', 'company']);
+        $emails = array_unique(array_filter(array_map('trim', explode(',', $validated['email']))));
+        foreach ($emails as $e) {
+            if (!filter_var($e, FILTER_VALIDATE_EMAIL)) {
+                return redirect()->back()->withErrors(['email' => "Invalid email address: {$e}"]);
+            }
+        }
+        if (empty($emails)) {
+            return redirect()->back()->withErrors(['email' => 'At least one valid email is required.']);
+        }
+
+        $quote->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'company']);
         
         // Get user's SMTP settings
         $user = auth()->user();
@@ -499,8 +513,8 @@ class QuotesController extends Controller
             Mail::mailer('smtp')->send('emails.quote', [
                 'quote' => $quote,
                 'customMessage' => $validated['message'],
-            ], function ($message) use ($validated, $quote, $pdfContent, $filename, $subjectPrefix, $company) {
-                $message->to($validated['email'])
+            ], function ($message) use ($emails, $quote, $pdfContent, $filename, $subjectPrefix, $company) {
+                $message->to($emails)
                     ->subject("{$subjectPrefix} {$quote->quote_number} - {$quote->title}")
                     ->attachData($pdfContent, $filename, [
                         'mime' => 'application/pdf',

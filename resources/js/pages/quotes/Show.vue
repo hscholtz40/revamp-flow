@@ -161,6 +161,17 @@
                                         <span v-else>{{ props.quote.customer?.name || '-' }}</span>
                                     </p>
                                 </div>
+                                <div v-if="(props.quote as any).contact">
+                                    <label class="block text-sm font-medium text-gray-500">Contact</label>
+                                    <p class="mt-1 text-sm text-gray-900">
+                                        <Link
+                                            :href="`/contacts/${(props.quote as any).contact.id}`"
+                                            class="text-blue-600 hover:text-blue-800 hover:underline"
+                                        >
+                                            {{ (props.quote as any).contact.name }}
+                                        </Link>
+                                    </p>
+                                </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-500">Email</label>
                                     <p class="mt-1 text-sm text-gray-900">{{ props.quote.email || props.quote.customer?.email || '-' }}</p>
@@ -174,6 +185,16 @@
                                     <p class="mt-1 text-sm text-gray-900">{{ props.quote.customer?.address || '-' }}</p>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Description -->
+                    <div v-if="props.quote.description" class="rounded-lg bg-white border border-gray-200 shadow-sm">
+                        <div class="border-b border-gray-200 bg-gray-50 px-6 py-4">
+                            <h2 class="text-lg font-semibold text-gray-900">Description</h2>
+                        </div>
+                        <div class="p-6">
+                            <p class="text-sm text-gray-900 whitespace-pre-wrap">{{ props.quote.description }}</p>
                         </div>
                     </div>
 
@@ -286,10 +307,6 @@
                                 <label class="block text-sm font-medium text-gray-500">Expiry Date</label>
                                 <p class="mt-1 text-sm text-gray-900">{{ formatDate(props.quote.expiry_date) }}</p>
                             </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-500">Description</label>
-                                <p class="mt-1 text-sm text-gray-900">{{ props.quote.description || '-' }}</p>
-                            </div>
                         </div>
                     </div>
 
@@ -331,17 +348,11 @@
                     <h3 class="text-lg font-medium text-gray-900 mb-4">Email Quote</h3>
                     <form @submit.prevent="sendEmail">
                         <div class="mb-4">
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Email Address *</label>
-                            <input
-                                v-model="emailForm.email"
-                                type="email"
-                                class="w-full rounded border px-3 py-2"
-                                :class="{ 'border-red-500': emailForm.errors.email }"
-                                required
+                            <EmailRecipientsInput
+                                v-model="emailRecipients"
+                                :customer-id="props.quote.customer?.id ?? null"
+                                :error="emailRecipientError || emailForm.errors.email"
                             />
-                            <div v-if="emailForm.errors.email" class="text-red-500 text-sm mt-1">
-                                {{ emailForm.errors.email }}
-                            </div>
                         </div>
                         <div class="mb-4">
                             <label class="block text-sm font-medium text-gray-700 mb-1">PDF Type</label>
@@ -467,6 +478,7 @@
 
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
+import EmailRecipientsInput from '@/components/EmailRecipientsInput.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import quotes from '@/routes/quotes';
 import invoices from '@/routes/invoices';
@@ -535,6 +547,14 @@ interface Props {
 const props = defineProps<Props>();
 
 const showEmailModal = ref(false);
+
+watch(showEmailModal, (open) => {
+    if (open) {
+        const str = (props.quote as any).recipient_email || props.quote.email || props.quote.customer?.email || '';
+        emailRecipients.value = parseInitialEmails(str);
+        emailRecipientError.value = '';
+    }
+});
 const showDownloadDropdown = ref(false);
 const showResultDialog = ref(false);
 const showTemplateModal = ref(false);
@@ -554,8 +574,16 @@ const canEditQuote = computed(() => {
     return props.canEditCompleted;
 });
 
+function parseInitialEmails(str: string | null | undefined): string[] {
+    if (!str) return [];
+    return str.split(',').map(s => s.trim()).filter(Boolean);
+}
+
+const initialEmailStr = (props.quote as any).recipient_email || props.quote.email || props.quote.customer?.email || '';
+const emailRecipients = ref<string[]>(parseInitialEmails(initialEmailStr));
+
 const emailForm = useForm({
-    email: props.quote.email || props.quote.customer?.email || '',
+    email: initialEmailStr,
     message: '',
     type: 'quotation',
     template_id: null as number | null,
@@ -622,7 +650,15 @@ onUnmounted(() => {
     document.removeEventListener('click', handleClickOutside);
 });
 
+const emailRecipientError = ref('');
+
 const sendEmail = () => {
+    emailRecipientError.value = '';
+    if (emailRecipients.value.length === 0) {
+        emailRecipientError.value = 'Please add at least one recipient';
+        return;
+    }
+    emailForm.email = emailRecipients.value.join(', ');
     // Set template_id based on the selected type if no template is manually selected
     if (!emailForm.template_id) {
         if (emailForm.type === 'quotation' && props.defaultQuoteTemplateId) {

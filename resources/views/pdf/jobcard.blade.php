@@ -374,6 +374,9 @@
                 <h4>To:</h4>
                 <p><strong>{{ $jobcard->customer->account_code ?? 'N/A' }}</strong></p>
                 <p><strong>{{ $jobcard->customer->name ?? 'CUSTOMER NAME' }}</strong></p>
+                @if($jobcard->contact)
+                    <p><em>Attn: {{ $jobcard->contact->name }}</em></p>
+                @endif
                 @if($jobcard->customer->address)
                     <p>{{ $jobcard->customer->address }}</p>
                 @endif
@@ -405,6 +408,13 @@
             </div>
         </div>
     </div>
+    
+    @if($jobcard->description)
+    <div style="margin-bottom: 20px; font-size: 11px;">
+        <h4 style="margin: 0 0 6px 0; font-size: 12px; font-weight: bold; color: #000;">Description</h4>
+        <p style="margin: 0; line-height: 1.4;">{{ $jobcard->description }}</p>
+    </div>
+    @endif
     
     <div class="separator-line"></div>
     
@@ -498,9 +508,6 @@
     
     <div class="work-notes-section">
         <h4>Work Notes & Instructions</h4>
-        @if($jobcard->description)
-            <p><strong>Job Description:</strong> {{ $jobcard->description }}</p>
-        @endif
         @if($jobcard->notes)
             <p><strong>Additional Notes:</strong> {{ $jobcard->notes }}</p>
         @endif

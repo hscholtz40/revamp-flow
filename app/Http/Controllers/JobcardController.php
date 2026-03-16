@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Company;
+use App\Models\Contact;
 use App\Models\Customer;
 use App\Models\Jobcard;
 use App\Models\JobcardLineItem;
@@ -160,6 +161,7 @@ class JobcardController extends Controller
         
         $validated = $request->validate([
             'customer_id' => ['required', 'exists:customers,id'],
+            'contact_id' => ['nullable', 'exists:contacts,id'],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:255'],
             'assigned_to_user_id' => ['nullable', 'exists:users,id'],
@@ -188,6 +190,7 @@ class JobcardController extends Controller
         $validated['company_id'] = $currentCompany->id;
         $validated['job_number'] = Jobcard::generateJobNumber($currentCompany->id);
         $validated['order_number'] = $validated['order_number'] ?? null;
+        $validated['contact_id'] = $validated['contact_id'] ?? null;
         $validated['email'] = $validated['email'] ?? null;
         $validated['phone'] = $validated['phone'] ?? null;
         $validated['tax_rate'] = $validated['tax_rate'] ?? 0;
@@ -270,7 +273,7 @@ class JobcardController extends Controller
             }
         }
 
-        $jobcard->load(['customer', 'assignedUser', 'assignedTeam', 'lineItems.product', 'lineItems.taxRate', 'invoice', 'timeEntries.user']);
+        $jobcard->load(['customer', 'contact', 'assignedUser', 'assignedTeam', 'lineItems.product', 'lineItems.taxRate', 'invoice', 'timeEntries.user']);
 
         $currentCompany = auth()->user()->getCurrentCompany();
         
@@ -328,7 +331,7 @@ class JobcardController extends Controller
         $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
         $chartOfAccounts = ChartOfAccount::where('company_id', $currentCompany->id)->where('is_active', true)->ordered()->get(['id', 'account_code', 'account_name', 'account_type', 'is_default_sales']);
         $defaultSalesAccount = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id);
-        $jobcard->load(['lineItems']);
+        $jobcard->load(['customer', 'contact', 'lineItems']);
 
         return Inertia::render('jobcards/Edit', [
             'jobcard' => $jobcard,
@@ -352,6 +355,7 @@ class JobcardController extends Controller
     {
         $validated = $request->validate([
             'customer_id' => ['required', 'exists:customers,id'],
+            'contact_id' => ['nullable', 'exists:contacts,id'],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:255'],
             'assigned_to_user_id' => ['nullable', 'exists:users,id'],
@@ -519,7 +523,7 @@ class JobcardController extends Controller
             abort(403, 'Unauthorized access to jobcard.');
         }
 
-        $jobcard->load(['customer', 'lineItems.product', 'lineItems.taxRate', 'company']);
+        $jobcard->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'company']);
         $templateId = $request->get('template_id');
 
         $pdfService = new \App\Services\PdfGenerationService();
@@ -546,10 +550,20 @@ class JobcardController extends Controller
         }
 
         $validated = $request->validate([
-            'email' => ['required', 'email'],
+            'email' => ['required', 'string'],
             'subject' => ['nullable', 'string', 'max:255'],
             'message' => ['nullable', 'string'],
         ]);
+
+        $emails = array_unique(array_filter(array_map('trim', explode(',', $validated['email']))));
+        foreach ($emails as $e) {
+            if (!filter_var($e, FILTER_VALIDATE_EMAIL)) {
+                return redirect()->back()->withErrors(['email' => "Invalid email address: {$e}"]);
+            }
+        }
+        if (empty($emails)) {
+            return redirect()->back()->withErrors(['email' => 'At least one valid email is required.']);
+        }
 
         $user = auth()->user();
         
@@ -577,10 +591,10 @@ class JobcardController extends Controller
                 'encryption' => $user->smtp_encryption ?? 'tls',
                 'from_email' => $user->smtp_from_email ?? $user->email,
                 'from_name' => $user->smtp_from_name ?? $user->name,
-                'to_email' => $validated['email'],
+                'to_email' => $emails,
             ]);
 
-            $jobcard->load(['customer', 'lineItems.product', 'lineItems.taxRate', 'company']);
+            $jobcard->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'company']);
 
             $subject = $validated['subject'] ?? "Jobcard #{$jobcard->job_number} - {$jobcard->title}";
             $fromEmail = $user->smtp_from_email ?? $user->email;
@@ -602,8 +616,8 @@ class JobcardController extends Controller
                 'jobcard' => $jobcard,
                 'company' => $currentCompany,
                 'customMessage' => $validated['message'] ?? '',
-            ], function ($message) use ($validated, $subject, $fromEmail, $fromName, $pdf, $filename, $currentCompany) {
-                $message->to($validated['email'])
+            ], function ($message) use ($emails, $subject, $fromEmail, $fromName, $pdf, $filename, $currentCompany) {
+                $message->to($emails)
                     ->subject($subject)
                     ->from($fromEmail, $fromName)
                     ->attachData($pdf->output(), $filename, [
@@ -616,13 +630,13 @@ class JobcardController extends Controller
             });
 
             \Log::info('Email sent successfully', [
-                'to' => $validated['email'],
+                'to' => $emails,
                 'subject' => $subject,
                 'from' => $fromEmail,
             ]);
 
             return redirect()->back()
-                ->with('success', 'Jobcard sent successfully to ' . $validated['email']);
+                ->with('success', 'Jobcard sent successfully to ' . implode(', ', $emails));
 
         } catch (\Exception $e) {
             \Log::error('Email sending failed', [
@@ -631,7 +645,7 @@ class JobcardController extends Controller
                 'smtp_host' => $user->smtp_host,
                 'smtp_port' => $user->smtp_port,
                 'smtp_username' => $user->smtp_username,
-                'to_email' => $validated['email'],
+                'to_email' => $emails,
             ]);
             
             return redirect()->back()

@@ -131,6 +131,17 @@
                                         <span v-else>{{ props.invoice.customer?.name || '-' }}</span>
                                     </p>
                                 </div>
+                                <div v-if="(props.invoice as any).contact">
+                                    <label class="block text-sm font-medium text-gray-700">Contact</label>
+                                    <p class="text-sm text-gray-900">
+                                        <Link
+                                            :href="`/contacts/${(props.invoice as any).contact.id}`"
+                                            class="text-blue-600 hover:text-blue-800 hover:underline"
+                                        >
+                                            {{ (props.invoice as any).contact.name }}
+                                        </Link>
+                                    </p>
+                                </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Email</label>
                                     <p class="text-sm text-gray-900">{{ props.invoice.email || props.invoice.customer?.email || '-' }}</p>
@@ -147,6 +158,15 @@
                         </div>
                     </div>
 
+                    <!-- Description -->
+                    <div v-if="props.invoice.description" class="rounded-lg bg-white border border-gray-200 shadow-sm">
+                        <div class="border-b border-gray-200 bg-gray-50 px-6 py-4">
+                            <h2 class="text-lg font-semibold text-gray-900">Description</h2>
+                        </div>
+                        <div class="p-6">
+                            <p class="text-sm text-gray-900 whitespace-pre-wrap">{{ props.invoice.description }}</p>
+                        </div>
+                    </div>
 
                     <!-- Line Items -->
                     <div class="rounded-lg bg-white border border-gray-200 shadow-sm">
@@ -283,10 +303,6 @@
                             <div v-if="props.invoice.salesperson">
                                 <label class="block text-sm font-medium text-gray-500">Salesperson</label>
                                 <p class="mt-1 text-sm text-gray-900">{{ props.invoice.salesperson.name }}</p>
-                            </div>
-                            <div v-if="props.invoice.description">
-                                <label class="block text-sm font-medium text-gray-500">Description</label>
-                                <p class="mt-1 text-sm text-gray-600">{{ props.invoice.description }}</p>
                             </div>
                         </div>
                     </div>
@@ -452,17 +468,11 @@
                     <h3 class="text-lg font-medium text-gray-900 mb-4">Email Invoice</h3>
                     <form @submit.prevent="sendEmail">
                         <div class="mb-4">
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Email Address *</label>
-                            <input
-                                v-model="emailForm.email"
-                                type="email"
-                                class="w-full rounded border px-3 py-2"
-                                :class="{ 'border-red-500': emailForm.errors.email }"
-                                required
+                            <EmailRecipientsInput
+                                v-model="emailRecipients"
+                                :customer-id="props.invoice.customer?.id ?? null"
+                                :error="emailRecipientError || emailForm.errors.email"
                             />
-                            <div v-if="emailForm.errors.email" class="text-red-500 text-sm mt-1">
-                                {{ emailForm.errors.email }}
-                            </div>
                         </div>
                         <div class="mb-4" v-if="props.pdfTemplates && props.pdfTemplates.length > 0">
                             <label class="block text-sm font-medium text-gray-700 mb-1">PDF Template</label>
@@ -680,8 +690,9 @@
 
 <script setup lang="ts">
 import { Head, Link, useForm, router, usePage } from '@inertiajs/vue3';
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import EmailRecipientsInput from '@/components/EmailRecipientsInput.vue';
 import invoices from '@/routes/invoices';
 import quotes from '@/routes/quotes';
 import jobcards from '@/routes/jobcards';
@@ -782,6 +793,23 @@ interface Props {
 const props = defineProps<Props>();
 
 const showEmailModal = ref(false);
+
+function parseInitialEmails(str: string | null | undefined): string[] {
+    if (!str) return [];
+    return str.split(',').map(s => s.trim()).filter(Boolean);
+}
+
+const initialEmailStr = (props.invoice as any).recipient_email || props.invoice.email || props.invoice.customer?.email || '';
+const emailRecipients = ref<string[]>(parseInitialEmails(initialEmailStr));
+const emailRecipientError = ref('');
+
+watch(showEmailModal, (open) => {
+    if (open) {
+        const str = (props.invoice as any).recipient_email || props.invoice.email || props.invoice.customer?.email || '';
+        emailRecipients.value = parseInitialEmails(str);
+        emailRecipientError.value = '';
+    }
+});
 const showResultDialog = ref(false);
 const showPaymentModal = ref(false);
 const showTemplateModal = ref(false);
@@ -801,7 +829,7 @@ const canEditInvoice = computed(() => {
 });
 
 const emailForm = useForm({
-    email: props.invoice.email || props.invoice.customer?.email || '',
+    email: initialEmailStr,
     customMessage: '',
     template_id: null as number | null,
 });
@@ -859,6 +887,12 @@ const downloadPDF = () => {
 };
 
 const sendEmail = () => {
+    emailRecipientError.value = '';
+    if (emailRecipients.value.length === 0) {
+        emailRecipientError.value = 'Please add at least one recipient';
+        return;
+    }
+    emailForm.email = emailRecipients.value.join(', ');
     emailForm.post(invoices.email(props.invoice.id).url, {
         onSuccess: (page) => {
             showEmailModal.value = false;

@@ -349,6 +349,9 @@
                 <h4>To:</h4>
                 <p><strong>{{ $quote->customer->account_code ?? 'N/A' }}</strong></p>
                 <p><strong>{{ $quote->customer->name ?? 'CUSTOMER NAME' }}</strong></p>
+                @if($quote->contact)
+                    <p><em>Attn: {{ $quote->contact->name }}</em></p>
+                @endif
                 @if($quote->customer->address)
                     <p>{{ $quote->customer->address }}</p>
                 @endif
@@ -370,6 +373,13 @@
             </div>
         </div>
     </div>
+    
+    @if($quote->description)
+    <div style="margin-bottom: 12px; font-size: 11px;">
+        <h4 style="margin: 0 0 6px 0; font-size: 12px; font-weight: bold; color: #000;">Description</h4>
+        <p style="margin: 0; line-height: 1.4;">{{ $quote->description }}</p>
+    </div>
+    @endif
     
     <div class="separator-line"></div>
     
@@ -456,10 +466,6 @@
     </div>
     
     <div class="terms-section">
-        @if($quote->description)
-            <h4>Description</h4>
-            <p>{{ $quote->description }}</p>
-        @endif
         @if($quote->notes)
             <h4>Notes</h4>
             <p>{{ $quote->notes }}</p>

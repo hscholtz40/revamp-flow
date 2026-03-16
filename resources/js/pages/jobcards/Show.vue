@@ -142,6 +142,17 @@
                                         <span v-else>{{ props.jobcard.customer?.name || '-' }}</span>
                                     </p>
                                 </div>
+                                <div v-if="(props.jobcard as any).contact">
+                                    <label class="block text-sm font-medium text-gray-700">Contact</label>
+                                    <p class="text-sm text-gray-900">
+                                        <Link
+                                            :href="`/contacts/${(props.jobcard as any).contact.id}`"
+                                            class="text-blue-600 hover:text-blue-800 hover:underline"
+                                        >
+                                            {{ (props.jobcard as any).contact.name }}
+                                        </Link>
+                                    </p>
+                                </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Email</label>
                                     <p class="text-sm text-gray-900">{{ props.jobcard.email || props.jobcard.customer.email || '-' }}</p>
@@ -386,18 +397,11 @@
                     <h3 class="text-lg font-medium text-gray-900 mb-4">Email Jobcard</h3>
                     <form @submit.prevent="sendEmail">
                         <div class="mb-4">
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Email Address *</label>
-                            <input
-                                v-model="emailForm.email"
-                                type="email"
-                                required
-                                class="w-full rounded border px-3 py-2"
-                                :class="{ 'border-red-500': emailForm.errors.email }"
-                                placeholder="recipient@example.com"
+                            <EmailRecipientsInput
+                                v-model="emailRecipients"
+                                :customer-id="props.jobcard.customer?.id ?? null"
+                                :error="emailRecipientError || emailForm.errors.email"
                             />
-                            <div v-if="emailForm.errors.email" class="text-red-500 text-sm mt-1">
-                                {{ emailForm.errors.email }}
-                            </div>
                         </div>
                         <div v-if="props.pdfTemplates && props.pdfTemplates.length > 0" class="mb-4">
                             <label class="block text-sm font-medium text-gray-700 mb-1">PDF Template</label>
@@ -525,8 +529,9 @@
 
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
+import EmailRecipientsInput from '@/components/EmailRecipientsInput.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import jobcards from '@/routes/jobcards';
 import invoices from '@/routes/invoices';
 import products from '@/routes/products';
@@ -736,8 +741,25 @@ const emailResult = ref({
     message: ''
 });
 
+function parseInitialEmails(str: string | null | undefined): string[] {
+    if (!str) return [];
+    return str.split(',').map(s => s.trim()).filter(Boolean);
+}
+
+const initialEmailStr = (props.jobcard as any).recipient_email || props.jobcard.email || props.jobcard.customer?.email || '';
+const emailRecipients = ref<string[]>(parseInitialEmails(initialEmailStr));
+const emailRecipientError = ref('');
+
+watch(showEmailModal, (open) => {
+    if (open) {
+        const str = (props.jobcard as any).recipient_email || props.jobcard.email || props.jobcard.customer?.email || '';
+        emailRecipients.value = parseInitialEmails(str);
+        emailRecipientError.value = '';
+    }
+});
+
 const emailForm = useForm({
-    email: props.jobcard.email || props.jobcard.customer?.email || '',
+    email: initialEmailStr,
     message: '',
     template_id: null as number | null,
 });
@@ -759,6 +781,12 @@ const convertToInvoice = () => {
 };
 
 const sendEmail = () => {
+    emailRecipientError.value = '';
+    if (emailRecipients.value.length === 0) {
+        emailRecipientError.value = 'Please add at least one recipient';
+        return;
+    }
+    emailForm.email = emailRecipients.value.join(', ');
     // Set template_id if default template exists and no template is selected
     if (!emailForm.template_id && props.defaultTemplateId) {
         emailForm.template_id = props.defaultTemplateId;

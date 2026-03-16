@@ -179,6 +179,17 @@
                             </div>
                         </div>
 
+                        <div v-if="form.customer_id">
+                            <ContactSelector
+                                v-model="form.contact_id"
+                                :customer-id="form.customer_id ? parseInt(form.customer_id) : null"
+                                :initial-contact="(props.jobcard as any).contact ?? null"
+                                label="Contact"
+                                :error="form.errors.contact_id"
+                                @select="onContactSelect"
+                            />
+                        </div>
+
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
                             <input
@@ -618,6 +629,7 @@
 
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
+import ContactSelector from '@/components/ContactSelector.vue';
 import { matchesProductSearch } from '@/composables/productSearch';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, watch, ref } from 'vue';
@@ -735,6 +747,7 @@ const assignmentType = ref<'none' | 'user' | 'team'>(
 
 const form = useForm({
     customer_id: props.jobcard.customer_id,
+    contact_id: (props.jobcard as any).contact_id ?? null,
     email: props.jobcard.email || '',
     phone: props.jobcard.phone || '',
     assigned_to_user_id: props.jobcard.assigned_to_user_id,
@@ -892,9 +905,17 @@ const handleCustomerBlur = () => {
     }, 200);
 };
 
+const onContactSelect = (contact: { email?: string | null; phone?: string | null } | null) => {
+    if (contact) {
+        form.email = contact.email || '';
+        form.phone = contact.phone || '';
+    }
+};
+
 const selectCustomer = (customer: Customer) => {
     selectedCustomer.value = customer;
     form.customer_id = customer.id;
+    form.contact_id = null;
     form.email = customer.email || '';
     form.phone = customer.phone || '';
     customerSearchQuery.value = customer.name;
@@ -907,6 +928,7 @@ const selectCustomer = (customer: Customer) => {
 const clearCustomer = () => {
     selectedCustomer.value = null;
     form.customer_id = 0;
+    form.contact_id = null;
     form.email = '';
     form.phone = '';
     customerSearchQuery.value = '';
@@ -1043,6 +1065,7 @@ watch(() => lineItemDiscountsTotal.value, (newTotal) => {
 });
 
 const submit = () => {
-    form.put(jobcards.update(props.jobcard.id).url);
+    form.transform((data) => ({ ...data, contact_id: form.contact_id ?? null }))
+        .put(jobcards.update(props.jobcard.id).url);
 };
 </script>

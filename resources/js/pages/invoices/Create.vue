@@ -188,6 +188,16 @@
                             </div>
                         </div>
 
+                        <div v-if="form.customer_id">
+                            <ContactSelector
+                                v-model="form.contact_id"
+                                :customer-id="form.customer_id ? parseInt(form.customer_id) : null"
+                                label="Contact"
+                                :error="form.errors.contact_id"
+                                @select="onContactSelect"
+                            />
+                        </div>
+
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
                             <input
@@ -558,6 +568,7 @@
 </template>
 
 <script setup lang="ts">
+import ContactSelector from '@/components/ContactSelector.vue';
 import { matchesProductSearch } from '@/composables/productSearch';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, watch, ref } from 'vue';
@@ -650,6 +661,7 @@ const form = useForm({
     title: '',
     description: '',
     customer_id: props.selectedCustomer?.id || '',
+    contact_id: null as number | null,
     email: props.selectedCustomer?.email || '',
     phone: props.selectedCustomer?.phone || '',
     order_number: '',
@@ -769,9 +781,17 @@ const handleCustomerBlur = () => {
     }, 200);
 };
 
+const onContactSelect = (contact: { email?: string | null; phone?: string | null } | null) => {
+    if (contact) {
+        form.email = contact.email || '';
+        form.phone = contact.phone || '';
+    }
+};
+
 const selectCustomer = (customer: Customer) => {
     selectedCustomer.value = customer;
     form.customer_id = customer.id.toString();
+    form.contact_id = null;
     form.email = customer.email || '';
     form.phone = customer.phone || '';
     customerSearchQuery.value = customer.name;
@@ -785,6 +805,7 @@ const selectCustomer = (customer: Customer) => {
 const clearCustomer = () => {
     selectedCustomer.value = null;
     form.customer_id = '';
+    form.contact_id = null;
     form.email = '';
     form.phone = '';
     customerSearchQuery.value = '';
@@ -1035,6 +1056,7 @@ watch(() => lineItemDiscountsTotal.value, (newTotal) => {
 });
 
 const submit = () => {
-    form.post(invoices.store().url);
+    form.transform((data) => ({ ...data, contact_id: form.contact_id ?? null }))
+        .post(invoices.store().url);
 };
 </script>

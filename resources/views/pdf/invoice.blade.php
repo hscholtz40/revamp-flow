@@ -383,6 +383,9 @@
                 <h4>To:</h4>
                 <p><strong>{{ $invoice->customer->account_code ?? 'N/A' }}</strong></p>
                 <p><strong>{{ $invoice->customer->name ?? 'CUSTOMER NAME' }}</strong></p>
+                @if($invoice->contact)
+                    <p><em>Attn: {{ $invoice->contact->name }}</em></p>
+                @endif
                 @if($invoice->customer->address)
                     <p>{{ $invoice->customer->address }}</p>
                 @endif
@@ -414,6 +417,13 @@
             </div>
         </div>
     </div>
+    
+    @if($invoice->description)
+    <div style="margin-bottom: 20px; font-size: 11px;">
+        <h4 style="margin: 0 0 6px 0; font-size: 12px; font-weight: bold; color: #000;">Description</h4>
+        <p style="margin: 0; line-height: 1.4;">{{ $invoice->description }}</p>
+    </div>
+    @endif
     
     <div class="separator-line"></div>
     
@@ -515,12 +525,8 @@
         </div>
     </div>
 
-    @if($invoice->description || $invoice->notes || $invoice->terms)
+    @if($invoice->notes || $invoice->terms)
     <div class="terms-section">
-        @if($invoice->description)
-            <h4>Description</h4>
-            <p>{{ $invoice->description }}</p>
-        @endif
         @if($invoice->notes)
             <h4>Notes</h4>
             <p>{{ $invoice->notes }}</p>
