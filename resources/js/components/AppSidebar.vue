@@ -217,15 +217,23 @@ const filteredNavItems = computed(() => {
 </script>
 
 <template>
-    <Sidebar collapsible="icon" variant="inset">
+    <Sidebar
+        collapsible="icon"
+        variant="inset"
+        class="bg-sidebar/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-sidebar/90"
+    >
         <SidebarHeader>
             <SidebarMenu>
                 <SidebarMenuItem>
-                    <SidebarMenuButton size="lg" as-child class="!h-auto py-3">
+                    <SidebarMenuButton
+                        size="lg"
+                        as-child
+                        class="!h-auto rounded-2xl border border-sidebar-border/70 bg-sidebar-accent/30 p-3 shadow-sm transition-all duration-200 hover:border-sidebar-border hover:bg-sidebar-accent/60 hover:shadow-md"
+                    >
                         <Link :href="dashboard().url" class="block w-full">
                             <!-- Company Logo or Fallback -->
                             <div class="flex flex-col gap-2 w-full">
-                                <div class="flex w-full items-center justify-center rounded-lg bg-primary/10 p-2">
+                                <div class="flex w-full items-center justify-center rounded-xl bg-gradient-to-br from-primary/10 via-primary/5 to-secondary/10 p-2 ring-1 ring-primary/10">
                                     <img
                                         v-if="currentCompany?.logo_path"
                                         :src="`/storage/${currentCompany.logo_path}`"
@@ -240,10 +248,10 @@ const filteredNavItems = computed(() => {
                                     />
                                 </div>
                                 <div class="flex flex-col text-center">
-                                    <span class="text-sm font-semibold text-gray-900">
+                                    <span class="text-sm font-semibold tracking-tight text-sidebar-foreground">
                                         {{ currentCompany?.name || 'Company' }}
                                     </span>
-                                    <span class="text-xs text-gray-500">Dashboard</span>
+                                    <span class="text-[11px] uppercase tracking-[0.08em] text-sidebar-foreground/55">Dashboard</span>
                                 </div>
                             </div>
                         </Link>
@@ -252,11 +260,11 @@ const filteredNavItems = computed(() => {
             </SidebarMenu>
         </SidebarHeader>
 
-        <SidebarContent>
+        <SidebarContent class="px-2 pb-1">
             <NavMain :items="filteredNavItems" />
         </SidebarContent>
 
-        <SidebarFooter>
+        <SidebarFooter class="border-t border-sidebar-border/60 pt-3">
             <NavFooter v-if="userType !== 'limited'" :items="footerNavItems" />
             <!-- Default Logo above user menu when company logo is uploaded -->
             <div v-if="currentCompany?.logo_path" class="mb-3 px-2">

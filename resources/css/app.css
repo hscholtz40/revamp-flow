@@ -146,7 +146,7 @@
     --chart-4: hsl(178 50% 55%);
     --chart-5: hsl(215 55% 55%);
     --radius: 0.5rem;
-    --sidebar-background: hsl(0 0% 98%);
+    --sidebar-background: hsl(0 0% 95%);
     --sidebar-foreground: hsl(240 5.3% 26.1%);
     /* Sidebar primary: Dark Blue */
     --sidebar-primary: hsl(215 59% 41%);
@@ -155,7 +155,7 @@
     --sidebar-accent-foreground: hsl(215 59% 41%);
     --sidebar-border: hsl(0 0% 91%);
     --sidebar-ring: hsl(215 59% 41%);
-    --sidebar: hsl(0 0% 98%);
+    --sidebar: hsl(0 0% 95%);
 }
 
 .dark {
