@@ -342,6 +342,9 @@
                 @if($company->phone)
                     <p>Telephone {{ $company->phone }}</p>
                 @endif
+                @if($company->email)
+                    <p>Email {{ $company->email }}</p>
+                @endif
                 @if($company->fax)
                     <p>Fax {{ $company->fax }}</p>
                 @endif

@@ -280,6 +280,9 @@
                 @if($company->phone)
                     <p>Telephone {{ $company->phone }}</p>
                 @endif
+                @if($company->email)
+                    <p>Email {{ $company->email }}</p>
+                @endif
             </div>
         </div>
         
