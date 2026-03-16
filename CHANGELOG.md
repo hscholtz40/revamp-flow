@@ -29,6 +29,7 @@
 - Added the customer VAT number to the customer detail view so VAT/tax registration information is visible on the show page.
 - Fixed POS invoice creation to consistently persist the currently logged-in user as `salesperson_id`.
 - Fixed invoice PDFs to render the customer's VAT number in the VAT box, and updated the invoice default template editor preset to include `{{invoice.customer.vat_number}}`.
+- Fixed quote/jobcard-to-invoice conversion to persist the currently logged-in user as `salesperson_id` on the created invoice.
 
 ## 2026-03-13 - version 1.7.5
 

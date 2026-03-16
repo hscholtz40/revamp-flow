@@ -1214,6 +1214,7 @@ class InvoicesController extends Controller
     public function convertFromQuote(Quote $quote): RedirectResponse
     {
         $currentCompany = auth()->user()->getCurrentCompany();
+        $salespersonId = auth()->id();
         
         // Generate invoice number
         $invoiceNumber = Invoice::create([
@@ -1224,6 +1225,7 @@ class InvoicesController extends Controller
             'customer_id' => $quote->customer_id,
             'email' => $quote->email,
             'phone' => $quote->phone,
+            'salesperson_id' => $salespersonId,
             'company_id' => $currentCompany->id,
             'invoice_date' => now()->toDateString(),
             'due_date' => $this->resolveInvoiceDueDateFromCustomerTerms(
@@ -1236,6 +1238,10 @@ class InvoicesController extends Controller
             'source_type' => 'quote',
             'source_id' => $quote->id,
         ]);
+
+        if (!$invoiceNumber->salesperson_id && $salespersonId) {
+            $invoiceNumber->update(['salesperson_id' => $salespersonId]);
+        }
 
         // Copy line items
         foreach ($quote->lineItems as $quoteLineItem) {
@@ -1269,6 +1275,7 @@ class InvoicesController extends Controller
     public function convertFromJobcard(Jobcard $jobcard): RedirectResponse
     {
         $currentCompany = auth()->user()->getCurrentCompany();
+        $salespersonId = auth()->id();
         
         // Generate invoice number
         $invoiceNumber = Invoice::create([
@@ -1279,6 +1286,7 @@ class InvoicesController extends Controller
             'customer_id' => $jobcard->customer_id,
             'email' => $jobcard->email,
             'phone' => $jobcard->phone,
+            'salesperson_id' => $salespersonId,
             'company_id' => $currentCompany->id,
             'invoice_date' => now()->toDateString(),
             'due_date' => $this->resolveInvoiceDueDateFromCustomerTerms(
@@ -1291,6 +1299,10 @@ class InvoicesController extends Controller
             'source_type' => 'jobcard',
             'source_id' => $jobcard->id,
         ]);
+
+        if (!$invoiceNumber->salesperson_id && $salespersonId) {
+            $invoiceNumber->update(['salesperson_id' => $salespersonId]);
+        }
 
         // Copy line items
         foreach ($jobcard->lineItems as $jobcardLineItem) {
