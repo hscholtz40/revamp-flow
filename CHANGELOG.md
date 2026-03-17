@@ -46,6 +46,8 @@
 - Restored automatic nearest-`0.10` rounding behavior on jobcard Create/Edit by auto-maintaining hidden `Rounding Adjustment` lines (assigned to default rounding account with sales-account fallback), and included rounding in jobcard totals calculations.
 - Fixed invoice PDF print/download/email error (`Unknown column 'rounding_adjustment_total' in 'SET'`) by passing rounding totals via a non-persisted relation instead of mutating invoice attributes.
 - Updated quote→invoice and jobcard→invoice conversions to enforce nearest-`0.10` rounding on the created invoice by auto-creating/updating a `Rounding Adjustment` line when needed.
+- Aligned invoice save/update totals with rounding behavior by re-applying server-side `Rounding Adjustment` normalization before `calculateTotals()`, preventing post-save 1-cent drift from edit-view totals.
+- Aligned invoice tax rounding with Xero by switching invoice line tax calculation from always-round-up (`ceil`) to standard 2-decimal rounding, including quote/jobcard-to-invoice conversion tax recalculation, reducing 1-cent VAT mismatches during sync.
 
 ## 2026-03-16 - version 1.7.6
 

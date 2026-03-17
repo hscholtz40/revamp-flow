@@ -303,7 +303,7 @@ class InvoicesController extends Controller
                 $total = $subtotal - $discountAmount;
                 $lineTaxAmount = 0;
                 if ($defaultTaxRateId) {
-                    $lineTaxAmount = ceil(($total * ($defaultTaxRateRate / 100)) * 100) / 100;
+                    $lineTaxAmount = round($total * ($defaultTaxRateRate / 100), 2);
                 }
 
                 InvoiceLineItem::create([
@@ -494,7 +494,7 @@ class InvoicesController extends Controller
             if ($taxRateId) {
                 $taxRateModel = TaxRate::find($taxRateId);
                 if ($taxRateModel) {
-                    $lineTaxAmount = ceil(($total * ($taxRateModel->rate / 100)) * 100) / 100;
+                    $lineTaxAmount = round($total * ($taxRateModel->rate / 100), 2);
                 }
             }
 
@@ -561,6 +561,8 @@ class InvoicesController extends Controller
                 }
             }
         }
+
+        $this->ensureConvertedInvoiceRoundingLine($invoice, $defaultAccountId);
 
         // Calculate totals
         $invoice->calculateTotals();
@@ -892,7 +894,7 @@ class InvoicesController extends Controller
             if ($taxRateId) {
                 $taxRateModel = TaxRate::find($taxRateId);
                 if ($taxRateModel) {
-                    $lineTaxAmount = ceil(($total * ($taxRateModel->rate / 100)) * 100) / 100;
+                    $lineTaxAmount = round($total * ($taxRateModel->rate / 100), 2);
                 }
             }
 
@@ -959,6 +961,8 @@ class InvoicesController extends Controller
                 }
             }
         }
+
+        $this->ensureConvertedInvoiceRoundingLine($invoice, $defaultAccountId);
 
         // Calculate totals
         $invoice->calculateTotals();
@@ -1335,7 +1339,7 @@ class InvoicesController extends Controller
                 'unit_price' => $quoteLineItem->unit_price,
                 'total' => $quoteLineItem->total,
                 'tax_rate_id' => $quoteLineItem->tax_rate_id,
-                'tax_amount' => $quoteLineItem->tax_amount,
+                'tax_amount' => $this->calculateInvoiceLineTaxAmount((float) $quoteLineItem->total, $quoteLineItem->tax_rate_id),
                 'account_id' => $quoteLineItem->account_id ?? $defaultAccountId,
                 'sort_order' => $quoteLineItem->sort_order,
             ]);
@@ -1400,7 +1404,7 @@ class InvoicesController extends Controller
                 'unit_price' => $jobcardLineItem->unit_price,
                 'total' => $jobcardLineItem->total,
                 'tax_rate_id' => $jobcardLineItem->tax_rate_id,
-                'tax_amount' => $jobcardLineItem->tax_amount,
+                'tax_amount' => $this->calculateInvoiceLineTaxAmount((float) $jobcardLineItem->total, $jobcardLineItem->tax_rate_id),
                 'account_id' => $jobcardLineItem->account_id ?? $defaultAccountId,
                 'sort_order' => $jobcardLineItem->sort_order,
             ]);
@@ -1503,6 +1507,7 @@ class InvoicesController extends Controller
         $adjustment = round($roundedTargetTotal - $baseTotal, 2);
 
         $roundingAccountId = ChartOfAccount::getDefaultRoundingForCompany($invoice->company_id)?->id ?? $fallbackAccountId;
+        $defaultLineGroupId = $invoice->lineGroups()->orderBy('sort_order')->value('id');
         $existingRoundingLine = $invoice->lineItems->first(function ($item) use ($roundingDescription) {
             return strtolower(trim((string) ($item->description ?? ''))) === strtolower($roundingDescription);
         });
@@ -1525,6 +1530,7 @@ class InvoicesController extends Controller
                 'tax_rate_id' => null,
                 'tax_amount' => 0,
                 'account_id' => $roundingAccountId,
+                'line_group_id' => $existingRoundingLine->line_group_id ?? $defaultLineGroupId,
             ]);
             return;
         }
@@ -1542,8 +1548,23 @@ class InvoicesController extends Controller
             'tax_rate_id' => null,
             'tax_amount' => 0,
             'account_id' => $roundingAccountId,
+            'line_group_id' => $defaultLineGroupId,
             'sort_order' => $nextSortOrder,
         ]);
+    }
+
+    private function calculateInvoiceLineTaxAmount(float $lineTotal, $taxRateId): float
+    {
+        if (!$taxRateId) {
+            return 0.0;
+        }
+
+        $rate = (float) (TaxRate::find($taxRateId)?->rate ?? 0);
+        if ($rate <= 0) {
+            return 0.0;
+        }
+
+        return round($lineTotal * ($rate / 100), 2);
     }
 
     private function resolveInvoiceFallbackAccount(int $companyId): ?ChartOfAccount
