@@ -30,6 +30,9 @@
 - Fixed Vue template parse errors (`Element is missing end tag`) in credit-note edit and purchase-order create pages by restoring missing closing wrapper divs in grouped line-item sections.
 - Extended invoice reports with payment-related columns from linked records (`Payments Count`, `Last Payment Date`, `Total Paid`, and `Balance Due`) so report builders can include payment context without leaving report views.
 - Added an invoice report column for full payment breakdowns that lists each linked payment method and amount in one cell (e.g. `Cash: R100.00, Card: R50.00`) for clearer per-invoice payment visibility.
+- Optimized report performance to reduce timeout risk by removing unnecessary eager-loaded relations and replacing grouped report per-group queries with a single record fetch plus in-memory bucketing.
+- Standardized report date-range filtering to use each document's primary date field (including `invoice_date` for invoices) instead of relying on record creation timestamps.
+- Fixed report sorting/grouping SQL errors for virtual columns (e.g. `formatted_date`) by mapping them to real database fields before query `ORDER BY`/`GROUP BY`.
 
 ## 2026-03-16 - version 1.7.6
 

@@ -472,47 +472,12 @@ class ReportController extends Controller
         $sortBy = $config['sort_by'] ?? null;
         $sortDirection = $config['sort_direction'] ?? 'asc';
 
-        $query = $this->getBaseQuery($entityType, $filters, $groupBy, $sortBy);
+        $query = $this->getBaseQuery($entityType, $filters, $groupBy, $sortBy, $groupBy ? [] : $columns);
 
         // Apply grouping if specified
         if ($groupBy) {
             // Determine the actual column to group by
-            $groupByColumn = null;
-            
-            // Handle relationship columns (e.g., 'salesperson.name', 'customer.name')
-            if (str_contains($groupBy, '.')) {
-                [$relation, $field] = explode('.', $groupBy, 2);
-                
-                // Use the joined table column name
-                if ($entityType === 'invoice') {
-                    if ($relation === 'salesperson') {
-                        $groupByColumn = 'salesperson_users.' . $field;
-                    } elseif ($relation === 'customer') {
-                        $groupByColumn = 'customers.' . $field;
-                    }
-                } elseif ($entityType === 'quote') {
-                    if ($relation === 'customer') {
-                        $groupByColumn = 'customers.' . $field;
-                    }
-                } elseif ($entityType === 'jobcard') {
-                    if ($relation === 'customer') {
-                        $groupByColumn = 'customers.' . $field;
-                    }
-                }
-            } else {
-                // Direct column grouping - use table prefix to avoid ambiguity
-                $tableName = match($entityType) {
-                    'invoice' => 'invoices',
-                    'quote' => 'quotes',
-                    'jobcard' => 'jobcards',
-                    default => null,
-                };
-                if ($tableName) {
-                    $groupByColumn = $tableName . '.' . $groupBy;
-                } else {
-                    $groupByColumn = $groupBy;
-                }
-            }
+            $groupByColumn = $this->getGroupByColumn($entityType, $groupBy);
             
             if ($groupByColumn) {
                 // When grouping, select only the grouping column and aggregated values
@@ -633,6 +598,7 @@ class ReportController extends Controller
                     }
                 } else {
                     // Direct column sorting - use table prefix
+                    $sortByColumn = $this->mapReportColumnToDatabaseColumn($entityType, $sortBy);
                     $tableName = match($entityType) {
                         'invoice' => 'invoices',
                         'quote' => 'quotes',
@@ -640,9 +606,9 @@ class ReportController extends Controller
                         default => null,
                     };
                     if ($tableName) {
-                        $query->orderBy($tableName . '.' . $sortBy, $sortDirection);
+                        $query->orderBy($tableName . '.' . $sortByColumn, $sortDirection);
                     } else {
-                        $query->orderBy($sortBy, $sortDirection);
+                        $query->orderBy($sortByColumn, $sortDirection);
                     }
                 }
             } else {
@@ -664,6 +630,24 @@ class ReportController extends Controller
         if ($groupBy) {
             // Get grouped summaries
             $groupedData = $query->get();
+
+            // Fetch all matching records once, then bucket in memory by group key.
+            // This avoids one query per group and significantly reduces timeouts.
+            $tableName = $this->getTableName($entityType);
+            $columnsForGroupedRecords = $columns;
+            if (!in_array($groupBy, $columnsForGroupedRecords, true)) {
+                $columnsForGroupedRecords[] = $groupBy;
+            }
+            $allGroupedRecords = $this->getBaseQuery($entityType, $filters, null, null, $columnsForGroupedRecords)
+                ->select($tableName . '.*')
+                ->get();
+
+            $recordsByGroupKey = [];
+            foreach ($allGroupedRecords as $record) {
+                $recordGroupValue = $this->getColumnValue($record, $groupBy, $entityType);
+                $recordGroupKey = $this->normalizeGroupKey($recordGroupValue);
+                $recordsByGroupKey[$recordGroupKey][] = $record;
+            }
             
             // Get individual records for each group
             $groupedRecords = [];
@@ -677,54 +661,8 @@ class ReportController extends Controller
             
             foreach ($groupedData as $group) {
                 $groupValue = $group->group_value;
-                
-                // Build query for individual records in this group
-                // Pass groupBy to ensure proper joins are set up, but we'll filter by the group value
-                $individualQuery = $this->getBaseQuery($entityType, $filters, $groupBy, null);
-                
-                // Apply group filter
-                $groupByColumn = $this->getGroupByColumn($entityType, $groupBy);
-                if ($groupByColumn) {
-                    if (str_contains($groupBy, '.')) {
-                        [$relation, $field] = explode('.', $groupBy, 2);
-                        if ($relation === 'customer') {
-                            // Check if join exists, add if not
-                            $joins = $individualQuery->getQuery()->joins ?? [];
-                            $hasJoin = collect($joins)->contains(fn($join) => $join->table === 'customers');
-                            if (!$hasJoin) {
-                                $individualQuery->leftJoin('customers', $this->getTableName($entityType) . '.customer_id', '=', 'customers.id');
-                            }
-                            $individualQuery->where('customers.' . $field, $groupValue);
-                        } elseif ($relation === 'salesperson' && $entityType === 'invoice') {
-                            // Check if join exists, add if not
-                            $joins = $individualQuery->getQuery()->joins ?? [];
-                            $hasJoin = collect($joins)->contains(fn($join) => str_contains($join->table ?? '', 'salesperson_users'));
-                            if (!$hasJoin) {
-                                $individualQuery->leftJoin('users as salesperson_users', 'invoices.salesperson_id', '=', 'salesperson_users.id');
-                            }
-                            $individualQuery->where('salesperson_users.' . $field, $groupValue);
-                        }
-                    } else {
-                        $tableName = $this->getTableName($entityType);
-                        $individualQuery->where($tableName . '.' . $groupBy, $groupValue);
-                    }
-                }
-                
-                // Ensure relationships are loaded for individual records
-                $tableName = $this->getTableName($entityType);
-                if ($entityType === 'invoice') {
-                    $individualQuery->with(['customer', 'salesperson', 'lineItems']);
-                } elseif ($entityType === 'quote') {
-                    $individualQuery->with(['customer', 'lineItems']);
-                } elseif ($entityType === 'jobcard') {
-                    $individualQuery->with(['customer', 'lineItems']);
-                }
-                
-                // Select all columns for individual records
-                $individualQuery->select($tableName . '.*');
-                
-                // Get individual records for this group
-                $individualRecords = $individualQuery->get();
+                $groupKey = $this->normalizeGroupKey($groupValue);
+                $individualRecords = collect($recordsByGroupKey[$groupKey] ?? []);
                 
                 // Transform individual records
                 $transformedRecords = $individualRecords->map(function ($item) use ($columns, $entityType) {
@@ -781,7 +719,7 @@ class ReportController extends Controller
             $grandTotals = [];
             if ($config['show_totals'] ?? false) {
                 // Get all data for totals calculation (not paginated)
-                $allDataQuery = $this->getBaseQuery($entityType, $filters, null, null);
+                $allDataQuery = $this->getBaseQuery($entityType, $filters, null, null, []);
                 $allData = $allDataQuery->get();
                 $totals = $this->calculateTotals($allData, $columns, $entityType, null);
                 $grandTotals = $totals;
@@ -834,7 +772,8 @@ class ReportController extends Controller
                 }
             }
         } else {
-            return $this->getTableName($entityType) . '.' . $groupBy;
+            $groupByColumn = $this->mapReportColumnToDatabaseColumn($entityType, $groupBy);
+            return $this->getTableName($entityType) . '.' . $groupByColumn;
         }
         
         return null;
@@ -843,7 +782,7 @@ class ReportController extends Controller
     /**
      * Get base query based on entity type and filters
      */
-    private function getBaseQuery(string $entityType, array $filters, ?string $groupBy = null, ?string $sortBy = null)
+    private function getBaseQuery(string $entityType, array $filters, ?string $groupBy = null, ?string $sortBy = null, array $columns = [])
     {
         $currentCompany = auth()->user()->getCurrentCompany();
 
@@ -860,6 +799,34 @@ class ReportController extends Controller
                 if ($relation === 'customer') {
                     $needsCustomerJoin = true;
                 }
+            }
+        }
+
+        // Determine relationships actually needed for selected columns.
+        $needsCustomerRelation = false;
+        $needsSalespersonRelation = false;
+        $needsPaymentsRelation = false;
+        $needsCreditNotesRelation = false;
+
+        foreach ($columns as $column) {
+            if (!is_string($column) || $column === '') {
+                continue;
+            }
+
+            if (str_starts_with($column, 'customer.')) {
+                $needsCustomerRelation = true;
+            }
+
+            if (str_starts_with($column, 'salesperson.')) {
+                $needsSalespersonRelation = true;
+            }
+
+            if (in_array($column, ['payment_count', 'last_payment_date', 'payments_summary', 'total_paid', 'remaining_balance'], true)) {
+                $needsPaymentsRelation = true;
+            }
+
+            if (in_array($column, ['total_credited', 'remaining_balance'], true)) {
+                $needsCreditNotesRelation = true;
             }
         }
 
@@ -880,7 +847,23 @@ class ReportController extends Controller
                 
                 // Eager load relationships for data transformation (only if not grouping)
                 if ($shouldEagerLoad) {
-                    $query->with(['customer', 'salesperson', 'lineItems', 'payments', 'creditNotes']);
+                    $relations = [];
+                    if ($needsCustomerRelation) {
+                        $relations[] = 'customer';
+                    }
+                    if ($needsSalespersonRelation) {
+                        $relations[] = 'salesperson';
+                    }
+                    if ($needsPaymentsRelation) {
+                        $relations[] = 'payments';
+                    }
+                    if ($needsCreditNotesRelation) {
+                        $relations[] = 'creditNotes';
+                    }
+
+                    if (!empty($relations)) {
+                        $query->with($relations);
+                    }
                 }
                 break;
             case 'quote':
@@ -892,7 +875,9 @@ class ReportController extends Controller
                 }
                 
                 if ($shouldEagerLoad) {
-                    $query->with(['customer', 'lineItems']);
+                    if ($needsCustomerRelation) {
+                        $query->with(['customer']);
+                    }
                 }
                 break;
             case 'jobcard':
@@ -904,7 +889,9 @@ class ReportController extends Controller
                 }
                 
                 if ($shouldEagerLoad) {
-                    $query->with(['customer', 'lineItems']);
+                    if ($needsCustomerRelation) {
+                        $query->with(['customer']);
+                    }
                 }
                 break;
             default:
@@ -913,12 +900,12 @@ class ReportController extends Controller
 
         // Apply filters
         if (isset($filters['date_from'])) {
-            $dateField = $entityType === 'invoice' ? 'invoice_date' : ($entityType === 'quote' ? 'created_at' : 'start_date');
+            $dateField = $this->getDocumentDateField($entityType);
             $query->whereDate($dateField, '>=', $filters['date_from']);
         }
 
         if (isset($filters['date_to'])) {
-            $dateField = $entityType === 'invoice' ? 'invoice_date' : ($entityType === 'quote' ? 'created_at' : 'start_date');
+            $dateField = $this->getDocumentDateField($entityType);
             $query->whereDate($dateField, '<=', $filters['date_to']);
         }
 
@@ -1034,7 +1021,7 @@ class ReportController extends Controller
         }
 
         if ($column === 'formatted_date') {
-            $dateField = $entityType === 'invoice' ? 'invoice_date' : ($entityType === 'quote' ? 'created_at' : 'start_date');
+            $dateField = $this->getDocumentDateField($entityType);
             return $item->{$dateField}?->format('Y-m-d') ?? '';
         }
 
@@ -1175,7 +1162,8 @@ class ReportController extends Controller
             $reportData = $this->getReportData($report, $mergedFilters, 1, 100000);
         } else {
             // For non-grouped, get all data without pagination
-            $query = $this->getBaseQuery($entityType, $mergedFilters, null, $config['sort_by'] ?? null);
+            $columns = $config['columns'] ?? [];
+            $query = $this->getBaseQuery($entityType, $mergedFilters, null, $config['sort_by'] ?? null, $columns);
             
             // Apply sorting
             if ($config['sort_by'] ?? null) {
@@ -1191,8 +1179,9 @@ class ReportController extends Controller
                         $query->orderBy('customers.' . $field, $sortDirection);
                     }
                 } else {
+                    $sortByColumn = $this->mapReportColumnToDatabaseColumn($entityType, $sortBy);
                     $tableName = $this->getTableName($entityType);
-                    $query->orderBy($tableName . '.' . $sortBy, $sortDirection);
+                    $query->orderBy($tableName . '.' . $sortByColumn, $sortDirection);
                 }
             } else {
                 $tableName = $this->getTableName($entityType);
@@ -1203,21 +1192,13 @@ class ReportController extends Controller
                 }
             }
             
-            // Load relationships
             $tableName = $this->getTableName($entityType);
-            if ($entityType === 'invoice') {
-                $query->with(['customer', 'salesperson', 'lineItems']);
-            } elseif ($entityType === 'quote') {
-                $query->with(['customer', 'lineItems']);
-            } elseif ($entityType === 'jobcard') {
-                $query->with(['customer', 'lineItems']);
-            }
+            $query->select($tableName . '.*');
             
             // Get all records
             $allData = $query->get();
             
             // Transform data
-            $columns = $config['columns'] ?? [];
             $transformedData = $allData->map(function ($item) use ($columns, $entityType) {
                 return $this->transformRow($item, $columns, $entityType, null);
             });
@@ -1413,5 +1394,54 @@ class ReportController extends Controller
         }
         
         return (string)$value;
+    }
+
+    /**
+     * Resolve the primary document date field used by report filters.
+     */
+    private function getDocumentDateField(string $entityType): string
+    {
+        return match ($entityType) {
+            'invoice' => 'invoice_date',
+            'quote' => 'created_at',
+            'jobcard' => 'start_date',
+            default => 'created_at',
+        };
+    }
+
+    /**
+     * Map report virtual columns to concrete DB columns.
+     */
+    private function mapReportColumnToDatabaseColumn(string $entityType, string $column): string
+    {
+        return match ($column) {
+            'formatted_date' => $this->getDocumentDateField($entityType),
+            'formatted_total' => 'total',
+            default => $column,
+        };
+    }
+
+    /**
+     * Normalize mixed group values for stable array keys.
+     */
+    private function normalizeGroupKey($value): string
+    {
+        if ($value === null) {
+            return '__NULL__';
+        }
+
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('Y-m-d');
+        }
+
+        if (is_scalar($value)) {
+            return (string) $value;
+        }
+
+        if (is_object($value) && method_exists($value, '__toString')) {
+            return (string) $value;
+        }
+
+        return json_encode($value) ?: '__JSON__';
     }
 }
