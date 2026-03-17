@@ -199,7 +199,7 @@ const lineTotal = (item: any) => {
 const subtotal = computed(() => form.line_items.reduce((sum, i) => sum + lineTotal(i), 0));
 
 const defaultTaxRate = computed(() => Number(props.defaultSalesTaxRate?.rate || 0));
-const taxAmount = computed(() => subtotal.value * (defaultTaxRate.value / 100));
+const taxAmount = computed(() => Math.round((subtotal.value * (defaultTaxRate.value / 100) + Number.EPSILON) * 100) / 100);
 
 const total = computed(() => subtotal.value + taxAmount.value);
 

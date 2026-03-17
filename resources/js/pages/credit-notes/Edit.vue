@@ -1039,6 +1039,10 @@ const lineItemDiscountsTotal = computed(() =>
 const subtotal = computed(() => subtotalBeforeDiscount.value - lineItemDiscountsTotal.value);
 const discountAmount = computed(() => lineItemDiscountsTotal.value);
 
+const roundCurrency = (amount: number): number => {
+    return Math.round((amount + Number.EPSILON) * 100) / 100;
+};
+
 const taxAmount = computed(() =>
     form.line_items.reduce((sum, item) => {
         const qty = Number(item.quantity) || 0;
@@ -1049,7 +1053,10 @@ const taxAmount = computed(() =>
         if (discPct > 0) discAmt = lineSub * (discPct / 100);
         const lineTotal = lineSub - discAmt;
         const tr = props.taxRates.find(t => t.id === item.tax_rate_id);
-        if (tr) return sum + Math.ceil(lineTotal * (tr.rate / 100) * 100) / 100;
+        if (tr) {
+            const lineTax = roundCurrency(lineTotal * (tr.rate / 100));
+            return roundCurrency(sum + lineTax);
+        }
         return sum;
     }, 0)
 );

@@ -48,6 +48,8 @@
 - Updated quote→invoice and jobcard→invoice conversions to enforce nearest-`0.10` rounding on the created invoice by auto-creating/updating a `Rounding Adjustment` line when needed.
 - Aligned invoice save/update totals with rounding behavior by re-applying server-side `Rounding Adjustment` normalization before `calculateTotals()`, preventing post-save 1-cent drift from edit-view totals.
 - Aligned invoice tax rounding with Xero by switching invoice line tax calculation from always-round-up (`ceil`) to standard 2-decimal rounding, including quote/jobcard-to-invoice conversion tax recalculation, reducing 1-cent VAT mismatches during sync.
+- Fixed invoice UI tax totals (Create/Edit and POS) to use standard 2-decimal rounding instead of round-up-per-line, so on-screen VAT matches saved invoice values and Xero sync calculations.
+- Standardized tax rounding across all remaining document types (quotes, jobcards, credit notes, and purchase orders) in both backend and UI calculations by replacing round-up (`ceil`) behavior with normal 2-decimal rounding to match Xero.
 
 ## 2026-03-16 - version 1.7.6
 

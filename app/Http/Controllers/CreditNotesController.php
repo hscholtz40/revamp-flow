@@ -187,7 +187,7 @@ class CreditNotesController extends Controller
             if (!empty($itemData['tax_rate_id'])) {
                 $taxRateModel = TaxRate::find($itemData['tax_rate_id']);
                 if ($taxRateModel) {
-                    $lineTaxAmount = ceil(($total * ($taxRateModel->rate / 100)) * 100) / 100;
+                    $lineTaxAmount = round($total * ($taxRateModel->rate / 100), 2);
                 }
             }
 
@@ -383,7 +383,7 @@ class CreditNotesController extends Controller
             if (!empty($itemData['tax_rate_id'])) {
                 $taxRateModel = TaxRate::find($itemData['tax_rate_id']);
                 if ($taxRateModel) {
-                    $lineTaxAmount = ceil(($total * ($taxRateModel->rate / 100)) * 100) / 100;
+                    $lineTaxAmount = round($total * ($taxRateModel->rate / 100), 2);
                 }
             }
 

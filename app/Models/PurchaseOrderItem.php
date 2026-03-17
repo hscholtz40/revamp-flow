@@ -88,7 +88,7 @@ class PurchaseOrderItem extends Model
             if ($item->tax_rate_id) {
                 $taxRate = TaxRate::find($item->tax_rate_id);
                 if ($taxRate) {
-                    $item->tax_amount = ceil(($item->total * ($taxRate->rate / 100)) * 100) / 100;
+                    $item->tax_amount = round($item->total * ($taxRate->rate / 100), 2);
                 } else {
                     $item->tax_amount = 0;
                 }

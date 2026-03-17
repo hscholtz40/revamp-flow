@@ -352,6 +352,10 @@ const subtotal = computed(() => {
     return form.items.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
 });
 
+const roundCurrency = (amount: number): number => {
+    return Math.round((amount + Number.EPSILON) * 100) / 100;
+};
+
 const taxAmount = computed(() => {
     return form.items.reduce((sum: number, item: any) => {
         const qty = Number(item.quantity) || 0;
@@ -359,7 +363,8 @@ const taxAmount = computed(() => {
         const lineTotal = qty * cost;
         const taxRate = (props.taxRates || []).find(tr => tr.id === item.tax_rate_id);
         if (taxRate) {
-            return sum + Math.ceil(lineTotal * (taxRate.rate / 100) * 100) / 100;
+            const lineTax = roundCurrency(lineTotal * (taxRate.rate / 100));
+            return roundCurrency(sum + lineTax);
         }
         return sum;
     }, 0);

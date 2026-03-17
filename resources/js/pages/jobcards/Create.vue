@@ -1260,13 +1260,18 @@ const discountAmount = computed(() => {
     return Number(lineItemDiscountsTotal.value) || 0;
 });
 
+const roundCurrency = (amount: number): number => {
+    return Math.round((amount + Number.EPSILON) * 100) / 100;
+};
+
 const taxAmount = computed(() => {
     return form.line_items.reduce((sum, item) => {
         if (isRoundingAdjustmentLine(item)) return sum;
         const lineTotal = calculateLineTotal(item);
         const taxRate = props.taxRates.find(tr => tr.id === item.tax_rate_id);
         if (taxRate) {
-            return sum + Math.ceil(lineTotal * (taxRate.rate / 100) * 100) / 100;
+            const lineTax = roundCurrency(lineTotal * (taxRate.rate / 100));
+            return roundCurrency(sum + lineTax);
         }
         return sum;
     }, 0);

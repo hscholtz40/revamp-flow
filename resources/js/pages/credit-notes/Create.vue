@@ -1056,12 +1056,17 @@ const discountTotal = computed(() => {
 
 const subtotal = computed(() => subtotalAfterDiscount.value);
 
+const roundCurrency = (amount: number): number => {
+    return Math.round((amount + Number.EPSILON) * 100) / 100;
+};
+
 const taxTotal = computed(() => {
     return form.line_items.reduce((sum, item) => {
         const lineTotal = calculateLineTotalValue(item);
         const taxRate = props.taxRates.find((tr) => tr.id === item.tax_rate_id);
         if (taxRate) {
-            return sum + Math.ceil(lineTotal * (taxRate.rate / 100) * 100) / 100;
+            const lineTax = roundCurrency(lineTotal * (taxRate.rate / 100));
+            return roundCurrency(sum + lineTax);
         }
         return sum;
     }, 0);
