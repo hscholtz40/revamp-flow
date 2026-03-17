@@ -66,6 +66,11 @@ const availableColumns = {
         { value: 'tax_amount', label: 'Tax Amount' },
         { value: 'discount_amount', label: 'Discount' },
         { value: 'formatted_total', label: 'Total' },
+        { value: 'payment_count', label: 'Payments Count', groupable: false, sortable: false },
+        { value: 'last_payment_date', label: 'Last Payment Date', groupable: false, sortable: false },
+        { value: 'payments_summary', label: 'Payments (Type + Amount)', groupable: false, sortable: false },
+        { value: 'total_paid', label: 'Total Paid', groupable: false, sortable: false },
+        { value: 'remaining_balance', label: 'Balance Due', groupable: false, sortable: false },
     ],
     quote: [
         { value: 'quote_number', label: 'Quote Number' },
@@ -98,6 +103,8 @@ const groupBy = ref(props.template?.config?.group_by || '');
 const sortBy = ref(props.template?.config?.sort_by || 'created_at');
 const sortDirection = ref<'asc' | 'desc'>(props.template?.config?.sort_direction || 'desc');
 const showTotals = ref(props.template?.config?.show_totals ?? true);
+const groupableColumns = computed(() => availableColumns[entityType.value].filter(column => column.groupable !== false));
+const sortableColumns = computed(() => availableColumns[entityType.value].filter(column => column.sortable !== false));
 
 // Filters - these will be saved to template when "Save as Template" is clicked
 const dateFrom = ref(props.template?.filters?.date_from || '');
@@ -524,7 +531,7 @@ const saveAsTemplate = () => {
                             <select v-model="groupBy" class="w-full rounded border px-3 py-2">
                                 <option value="">None</option>
                                 <option
-                                    v-for="column in availableColumns[entityType]"
+                                    v-for="column in groupableColumns"
                                     :key="column.value"
                                     :value="column.value"
                                 >
@@ -537,7 +544,7 @@ const saveAsTemplate = () => {
                             <label class="block text-sm font-medium text-gray-700 mb-1">Sort By</label>
                             <select v-model="sortBy" class="w-full rounded border px-3 py-2">
                                 <option
-                                    v-for="column in availableColumns[entityType]"
+                                    v-for="column in sortableColumns"
                                     :key="column.value"
                                     :value="column.value"
                                 >

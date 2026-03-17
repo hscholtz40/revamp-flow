@@ -42,6 +42,7 @@ require __DIR__.'/bank-accounts.php';
 require __DIR__.'/reports.php';
 require __DIR__.'/teams.php';
 require __DIR__.'/licenses.php';
+require __DIR__.'/list-view-preferences.php';
 
 // Installer routes (available only before first install)
 Route::middleware([EnsureNotInstalled::class])->group(function () {

@@ -880,7 +880,7 @@ class ReportController extends Controller
                 
                 // Eager load relationships for data transformation (only if not grouping)
                 if ($shouldEagerLoad) {
-                    $query->with(['customer', 'salesperson', 'lineItems']);
+                    $query->with(['customer', 'salesperson', 'lineItems', 'payments', 'creditNotes']);
                 }
                 break;
             case 'quote':
@@ -1038,6 +1038,50 @@ class ReportController extends Controller
             return $item->{$dateField}?->format('Y-m-d') ?? '';
         }
 
+        // Invoice related-record derived fields
+        if ($entityType === 'invoice' && $column === 'payment_count') {
+            if ($item->relationLoaded('payments')) {
+                return $item->payments->count();
+            }
+            return $item->payments()->count();
+        }
+
+        if ($entityType === 'invoice' && $column === 'last_payment_date') {
+            if ($item->relationLoaded('payments')) {
+                $latest = $item->payments
+                    ->sortByDesc(fn ($payment) => $payment->payment_date?->timestamp ?? 0)
+                    ->first();
+                return $latest?->payment_date?->format('Y-m-d');
+            }
+            return $item->payments()
+                ->latest('payment_date')
+                ->first()
+                ?->payment_date
+                ?->format('Y-m-d');
+        }
+
+        if ($entityType === 'invoice' && $column === 'payments_summary') {
+            $payments = $item->relationLoaded('payments')
+                ? $item->payments
+                : $item->payments()->orderBy('payment_date', 'asc')->get();
+
+            if ($payments->isEmpty()) {
+                return '';
+            }
+
+            return $payments
+                ->map(function ($payment) {
+                    $method = ucfirst((string) ($payment->payment_method ?? 'unknown'));
+                    $amount = (float) ($payment->amount ?? 0);
+                    return $method . ': R' . number_format($amount, 2);
+                })
+                ->implode(', ');
+        }
+
+        if ($entityType === 'invoice' && in_array($column, ['total_paid', 'total_credited', 'remaining_balance'], true)) {
+            return (float) ($item->{$column} ?? 0);
+        }
+
         // Default to direct property access
         return $item->{$column} ?? null;
     }
@@ -1049,7 +1093,7 @@ class ReportController extends Controller
     {
         $totals = [];
 
-        $numericColumns = ['subtotal', 'tax_amount', 'total', 'discount_amount'];
+        $numericColumns = ['subtotal', 'tax_amount', 'total', 'discount_amount', 'total_paid', 'total_credited', 'remaining_balance'];
         
         foreach ($numericColumns as $column) {
             if (in_array($column, $columns)) {
@@ -1250,7 +1294,7 @@ class ReportController extends Controller
                         foreach ($columns as $column) {
                             $value = $record[$column] ?? '';
                             // Format numeric values
-                            if (is_numeric($value) && in_array($column, ['subtotal', 'tax_amount', 'total', 'discount_amount', 'unit_price', 'quantity'])) {
+                            if (is_numeric($value) && in_array($column, ['subtotal', 'tax_amount', 'total', 'discount_amount', 'unit_price', 'quantity', 'total_paid', 'total_credited', 'remaining_balance'])) {
                                 $row[] = 'R' . number_format((float)$value, 2);
                             } else {
                                 $row[] = $this->formatCellValue($value);
@@ -1289,7 +1333,7 @@ class ReportController extends Controller
                     foreach ($columns as $column) {
                         $value = $record[$column] ?? '';
                         // Format numeric values
-                        if (is_numeric($value) && in_array($column, ['subtotal', 'tax_amount', 'total', 'discount_amount', 'unit_price', 'quantity'])) {
+                        if (is_numeric($value) && in_array($column, ['subtotal', 'tax_amount', 'total', 'discount_amount', 'unit_price', 'quantity', 'total_paid', 'total_credited', 'remaining_balance'])) {
                             $row[] = 'R' . number_format((float)$value, 2);
                         } else {
                             $row[] = $this->formatCellValue($value);

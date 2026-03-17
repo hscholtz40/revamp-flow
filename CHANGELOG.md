@@ -24,8 +24,12 @@
 - Improved credit-note Create/Edit load performance by removing large preloaded invoice/product datasets from Inertia props and switching to debounced server-side invoice/product search endpoints.
 - Fixed invoice permission enforcement so users without `invoices.edit` can no longer access invoice edit/update/status actions; payment creation remains available to invoice-view users, and invoice edit controls are now hidden when edit permission is missing.
 - Updated company switching behavior to always redirect to the dashboard after a successful switch, preventing record-page errors when the same URL is invalid in the newly selected company context.
+- Added per-user, per-company list-view column preferences across index pages via a new `Edit Columns` control in the app header, supporting column show/hide and drag-to-reorder with server-side persistence.
+- Fixed list column editor reordering instability where dragged columns could snap back due to over-aggressive DOM observer reloads; preferences now stay in place immediately after reorder.
 - Fixed Xero payment export for fully paid local invoices: removed an incorrect cap that used JCO `remaining_balance` (0 on paid invoices), and expanded invoice export selection to include invoices with unsynced payment records so payment sync retries are not skipped.
 - Fixed Vue template parse errors (`Element is missing end tag`) in credit-note edit and purchase-order create pages by restoring missing closing wrapper divs in grouped line-item sections.
+- Extended invoice reports with payment-related columns from linked records (`Payments Count`, `Last Payment Date`, `Total Paid`, and `Balance Due`) so report builders can include payment context without leaving report views.
+- Added an invoice report column for full payment breakdowns that lists each linked payment method and amount in one cell (e.g. `Cash: R100.00, Card: R50.00`) for clearer per-invoice payment visibility.
 
 ## 2026-03-16 - version 1.7.6
 

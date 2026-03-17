@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
 import CompanySwitcher from '@/components/CompanySwitcher.vue';
+import ListViewColumnsEditor from '@/components/ListViewColumnsEditor.vue';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import type { BreadcrumbItemType } from '@/types';
 import { usePage } from '@inertiajs/vue3';
@@ -40,7 +41,8 @@ const companies = computed(() => page.props.companies as Company[] || []);
         </div>
         
         <!-- Company Switcher -->
-        <div class="flex items-center">
+        <div class="flex items-center gap-2">
+            <ListViewColumnsEditor />
             <CompanySwitcher 
                 :current-company="currentCompany" 
                 :companies="companies" 
