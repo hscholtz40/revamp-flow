@@ -347,6 +347,10 @@
                                     <span class="text-sm text-gray-600">Tax:</span>
                                     <span class="text-sm font-medium">R{{ (Number(props.jobcard.tax_amount) || 0).toFixed(2) }}</span>
                                 </div>
+                                <div v-if="Math.abs(roundingAdjustment) > 0.0001" class="flex justify-between">
+                                    <span class="text-sm text-gray-600">Rounding Adjustment:</span>
+                                    <span class="text-sm font-medium">R{{ roundingAdjustment.toFixed(2) }}</span>
+                                </div>
                                 <div class="flex justify-between border-t pt-3">
                                     <span class="text-base font-semibold">Total:</span>
                                     <span class="text-base font-semibold">{{ props.jobcard.formatted_total }}</span>
@@ -639,6 +643,14 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+const roundingAdjustment = computed(() => {
+    return (props.jobcard.line_items || []).reduce((sum, item) => {
+        if ((item.description || '').trim().toLowerCase() !== 'rounding adjustment') {
+            return sum;
+        }
+        return sum + (Number(item.total) || (Number(item.quantity) || 0) * (Number(item.unit_price) || 0));
+    }, 0);
+});
 
 // Status options for the status bar
 const statusOptions = [

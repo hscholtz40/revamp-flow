@@ -367,6 +367,15 @@ const taxAmount = computed(() => {
 
 const total = computed(() => subtotal.value + taxAmount.value);
 
+const roundingAdjustment = computed(() => {
+    return form.items.reduce((sum, item) => {
+        if ((item.description || '').trim().toLowerCase() !== 'rounding adjustment') {
+            return sum;
+        }
+        return sum + (Number(item.total) || (Number(item.quantity) || 0) * (Number(item.unit_cost) || 0));
+    }, 0);
+});
+
 function submit() {
     form.transform((data) => ({
         ...data,
@@ -675,6 +684,10 @@ function submit() {
                                 <div class="flex items-center justify-between">
                                     <span class="text-sm text-gray-600">Tax</span>
                                     <span class="text-sm font-medium">R{{ taxAmount.toFixed(2) }}</span>
+                                </div>
+                                <div v-if="Math.abs(roundingAdjustment) > 0.0001" class="flex items-center justify-between">
+                                    <span class="text-sm text-gray-600">Rounding Adjustment</span>
+                                    <span class="text-sm font-medium">R{{ roundingAdjustment.toFixed(2) }}</span>
                                 </div>
                                 <div class="flex items-center justify-between border-t pt-2">
                                     <span class="text-base font-semibold">Total</span>

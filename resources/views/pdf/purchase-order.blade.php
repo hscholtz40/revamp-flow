@@ -384,7 +384,9 @@
         <tbody>
             @php
                 $lineGroups = $purchaseOrder->lineGroups ?? collect();
-                $items = $purchaseOrder->items ?? collect();
+                $items = ($purchaseOrder->items ?? collect())->filter(function ($item) {
+                    return strtolower(trim((string) ($item->description ?? ''))) !== 'rounding adjustment';
+                });
                 $resolvedGroups = collect();
                 $renderedItemIds = collect();
 
@@ -438,6 +440,16 @@
         </tbody>
     </table>
     
+    @php
+        $roundingAdjustment = ($purchaseOrder->items ?? collect())->reduce(function ($sum, $item) {
+            $description = strtolower(trim((string) ($item->description ?? '')));
+            if ($description !== 'rounding adjustment') {
+                return $sum;
+            }
+            $lineTotal = (float) ($item->total ?? (($item->quantity ?? 0) * ($item->unit_cost ?? 0)));
+            return $sum + $lineTotal;
+        }, 0.0);
+    @endphp
     <div class="totals-section">
         <div class="total-row">
             <span>Subtotal:</span>
@@ -447,6 +459,12 @@
         <div class="total-row">
             <span>Tax:</span>
             <span>R{{ number_format($purchaseOrder->tax_amount, 2) }}</span>
+        </div>
+        @endif
+        @if(abs($roundingAdjustment) > 0.0001)
+        <div class="total-row">
+            <span>Rounding Adjustment:</span>
+            <span>R{{ number_format($roundingAdjustment, 2) }}</span>
         </div>
         @endif
         <div class="total-row final">

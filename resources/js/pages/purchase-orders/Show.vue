@@ -83,6 +83,14 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+const roundingAdjustment = computed(() => {
+    return (props.purchaseOrder.items || []).reduce((sum, item) => {
+        if ((item.description || '').trim().toLowerCase() !== 'rounding adjustment') {
+            return sum;
+        }
+        return sum + (Number(item.total) || (Number(item.quantity) || 0) * (Number(item.unit_cost) || 0));
+    }, 0);
+});
 
 const showReceiveModal = ref(false);
 const showEmailModal = ref(false);
@@ -368,6 +376,12 @@ const sendEmail = () => {
                                         <td colspan="4" class="px-4 py-4 text-right text-sm font-medium text-gray-900">Tax</td>
                                         <td class="whitespace-nowrap px-4 py-4 text-right text-sm font-medium text-gray-900">
                                             R{{ Number(props.purchaseOrder.tax_amount).toLocaleString('en-ZA', { minimumFractionDigits: 2 }) }}
+                                        </td>
+                                    </tr>
+                                    <tr v-if="Math.abs(roundingAdjustment) > 0.0001">
+                                        <td colspan="4" class="px-4 py-4 text-right text-sm font-medium text-gray-900">Rounding Adjustment</td>
+                                        <td class="whitespace-nowrap px-4 py-4 text-right text-sm font-medium text-gray-900">
+                                            R{{ Number(roundingAdjustment).toLocaleString('en-ZA', { minimumFractionDigits: 2 }) }}
                                         </td>
                                     </tr>
                                     <tr>

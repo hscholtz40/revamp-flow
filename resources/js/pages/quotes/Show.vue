@@ -329,6 +329,10 @@
                                 <span class="text-sm text-gray-500">Tax:</span>
                                 <span class="text-sm font-medium text-gray-900">R{{ formatCurrency(props.quote.tax_amount) }}</span>
                             </div>
+                            <div v-if="Math.abs(roundingAdjustment) > 0.0001" class="flex justify-between">
+                                <span class="text-sm text-gray-500">Rounding Adjustment:</span>
+                                <span class="text-sm font-medium text-gray-900">R{{ formatCurrency(roundingAdjustment) }}</span>
+                            </div>
                             <div class="border-t border-gray-200 pt-3">
                                 <div class="flex justify-between">
                                     <span class="text-base font-semibold text-gray-900">Total:</span>
@@ -545,6 +549,14 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+const roundingAdjustment = computed(() => {
+    return (props.quote.line_items || []).reduce((sum, item) => {
+        if ((item.description || '').trim().toLowerCase() !== 'rounding adjustment') {
+            return sum;
+        }
+        return sum + (Number(item.total) || (Number(item.quantity) || 0) * (Number(item.unit_price) || 0));
+    }, 0);
+});
 
 const showEmailModal = ref(false);
 

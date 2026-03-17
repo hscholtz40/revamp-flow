@@ -188,7 +188,7 @@
                                         </tr>
                                     </thead>
                                     <tbody class="bg-white divide-y divide-gray-200">
-                                        <template v-for="item in props.invoice.line_items" :key="item.id">
+                                        <template v-for="item in visibleInvoiceLineItems" :key="item.id">
                                             <tr>
                                                 <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900 text-center">
                                                     {{ item.quantity }}
@@ -326,6 +326,10 @@
                                 <div class="flex justify-between">
                                     <span class="text-gray-600">Tax:</span>
                                     <span class="font-medium">{{ formatCurrency(props.invoice.tax_amount) }}</span>
+                                </div>
+                                <div v-if="Math.abs(roundingAdjustment) > 0.0001" class="flex justify-between">
+                                    <span class="text-gray-600">Rounding Adjustment:</span>
+                                    <span class="font-medium">{{ formatCurrency(roundingAdjustment) }}</span>
                                 </div>
                                 <div class="flex justify-between text-lg font-semibold border-t pt-2">
                                     <span>Total:</span>
@@ -864,6 +868,23 @@ const formatCurrency = (amount: number) => {
 const formatStatus = (status: string) => {
     return status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ');
 };
+
+const isRoundingAdjustmentLine = (item: LineItem) => {
+    return (item.description || '').trim().toLowerCase() === 'rounding adjustment';
+};
+
+const visibleInvoiceLineItems = computed(() => {
+    return (props.invoice.line_items || []).filter((item) => !isRoundingAdjustmentLine(item));
+});
+
+const roundingAdjustment = computed(() => {
+    return (props.invoice.line_items || []).reduce((sum, item) => {
+        if (!isRoundingAdjustmentLine(item)) {
+            return sum;
+        }
+        return sum + (Number(item.total) || (Number(item.quantity) || 0) * (Number(item.unit_price) || 0));
+    }, 0);
+});
 
 const getStatusBadgeClass = (status: string) => {
     const classes = {

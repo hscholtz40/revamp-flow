@@ -313,7 +313,7 @@
 
                     <div class="space-y-4">
                         <div
-                            v-for="groupBlock in groupedLineItems"
+                            v-for="groupBlock in visibleGroupedLineItems"
                             :key="groupBlock.groupId"
                             class="rounded border border-gray-200 transition-colors"
                             :class="{ 'border-blue-300 bg-blue-50/30': dragOverGroupId === groupBlock.groupId && dragOverItemIndex === null }"
@@ -355,6 +355,7 @@
                                         type="number"
                                         min="1"
                                         class="w-full rounded border border-gray-300 px-2 py-1.5 text-sm text-center focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                        :disabled="isRoundingLineAtIndex(index)"
                                         required
                                     />
                                 </div>
@@ -372,10 +373,11 @@
                                             placeholder="Type description or search products..."
                                             class="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                             :class="{ 'border-red-500': form.errors[`line_items.${index}.description`] }"
+                                            :disabled="isRoundingLineAtIndex(index)"
                                             required
                                         />
                                         <span
-                                            v-if="item.product_id"
+                                        v-if="item.product_id && !isRoundingLineAtIndex(index)"
                                             class="flex-shrink-0 inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700 border border-blue-200"
                                             :title="getProductName(item.product_id)"
                                         >
@@ -385,7 +387,7 @@
                                     </div>
                                     <!-- Product Suggestions Dropdown -->
                                     <div
-                                        v-if="showProductSuggestions[index] && productSuggestions(index).length > 0"
+                                        v-if="!isRoundingLineAtIndex(index) && showProductSuggestions[index] && productSuggestions(index).length > 0"
                                         class="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-auto"
                                     >
                                         <div
@@ -416,6 +418,7 @@
                                         type="number"
                                         step="0.01"
                                         class="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                        :disabled="isRoundingLineAtIndex(index)"
                                         required
                                     />
                                 </div>
@@ -433,11 +436,13 @@
                                             :max="discountTypes[index] === 'percentage' ? 100 : undefined"
                                             class="w-full min-w-0 rounded-l border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                             placeholder="0"
+                                            :disabled="isRoundingLineAtIndex(index)"
                                         />
                                         <select
                                             :value="discountTypes[index] || 'amount'"
                                             @change="handleDiscountTypeChange(index, $event)"
                                             class="rounded-r border border-l-0 border-gray-300 bg-gray-50 px-1 py-1.5 text-xs font-medium text-gray-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                            :disabled="isRoundingLineAtIndex(index)"
                                         >
                                             <option value="amount">R</option>
                                             <option value="percentage">%</option>
@@ -451,6 +456,7 @@
                                     <select
                                         v-model="item.tax_rate_id"
                                         class="w-full rounded border border-gray-300 px-1 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                        :disabled="isRoundingLineAtIndex(index)"
                                     >
                                         <option :value="null">None</option>
                                         <option v-for="tr in props.taxRates" :key="tr.id" :value="tr.id">
@@ -465,6 +471,7 @@
                                     <select
                                         v-model="item.account_id"
                                         class="w-full rounded border border-gray-300 px-1 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                        :disabled="isRoundingLineAtIndex(index)"
                                     >
                                         <option :value="null">None</option>
                                         <option v-for="acc in props.chartOfAccounts" :key="acc.id" :value="acc.id">
@@ -495,8 +502,8 @@
                                         type="button"
                                         @click="removeLineItem(index)"
                                         class="text-gray-400 hover:text-red-600 transition-colors"
-                                        :disabled="form.line_items.length === 1"
-                                        :class="{ 'opacity-30 cursor-not-allowed': form.line_items.length === 1 }"
+                                        :disabled="form.line_items.filter((li) => !isRoundingAdjustmentLine(li)).length === 1 || isRoundingLineAtIndex(index)"
+                                        :class="{ 'opacity-30 cursor-not-allowed': form.line_items.filter((li) => !isRoundingAdjustmentLine(li)).length === 1 || isRoundingLineAtIndex(index) }"
                                     >
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -563,6 +570,10 @@
                         <div class="flex justify-between">
                             <span class="text-gray-600">Tax:</span>
                             <span class="font-medium">{{ formatCurrency(taxAmount) }}</span>
+                        </div>
+                        <div v-if="Math.abs(roundingAdjustment) > 0.0001" class="flex justify-between">
+                            <span class="text-gray-600">Rounding Adjustment:</span>
+                            <span class="font-medium">{{ formatCurrency(roundingAdjustment) }}</span>
                         </div>
                         <div class="flex justify-between text-lg font-semibold border-t pt-2">
                             <span>Total:</span>
@@ -696,6 +707,7 @@ interface LineItem {
     serial_number_ids?: number[];
     tax_rate_id?: number | null;
     account_id?: number | null;
+    is_rounding_adjustment?: boolean;
 }
 
 interface LineGroup {
@@ -715,10 +727,12 @@ interface Props {
     defaultSalesTaxRateId: number | null;
     chartOfAccounts: { id: number; account_code: string; account_name: string; account_type: string; is_default_sales: boolean }[];
     defaultSalesAccountId: number | null;
+    defaultRoundingAccountId: number | null;
 }
 
 const props = defineProps<Props>();
 const paymentTermsOptions = ['COD', 'Net 7 Days', 'Net 14 Days', 'Net 30 Days', 'Net 60 Days'];
+const ROUNDING_LINE_DESCRIPTION = 'Rounding Adjustment';
 
 // Track product suggestions and discount types for each line item
 const showProductSuggestions = ref<Record<number, boolean>>({});
@@ -981,6 +995,13 @@ const groupedLineItems = computed(() =>
     }),
 );
 
+const visibleGroupedLineItems = computed(() =>
+    groupedLineItems.value.map((groupBlock) => ({
+        ...groupBlock,
+        items: groupBlock.items.filter(({ item }) => !isRoundingAdjustmentLine(item)),
+    })),
+);
+
 const addLineItem = (groupIndex = 0) => {
     const newIndex = form.line_items.length;
     form.line_items.push({
@@ -1030,7 +1051,12 @@ const removeLineGroup = (index: number) => {
 };
 
 const removeLineItem = (index: number) => {
-    if (form.line_items.length > 1) {
+    if (isRoundingLineAtIndex(index)) {
+        return;
+    }
+
+    const nonRoundingCount = form.line_items.filter((item) => !isRoundingAdjustmentLine(item)).length;
+    if (nonRoundingCount > 1) {
         form.line_items.splice(index, 1);
         normalizeLineItemOrder();
     }
@@ -1230,6 +1256,9 @@ const formatCurrency = (amount: number) => {
 // Calculate subtotal before discounts
 const subtotalBeforeDiscount = computed(() => {
     return form.line_items.reduce((sum, item) => {
+        if (isRoundingAdjustmentLine(item)) {
+            return sum;
+        }
         const quantity = item.quantity || 0;
         const unitPrice = item.unit_price || 0;
         return sum + (quantity * unitPrice);
@@ -1239,6 +1268,9 @@ const subtotalBeforeDiscount = computed(() => {
 // Calculate total discount from line items
 const lineItemDiscountsTotal = computed(() => {
     return form.line_items.reduce((sum, item) => {
+        if (isRoundingAdjustmentLine(item)) {
+            return sum;
+        }
         const quantity = item.quantity || 0;
         const unitPrice = item.unit_price || 0;
         const discountAmount = item.discount_amount || 0;
@@ -1265,6 +1297,9 @@ const discountAmount = computed(() => {
 
 const taxAmount = computed(() => {
     return form.line_items.reduce((sum: number, item: any) => {
+        if (isRoundingAdjustmentLine(item)) {
+            return sum;
+        }
         const qty = Number(item.quantity) || 0;
         const price = Number(item.unit_price) || 0;
         let discAmt = Number(item.discount_amount) || 0;
@@ -1284,8 +1319,70 @@ const taxAmount = computed(() => {
 
 const total = computed(() => {
     // Subtotal already has discounts applied, so just add tax
-    return subtotal.value + taxAmount.value;
+    return subtotal.value + taxAmount.value + roundingAdjustment.value;
 });
+
+const roundToNearestTenCents = (amount: number): number => {
+    return Math.round(amount * 10) / 10;
+};
+
+const isRoundingAdjustmentLine = (item: LineItem | undefined): boolean => {
+    if (!item) return false;
+    if (item.is_rounding_adjustment) return true;
+    return (item.description || '').trim().toLowerCase() === ROUNDING_LINE_DESCRIPTION.toLowerCase();
+};
+
+const isRoundingLineAtIndex = (index: number): boolean => {
+    return isRoundingAdjustmentLine(form.line_items[index]);
+};
+
+const baseTotalBeforeRounding = computed(() => subtotal.value + taxAmount.value);
+const roundedTargetTotal = computed(() => roundToNearestTenCents(baseTotalBeforeRounding.value));
+const roundingAdjustment = computed(() => roundedTargetTotal.value - baseTotalBeforeRounding.value);
+
+const ensureRoundingAdjustmentLine = () => {
+    const roundingIndex = form.line_items.findIndex((item) => isRoundingAdjustmentLine(item));
+    const roundingAccountId = props.defaultRoundingAccountId ?? props.defaultSalesAccountId;
+
+    if (!roundingAccountId) {
+        if (roundingIndex >= 0) {
+            form.line_items.splice(roundingIndex, 1);
+        }
+        return;
+    }
+
+    const adjustment = Math.round(roundingAdjustment.value * 100) / 100;
+    if (Math.abs(adjustment) < 0.0001) {
+        if (roundingIndex >= 0) {
+            form.line_items.splice(roundingIndex, 1);
+        }
+        return;
+    }
+
+    const roundingLine: LineItem = {
+        product_id: null,
+        line_group_id: 1,
+        description: ROUNDING_LINE_DESCRIPTION,
+        quantity: 1,
+        unit_price: adjustment,
+        discount_amount: 0,
+        discount_percentage: 0,
+        total: adjustment,
+        serial_number_ids: [],
+        tax_rate_id: null,
+        account_id: roundingAccountId,
+        is_rounding_adjustment: true,
+    };
+
+    if (roundingIndex >= 0) {
+        form.line_items[roundingIndex] = {
+            ...form.line_items[roundingIndex],
+            ...roundingLine,
+        };
+    } else {
+        form.line_items.push(roundingLine);
+    }
+};
 
 // Update form discount_amount when line item discounts change
 watch(() => lineItemDiscountsTotal.value, (newTotal) => {
@@ -1293,7 +1390,22 @@ watch(() => lineItemDiscountsTotal.value, (newTotal) => {
     form.discount_percentage = 0; // Clear percentage since we're using amount from line items
 });
 
+watch(
+    () => [subtotal.value, taxAmount.value, props.defaultRoundingAccountId, props.defaultSalesAccountId, form.line_groups.length],
+    () => {
+        ensureRoundingAdjustmentLine();
+        normalizeLineItemOrder();
+    },
+    { immediate: true },
+);
+
 const submit = () => {
+    const nonRoundingItems = form.line_items.filter((item) => !isRoundingAdjustmentLine(item));
+    if (nonRoundingItems.length === 0) {
+        form.setError('line_items', 'At least one non-rounding line item is required.');
+        return;
+    }
+
     form.transform((data) => ({
         ...data,
         contact_id: form.contact_id ?? null,
@@ -1302,7 +1414,15 @@ const submit = () => {
             sort_order: index,
         })),
         line_items: data.line_items.map((item) => ({
-            ...item,
+            product_id: item.product_id,
+            description: item.description,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            discount_amount: item.discount_amount ?? 0,
+            discount_percentage: item.discount_percentage ?? 0,
+            tax_rate_id: item.tax_rate_id ?? null,
+            account_id: item.account_id ?? null,
+            serial_number_ids: item.serial_number_ids ?? [],
             line_group_id: item.line_group_id ?? 1,
         })),
     }))

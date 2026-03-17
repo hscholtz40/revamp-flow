@@ -427,6 +427,10 @@
                             <span class="text-gray-600">Tax:</span>
                             <span class="font-medium">{{ formatCurrency(taxTotal) }}</span>
                         </div>
+                        <div v-if="Math.abs(roundingAdjustment) > 0.0001" class="flex justify-between text-sm">
+                            <span class="text-gray-600">Rounding Adjustment:</span>
+                            <span class="font-medium">{{ formatCurrency(roundingAdjustment) }}</span>
+                        </div>
                         <div class="flex justify-between text-lg font-semibold border-t border-gray-200 pt-2 mt-2">
                             <span>Total:</span>
                             <span>{{ formatCurrency(total) }}</span>
@@ -1064,6 +1068,15 @@ const taxTotal = computed(() => {
 });
 
 const total = computed(() => subtotal.value + taxTotal.value);
+
+const roundingAdjustment = computed(() => {
+    return form.line_items.reduce((sum, item) => {
+        if ((item.description || '').trim().toLowerCase() !== 'rounding adjustment') {
+            return sum;
+        }
+        return sum + calculateLineTotalValue(item);
+    }, 0);
+});
 
 function submit() {
     form.transform((data) => ({

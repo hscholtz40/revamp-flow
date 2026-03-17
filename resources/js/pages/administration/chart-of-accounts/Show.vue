@@ -16,6 +16,7 @@ interface ChartOfAccount {
     is_active: boolean;
     is_default_sales: boolean;
     is_default_purchasing: boolean;
+    is_default_rounding: boolean;
     sort_order: number;
     created_at: string;
     updated_at: string;
@@ -113,6 +114,7 @@ function getAccountTypeColor(type: string): string {
                                 </span>
                                 <span v-if="props.account.is_default_sales" class="rounded-full bg-blue-100 px-3 py-1 text-sm font-medium text-blue-700">Default Sales</span>
                                 <span v-if="props.account.is_default_purchasing" class="rounded-full bg-amber-100 px-3 py-1 text-sm font-medium text-amber-700">Default Purchasing</span>
+                                <span v-if="props.account.is_default_rounding" class="rounded-full bg-purple-100 px-3 py-1 text-sm font-medium text-purple-700">Default Rounding</span>
                             </div>
                             
                             <div class="flex items-center gap-4 text-sm text-gray-600">

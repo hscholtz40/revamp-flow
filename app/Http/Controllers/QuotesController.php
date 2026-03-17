@@ -109,6 +109,7 @@ class QuotesController extends Controller
         $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
         $chartOfAccounts = ChartOfAccount::where('company_id', $currentCompany->id)->where('is_active', true)->ordered()->get(['id', 'account_code', 'account_name', 'account_type', 'is_default_sales']);
         $defaultSalesAccount = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id);
+        $defaultRoundingAccount = ChartOfAccount::getDefaultRoundingForCompany($currentCompany->id);
         $defaultSalesCustomer = Customer::getDefaultSalesForCompany($currentCompany->id);
 
         return Inertia::render('quotes/Create', [
@@ -120,6 +121,7 @@ class QuotesController extends Controller
             'defaultSalesTaxRateId' => $defaultSalesTaxRate?->id,
             'chartOfAccounts' => $chartOfAccounts,
             'defaultSalesAccountId' => $defaultSalesAccount?->id,
+            'defaultRoundingAccountId' => $defaultRoundingAccount?->id,
             'defaultSalesCustomerId' => $defaultSalesCustomer?->id,
         ]);
     }
@@ -280,6 +282,7 @@ class QuotesController extends Controller
         $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
         $chartOfAccounts = ChartOfAccount::where('company_id', $currentCompany->id)->where('is_active', true)->ordered()->get(['id', 'account_code', 'account_name', 'account_type', 'is_default_sales']);
         $defaultSalesAccount = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id);
+        $defaultRoundingAccount = ChartOfAccount::getDefaultRoundingForCompany($currentCompany->id);
 
         // Pass quote as array to ensure line_items include tax_rate_id and account_id
         $quoteData = $quote->toArray();
@@ -293,6 +296,7 @@ class QuotesController extends Controller
             'defaultSalesTaxRateId' => $defaultSalesTaxRate?->id,
             'chartOfAccounts' => $chartOfAccounts,
             'defaultSalesAccountId' => $defaultSalesAccount?->id,
+            'defaultRoundingAccountId' => $defaultRoundingAccount?->id,
             'canEditCompleted' => auth()->user()->hasModulePermission('quotes', 'edit_completed'),
         ]);
     }

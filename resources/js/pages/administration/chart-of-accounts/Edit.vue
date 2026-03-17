@@ -14,6 +14,7 @@ interface ChartOfAccount {
     is_active: boolean;
     is_default_sales: boolean;
     is_default_purchasing: boolean;
+    is_default_rounding: boolean;
     sort_order: number;
 }
 
@@ -39,6 +40,7 @@ const form = useForm({
     is_active: props.account.is_active,
     is_default_sales: props.account.is_default_sales,
     is_default_purchasing: props.account.is_default_purchasing,
+    is_default_rounding: props.account.is_default_rounding ?? false,
     sort_order: props.account.sort_order,
 });
 
@@ -230,6 +232,19 @@ function submit() {
                                     <span class="text-sm font-medium text-gray-700">Default Account for Purchasing</span>
                                 </label>
                                 <p class="mt-1 text-sm text-gray-500">Used as default for purchase orders</p>
+                            </div>
+
+                            <!-- Default Rounding -->
+                            <div>
+                                <label class="flex items-center gap-2">
+                                    <input
+                                        v-model="form.is_default_rounding"
+                                        type="checkbox"
+                                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <span class="text-sm font-medium text-gray-700">Default Account for Rounding</span>
+                                </label>
+                                <p class="mt-1 text-sm text-gray-500">Used for invoice rounding-adjustment line items</p>
                             </div>
                         </div>
                     </div>

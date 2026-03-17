@@ -205,6 +205,10 @@
                                 <span class="text-gray-600">Tax</span>
                                 <span class="font-medium">{{ formatCurrency(creditNote.tax_amount) }}</span>
                             </div>
+                            <div v-if="Math.abs(roundingAdjustment) > 0.0001" class="flex justify-between">
+                                <span class="text-gray-600">Rounding Adjustment</span>
+                                <span class="font-medium">{{ formatCurrency(roundingAdjustment) }}</span>
+                            </div>
                             <div class="flex justify-between border-t border-gray-200 pt-2 text-lg font-semibold">
                                 <span>Total</span>
                                 <span>{{ formatCurrency(creditNote.total) }}</span>
@@ -394,6 +398,14 @@ const statusColors: Record<string, string> = {
 const statusBadgeClass = computed(() => statusColors[creditNote.value.status] ?? 'bg-gray-100 text-gray-800');
 const canAddRefund = computed(() => Number(creditNote.value.remaining_credit || 0) > 0 && creditNote.value.status !== 'voided');
 const totalRefunded = computed(() => (creditNote.value.payments || []).reduce((sum, p) => sum + Number(p.amount || 0), 0));
+const roundingAdjustment = computed(() =>
+    (creditNote.value.line_items || []).reduce((sum, item) => {
+        if ((item.description || '').trim().toLowerCase() !== 'rounding adjustment') {
+            return sum;
+        }
+        return sum + (Number(item.total) || (Number(item.quantity) || 0) * (Number(item.unit_price) || 0));
+    }, 0)
+);
 
 function updateStatus(status: string) {
     if (creditNote.value.status === status) return;

@@ -25,6 +25,7 @@ const form = useForm({
     is_active: true,
     is_default_sales: false,
     is_default_purchasing: false,
+    is_default_rounding: false,
     sort_order: 0,
 });
 
@@ -221,6 +222,19 @@ function submit() {
                                     <span class="text-sm font-medium text-gray-700">Default Account for Purchasing</span>
                                 </label>
                                 <p class="mt-1 text-sm text-gray-500">Used as default for purchase orders</p>
+                            </div>
+
+                            <!-- Default Rounding -->
+                            <div>
+                                <label class="flex items-center gap-2">
+                                    <input
+                                        v-model="form.is_default_rounding"
+                                        type="checkbox"
+                                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <span class="text-sm font-medium text-gray-700">Default Account for Rounding</span>
+                                </label>
+                                <p class="mt-1 text-sm text-gray-500">Used for invoice rounding-adjustment line items</p>
                             </div>
                         </div>
                     </div>

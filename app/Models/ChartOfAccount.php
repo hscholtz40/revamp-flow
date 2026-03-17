@@ -22,6 +22,7 @@ class ChartOfAccount extends Model
         'is_active',
         'is_default_sales',
         'is_default_purchasing',
+        'is_default_rounding',
         'sort_order',
         'xero_updated_at',
         'xero_created_at',
@@ -31,6 +32,7 @@ class ChartOfAccount extends Model
         'is_active' => 'boolean',
         'is_default_sales' => 'boolean',
         'is_default_purchasing' => 'boolean',
+        'is_default_rounding' => 'boolean',
         'sort_order' => 'integer',
         'xero_updated_at' => 'datetime',
         'xero_created_at' => 'datetime',
@@ -86,6 +88,11 @@ class ChartOfAccount extends Model
         return $query->where('is_default_purchasing', true);
     }
 
+    public function scopeDefaultRounding($query)
+    {
+        return $query->where('is_default_rounding', true);
+    }
+
     public static function getDefaultSalesForCompany(int $companyId): ?self
     {
         return static::where('company_id', $companyId)
@@ -98,6 +105,14 @@ class ChartOfAccount extends Model
     {
         return static::where('company_id', $companyId)
             ->where('is_default_purchasing', true)
+            ->where('is_active', true)
+            ->first();
+    }
+
+    public static function getDefaultRoundingForCompany(int $companyId): ?self
+    {
+        return static::where('company_id', $companyId)
+            ->where('is_default_rounding', true)
             ->where('is_active', true)
             ->first();
     }

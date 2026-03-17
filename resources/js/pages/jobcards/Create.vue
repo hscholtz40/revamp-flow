@@ -598,6 +598,10 @@
                                     <span class="text-sm text-gray-600">Tax:</span>
                                     <span class="text-sm font-medium">R{{ taxAmount.toFixed(2) }}</span>
                                 </div>
+                                <div v-if="Math.abs(roundingAdjustment) > 0.0001" class="flex justify-between">
+                                    <span class="text-sm text-gray-600">Rounding Adjustment:</span>
+                                    <span class="text-sm font-medium">R{{ roundingAdjustment.toFixed(2) }}</span>
+                                </div>
                                 <div class="flex justify-between border-t pt-2">
                                     <span class="text-base font-semibold">Total:</span>
                                     <span class="text-base font-semibold">R{{ total.toFixed(2) }}</span>
@@ -1248,6 +1252,15 @@ const total = computed(() => {
     const taxValue = Number(taxAmount.value) || 0;
     const result = subtotalValue + taxValue;
     return Number(result) || 0;
+});
+
+const roundingAdjustment = computed(() => {
+    return form.line_items.reduce((sum, item) => {
+        if ((item.description || '').trim().toLowerCase() !== 'rounding adjustment') {
+            return sum;
+        }
+        return sum + (Number(item.total) || calculateLineTotal(item));
+    }, 0);
 });
 
 // Update form discount_amount when line item discounts change

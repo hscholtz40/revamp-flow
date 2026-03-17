@@ -161,6 +161,7 @@ class InvoicesController extends Controller
         $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
         $chartOfAccounts = ChartOfAccount::where('company_id', $currentCompany->id)->where('is_active', true)->ordered()->get(['id', 'account_code', 'account_name', 'account_type', 'is_default_sales']);
         $defaultSalesAccount = $this->resolveInvoiceFallbackAccount($currentCompany->id);
+        $defaultRoundingAccount = ChartOfAccount::getDefaultRoundingForCompany($currentCompany->id);
 
         return Inertia::render('invoices/Create', [
             'customers' => $customers,
@@ -174,6 +175,7 @@ class InvoicesController extends Controller
             'defaultSalesTaxRateId' => $defaultSalesTaxRate?->id,
             'chartOfAccounts' => $chartOfAccounts,
             'defaultSalesAccountId' => $defaultSalesAccount?->id,
+            'defaultRoundingAccountId' => $defaultRoundingAccount?->id,
         ]);
     }
 
@@ -706,6 +708,7 @@ class InvoicesController extends Controller
         $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
         $chartOfAccounts = ChartOfAccount::where('company_id', $currentCompany->id)->where('is_active', true)->ordered()->get(['id', 'account_code', 'account_name', 'account_type', 'is_default_sales']);
         $defaultSalesAccount = $this->resolveInvoiceFallbackAccount($currentCompany->id);
+        $defaultRoundingAccount = ChartOfAccount::getDefaultRoundingForCompany($currentCompany->id);
 
         return Inertia::render('invoices/Edit', [
             'invoice' => $invoiceData,
@@ -716,6 +719,7 @@ class InvoicesController extends Controller
             'defaultSalesTaxRateId' => $defaultSalesTaxRate?->id,
             'chartOfAccounts' => $chartOfAccounts,
             'defaultSalesAccountId' => $defaultSalesAccount?->id,
+            'defaultRoundingAccountId' => $defaultRoundingAccount?->id,
             'canEditInvoices' => auth()->user()->hasModulePermission('invoices', 'edit'),
             'canEditSalesperson' => auth()->user()->canEditSalesperson('invoices'),
             'canEditCompleted' => auth()->user()->hasModulePermission('invoices', 'edit_completed'),
@@ -1147,6 +1151,15 @@ class InvoicesController extends Controller
                 $lineItem->serialNumbers = collect([]);
             }
         }
+        $invoice->setAttribute('rounding_adjustment_total', $invoice->lineItems->reduce(function ($sum, $item) {
+            if (strtolower(trim((string) ($item->description ?? ''))) !== 'rounding adjustment') {
+                return $sum;
+            }
+            return $sum + (float) ($item->total ?? (($item->quantity ?? 0) * ($item->unit_price ?? 0)));
+        }, 0.0));
+        $invoice->setRelation('lineItems', $invoice->lineItems->reject(function ($item) {
+            return strtolower(trim((string) ($item->description ?? ''))) === 'rounding adjustment';
+        })->values());
         
         $company = $invoice->company;
         $templateId = $request->get('template_id');
@@ -1177,6 +1190,15 @@ class InvoicesController extends Controller
                 $lineItem->serialNumbers = collect([]);
             }
         }
+        $invoice->setAttribute('rounding_adjustment_total', $invoice->lineItems->reduce(function ($sum, $item) {
+            if (strtolower(trim((string) ($item->description ?? ''))) !== 'rounding adjustment') {
+                return $sum;
+            }
+            return $sum + (float) ($item->total ?? (($item->quantity ?? 0) * ($item->unit_price ?? 0)));
+        }, 0.0));
+        $invoice->setRelation('lineItems', $invoice->lineItems->reject(function ($item) {
+            return strtolower(trim((string) ($item->description ?? ''))) === 'rounding adjustment';
+        })->values());
         
         $company = $invoice->company;
         $templateId = $request->get('template_id');
@@ -1223,6 +1245,15 @@ class InvoicesController extends Controller
                 $lineItem->serialNumbers = collect([]);
             }
         }
+        $invoice->setAttribute('rounding_adjustment_total', $invoice->lineItems->reduce(function ($sum, $item) {
+            if (strtolower(trim((string) ($item->description ?? ''))) !== 'rounding adjustment') {
+                return $sum;
+            }
+            return $sum + (float) ($item->total ?? (($item->quantity ?? 0) * ($item->unit_price ?? 0)));
+        }, 0.0));
+        $invoice->setRelation('lineItems', $invoice->lineItems->reject(function ($item) {
+            return strtolower(trim((string) ($item->description ?? ''))) === 'rounding adjustment';
+        })->values());
         
         // Get user's SMTP settings
         $user = auth()->user();

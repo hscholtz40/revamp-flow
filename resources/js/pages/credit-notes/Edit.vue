@@ -404,6 +404,10 @@
                             <span class="text-gray-600">Tax:</span>
                             <span class="font-medium">{{ formatCurrency(taxAmount) }}</span>
                         </div>
+                        <div v-if="Math.abs(roundingAdjustment) > 0.0001" class="flex justify-between">
+                            <span class="text-gray-600">Rounding Adjustment:</span>
+                            <span class="font-medium">{{ formatCurrency(roundingAdjustment) }}</span>
+                        </div>
                         <div class="flex justify-between text-lg font-semibold border-t border-gray-200 pt-2">
                             <span>Total:</span>
                             <span>{{ formatCurrency(total) }}</span>
@@ -1051,6 +1055,15 @@ const taxAmount = computed(() =>
 );
 
 const total = computed(() => subtotal.value + taxAmount.value);
+
+const roundingAdjustment = computed(() =>
+    form.line_items.reduce((sum, item) => {
+        if ((item.description || '').trim().toLowerCase() !== 'rounding adjustment') {
+            return sum;
+        }
+        return sum + calculateLineTotalValue(item);
+    }, 0)
+);
 
 function formatCurrency(amount: number) {
     return new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' }).format(amount ?? 0);

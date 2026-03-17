@@ -33,6 +33,12 @@
 - Optimized report performance to reduce timeout risk by removing unnecessary eager-loaded relations and replacing grouped report per-group queries with a single record fetch plus in-memory bucketing.
 - Standardized report date-range filtering to use each document's primary date field (including `invoice_date` for invoices) instead of relying on record creation timestamps.
 - Fixed report sorting/grouping SQL errors for virtual columns (e.g. `formatted_date`) by mapping them to real database fields before query `ORDER BY`/`GROUP BY`.
+- Added invoice UI rounding support to nearest `0.10` by automatically maintaining a `Rounding Adjustment` line item, and introduced a chart-of-accounts `Default Rounding` account flag so rounding lines are posted to the configured account with tax set to `None`.
+- Updated invoice presentation to keep `Rounding Adjustment` lines operational but hidden from invoice create/edit/show screens and generated invoice PDFs, while preserving backend totals and Xero sync line exports.
+- Added `Rounding Adjustment` breakdown rows to totals sections across document views and core PDFs (invoice, quote, proforma invoice, jobcard, purchase order, and credit note), while keeping rounding persisted as line items for backend calculations/integrations.
+- Fixed invoice edit-page startup crash (`Cannot access 'ensureRoundingAdjustmentLine' before initialization`) by hoisting rounding helper functions used by immediate watchers.
+- Restored automatic rounding behavior in quote and invoice editors: rounding adjustment lines are now actively maintained again (including fallback account assignment when a default rounding account is not configured) so totals round correctly to the nearest `0.10`.
+- Updated all core PDF document tables to suppress `Rounding Adjustment` line items from printed line rows, while still showing rounding in totals sections.
 
 ## 2026-03-16 - version 1.7.6
 
