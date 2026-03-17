@@ -308,6 +308,7 @@ class Jobcard extends Model
             'contact_id' => $this->contact_id,
             'email' => $this->email,
             'phone' => $this->phone,
+            'salesperson_id' => auth()->id(),
             'invoice_number' => Invoice::generateInvoiceNumber($this->company_id),
             'order_number' => $this->order_number,
             'title' => $this->title,
