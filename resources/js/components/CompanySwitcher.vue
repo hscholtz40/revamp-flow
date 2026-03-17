@@ -22,8 +22,8 @@ const isOpen = ref(false);
 
 function switchCompany(company: Company) {
     router.post(companySettings.switch(company.id).url, {}, {
-        preserveState: true,
-        preserveScroll: true,
+        preserveState: false,
+        preserveScroll: false,
     });
     isOpen.value = false;
 }

@@ -350,6 +350,7 @@ interface Props {
         sort_by?: string;
         sort_dir?: 'asc' | 'desc';
     };
+    canEditInvoices: boolean;
     canEditCompleted: boolean;
     canCreateInvoices: boolean;
     isPosEnabled: boolean;
@@ -366,6 +367,9 @@ const sortDir = ref<'asc' | 'desc'>(props.filters.sort_dir || 'desc');
 
 // Helper functions for edit/delete permissions
 const canEditInvoice = (invoice: Invoice) => {
+    if (!props.canEditInvoices) {
+        return false;
+    }
     if (invoice.status !== 'paid') {
         return true;
     }
@@ -373,6 +377,9 @@ const canEditInvoice = (invoice: Invoice) => {
 };
 
 const canDeleteInvoice = (invoice: Invoice) => {
+    if (!props.canEditInvoices) {
+        return false;
+    }
     if (invoice.status !== 'paid') {
         return true;
     }

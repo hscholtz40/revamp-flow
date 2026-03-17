@@ -286,7 +286,7 @@ class CompanySettingsController extends Controller
         // Set the current company for the authenticated user
         $user->update(['current_company_id' => $company->id]);
 
-        return redirect()->back()->with('success', "Switched to {$company->name}");
+        return redirect()->route('dashboard')->with('success', "Switched to {$company->name}");
     }
 
     public function uploadLogo(Request $request, Company $company): RedirectResponse

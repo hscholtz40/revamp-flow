@@ -104,6 +104,7 @@ class InvoicesController extends Controller
                 'sort_by' => $sortBy,
                 'sort_dir' => $sortDir,
             ],
+            'canEditInvoices' => auth()->user()->hasModulePermission('invoices', 'edit'),
             'canEditCompleted' => auth()->user()->hasModulePermission('invoices', 'edit_completed'),
             'canCreateInvoices' => auth()->user()->hasModulePermission('invoices', 'create'),
             'isPosEnabled' => (bool) ($currentCompany?->enable_pos ?? false),
@@ -631,6 +632,7 @@ class InvoicesController extends Controller
         
         return Inertia::render('invoices/Show', [
             'invoice' => $invoiceData,
+            'canEditInvoices' => auth()->user()->hasModulePermission('invoices', 'edit'),
             'canEditCompleted' => auth()->user()->hasModulePermission('invoices', 'edit_completed'),
             'pdfTemplates' => $pdfTemplates,
             'defaultTemplateId' => $defaultTemplateId,
@@ -714,6 +716,7 @@ class InvoicesController extends Controller
             'defaultSalesTaxRateId' => $defaultSalesTaxRate?->id,
             'chartOfAccounts' => $chartOfAccounts,
             'defaultSalesAccountId' => $defaultSalesAccount?->id,
+            'canEditInvoices' => auth()->user()->hasModulePermission('invoices', 'edit'),
             'canEditSalesperson' => auth()->user()->canEditSalesperson('invoices'),
             'canEditCompleted' => auth()->user()->hasModulePermission('invoices', 'edit_completed'),
         ]);

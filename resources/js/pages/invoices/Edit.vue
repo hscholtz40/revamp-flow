@@ -768,6 +768,7 @@ interface Props {
     products: Product[];
     users: User[];
     currentCompany: Company;
+    canEditInvoices: boolean;
     canEditSalesperson: boolean;
     canEditCompleted: boolean;
     taxRates: { id: number; name: string; rate: number; is_default_sales: boolean }[];
@@ -816,12 +817,13 @@ watch(customerSearchQuery, (newQuery) => {
 // Use the permission passed from backend
 const canEditSalesperson = computed(() => props.canEditSalesperson);
 const canEditCompleted = computed(() => props.canEditCompleted);
+const canEditInvoices = computed(() => props.canEditInvoices);
 
 // Check if invoice is completed (paid status)
 const isCompleted = computed(() => props.invoice.status === 'paid');
 
 // Check if user can edit this invoice
-const canEdit = computed(() => !isCompleted.value || canEditCompleted.value);
+const canEdit = computed(() => canEditInvoices.value && (!isCompleted.value || canEditCompleted.value));
 
 const form = useForm({
     title: props.invoice.title,

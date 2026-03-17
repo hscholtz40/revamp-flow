@@ -785,6 +785,7 @@ interface PdfTemplate {
 
 interface Props {
     invoice: Invoice;
+    canEditInvoices: boolean;
     canEditCompleted: boolean;
     pdfTemplates?: PdfTemplate[];
     defaultTemplateId?: number | null;
@@ -822,6 +823,9 @@ const emailResult = ref({
 
 // Computed property to check if user can edit the invoice
 const canEditInvoice = computed(() => {
+    if (!props.canEditInvoices) {
+        return false;
+    }
     if (props.invoice.status !== 'paid') {
         return true;
     }
