@@ -578,16 +578,15 @@
     </table>
     
     @php
-        $roundingAdjustment = isset($invoice->rounding_adjustment_total)
-            ? (float) $invoice->rounding_adjustment_total
-            : ($invoice->lineItems ?? collect())->reduce(function ($sum, $item) {
-                $description = strtolower(trim((string) ($item->description ?? '')));
-                if ($description !== 'rounding adjustment') {
-                    return $sum;
-                }
-                $lineTotal = (float) ($item->total ?? (($item->quantity ?? 0) * ($item->unit_price ?? 0)));
-                return $sum + $lineTotal;
-            }, 0.0);
+        $lineItemsForRoundingTotals = $invoice->lineItemsForRoundingTotals ?? $invoice->lineItems ?? collect();
+        $roundingAdjustment = $lineItemsForRoundingTotals->reduce(function ($sum, $item) {
+            $description = strtolower(trim((string) ($item->description ?? '')));
+            if ($description !== 'rounding adjustment') {
+                return $sum;
+            }
+            $lineTotal = (float) ($item->total ?? (($item->quantity ?? 0) * ($item->unit_price ?? 0)));
+            return $sum + $lineTotal;
+        }, 0.0);
     @endphp
     <div class="totals-section">
         <div class="total-row">

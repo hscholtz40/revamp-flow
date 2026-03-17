@@ -1151,12 +1151,7 @@ class InvoicesController extends Controller
                 $lineItem->serialNumbers = collect([]);
             }
         }
-        $invoice->setAttribute('rounding_adjustment_total', $invoice->lineItems->reduce(function ($sum, $item) {
-            if (strtolower(trim((string) ($item->description ?? ''))) !== 'rounding adjustment') {
-                return $sum;
-            }
-            return $sum + (float) ($item->total ?? (($item->quantity ?? 0) * ($item->unit_price ?? 0)));
-        }, 0.0));
+        $invoice->setRelation('lineItemsForRoundingTotals', $invoice->lineItems->values());
         $invoice->setRelation('lineItems', $invoice->lineItems->reject(function ($item) {
             return strtolower(trim((string) ($item->description ?? ''))) === 'rounding adjustment';
         })->values());
@@ -1190,12 +1185,7 @@ class InvoicesController extends Controller
                 $lineItem->serialNumbers = collect([]);
             }
         }
-        $invoice->setAttribute('rounding_adjustment_total', $invoice->lineItems->reduce(function ($sum, $item) {
-            if (strtolower(trim((string) ($item->description ?? ''))) !== 'rounding adjustment') {
-                return $sum;
-            }
-            return $sum + (float) ($item->total ?? (($item->quantity ?? 0) * ($item->unit_price ?? 0)));
-        }, 0.0));
+        $invoice->setRelation('lineItemsForRoundingTotals', $invoice->lineItems->values());
         $invoice->setRelation('lineItems', $invoice->lineItems->reject(function ($item) {
             return strtolower(trim((string) ($item->description ?? ''))) === 'rounding adjustment';
         })->values());
@@ -1245,12 +1235,7 @@ class InvoicesController extends Controller
                 $lineItem->serialNumbers = collect([]);
             }
         }
-        $invoice->setAttribute('rounding_adjustment_total', $invoice->lineItems->reduce(function ($sum, $item) {
-            if (strtolower(trim((string) ($item->description ?? ''))) !== 'rounding adjustment') {
-                return $sum;
-            }
-            return $sum + (float) ($item->total ?? (($item->quantity ?? 0) * ($item->unit_price ?? 0)));
-        }, 0.0));
+        $invoice->setRelation('lineItemsForRoundingTotals', $invoice->lineItems->values());
         $invoice->setRelation('lineItems', $invoice->lineItems->reject(function ($item) {
             return strtolower(trim((string) ($item->description ?? ''))) === 'rounding adjustment';
         })->values());
@@ -1356,6 +1341,8 @@ class InvoicesController extends Controller
             ]);
         }
 
+        $this->ensureConvertedInvoiceRoundingLine($invoiceNumber, $defaultAccountId);
+
         // Calculate totals
         $invoiceNumber->calculateTotals();
 
@@ -1418,6 +1405,8 @@ class InvoicesController extends Controller
                 'sort_order' => $jobcardLineItem->sort_order,
             ]);
         }
+
+        $this->ensureConvertedInvoiceRoundingLine($invoiceNumber, $defaultAccountId);
 
         // Calculate totals
         $invoiceNumber->calculateTotals();
@@ -1490,6 +1479,71 @@ class InvoicesController extends Controller
         }
 
         return 0;
+    }
+
+    private function ensureConvertedInvoiceRoundingLine(Invoice $invoice, ?int $fallbackAccountId = null): void
+    {
+        $roundingDescription = 'Rounding Adjustment';
+        $invoice->loadMissing('lineItems');
+
+        $baseItems = $invoice->lineItems->filter(function ($item) use ($roundingDescription) {
+            return strtolower(trim((string) ($item->description ?? ''))) !== strtolower($roundingDescription);
+        });
+
+        $baseSubtotal = (float) $baseItems->sum(function ($item) {
+            return (float) ($item->total ?? 0);
+        });
+
+        $baseTax = (float) $baseItems->sum(function ($item) {
+            return (float) ($item->tax_amount ?? 0);
+        });
+
+        $baseTotal = $baseSubtotal + $baseTax;
+        $roundedTargetTotal = round($baseTotal * 10) / 10;
+        $adjustment = round($roundedTargetTotal - $baseTotal, 2);
+
+        $roundingAccountId = ChartOfAccount::getDefaultRoundingForCompany($invoice->company_id)?->id ?? $fallbackAccountId;
+        $existingRoundingLine = $invoice->lineItems->first(function ($item) use ($roundingDescription) {
+            return strtolower(trim((string) ($item->description ?? ''))) === strtolower($roundingDescription);
+        });
+
+        if (abs($adjustment) < 0.0001 || !$roundingAccountId) {
+            if ($existingRoundingLine) {
+                $existingRoundingLine->delete();
+            }
+            return;
+        }
+
+        if ($existingRoundingLine) {
+            $existingRoundingLine->update([
+                'description' => $roundingDescription,
+                'quantity' => 1,
+                'unit_price' => $adjustment,
+                'discount_amount' => 0,
+                'discount_percentage' => 0,
+                'total' => $adjustment,
+                'tax_rate_id' => null,
+                'tax_amount' => 0,
+                'account_id' => $roundingAccountId,
+            ]);
+            return;
+        }
+
+        $nextSortOrder = ((int) $invoice->lineItems()->max('sort_order')) + 1;
+        InvoiceLineItem::create([
+            'invoice_id' => $invoice->id,
+            'product_id' => null,
+            'description' => $roundingDescription,
+            'quantity' => 1,
+            'unit_price' => $adjustment,
+            'discount_amount' => 0,
+            'discount_percentage' => 0,
+            'total' => $adjustment,
+            'tax_rate_id' => null,
+            'tax_amount' => 0,
+            'account_id' => $roundingAccountId,
+            'sort_order' => $nextSortOrder,
+        ]);
     }
 
     private function resolveInvoiceFallbackAccount(int $companyId): ?ChartOfAccount

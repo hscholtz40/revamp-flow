@@ -380,7 +380,7 @@
 
                     <div class="space-y-4">
                         <div
-                            v-for="groupBlock in groupedLineItems"
+                            v-for="groupBlock in visibleGroupedLineItems"
                             :key="groupBlock.groupId"
                             class="rounded border border-gray-200 transition-colors"
                             :class="{ 'border-blue-300 bg-blue-50/30': dragOverGroupId === groupBlock.groupId && dragOverItemIndex === null }"
@@ -755,9 +755,11 @@ interface Props {
     defaultSalesTaxRateId: number | null;
     chartOfAccounts: { id: number; account_code: string; account_name: string; account_type: string }[];
     defaultSalesAccountId: number | null;
+    defaultRoundingAccountId?: number | null;
 }
 
 const props = defineProps<Props>();
+const ROUNDING_LINE_DESCRIPTION = 'Rounding Adjustment';
 
 const showProductSuggestions = ref<Record<number, boolean>>({});
 const discountTypes = ref<Record<number, 'amount' | 'percentage'>>({});
@@ -961,6 +963,13 @@ const groupedLineItems = computed(() =>
     }),
 );
 
+const visibleGroupedLineItems = computed(() =>
+    groupedLineItems.value.map((groupBlock) => ({
+        ...groupBlock,
+        items: groupBlock.items.filter(({ item }) => !isRoundingAdjustmentLine(item)),
+    })),
+);
+
 const addLineItem = (groupIndex = 0) => {
     form.line_items.push({
         product_id: null,
@@ -1006,7 +1015,12 @@ const removeLineGroup = (index: number) => {
 };
 
 const removeLineItem = (index: number) => {
-    if (form.line_items.length > 1) {
+    if (isRoundingLineAtIndex(index)) {
+        return;
+    }
+
+    const nonRoundingCount = form.line_items.filter((item) => !isRoundingAdjustmentLine(item)).length;
+    if (nonRoundingCount > 1) {
         form.line_items.splice(index, 1);
         normalizeLineItemOrder();
     }
@@ -1190,12 +1204,22 @@ const calculateLineTotal = (item: LineItem) => {
     return subtotal - finalDiscount;
 };
 
+const isRoundingAdjustmentLine = (item: LineItem | undefined): boolean => {
+    if (!item) return false;
+    return (item.description || '').trim().toLowerCase() === ROUNDING_LINE_DESCRIPTION.toLowerCase();
+};
+
+const isRoundingLineAtIndex = (index: number): boolean => {
+    return isRoundingAdjustmentLine(form.line_items[index]);
+};
+
 
 // Calculate subtotal before discounts
 const subtotalBeforeDiscount = computed(() => {
     if (!form.line_items || form.line_items.length === 0) return 0;
     const result = form.line_items.reduce((sum, item) => {
         if (!item) return sum;
+        if (isRoundingAdjustmentLine(item)) return sum;
         const quantity = Number(item.quantity) || 0;
         const unitPrice = Number(item.unit_price) || 0;
         return sum + (quantity * unitPrice);
@@ -1208,6 +1232,7 @@ const lineItemDiscountsTotal = computed(() => {
     if (!form.line_items || form.line_items.length === 0) return 0;
     const result = form.line_items.reduce((sum, item) => {
         if (!item) return sum;
+        if (isRoundingAdjustmentLine(item)) return sum;
         const quantity = Number(item.quantity) || 0;
         const unitPrice = Number(item.unit_price) || 0;
         const discountAmount = Number(item.discount_amount) || 0;
@@ -1237,6 +1262,7 @@ const discountAmount = computed(() => {
 
 const taxAmount = computed(() => {
     return form.line_items.reduce((sum, item) => {
+        if (isRoundingAdjustmentLine(item)) return sum;
         const lineTotal = calculateLineTotal(item);
         const taxRate = props.taxRates.find(tr => tr.id === item.tax_rate_id);
         if (taxRate) {
@@ -1247,21 +1273,61 @@ const taxAmount = computed(() => {
 });
 
 const total = computed(() => {
-    // Subtotal already has discounts applied, so just add tax
+    // Subtotal already has discounts applied; rounding is added separately.
     const subtotalValue = Number(subtotal.value) || 0;
     const taxValue = Number(taxAmount.value) || 0;
-    const result = subtotalValue + taxValue;
+    const result = subtotalValue + taxValue + roundingAdjustment.value;
     return Number(result) || 0;
 });
 
 const roundingAdjustment = computed(() => {
-    return form.line_items.reduce((sum, item) => {
-        if ((item.description || '').trim().toLowerCase() !== 'rounding adjustment') {
-            return sum;
-        }
-        return sum + (Number(item.total) || calculateLineTotal(item));
-    }, 0);
+    return roundedTargetTotal.value - baseTotalBeforeRounding.value;
 });
+
+const roundToNearestTenCents = (amount: number): number => Math.round(amount * 10) / 10;
+const baseTotalBeforeRounding = computed(() => subtotal.value + taxAmount.value);
+const roundedTargetTotal = computed(() => roundToNearestTenCents(baseTotalBeforeRounding.value));
+
+const ensureRoundingAdjustmentLine = () => {
+    const roundingIndex = form.line_items.findIndex((item) => isRoundingAdjustmentLine(item));
+    const roundingAccountId = props.defaultRoundingAccountId ?? props.defaultSalesAccountId;
+
+    if (!roundingAccountId) {
+        if (roundingIndex >= 0) {
+            form.line_items.splice(roundingIndex, 1);
+        }
+        return;
+    }
+
+    const adjustment = Math.round(roundingAdjustment.value * 100) / 100;
+    if (Math.abs(adjustment) < 0.0001) {
+        if (roundingIndex >= 0) {
+            form.line_items.splice(roundingIndex, 1);
+        }
+        return;
+    }
+
+    const roundingLine: LineItem = {
+        product_id: null,
+        line_group_id: 1,
+        description: ROUNDING_LINE_DESCRIPTION,
+        quantity: 1,
+        unit_price: adjustment,
+        discount_amount: 0,
+        discount_percentage: 0,
+        tax_rate_id: null,
+        account_id: roundingAccountId,
+    };
+
+    if (roundingIndex >= 0) {
+        form.line_items[roundingIndex] = {
+            ...form.line_items[roundingIndex],
+            ...roundingLine,
+        };
+    } else {
+        form.line_items.push(roundingLine);
+    }
+};
 
 // Update form discount_amount when line item discounts change
 watch(() => lineItemDiscountsTotal.value, (newTotal) => {
@@ -1269,7 +1335,22 @@ watch(() => lineItemDiscountsTotal.value, (newTotal) => {
     form.discount_percentage = 0; // Clear percentage since we're using amount from line items
 });
 
+watch(
+    () => [subtotal.value, taxAmount.value, props.defaultRoundingAccountId, props.defaultSalesAccountId, form.line_groups.length],
+    () => {
+        ensureRoundingAdjustmentLine();
+        normalizeLineItemOrder();
+    },
+    { immediate: true },
+);
+
 const submit = () => {
+    const nonRoundingItems = form.line_items.filter((item) => !isRoundingAdjustmentLine(item));
+    if (nonRoundingItems.length === 0) {
+        form.setError('line_items', 'At least one non-rounding line item is required.');
+        return;
+    }
+
     form.transform((data) => ({
         ...data,
         contact_id: form.contact_id ?? null,

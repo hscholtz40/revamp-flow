@@ -260,6 +260,54 @@ class XeroService
         return $this->settings->company;
     }
 
+    private function isRoundingAdjustmentLineDescription(?string $description): bool
+    {
+        $normalized = strtolower(trim((string) $description));
+        if ($normalized === '') {
+            return false;
+        }
+
+        return str_contains($normalized, 'rounding adjustment');
+    }
+
+    private function resolveXeroTaxTypeForLineItem($lineItem, string $defaultTaxCode, int $companyId): string
+    {
+        // Null tax in JCO must remain non-taxable in Xero.
+        if (empty($lineItem->tax_rate_id)) {
+            return 'NONE';
+        }
+
+        $lineTaxRate = null;
+        if (isset($lineItem->taxRate) && $lineItem->taxRate) {
+            $lineTaxRate = $lineItem->taxRate;
+        } else {
+            $lineTaxRate = TaxRate::where('company_id', $companyId)
+                ->where('id', (int) $lineItem->tax_rate_id)
+                ->first();
+        }
+
+        if ($lineTaxRate) {
+            return $lineTaxRate->xero_tax_rate_id ?? $lineTaxRate->code ?? $defaultTaxCode;
+        }
+
+        return $defaultTaxCode;
+    }
+
+    private function resolveDefaultRoundingAccountForCompany(int $companyId): ?ChartOfAccount
+    {
+        // Prefer the active default rounding account, but fall back to any
+        // account marked as default rounding to avoid silent 1000 fallback.
+        $activeDefault = ChartOfAccount::getDefaultRoundingForCompany($companyId);
+        if ($activeDefault) {
+            return $activeDefault;
+        }
+
+        return ChartOfAccount::where('company_id', $companyId)
+            ->where('is_default_rounding', true)
+            ->orderByDesc('id')
+            ->first();
+    }
+
     /**
      * Make HTTP request with rate limiting handling
      * 
@@ -1972,7 +2020,7 @@ class XeroService
             $invoice->load('lineItems');
         }
         
-        $invoice->load(['lineItems.product', 'lineItems.account']);
+        $invoice->load(['lineItems.product', 'lineItems.account', 'lineItems.taxRate']);
         
         // Ensure customer is loaded
         if (!$invoice->relationLoaded('customer')) {
@@ -1983,20 +2031,23 @@ class XeroService
             throw new \Exception("Invoice '{$invoice->invoice_number}' has no line items. Cannot sync to Xero.");
         }
         
-        $currentCompany = $this->getCompany();
-        $defaultTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
+        $documentCompanyId = (int) ($invoice->company_id ?: $this->settings->company_id);
+        $defaultTaxRate = TaxRate::getDefaultSalesForCompany($documentCompanyId);
         $defaultTaxCode = $defaultTaxRate && $defaultTaxRate->xero_tax_rate_id 
             ? $defaultTaxRate->xero_tax_rate_id 
             : ($defaultTaxRate && $defaultTaxRate->code 
                 ? $defaultTaxRate->code 
                 : 'TAX002');
         
-        $fallbackSalesAccountCode = ChartOfAccount::where('company_id', $currentCompany->id)
+        $fallbackSalesAccountCode = ChartOfAccount::where('company_id', $documentCompanyId)
             ->where('is_active', true)
             ->where('account_code', '1000')
             ->value('account_code')
-            ?? ChartOfAccount::getDefaultSalesForCompany($currentCompany->id)?->account_code
+            ?? ChartOfAccount::getDefaultSalesForCompany($documentCompanyId)?->account_code
             ?? '1000';
+        $defaultRoundingAccount = $this->resolveDefaultRoundingAccountForCompany($documentCompanyId);
+        $defaultRoundingAccountCode = $defaultRoundingAccount?->account_code;
+        $defaultRoundingAccountId = $defaultRoundingAccount?->id;
 
         $lineItems = [];
         foreach ($invoice->lineItems as $lineItem) {
@@ -2014,6 +2065,12 @@ class XeroService
             if ($lineItem->account_id && $lineItem->account && !empty($lineItem->account->account_code)) {
                 $accountCode = $lineItem->account->account_code;
             }
+            $isRoundingAdjustmentLine = $this->isRoundingAdjustmentLineDescription($lineItem->description ?? '')
+                || ($defaultRoundingAccountId && (int) $lineItem->account_id === (int) $defaultRoundingAccountId);
+            if ($isRoundingAdjustmentLine && !empty($defaultRoundingAccountCode)) {
+                $accountCode = $defaultRoundingAccountCode;
+            }
+            $taxTypeCode = $this->resolveXeroTaxTypeForLineItem($lineItem, $defaultTaxCode, $documentCompanyId);
             
             // Calculate expected subtotal (Quantity * UnitAmount)
             $expectedSubtotal = $quantity * $unitAmount;
@@ -2086,7 +2143,7 @@ class XeroService
                 'UnitAmount' => $unitAmount,
                 'LineAmount' => round($lineAmount, 2),
                 'AccountCode' => $accountCode,
-                'TaxType' => $defaultTaxCode,
+                'TaxType' => $taxTypeCode,
             ];
             
             // Add discount field based on discount type
@@ -2170,6 +2227,12 @@ class XeroService
                 $xeroLineItems = $xeroInvoice['LineItems'] ?? [];
                 
                 foreach ($lineItems as $index => &$lineItem) {
+                    $isRoundingAdjustmentLine = $this->isRoundingAdjustmentLineDescription($lineItem['Description'] ?? null);
+                    if ($isRoundingAdjustmentLine) {
+                        // Keep rounding lines mutable so account/tax corrections can be applied
+                        // even when older Xero lines were created with a fallback account code.
+                        continue;
+                    }
                     // Try to find matching Xero line item
                     $matchedXeroItem = null;
                     foreach ($xeroLineItems as $xeroItem) {
@@ -3449,7 +3512,7 @@ class XeroService
             $quote->load('lineItems');
         }
         
-        $quote->load(['lineItems.product', 'lineItems.account']);
+        $quote->load(['lineItems.product', 'lineItems.account', 'lineItems.taxRate']);
         
         // Ensure customer is loaded
         if (!$quote->relationLoaded('customer')) {
@@ -3465,20 +3528,23 @@ class XeroService
             throw new \Exception("Quote '{$quote->quote_number}' has no customer. Cannot sync to Xero.");
         }
         
-        $currentCompany = $this->getCompany();
-        $defaultTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
+        $documentCompanyId = (int) ($quote->company_id ?: $this->settings->company_id);
+        $defaultTaxRate = TaxRate::getDefaultSalesForCompany($documentCompanyId);
         $defaultTaxCode = $defaultTaxRate && $defaultTaxRate->xero_tax_rate_id 
             ? $defaultTaxRate->xero_tax_rate_id 
             : ($defaultTaxRate && $defaultTaxRate->code 
                 ? $defaultTaxRate->code 
                 : 'OUTPUT3');
         
-        $fallbackSalesAccountCode = ChartOfAccount::where('company_id', $currentCompany->id)
+        $fallbackSalesAccountCode = ChartOfAccount::where('company_id', $documentCompanyId)
             ->where('is_active', true)
             ->where('account_code', '1000')
             ->value('account_code')
-            ?? ChartOfAccount::getDefaultSalesForCompany($currentCompany->id)?->account_code
+            ?? ChartOfAccount::getDefaultSalesForCompany($documentCompanyId)?->account_code
             ?? '1000';
+        $defaultRoundingAccount = $this->resolveDefaultRoundingAccountForCompany($documentCompanyId);
+        $defaultRoundingAccountCode = $defaultRoundingAccount?->account_code;
+        $defaultRoundingAccountId = $defaultRoundingAccount?->id;
 
         $lineItems = [];
         foreach ($quote->lineItems as $lineItem) {
@@ -3486,6 +3552,12 @@ class XeroService
             if ($lineItem->account_id && $lineItem->account && !empty($lineItem->account->account_code)) {
                 $accountCode = $lineItem->account->account_code;
             }
+            $isRoundingAdjustmentLine = $this->isRoundingAdjustmentLineDescription($lineItem->description ?? '')
+                || ($defaultRoundingAccountId && (int) $lineItem->account_id === (int) $defaultRoundingAccountId);
+            if ($isRoundingAdjustmentLine && !empty($defaultRoundingAccountCode)) {
+                $accountCode = $defaultRoundingAccountCode;
+            }
+            $taxTypeCode = $this->resolveXeroTaxTypeForLineItem($lineItem, $defaultTaxCode, $documentCompanyId);
             
             $lineItems[] = [
                 'Description' => $lineItem->description,
@@ -3493,7 +3565,7 @@ class XeroService
                 'UnitAmount' => $lineItem->unit_price,
                 'LineAmount' => $lineItem->total,
                 'AccountCode' => $accountCode,
-                'TaxType' => $defaultTaxCode,
+                'TaxType' => $taxTypeCode,
             ];
         }
 

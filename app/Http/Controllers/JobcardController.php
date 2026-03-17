@@ -143,6 +143,7 @@ class JobcardController extends Controller
         $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
         $chartOfAccounts = ChartOfAccount::where('company_id', $currentCompany->id)->where('is_active', true)->ordered()->get(['id', 'account_code', 'account_name', 'account_type', 'is_default_sales']);
         $defaultSalesAccount = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id);
+        $defaultRoundingAccount = ChartOfAccount::getDefaultRoundingForCompany($currentCompany->id);
         $defaultSalesCustomer = Customer::getDefaultSalesForCompany($currentCompany->id);
 
         return Inertia::render('jobcards/Create', [
@@ -154,6 +155,7 @@ class JobcardController extends Controller
             'defaultSalesTaxRateId' => $defaultSalesTaxRate?->id,
             'chartOfAccounts' => $chartOfAccounts,
             'defaultSalesAccountId' => $defaultSalesAccount?->id,
+            'defaultRoundingAccountId' => $defaultRoundingAccount?->id,
             'defaultSalesCustomerId' => $defaultSalesCustomer?->id,
             'currentCompany' => $currentCompany,
             'defaultTerms' => $currentCompany->default_jobcard_terms,
@@ -357,6 +359,7 @@ class JobcardController extends Controller
         $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
         $chartOfAccounts = ChartOfAccount::where('company_id', $currentCompany->id)->where('is_active', true)->ordered()->get(['id', 'account_code', 'account_name', 'account_type', 'is_default_sales']);
         $defaultSalesAccount = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id);
+        $defaultRoundingAccount = ChartOfAccount::getDefaultRoundingForCompany($currentCompany->id);
         $jobcard->load(['customer', 'contact', 'lineItems.product', 'lineItems.lineGroup', 'lineGroups']);
 
         return Inertia::render('jobcards/Edit', [
@@ -369,6 +372,7 @@ class JobcardController extends Controller
             'defaultSalesTaxRateId' => $defaultSalesTaxRate?->id,
             'chartOfAccounts' => $chartOfAccounts,
             'defaultSalesAccountId' => $defaultSalesAccount?->id,
+            'defaultRoundingAccountId' => $defaultRoundingAccount?->id,
             'currentCompany' => $currentCompany,
             'canEditCompleted' => auth()->user()->canEditCompletedJobcards(),
         ]);

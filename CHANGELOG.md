@@ -39,6 +39,13 @@
 - Fixed invoice edit-page startup crash (`Cannot access 'ensureRoundingAdjustmentLine' before initialization`) by hoisting rounding helper functions used by immediate watchers.
 - Restored automatic rounding behavior in quote and invoice editors: rounding adjustment lines are now actively maintained again (including fallback account assignment when a default rounding account is not configured) so totals round correctly to the nearest `0.10`.
 - Updated all core PDF document tables to suppress `Rounding Adjustment` line items from printed line rows, while still showing rounding in totals sections.
+- Enforced Xero export account mapping for `Rounding Adjustment` lines on invoices and quotes so outbound `AccountCode` uses the company’s configured default rounding account when set.
+- Fixed Xero rounding-account export edge cases by resolving default rounding/sales account codes using the document’s company context (invoice/quote `company_id`) and matching rounding lines by both description and default-rounding-account assignment.
+- Fixed Xero invoice/quote line tax mapping so lines with no `tax_rate_id` now export with `TaxType: NONE` (including rounding lines), instead of inheriting the default sales tax code.
+- Improved Xero rounding-account resolution by falling back to any company account flagged `is_default_rounding` (even if inactive) and skipping `LineItemID` reuse for rounding lines on paid/allocated invoice updates so account-code corrections can apply.
+- Restored automatic nearest-`0.10` rounding behavior on jobcard Create/Edit by auto-maintaining hidden `Rounding Adjustment` lines (assigned to default rounding account with sales-account fallback), and included rounding in jobcard totals calculations.
+- Fixed invoice PDF print/download/email error (`Unknown column 'rounding_adjustment_total' in 'SET'`) by passing rounding totals via a non-persisted relation instead of mutating invoice attributes.
+- Updated quote→invoice and jobcard→invoice conversions to enforce nearest-`0.10` rounding on the created invoice by auto-creating/updating a `Rounding Adjustment` line when needed.
 
 ## 2026-03-16 - version 1.7.6
 
