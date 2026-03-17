@@ -857,14 +857,14 @@ const form = useForm({
         product_id: item.product_id?.toString() || null,
         line_group_id: (item as any).line_group_id != null ? Number((item as any).line_group_id) : 1,
         description: item.description,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        discount_amount: (item as any).discount_amount || 0,
-        discount_percentage: (item as any).discount_percentage || 0,
-        total: item.total,
+        quantity: Number(item.quantity) || 0,
+        unit_price: Number(item.unit_price) || 0,
+        discount_amount: Number((item as any).discount_amount) || 0,
+        discount_percentage: Number((item as any).discount_percentage) || 0,
+        total: Number(item.total) || 0,
         serial_number_ids: Array.isArray((item as any).serial_number_ids) ? (item as any).serial_number_ids : [],
-        tax_rate_id: (item as any).tax_rate_id || null,
-        account_id: (item as any).account_id ?? null,
+        tax_rate_id: (item as any).tax_rate_id != null ? Number((item as any).tax_rate_id) : null,
+        account_id: (item as any).account_id != null ? Number((item as any).account_id) : null,
         is_rounding_adjustment: (item.description || '').trim().toLowerCase() === ROUNDING_LINE_DESCRIPTION.toLowerCase(),
     })) as LineItem[],
 });
@@ -888,8 +888,8 @@ const subtotalBeforeDiscount = computed(() => {
         if (isRoundingAdjustmentLine(item)) {
             return sum;
         }
-        const quantity = item.quantity || 0;
-        const unitPrice = item.unit_price || 0;
+        const quantity = Number(item.quantity) || 0;
+        const unitPrice = Number(item.unit_price) || 0;
         return sum + (quantity * unitPrice);
     }, 0);
 });
@@ -900,10 +900,10 @@ const lineItemDiscountsTotal = computed(() => {
         if (isRoundingAdjustmentLine(item)) {
             return sum;
         }
-        const quantity = item.quantity || 0;
-        const unitPrice = item.unit_price || 0;
-        const discountAmount = item.discount_amount || 0;
-        const discountPercentage = item.discount_percentage || 0;
+        const quantity = Number(item.quantity) || 0;
+        const unitPrice = Number(item.unit_price) || 0;
+        const discountAmount = Number(item.discount_amount) || 0;
+        const discountPercentage = Number(item.discount_percentage) || 0;
         
         const itemSubtotal = quantity * unitPrice;
         let itemDiscount = discountAmount;
@@ -1239,7 +1239,9 @@ const addLineItem = (groupIndex = 0) => {
     normalizeLineItemOrder();
 };
 
-const getGroupValueByIndex = (index: number) => Number(form.line_groups[index]?.id) || index + 1;
+function getGroupValueByIndex(index: number): number {
+    return Number(form.line_groups[index]?.id) || index + 1;
+}
 
 normalizeLineItemOrder();
 
@@ -1383,10 +1385,10 @@ const onDropInGroup = (groupId: number) => {
 };
 
 const calculateLineTotalValue = (item: LineItem) => {
-    const quantity = item.quantity || 0;
-    const unitPrice = item.unit_price || 0;
-    const discountAmount = item.discount_amount || 0;
-    const discountPercentage = item.discount_percentage || 0;
+    const quantity = Number(item.quantity) || 0;
+    const unitPrice = Number(item.unit_price) || 0;
+    const discountAmount = Number(item.discount_amount) || 0;
+    const discountPercentage = Number(item.discount_percentage) || 0;
     
     const subtotal = quantity * unitPrice;
     
@@ -1444,7 +1446,9 @@ const getDiscountValue = (index: number) => {
     const item = form.line_items[index];
     if (!item) return 0;
     const type = discountTypes.value[index] || 'amount';
-    return type === 'percentage' ? (item.discount_percentage || 0) : (item.discount_amount || 0);
+    return type === 'percentage'
+        ? (Number(item.discount_percentage) || 0)
+        : (Number(item.discount_amount) || 0);
 };
 
 const setDiscountValue = (index: number, event: Event) => {

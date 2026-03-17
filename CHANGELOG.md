@@ -50,6 +50,8 @@
 - Aligned invoice tax rounding with Xero by switching invoice line tax calculation from always-round-up (`ceil`) to standard 2-decimal rounding, including quote/jobcard-to-invoice conversion tax recalculation, reducing 1-cent VAT mismatches during sync.
 - Fixed invoice UI tax totals (Create/Edit and POS) to use standard 2-decimal rounding instead of round-up-per-line, so on-screen VAT matches saved invoice values and Xero sync calculations.
 - Standardized tax rounding across all remaining document types (quotes, jobcards, credit notes, and purchase orders) in both backend and UI calculations by replacing round-up (`ceil`) behavior with normal 2-decimal rounding to match Xero.
+- Fixed invoice Edit view `NaN` totals on records without discounts by normalizing line-item numeric fields (`quantity`, `unit_price`, `discount_amount`, `discount_percentage`, and related IDs) before calculations, preventing string concatenation in discount/subtotal reducers.
+- Fixed invoice Edit startup crash (`Cannot access 'getGroupValueByIndex' before initialization`) by converting `getGroupValueByIndex` to a hoisted function declaration so immediate watchers can safely call `normalizeLineItemOrder` during setup.
 
 ## 2026-03-16 - version 1.7.6
 
