@@ -492,6 +492,7 @@
         <thead>
             <tr>
                 <th>Item Description</th>
+                <th>Item Code</th>
                 <th class="text-right">QTY</th>
                 <th class="text-right">Price (Ex)</th>
                 <th class="text-right">Discount</th>
@@ -537,12 +538,12 @@
             @endphp
             @foreach($resolvedGroups as $group)
                     @if($group->name)
-                        <tr class="group-header"><td colspan="6" style="font-weight: bold; background: #f5f5f5; padding: 4px 2px;">{{ $group->name }}</td></tr>
+                        <tr class="group-header"><td colspan="7" style="font-weight: bold; background: #f5f5f5; padding: 4px 2px;">{{ $group->name }}</td></tr>
                     @endif
                     @foreach($group->items->sortBy('sort_order') as $item)
                 <tr>
                     <td>
-                        <div>{{ $item->description ?? 'Item Description' }}{{ ($item->product && ($item->product->sku ?? $item->product->barcode)) ? ' (' . ($item->product->sku ?? $item->product->barcode) . ')' : '' }}</div>
+                        <div>{{ $item->description ?? 'Item Description' }}</div>
                         @if(!empty($item->serialNumbers) && $item->serialNumbers->count() > 0)
                             <div style="margin-top: 4px; font-size: 9px; color: #666;">
                                 <strong>Serial Numbers:</strong>
@@ -552,6 +553,7 @@
                             </div>
                         @endif
                     </td>
+                    <td>{{ ($item->product->sku ?? $item->product->barcode ?? $item->product->item_code ?? '—') }}</td>
                     <td class="text-right">{{ number_format($item->quantity ?? 0, 2) }}</td>
                     <td class="text-right">R{{ number_format($item->unit_price ?? 0, 2) }}</td>
                     <td class="text-right">

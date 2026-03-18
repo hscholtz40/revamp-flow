@@ -53,6 +53,8 @@
 - Fixed invoice Edit view `NaN` totals on records without discounts by normalizing line-item numeric fields (`quantity`, `unit_price`, `discount_amount`, `discount_percentage`, and related IDs) before calculations, preventing string concatenation in discount/subtotal reducers.
 - Fixed invoice Edit startup crash (`Cannot access 'getGroupValueByIndex' before initialization`) by converting `getGroupValueByIndex` to a hoisted function declaration so immediate watchers can safely call `normalizeLineItemOrder` during setup.
 - Fixed quote→invoice and jobcard→invoice conversions triggered from document Show pages to assign the currently logged-in user as `salesperson_id` on the created invoice (model-level `convertToInvoice()` path), matching invoice controller conversion behavior.
+- Updated Xero document sync payloads to include line-item `ItemCode` when a linked product has an SKU, covering invoices, quotes, credit notes, and purchase orders so item references are preserved in Xero.
+- Updated invoice PDF line-item table to include a dedicated `Item Code` column (SKU/barcode fallback) instead of appending item codes to descriptions, improving readability and aligning output with Xero item-code usage.
 
 ## 2026-03-16 - version 1.7.6
 

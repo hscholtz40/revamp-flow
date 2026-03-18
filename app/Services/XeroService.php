@@ -44,6 +44,7 @@ class XeroService
     private array $cachedXeroContacts = [];
     private array $cachedXeroAccounts = [];
     private array $xeroInvoiceCache = [];
+    private array $xeroProductSkuCache = [];
 
     public static function getInitialSyncCompletedCacheKey(int $companyId, string $module): string
     {
@@ -291,6 +292,39 @@ class XeroService
         }
 
         return $defaultTaxCode;
+    }
+
+    private function resolveXeroItemCodeForLineItem($lineItem): ?string
+    {
+        $productId = (int) ($lineItem->product_id ?? 0);
+        if ($productId <= 0) {
+            return null;
+        }
+
+        if (array_key_exists($productId, $this->xeroProductSkuCache)) {
+            return $this->xeroProductSkuCache[$productId];
+        }
+
+        $product = null;
+        if (isset($lineItem->product) && $lineItem->product) {
+            $product = $lineItem->product;
+        } else {
+            $product = Product::query()
+                ->select('id', 'sku')
+                ->find($productId);
+        }
+
+        $sku = trim((string) ($product?->sku ?? ''));
+        if ($sku === '') {
+            $this->xeroProductSkuCache[$productId] = null;
+            return null;
+        }
+
+        // Xero item codes are max 30 chars.
+        $itemCode = substr($sku, 0, 30);
+        $this->xeroProductSkuCache[$productId] = $itemCode;
+
+        return $itemCode;
     }
 
     private function resolveDefaultRoundingAccountForCompany(int $companyId): ?ChartOfAccount
@@ -2145,6 +2179,11 @@ class XeroService
                 'AccountCode' => $accountCode,
                 'TaxType' => $taxTypeCode,
             ];
+
+            $itemCode = $this->resolveXeroItemCodeForLineItem($lineItem);
+            if (!empty($itemCode)) {
+                $lineItemData['ItemCode'] = $itemCode;
+            }
             
             // Add discount field based on discount type
             // Xero requires DiscountRate for percentage discounts or DiscountAmount for amount discounts
@@ -3559,7 +3598,7 @@ class XeroService
             }
             $taxTypeCode = $this->resolveXeroTaxTypeForLineItem($lineItem, $defaultTaxCode, $documentCompanyId);
             
-            $lineItems[] = [
+            $lineItemData = [
                 'Description' => $lineItem->description,
                 'Quantity' => $lineItem->quantity,
                 'UnitAmount' => $lineItem->unit_price,
@@ -3567,6 +3606,13 @@ class XeroService
                 'AccountCode' => $accountCode,
                 'TaxType' => $taxTypeCode,
             ];
+
+            $itemCode = $this->resolveXeroItemCodeForLineItem($lineItem);
+            if (!empty($itemCode)) {
+                $lineItemData['ItemCode'] = $itemCode;
+            }
+
+            $lineItems[] = $lineItemData;
         }
 
         $quoteData = [
@@ -6472,6 +6518,11 @@ class XeroService
                 'TaxType' => $taxTypeCode,
             ];
 
+            $itemCode = $this->resolveXeroItemCodeForLineItem($lineItem);
+            if (!empty($itemCode)) {
+                $lineItemData['ItemCode'] = $itemCode;
+            }
+
             if ($discountPercentage <= 0 && $discountAmount <= 0) {
                 $lineItemData['LineAmount'] = round($lineAmount, 2);
             }
@@ -7146,7 +7197,7 @@ class XeroService
                 }
             }
 
-            $lineItems[] = [
+            $lineItemData = [
                 'Description' => $item->description ?? ($item->product ? $item->product->name : 'Item'),
                 'Quantity' => $item->quantity,
                 'UnitAmount' => $item->unit_cost,
@@ -7154,6 +7205,13 @@ class XeroService
                 'AccountCode' => $accountCode,
                 'TaxType' => $defaultTaxCode,
             ];
+
+            $itemCode = $this->resolveXeroItemCodeForLineItem($item);
+            if (!empty($itemCode)) {
+                $lineItemData['ItemCode'] = $itemCode;
+            }
+
+            $lineItems[] = $lineItemData;
         }
 
         $data = [
