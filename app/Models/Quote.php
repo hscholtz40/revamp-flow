@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Facades\DB;
 
 class Quote extends Model
@@ -21,6 +22,8 @@ class Quote extends Model
         'email',
         'phone',
         'invoice_id',
+        'source_type',
+        'source_id',
         'quote_number',
         'order_number',
         'xero_quote_id',
@@ -85,6 +88,11 @@ class Quote extends Model
     public function invoice(): BelongsTo
     {
         return $this->belongsTo(Invoice::class);
+    }
+
+    public function source(): MorphTo
+    {
+        return $this->morphTo('source', 'source_type', 'source_id');
     }
 
     /**

@@ -3,6 +3,12 @@
 ## 2026-03-17 - version 1.7.7
 
 - Added line groups to all document line items: quotes, jobcards, invoices, credit notes, and purchase orders. Each document gets a default "Items" group when created; line groups are displayed on PDFs with group headers. Document conversions (quote→jobcard, quote→invoice, jobcard→invoice) copy line groups and assign line items to the corresponding groups.
+- Standardized document conversion traceability on Quote and Jobcard show pages: converted records now persist source metadata (`source_type`/`source_id`), display the original source document link, and hide only conversion actions already completed (showing a view link instead).
+- Upgraded customer/contact email send flows with a manual-first composer: no template is preselected by default, users can enter/edit subject and HTML body directly, and selecting a template now prefills editable content with an on-screen preview.
+- Added persistent email activity history for customers and contacts, including direct emails and document emails (invoices, quotes, and jobcards), with status tracking and timestamps shown in new Email Activity panels on customer/contact detail pages.
+- Replaced the administration email-template editor implementation from GrapesJS to `vue-email-editor` (Unlayer), with a visual designer + manual HTML tabs and image upload support retained for template assets.
+- Standardized outbound email identity defaults so sender display name uses the current company name and reply-to uses the current company email across direct customer/contact emails and core document email flows.
+- Improved CRM detail pages: Email Activity now has explicit per-page pagination controls on customer and contact views, and the Customer Version History panel has been removed.
 - Added line group controls to document create/edit forms (quotes, invoices, jobcards, credit notes, and purchase orders): users can add/remove group names and assign each line item to a group from the form UI.
 - Updated PDF rendering for historical documents so line items still print when line groups are missing or mismatched; ungrouped items now fall back into an "Items" section.
 - Reworked quote line-group editing UX in Create/Edit: line items now render under their group sections (no per-line group dropdown), and dragging a line item between positions/groups updates both order and group assignment.
@@ -55,6 +61,26 @@
 - Fixed quote→invoice and jobcard→invoice conversions triggered from document Show pages to assign the currently logged-in user as `salesperson_id` on the created invoice (model-level `convertToInvoice()` path), matching invoice controller conversion behavior.
 - Updated Xero document sync payloads to include line-item `ItemCode` when a linked product has an SKU, covering invoices, quotes, credit notes, and purchase orders so item references are preserved in Xero.
 - Updated invoice PDF line-item table to include a dedicated `Item Code` column (SKU/barcode fallback) instead of appending item codes to descriptions, improving readability and aligning output with Xero item-code usage.
+
+
+## v1.8.2
+- Expanded list-view column editing on core document index pages (invoices, quotes, jobcards, purchase orders, and credit notes) by exposing additional model-backed fields as hidden-by-default columns so users can add them to their table views without showing internal ID/Xero identifiers.
+- Updated document Show pages to better match Edit behavior by rendering grouped line items (line-group headers + grouped rows) across invoices, quotes, jobcards, purchase orders, and credit notes; invoice/purchase-order show payloads now load line-group relations required for grouped display.
+- Added `Description` as a selectable hidden-by-default column in the document list column editor for invoices, quotes, and jobcards so users can include document descriptions in index table views when needed.
+- Fixed list column editor labels showing all-uppercase by switching header label extraction from rendered `innerText` to source `textContent`, preserving intended casing while still cleaning sort-indicator symbols.
+- Fixed list column order/visibility drift after applying filters on the same index page by reloading and reapplying saved column preferences whenever the Inertia page URL/query changes (not only when component name changes).
+- Added per-column table filtering on index list views by rendering a filter-input row directly beneath column headers (works with reordered/hidden/custom-added columns from `Edit Columns`) so users can filter each visible column independently.
+- Added jobcard→quote conversion support: new backend endpoint/controller action plus Jobcard Show-page action button now create a draft quote from the jobcard (including copied line groups/line items, pricing, tax, notes, terms, and contact fields).
+- Changed all document conversion actions (quote↔jobcard/invoice and jobcard→quote/invoice paths) to open the target Create screen with source data pre-populated instead of immediately creating records; saving now performs creation explicitly and invoice saves still apply conversion links/status updates to the source document.
+- Added Administration Email Templates with a drag-and-drop editor (image uploads + source HTML editing), exposed customer/contact/company/user/date variable tokens in the template UI, and added template-driven `Email` actions on customer/contact list and detail screens.
+- Removed user-level and company-level SMTP configuration from app workflows: outgoing mail now always uses `.env` mail settings, while all customer/contact/document/reminder emails explicitly set sender name to the active company and reply-to to the active company email.
+- Added automated reminder SMS activity logging into `sms_activities` (not just reminder logs), including success/failure details and phone/message payloads, so reminder SMS now appears in customer/contact SMS activity tracking.
+- Fixed a blank-render issue in the administration email template editor by hardening async `vue-email-editor` module resolution and adding a visible fallback state when the designer fails to initialize.
+- Fixed email template editor viewport sizing by switching the designer wrapper to a fixed height and forcing the embedded editor to fill the container, preventing the collapsed "small bar" layout.
+- Fixed outbound email delivery behavior by explicitly sending through the SMTP mailer in customer/contact/document/reminder flows (instead of the default mailer), preventing false "sent" success when `MAIL_MAILER=log`.
+- Upgraded customer/contact email compose modals to include the visual Unlayer editor in-place (with manual HTML still available), while preserving live preview and stripping embedded design markers before send.
+- Fixed Unlayer editor sync so changing template/body content after mount now reloads into the designer view, ensuring preview content is reflected inside the editor instead of remaining stale.
+- Simplified the customer/contact email composer UI by removing the separate preview panel, giving the body editor full modal width for a cleaner compose experience.
 
 ## 2026-03-16 - version 1.7.6
 

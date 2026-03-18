@@ -38,8 +38,10 @@ interface PurchaseOrderItem {
     total: number;
     quantity_received: number;
     description: string | null;
+    line_group_id?: number | null;
     product_batch_id: number | null;
     serial_number_ids: number[] | null;
+    tax_rate?: { id: number; name: string; rate: number } | null;
 }
 
 interface Supplier {
@@ -67,6 +69,7 @@ interface PurchaseOrder {
     terms: string | null;
     user: User | null;
     items: PurchaseOrderItem[];
+    line_groups?: { id: number; name: string; sort_order?: number }[];
     created_at: string;
     updated_at: string;
 }
@@ -83,9 +86,46 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+const isRoundingAdjustmentLine = (item: PurchaseOrderItem) => {
+    return (item.description || '').trim().toLowerCase() === 'rounding adjustment';
+};
+
+const visiblePurchaseOrderItems = computed(() => {
+    return (props.purchaseOrder.items || []).filter((item) => !isRoundingAdjustmentLine(item));
+});
+
+const groupedVisiblePurchaseOrderItems = computed(() => {
+    const groups = [...(props.purchaseOrder.line_groups || [])].sort((a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0));
+    const fallbackGroupId = groups[0]?.id ?? 1;
+    const baseItems = visiblePurchaseOrderItems.value;
+    const usedIds = new Set<number>();
+
+    const grouped = groups
+        .map((group) => {
+            const items = baseItems.filter((item) => (item.line_group_id ?? fallbackGroupId) === group.id);
+            items.forEach((item) => usedIds.add(item.id));
+            return { groupId: group.id, groupName: group.name || 'Items', items };
+        })
+        .filter((group) => group.items.length > 0);
+
+    const ungroupedItems = baseItems.filter((item) => !usedIds.has(item.id));
+    if (ungroupedItems.length > 0) {
+        grouped.push({
+            groupId: -1,
+            groupName: grouped.length === 0 ? 'Items' : 'Ungrouped',
+            items: ungroupedItems,
+        });
+    }
+
+    if (grouped.length === 0 && baseItems.length > 0) {
+        grouped.push({ groupId: -1, groupName: 'Items', items: baseItems });
+    }
+
+    return grouped;
+});
 const roundingAdjustment = computed(() => {
     return (props.purchaseOrder.items || []).reduce((sum, item) => {
-        if ((item.description || '').trim().toLowerCase() !== 'rounding adjustment') {
+        if (!isRoundingAdjustmentLine(item)) {
             return sum;
         }
         return sum + (Number(item.total) || (Number(item.quantity) || 0) * (Number(item.unit_cost) || 0));
@@ -326,12 +366,19 @@ const sendEmail = () => {
                                         <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Product</th>
                                         <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Quantity</th>
                                         <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Unit Cost</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Tax</th>
                                         <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Received</th>
                                         <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Total</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-gray-200 bg-white">
-                                    <tr v-for="item in props.purchaseOrder.items" :key="item.id">
+                                    <template v-for="group in groupedVisiblePurchaseOrderItems" :key="`group-${group.groupId}`">
+                                        <tr class="bg-gray-100">
+                                            <td colspan="6" class="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-700">
+                                                {{ group.groupName }}
+                                            </td>
+                                        </tr>
+                                        <tr v-for="item in group.items" :key="item.id">
                                         <td class="whitespace-nowrap px-4 py-4">
                                             <div class="flex items-center gap-2">
                                                 <Package class="h-4 w-4 text-gray-400" />
@@ -355,6 +402,12 @@ const sendEmail = () => {
                                         <td class="whitespace-nowrap px-4 py-4 text-right text-sm text-gray-900">
                                             R{{ Number(item.unit_cost).toLocaleString('en-ZA', { minimumFractionDigits: 2 }) }}
                                         </td>
+                                        <td class="whitespace-nowrap px-4 py-4 text-sm text-gray-900">
+                                            <span v-if="item.tax_rate" class="inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-700">
+                                                {{ item.tax_rate.name }} ({{ item.tax_rate.rate }}%)
+                                            </span>
+                                            <span v-else class="text-gray-400">—</span>
+                                        </td>
                                         <td class="whitespace-nowrap px-4 py-4 text-right text-sm">
                                             <span :class="item.quantity_received >= item.quantity ? 'text-green-600' : 'text-yellow-600'" class="font-medium">
                                                 {{ item.quantity_received }} / {{ item.quantity }}
@@ -363,29 +416,30 @@ const sendEmail = () => {
                                         <td class="whitespace-nowrap px-4 py-4 text-right text-sm font-medium text-gray-900">
                                             R{{ Number(item.total).toLocaleString('en-ZA', { minimumFractionDigits: 2 }) }}
                                         </td>
-                                    </tr>
+                                        </tr>
+                                    </template>
                                 </tbody>
                                 <tfoot class="bg-gray-50">
                                     <tr>
-                                        <td colspan="4" class="px-4 py-4 text-right text-sm font-medium text-gray-900">Subtotal</td>
+                                        <td colspan="5" class="px-4 py-4 text-right text-sm font-medium text-gray-900">Subtotal</td>
                                         <td class="whitespace-nowrap px-4 py-4 text-right text-sm font-medium text-gray-900">
                                             R{{ Number(props.purchaseOrder.subtotal).toLocaleString('en-ZA', { minimumFractionDigits: 2 }) }}
                                         </td>
                                     </tr>
                                     <tr v-if="props.purchaseOrder.tax_amount > 0">
-                                        <td colspan="4" class="px-4 py-4 text-right text-sm font-medium text-gray-900">Tax</td>
+                                        <td colspan="5" class="px-4 py-4 text-right text-sm font-medium text-gray-900">Tax</td>
                                         <td class="whitespace-nowrap px-4 py-4 text-right text-sm font-medium text-gray-900">
                                             R{{ Number(props.purchaseOrder.tax_amount).toLocaleString('en-ZA', { minimumFractionDigits: 2 }) }}
                                         </td>
                                     </tr>
                                     <tr v-if="Math.abs(roundingAdjustment) > 0.0001">
-                                        <td colspan="4" class="px-4 py-4 text-right text-sm font-medium text-gray-900">Rounding Adjustment</td>
+                                        <td colspan="5" class="px-4 py-4 text-right text-sm font-medium text-gray-900">Rounding Adjustment</td>
                                         <td class="whitespace-nowrap px-4 py-4 text-right text-sm font-medium text-gray-900">
                                             R{{ Number(roundingAdjustment).toLocaleString('en-ZA', { minimumFractionDigits: 2 }) }}
                                         </td>
                                     </tr>
                                     <tr>
-                                        <td colspan="4" class="px-4 py-4 text-right text-lg font-bold text-gray-900">Total</td>
+                                        <td colspan="5" class="px-4 py-4 text-right text-lg font-bold text-gray-900">Total</td>
                                         <td class="whitespace-nowrap px-4 py-4 text-right text-lg font-bold text-gray-900">
                                             R{{ Number(props.purchaseOrder.total).toLocaleString('en-ZA', { minimumFractionDigits: 2 }) }}
                                         </td>

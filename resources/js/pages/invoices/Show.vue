@@ -188,8 +188,13 @@
                                         </tr>
                                     </thead>
                                     <tbody class="bg-white divide-y divide-gray-200">
-                                        <template v-for="item in visibleInvoiceLineItems" :key="item.id">
-                                            <tr>
+                                        <template v-for="group in groupedVisibleInvoiceLineItems" :key="`group-${group.groupId}`">
+                                            <tr class="bg-gray-100">
+                                                <td colspan="6" class="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-700">
+                                                    {{ group.groupName }}
+                                                </td>
+                                            </tr>
+                                            <tr v-for="item in group.items" :key="item.id">
                                                 <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900 text-center">
                                                     {{ item.quantity }}
                                                 </td>
@@ -729,6 +734,13 @@ interface LineItem {
     product?: Product | null;
     serial_number_ids?: number[];
     serialNumbers?: SerialNumber[];
+    line_group_id?: number | null;
+}
+
+interface LineGroup {
+    id: number;
+    name: string;
+    sort_order?: number;
 }
 
 interface Customer {
@@ -778,6 +790,7 @@ interface Invoice {
     customer?: Customer;
     salesperson?: Salesperson;
     line_items: LineItem[];
+    line_groups?: LineGroup[];
     payments?: Payment[];
     source?: any;
 }
@@ -875,6 +888,44 @@ const isRoundingAdjustmentLine = (item: LineItem) => {
 
 const visibleInvoiceLineItems = computed(() => {
     return (props.invoice.line_items || []).filter((item) => !isRoundingAdjustmentLine(item));
+});
+
+const groupedVisibleInvoiceLineItems = computed(() => {
+    const groups = [...(props.invoice.line_groups || [])].sort((a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0));
+    const fallbackGroupId = groups[0]?.id ?? 1;
+    const baseItems = visibleInvoiceLineItems.value;
+    const usedIds = new Set<number>();
+
+    const grouped = groups
+        .map((group) => {
+            const items = baseItems.filter((item) => (item.line_group_id ?? fallbackGroupId) === group.id);
+            items.forEach((item) => usedIds.add(item.id));
+            return {
+                groupId: group.id,
+                groupName: group.name || 'Items',
+                items,
+            };
+        })
+        .filter((group) => group.items.length > 0);
+
+    const ungroupedItems = baseItems.filter((item) => !usedIds.has(item.id));
+    if (ungroupedItems.length > 0) {
+        grouped.push({
+            groupId: -1,
+            groupName: grouped.length === 0 ? 'Items' : 'Ungrouped',
+            items: ungroupedItems,
+        });
+    }
+
+    if (grouped.length === 0 && baseItems.length > 0) {
+        grouped.push({
+            groupId: -1,
+            groupName: 'Items',
+            items: baseItems,
+        });
+    }
+
+    return grouped;
 });
 
 const roundingAdjustment = computed(() => {

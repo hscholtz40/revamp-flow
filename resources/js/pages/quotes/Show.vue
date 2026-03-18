@@ -100,11 +100,19 @@
                             Email
                         </button>
                         <button
+                            v-if="!props.convertedJobcardId"
                             @click="convertToJobcard"
                             class="rounded-md bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
                         >
                             Convert to Jobcard
                         </button>
+                        <Link
+                            v-else
+                            :href="jobcards.show(props.convertedJobcardId).url"
+                            class="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                        >
+                            View Jobcard
+                        </Link>
                         <button
                             v-if="!props.quote.invoice_id"
                             @click="convertToInvoice"
@@ -217,7 +225,13 @@
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200">
-                                    <tr v-for="item in props.quote.line_items" :key="item.id">
+                                    <template v-for="group in groupedVisibleQuoteLineItems" :key="`group-${group.groupId}`">
+                                        <tr class="bg-gray-100">
+                                            <td colspan="6" class="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-700">
+                                                {{ group.groupName }}
+                                            </td>
+                                        </tr>
+                                        <tr v-for="item in group.items" :key="item.id">
                                         <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900 text-center">
                                             {{ item.quantity }}
                                         </td>
@@ -257,7 +271,8 @@
                                         <td class="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900 text-right">
                                             {{ item.formatted_total }}
                                         </td>
-                                    </tr>
+                                        </tr>
+                                    </template>
                                 </tbody>
                             </table>
                         </div>
@@ -306,6 +321,29 @@
                             <div v-if="props.quote.expiry_date">
                                 <label class="block text-sm font-medium text-gray-500">Expiry Date</label>
                                 <p class="mt-1 text-sm text-gray-900">{{ formatDate(props.quote.expiry_date) }}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="props.quote.source || props.quote.source_type" class="rounded-lg bg-white border border-gray-200 shadow-sm">
+                        <div class="border-b border-gray-200 bg-gray-50 px-6 py-4">
+                            <h2 class="text-lg font-semibold text-gray-900">Source</h2>
+                            <p class="text-sm text-gray-600">Original document this quote was created from</p>
+                        </div>
+                        <div class="p-6">
+                            <div class="text-sm">
+                                <div><span class="font-medium">Type:</span> {{ props.quote.source_type || '-' }}</div>
+                                <div v-if="props.quote.source_type === 'jobcard' && props.quote.source_id">
+                                    <Link
+                                        :href="jobcards.show(props.quote.source_id).url"
+                                        class="text-blue-600 hover:text-blue-800"
+                                    >
+                                        View Original Jobcard
+                                    </Link>
+                                    <span v-if="props.quote.source?.job_number" class="ml-2 text-gray-500">
+                                        ({{ props.quote.source.job_number }})
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -486,6 +524,7 @@ import EmailRecipientsInput from '@/components/EmailRecipientsInput.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import quotes from '@/routes/quotes';
 import invoices from '@/routes/invoices';
+import jobcards from '@/routes/jobcards';
 import products from '@/routes/products';
 import customers from '@/routes/customers';
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
@@ -512,12 +551,15 @@ interface LineItem {
     product_id?: number | null;
     formatted_unit_price: string;
     formatted_total: string;
+    line_group_id?: number | null;
     product?: Product | null;
 }
 
 interface Quote {
     id: number;
     invoice_id?: number;
+    source_type?: string | null;
+    source_id?: number | null;
     quote_number: string;
     order_number?: string | null;
     email?: string | null;
@@ -538,6 +580,11 @@ interface Quote {
     updated_at: string;
     customer?: Customer;
     line_items: LineItem[];
+    line_groups?: { id: number; name: string; sort_order?: number }[];
+    source?: {
+        id: number;
+        job_number?: string;
+    } | null;
 }
 
 interface Props {
@@ -546,12 +593,50 @@ interface Props {
     pdfTemplates?: Array<{ id: number; name: string; module: string; is_default: boolean }>;
     defaultQuoteTemplateId?: number | null;
     defaultProformaTemplateId?: number | null;
+    convertedJobcardId?: number | null;
 }
 
 const props = defineProps<Props>();
+const isRoundingAdjustmentLine = (item: LineItem) => {
+    return (item.description || '').trim().toLowerCase() === 'rounding adjustment';
+};
+
+const visibleQuoteLineItems = computed(() => {
+    return (props.quote.line_items || []).filter((item) => !isRoundingAdjustmentLine(item));
+});
+
+const groupedVisibleQuoteLineItems = computed(() => {
+    const groups = [...(props.quote.line_groups || [])].sort((a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0));
+    const fallbackGroupId = groups[0]?.id ?? 1;
+    const baseItems = visibleQuoteLineItems.value;
+    const usedIds = new Set<number>();
+
+    const grouped = groups
+        .map((group) => {
+            const items = baseItems.filter((item) => (item.line_group_id ?? fallbackGroupId) === group.id);
+            items.forEach((item) => usedIds.add(item.id));
+            return { groupId: group.id, groupName: group.name || 'Items', items };
+        })
+        .filter((group) => group.items.length > 0);
+
+    const ungroupedItems = baseItems.filter((item) => !usedIds.has(item.id));
+    if (ungroupedItems.length > 0) {
+        grouped.push({
+            groupId: -1,
+            groupName: grouped.length === 0 ? 'Items' : 'Ungrouped',
+            items: ungroupedItems,
+        });
+    }
+
+    if (grouped.length === 0 && baseItems.length > 0) {
+        grouped.push({ groupId: -1, groupName: 'Items', items: baseItems });
+    }
+
+    return grouped;
+});
 const roundingAdjustment = computed(() => {
     return (props.quote.line_items || []).reduce((sum, item) => {
-        if ((item.description || '').trim().toLowerCase() !== 'rounding adjustment') {
+        if (!isRoundingAdjustmentLine(item)) {
             return sum;
         }
         return sum + (Number(item.total) || (Number(item.quantity) || 0) * (Number(item.unit_price) || 0));

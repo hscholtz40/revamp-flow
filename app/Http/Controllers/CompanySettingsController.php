@@ -68,13 +68,6 @@ class CompanySettingsController extends Controller
             'is_default' => ['boolean'],
             'enable_pos' => ['boolean'],
             'logo' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg', 'max:2048'],
-            'smtp_host' => ['nullable', 'string', 'max:255'],
-            'smtp_port' => ['nullable', 'integer', 'min:1', 'max:65535'],
-            'smtp_username' => ['nullable', 'string', 'max:255'],
-            'smtp_password' => ['nullable', 'string', 'max:255'],
-            'smtp_encryption' => ['nullable', 'string', 'in:tls,ssl'],
-            'smtp_from_email' => ['nullable', 'email', 'max:255'],
-            'smtp_from_name' => ['nullable', 'string', 'max:255'],
             'whatsapp_business_number' => ['nullable', 'string', 'max:20'],
             'bank_name' => ['nullable', 'string', 'max:255'],
             'bank_account_name' => ['nullable', 'string', 'max:255'],
@@ -202,13 +195,6 @@ class CompanySettingsController extends Controller
             'is_default' => ['boolean'],
             'enable_pos' => ['boolean'],
             'logo' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg', 'max:2048'],
-            'smtp_host' => ['nullable', 'string', 'max:255'],
-            'smtp_port' => ['nullable', 'integer', 'min:1', 'max:65535'],
-            'smtp_username' => ['nullable', 'string', 'max:255'],
-            'smtp_password' => ['nullable', 'string', 'max:255'],
-            'smtp_encryption' => ['nullable', 'string', 'in:tls,ssl'],
-            'smtp_from_email' => ['nullable', 'email', 'max:255'],
-            'smtp_from_name' => ['nullable', 'string', 'max:255'],
             'whatsapp_business_number' => ['nullable', 'string', 'max:20'],
             'bank_name' => ['nullable', 'string', 'max:255'],
             'bank_account_name' => ['nullable', 'string', 'max:255'],
@@ -222,11 +208,6 @@ class CompanySettingsController extends Controller
                 Storage::delete($company->logo_path);
             }
             $validated['logo_path'] = $request->file('logo')->store('company-logos', 'public');
-        }
-
-        // Only update SMTP password if a new one is provided
-        if (empty($validated['smtp_password'])) {
-            unset($validated['smtp_password']);
         }
 
         $company->update($validated);

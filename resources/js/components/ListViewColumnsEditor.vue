@@ -18,8 +18,10 @@ const dragIndex = ref<number | null>(null);
 const isSaving = ref(false);
 const saveTimer = ref<ReturnType<typeof setTimeout> | null>(null);
 const loadTimer = ref<ReturnType<typeof setTimeout> | null>(null);
+const columnFilters = ref<Record<number, string>>({});
 
 const pageKey = computed(() => String(page.component ?? ''));
+const pageUrl = computed(() => String((page as any).url ?? ''));
 const isIndexView = computed(() => pageKey.value.endsWith('/Index'));
 
 function getMainTable(): HTMLTableElement | null {
@@ -33,8 +35,13 @@ function extractColumnsFromTable(table: HTMLTableElement): ColumnPref[] {
     const headerCells = Array.from(headerRow.children) as HTMLElement[];
     return headerCells.map((cell, idx) => ({
         id: idx,
-        label: (cell.innerText || `Column ${idx + 1}`).trim(),
-        visible: true,
+        // Use source textContent (not rendered innerText) so Tailwind uppercase styles
+        // don't force labels to appear in all-caps in the column editor.
+        label: (cell.dataset.colLabel || cell.textContent || `Column ${idx + 1}`)
+            .replace(/[↕↑↓]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim(),
+        visible: cell.dataset.colDefaultVisible !== 'false',
         order: idx,
     }));
 }
@@ -83,11 +90,92 @@ function applyColumnsToTable(table: HTMLTableElement, prefs: ColumnPref[]) {
     });
 }
 
+function ensureColumnFilterRow(table: HTMLTableElement) {
+    const thead = table.querySelector('thead');
+    const headerRow = thead?.querySelector('tr');
+    if (!thead || !headerRow) return;
+
+    let filterRow = thead.querySelector('tr[data-col-filter-row="true"]') as HTMLTableRowElement | null;
+    if (!filterRow) {
+        filterRow = document.createElement('tr');
+        filterRow.dataset.colFilterRow = 'true';
+        filterRow.className = 'bg-gray-50';
+        thead.appendChild(filterRow);
+    }
+
+    const headerCells = Array.from(headerRow.children) as HTMLElement[];
+    const needsRebuild = filterRow.children.length !== headerCells.length;
+    if (needsRebuild) {
+        filterRow.innerHTML = '';
+        headerCells.forEach((headerCell, index) => {
+            const id = Number(headerCell.dataset.colPrefId ?? index);
+            const cell = document.createElement('th');
+            cell.className = 'px-2 py-2';
+            cell.dataset.colPrefId = String(id);
+            const input = document.createElement('input');
+            input.type = 'search';
+            input.value = columnFilters.value[id] ?? '';
+            input.placeholder = 'Filter...';
+            input.className = 'w-full rounded border border-gray-300 px-2 py-1 text-xs';
+            input.addEventListener('input', (event) => {
+                const target = event.target as HTMLInputElement;
+                columnFilters.value[id] = target.value;
+                applyTableRowFilters(table);
+            });
+            cell.appendChild(input);
+            filterRow!.appendChild(cell);
+        });
+    } else {
+        const filterCells = Array.from(filterRow.children) as HTMLElement[];
+        filterCells.forEach((cell) => {
+            const id = Number(cell.dataset.colPrefId ?? -1);
+            const input = cell.querySelector('input') as HTMLInputElement | null;
+            if (input && Number.isFinite(id)) {
+                input.value = columnFilters.value[id] ?? '';
+            }
+        });
+    }
+}
+
+function applyTableRowFilters(table: HTMLTableElement) {
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return;
+
+    const activeFilters = Object.entries(columnFilters.value)
+        .map(([id, value]) => ({ id: Number(id), value: (value || '').trim().toLowerCase() }))
+        .filter((entry) => Number.isFinite(entry.id) && entry.value.length > 0)
+        .filter((entry) => {
+            const col = columns.value.find((c) => c.id === entry.id);
+            return !col || col.visible;
+        });
+
+    const rows = Array.from(tbody.querySelectorAll('tr')) as HTMLElement[];
+    rows.forEach((row) => {
+        const cells = Array.from(row.children) as HTMLElement[];
+        const cellMap = new Map<number, HTMLElement>(
+            cells
+                .map((cell, idx) => [Number(cell.dataset.colPrefId ?? idx), cell] as const)
+                .filter(([id]) => Number.isFinite(id)),
+        );
+
+        const matches = activeFilters.every((filter) => {
+            const cell = cellMap.get(filter.id);
+            const text = (cell?.textContent || '').trim().toLowerCase();
+            return text.includes(filter.value);
+        });
+
+        row.style.display = matches ? '' : 'none';
+    });
+}
+
 function applyCurrentPreferences() {
     if (!isIndexView.value || columns.value.length === 0) return;
     const table = getMainTable();
     if (!table) return;
     applyColumnsToTable(table, columns.value);
+    ensureColumnFilterRow(table);
+    applyColumnsToTable(table, columns.value);
+    applyTableRowFilters(table);
 }
 
 function mergeWithStored(base: ColumnPref[], stored: ColumnPref[]): ColumnPref[] {
@@ -203,6 +291,7 @@ function toggleVisibility(id: number) {
 }
 
 function resetDefaults() {
+    columnFilters.value = {};
     updateColumns(
         [...columns.value]
             .sort((a, b) => a.id - b.id)
@@ -228,7 +317,7 @@ function onDrop(targetIndex: number) {
 }
 
 watch(
-    () => pageKey.value,
+    () => `${pageKey.value}|${pageUrl.value}`,
     () => {
         isOpen.value = false;
         scheduleLoadPreferences();

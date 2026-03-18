@@ -14,4 +14,5 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::put('/contacts/{contact}', [ContactController::class, 'update'])->middleware('module.permission:contacts,edit')->name('contacts.update');
     Route::delete('/contacts/{contact}', [ContactController::class, 'destroy'])->middleware('module.permission:contacts,delete')->name('contacts.destroy');
     Route::post('/contacts/{contact}/sms', [ContactController::class, 'sendSMS'])->middleware('module.permission:contacts,view')->name('contacts.sms');
+    Route::post('/contacts/{contact}/send-email', [ContactController::class, 'sendEmail'])->middleware('module.permission:contacts,view')->name('contacts.sendEmail');
 });

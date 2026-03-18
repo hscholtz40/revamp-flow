@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
+import EmailComposerModal from '@/components/EmailComposerModal.vue';
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import customers from '@/routes/customers';
 import contacts from '@/routes/contacts';
-import VersionHistory from '@/components/VersionHistory.vue';
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 interface Contact {
     id: number;
@@ -27,6 +27,23 @@ interface SMSActivity {
         id: number;
         name: string;
     };
+}
+
+interface EmailActivity {
+    id: number;
+    recipient_email: string;
+    subject: string;
+    email_type: string;
+    related_type?: string | null;
+    related_id?: number | null;
+    status: 'sent' | 'failed' | string;
+    error_message?: string | null;
+    sent_at?: string | null;
+    created_at: string;
+    user?: {
+        id: number;
+        name: string;
+    } | null;
 }
 
 const props = defineProps<{
@@ -61,19 +78,37 @@ const props = defineProps<{
         per_page: number
         total: number
     }
+    emailActivities: {
+        data: EmailActivity[]
+        links: { url: string | null; label: string; active: boolean }[]
+        current_page: number
+        last_page: number
+        per_page: number
+        total: number
+    }
     filters: {
         contact_search?: string
         contacts_per_page?: number
         sms_search?: string
         sms_status?: string
         sms_per_page?: number
+        email_per_page?: number
     }
+    emailTemplates: {
+        id: number
+        name: string
+        subject: string
+        html_template?: string | null
+        css_styles?: string | null
+        is_default?: boolean
+    }[]
 }>()
 
 // SMS functionality
 const showSMSModal = ref(false);
 const showSMSResultModal = ref(false);
 const smsResult = ref<{ success: boolean; message: string } | null>(null);
+const showEmailModal = ref(false);
 
 const smsForm = useForm({
     message: '',
@@ -116,12 +151,23 @@ const closeSMSResultModal = () => {
     smsResult.value = null;
 };
 
+const openEmailModal = () => {
+    showEmailModal.value = true;
+};
+
+const emailSendUrl = computed(() => `/customers/${props.customer.id}/send-email`);
+const emailModalTitle = computed(() => `Send Email to ${props.customer.name}`);
+const emailPreviewContext = computed(() => ({
+    customer: props.customer,
+}));
+
 // Filtering and pagination
 const contactSearch = ref(String(props.filters?.contact_search ?? ''));
 const contactsPerPage = ref(Number(props.filters?.contacts_per_page ?? 5));
 const smsSearch = ref(String(props.filters?.sms_search ?? ''));
 const smsStatus = ref(String(props.filters?.sms_status ?? ''));
 const smsPerPage = ref(Number(props.filters?.sms_per_page ?? 5));
+const emailPerPage = ref(Number(props.filters?.email_per_page ?? 10));
 
 const updateFilters = () => {
     // Ensure customer ID is valid
@@ -151,6 +197,10 @@ const updateFilters = () => {
     if (smsPerPage.value && smsPerPage.value !== 5) {
         params.sms_per_page = smsPerPage.value.toString();
     }
+
+    if (emailPerPage.value && emailPerPage.value !== 10) {
+        params.email_per_page = emailPerPage.value.toString();
+    }
     
     router.get(customers.show(props.customer.id).url, params, {
         preserveState: true,
@@ -159,7 +209,7 @@ const updateFilters = () => {
 };
 
 // Watch for filter changes
-watch([contactSearch, contactsPerPage, smsSearch, smsStatus, smsPerPage], () => {
+watch([contactSearch, contactsPerPage, smsSearch, smsStatus, smsPerPage, emailPerPage], () => {
     // Only update filters if customer is available
     if (props.customer?.id) {
         updateFilters();
@@ -183,6 +233,13 @@ watch([contactSearch, contactsPerPage, smsSearch, smsStatus, smsPerPage], () => 
                         <p class="text-sm text-gray-500 mt-1">Customer Details</p>
                     </div>
                 <div class="flex items-center gap-2">
+                        <button
+                            v-if="props.customer.email"
+                            @click="openEmailModal"
+                            class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                        >
+                            Email
+                        </button>
                         <button 
                             v-if="props.customer.phone"
                             @click="openSMSModal"
@@ -593,22 +650,93 @@ watch([contactSearch, contactsPerPage, smsSearch, smsStatus, smsPerPage], () => 
                 </div>
             </div>
 
-            <!-- Version History Section -->
+            <!-- Email Activities Sub-Panel -->
             <div class="rounded-lg bg-white border border-gray-200 shadow-sm">
                 <div class="border-b border-gray-200 bg-blue-50 px-6 py-4">
-                    <h2 class="text-lg font-semibold text-gray-900 flex items-center">
-                        <svg class="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                        Version History
-                    </h2>
-                    <p class="text-sm text-gray-600">View and restore previous versions of this record</p>
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold text-gray-900 flex items-center">
+                                <svg class="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8m-18 0v8a2 2 0 002 2h14a2 2 0 002-2V8"></path>
+                                </svg>
+                                Email Activity
+                            </h2>
+                            <p class="text-sm text-gray-600">Direct and document email history for this customer</p>
+                        </div>
+                        <span class="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-sm font-medium text-blue-800">
+                            {{ props.emailActivities?.total || 0 }} email{{ (props.emailActivities?.total || 0) !== 1 ? 's' : '' }}
+                        </span>
+                    </div>
                 </div>
                 <div class="p-6">
-                    <VersionHistory 
-                        :model-type="'App\\Models\\Customer'"
-                        :model-id="props.customer.id"
-                    />
+                    <div class="mb-4 flex items-center justify-end">
+                        <div>
+                            <label class="mb-1 block text-sm font-medium text-gray-700">Results per page</label>
+                            <select
+                                v-model="emailPerPage"
+                                class="w-40 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                            >
+                                <option value="10">10 per page</option>
+                                <option value="25">25 per page</option>
+                                <option value="50">50 per page</option>
+                                <option value="100">100 per page</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div v-if="(props.emailActivities?.data || []).length === 0" class="text-center py-8 text-sm text-gray-500">
+                        No emails sent to this customer yet.
+                    </div>
+                    <div v-else class="space-y-3">
+                        <div
+                            v-for="activity in props.emailActivities?.data || []"
+                            :key="activity.id"
+                            class="rounded-lg border border-gray-200 bg-white p-4"
+                        >
+                            <div class="flex items-start justify-between gap-3">
+                                <div>
+                                    <div class="text-sm font-medium text-gray-900">{{ activity.subject }}</div>
+                                    <div class="text-xs text-gray-500 mt-1">
+                                        To: {{ activity.recipient_email }} •
+                                        {{ activity.related_type ? `${activity.related_type} email` : 'direct email' }}
+                                    </div>
+                                </div>
+                                <span
+                                    class="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium"
+                                    :class="activity.status === 'sent' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'"
+                                >
+                                    {{ activity.status }}
+                                </span>
+                            </div>
+                            <div class="mt-2 text-xs text-gray-500">
+                                {{ new Date(activity.sent_at || activity.created_at).toLocaleString() }}
+                                <span v-if="activity.user?.name"> • by {{ activity.user.name }}</span>
+                            </div>
+                            <div v-if="activity.error_message" class="mt-2 text-xs text-red-600">
+                                {{ activity.error_message }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="props.emailActivities?.last_page > 1" class="mt-6 pt-6 border-t border-gray-200">
+                        <div class="flex items-center justify-end gap-1">
+                            <Link
+                                v-for="link in props.emailActivities?.links || []"
+                                :key="link.label"
+                                :href="link.url || '#'"
+                                :preserve-scroll="true"
+                                :class="[
+                                    'px-3 py-1 text-sm rounded-md',
+                                    link.active
+                                        ? 'bg-blue-600 text-white'
+                                        : link.url
+                                            ? 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                                            : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                ]"
+                                v-html="link.label"
+                            />
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -709,6 +837,15 @@ watch([contactSearch, contactsPerPage, smsSearch, smsStatus, smsPerPage], () => 
                 </div>
             </div>
         </div>
+
+        <EmailComposerModal
+            :open="showEmailModal"
+            :title="emailModalTitle"
+            :send-url="emailSendUrl"
+            :templates="props.emailTemplates"
+            :preview-context="emailPreviewContext"
+            @close="showEmailModal = false"
+        />
 
     </AppLayout>
 </template>

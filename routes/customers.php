@@ -15,6 +15,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/customers/{customer}/set-default-sales', [CustomersController::class, 'setDefaultSales'])->middleware('module.permission:customers,edit')->name('customers.setDefaultSales');
     Route::delete('/customers/{customer}', [CustomersController::class, 'destroy'])->middleware('module.permission:customers,delete')->name('customers.destroy');
     Route::post('/customers/{customer}/send-sms', [CustomersController::class, 'sendSMS'])->middleware('module.permission:customers,view')->name('customers.sendSMS');
+    Route::post('/customers/{customer}/send-email', [CustomersController::class, 'sendEmail'])->middleware('module.permission:customers,view')->name('customers.sendEmail');
 });
 
 

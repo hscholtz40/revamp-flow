@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdministrationController;
+use App\Http\Controllers\Administration\EmailTemplateController;
 use App\Http\Controllers\SMSSettingsController;
 use App\Http\Controllers\WhatsAppSettingsController;
 use App\Http\Controllers\Administration\PdfTemplateController;
@@ -43,4 +44,13 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::put('/administration/pdf-templates/{pdfTemplate}', [PdfTemplateController::class, 'update'])->name('administration.pdf-templates.update');
     Route::delete('/administration/pdf-templates/{pdfTemplate}', [PdfTemplateController::class, 'destroy'])->name('administration.pdf-templates.destroy');
     Route::post('/administration/pdf-templates/upload-image', [PdfTemplateController::class, 'uploadImage'])->name('administration.pdf-templates.upload-image');
+
+    // Email Templates routes
+    Route::get('/administration/email-templates', [EmailTemplateController::class, 'index'])->name('administration.email-templates.index');
+    Route::get('/administration/email-templates/create', [EmailTemplateController::class, 'create'])->name('administration.email-templates.create');
+    Route::post('/administration/email-templates', [EmailTemplateController::class, 'store'])->name('administration.email-templates.store');
+    Route::get('/administration/email-templates/{emailTemplate}/edit', [EmailTemplateController::class, 'edit'])->name('administration.email-templates.edit');
+    Route::put('/administration/email-templates/{emailTemplate}', [EmailTemplateController::class, 'update'])->name('administration.email-templates.update');
+    Route::delete('/administration/email-templates/{emailTemplate}', [EmailTemplateController::class, 'destroy'])->name('administration.email-templates.destroy');
+    Route::post('/administration/email-templates/upload-image', [EmailTemplateController::class, 'uploadImage'])->name('administration.email-templates.upload-image');
 });

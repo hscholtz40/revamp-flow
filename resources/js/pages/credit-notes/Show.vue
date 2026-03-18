@@ -131,7 +131,13 @@
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-gray-200 bg-white">
-                                    <tr v-for="item in creditNote.line_items" :key="item.id">
+                                    <template v-for="group in groupedVisibleCreditNoteLineItems" :key="`group-${group.groupId}`">
+                                        <tr class="bg-gray-100">
+                                            <td colspan="6" class="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-700">
+                                                {{ group.groupName }}
+                                            </td>
+                                        </tr>
+                                        <tr v-for="item in group.items" :key="item.id">
                                         <td class="px-3 py-3 text-sm text-gray-900">
                                             <span>{{ item.description }}{{ (item.product?.sku || item.product?.barcode) ? ` (${item.product.sku || item.product.barcode})` : '' }}</span>
                                         </td>
@@ -149,7 +155,8 @@
                                             <span v-else class="text-gray-400">-</span>
                                         </td>
                                         <td class="whitespace-nowrap px-3 py-3 text-right text-sm font-medium text-gray-900">{{ formatCurrency(item.total) }}</td>
-                                    </tr>
+                                        </tr>
+                                    </template>
                                 </tbody>
                             </table>
                         </div>
@@ -356,14 +363,53 @@ interface Props {
             discount_percentage: number;
             tax_amount: number;
             total: number;
+            line_group_id?: number | null;
             product: { id: number; name: string; sku: string } | null;
             tax_rate: { id: number; name: string; rate: number } | null;
         }>;
+        line_groups?: Array<{ id: number; name: string; sort_order?: number }>;
     };
 }
 
 const props = defineProps<Props>();
 const creditNote = computed(() => props.creditNote);
+const isRoundingAdjustmentLine = (item: { description?: string | null }) => {
+    return (item.description || '').trim().toLowerCase() === 'rounding adjustment';
+};
+
+const visibleCreditNoteLineItems = computed(() => {
+    return (creditNote.value.line_items || []).filter((item) => !isRoundingAdjustmentLine(item));
+});
+
+const groupedVisibleCreditNoteLineItems = computed(() => {
+    const groups = [...(creditNote.value.line_groups || [])].sort((a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0));
+    const fallbackGroupId = groups[0]?.id ?? 1;
+    const baseItems = visibleCreditNoteLineItems.value;
+    const usedIds = new Set<number>();
+
+    const grouped = groups
+        .map((group) => {
+            const items = baseItems.filter((item) => (item.line_group_id ?? fallbackGroupId) === group.id);
+            items.forEach((item) => usedIds.add(item.id));
+            return { groupId: group.id, groupName: group.name || 'Items', items };
+        })
+        .filter((group) => group.items.length > 0);
+
+    const ungroupedItems = baseItems.filter((item) => !usedIds.has(item.id));
+    if (ungroupedItems.length > 0) {
+        grouped.push({
+            groupId: -1,
+            groupName: grouped.length === 0 ? 'Items' : 'Ungrouped',
+            items: ungroupedItems,
+        });
+    }
+
+    if (grouped.length === 0 && baseItems.length > 0) {
+        grouped.push({ groupId: -1, groupName: 'Items', items: baseItems });
+    }
+
+    return grouped;
+});
 const showRefundModal = ref(false);
 
 const statusOptions = [
@@ -400,7 +446,7 @@ const canAddRefund = computed(() => Number(creditNote.value.remaining_credit || 
 const totalRefunded = computed(() => (creditNote.value.payments || []).reduce((sum, p) => sum + Number(p.amount || 0), 0));
 const roundingAdjustment = computed(() =>
     (creditNote.value.line_items || []).reduce((sum, item) => {
-        if ((item.description || '').trim().toLowerCase() !== 'rounding adjustment') {
+        if (!isRoundingAdjustmentLine(item)) {
             return sum;
         }
         return sum + (Number(item.total) || (Number(item.quantity) || 0) * (Number(item.unit_price) || 0));

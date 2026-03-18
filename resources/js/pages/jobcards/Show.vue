@@ -79,6 +79,20 @@
                         </button>
                         <template v-if="!isLimitedUser">
                             <button
+                                v-if="!props.convertedQuoteId"
+                                @click="convertToQuote"
+                                class="rounded-md bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+                            >
+                                Convert to Quote
+                            </button>
+                            <Link
+                                v-else
+                                :href="quotes.show(props.convertedQuoteId).url"
+                                class="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                            >
+                                View Quote
+                            </Link>
+                            <button
                                 v-if="!props.jobcard.invoice_id"
                                 @click="convertToInvoice"
                                 class="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
@@ -209,7 +223,13 @@
                                         </tr>
                                     </thead>
                                     <tbody class="bg-white divide-y divide-gray-200">
-                                        <tr v-for="item in props.jobcard.line_items" :key="item.id">
+                                        <template v-for="group in groupedVisibleJobcardLineItems" :key="`group-${group.groupId}`">
+                                            <tr class="bg-gray-100">
+                                                <td :colspan="isLimitedUser ? 2 : 6" class="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-700">
+                                                    {{ group.groupName }}
+                                                </td>
+                                            </tr>
+                                            <tr v-for="item in group.items" :key="item.id">
                                             <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900 text-center">
                                                 {{ item.quantity }}
                                             </td>
@@ -238,7 +258,8 @@
                                             <td v-if="!isLimitedUser" class="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900 text-right">
                                                 {{ item.formatted_total }}
                                             </td>
-                                        </tr>
+                                            </tr>
+                                        </template>
                                     </tbody>
                                 </table>
                             </div>
@@ -322,6 +343,29 @@
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Last Updated</label>
                                     <p class="text-sm text-gray-900">{{ formatDateTime(props.jobcard.updated_at) }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="props.jobcard.source || props.jobcard.source_type" class="rounded-lg bg-white border border-gray-200 shadow-sm">
+                        <div class="border-b border-gray-200 bg-gray-50 px-6 py-4">
+                            <h2 class="text-lg font-semibold text-gray-900">Source</h2>
+                            <p class="text-sm text-gray-600">Original document this jobcard was created from</p>
+                        </div>
+                        <div class="p-6">
+                            <div class="text-sm">
+                                <div><span class="font-medium">Type:</span> {{ props.jobcard.source_type || '-' }}</div>
+                                <div v-if="props.jobcard.source_type === 'quote' && props.jobcard.source_id">
+                                    <Link
+                                        :href="quotes.show(props.jobcard.source_id).url"
+                                        class="text-blue-600 hover:text-blue-800"
+                                    >
+                                        View Original Quote
+                                    </Link>
+                                    <span v-if="props.jobcard.source?.quote_number" class="ml-2 text-gray-500">
+                                        ({{ props.jobcard.source.quote_number }})
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -538,6 +582,7 @@ import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import jobcards from '@/routes/jobcards';
 import invoices from '@/routes/invoices';
+import quotes from '@/routes/quotes';
 import products from '@/routes/products';
 import customers from '@/routes/customers';
 import TimeTracking from '@/components/TimeTracking.vue';
@@ -557,6 +602,7 @@ interface LineItem {
     unit_price: number | null;
     total: number | null;
     product_id?: number | null;
+    line_group_id?: number | null;
     product?: Product | null;
     formatted_unit_price: string;
     formatted_total: string;
@@ -601,6 +647,8 @@ interface AssignedTeam {
 interface Jobcard {
     id: number;
     invoice_id?: number;
+    source_type?: string | null;
+    source_id?: number | null;
     job_number: string;
     order_number?: string | null;
     email?: string | null;
@@ -626,7 +674,12 @@ interface Jobcard {
     updated_at: string;
     customer: Customer;
     line_items: LineItem[];
+    line_groups?: { id: number; name: string; sort_order?: number }[];
     time_entries?: TimeEntry[];
+    source?: {
+        id: number;
+        quote_number?: string;
+    } | null;
 }
 
 interface Props {
@@ -634,6 +687,7 @@ interface Props {
     canEditCompleted: boolean;
     pdfTemplates?: Array<{ id: number; name: string; module: string; is_default: boolean }>;
     defaultTemplateId?: number | null;
+    convertedQuoteId?: number | null;
     runningTimer?: TimeEntry | null;
     timeSummary?: {
         total_hours: number;
@@ -643,9 +697,47 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+const isRoundingAdjustmentLine = (item: LineItem) => {
+    return (item.description || '').trim().toLowerCase() === 'rounding adjustment';
+};
+
+const visibleJobcardLineItems = computed(() => {
+    return (props.jobcard.line_items || []).filter((item) => !isRoundingAdjustmentLine(item));
+});
+
+const groupedVisibleJobcardLineItems = computed(() => {
+    const groups = [...(props.jobcard.line_groups || [])].sort((a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0));
+    const fallbackGroupId = groups[0]?.id ?? 1;
+    const baseItems = visibleJobcardLineItems.value;
+    const usedIds = new Set<number>();
+
+    const grouped = groups
+        .map((group) => {
+            const items = baseItems.filter((item) => (item.line_group_id ?? fallbackGroupId) === group.id);
+            items.forEach((item) => usedIds.add(item.id));
+            return { groupId: group.id, groupName: group.name || 'Items', items };
+        })
+        .filter((group) => group.items.length > 0);
+
+    const ungroupedItems = baseItems.filter((item) => !usedIds.has(item.id));
+    if (ungroupedItems.length > 0) {
+        grouped.push({
+            groupId: -1,
+            groupName: grouped.length === 0 ? 'Items' : 'Ungrouped',
+            items: ungroupedItems,
+        });
+    }
+
+    if (grouped.length === 0 && baseItems.length > 0) {
+        grouped.push({ groupId: -1, groupName: 'Items', items: baseItems });
+    }
+
+    return grouped;
+});
+
 const roundingAdjustment = computed(() => {
     return (props.jobcard.line_items || []).reduce((sum, item) => {
-        if ((item.description || '').trim().toLowerCase() !== 'rounding adjustment') {
+        if (!isRoundingAdjustmentLine(item)) {
             return sum;
         }
         return sum + (Number(item.total) || (Number(item.quantity) || 0) * (Number(item.unit_price) || 0));
@@ -789,6 +881,12 @@ const downloadPDF = () => {
 const convertToInvoice = () => {
     if (confirm('Are you sure you want to convert this jobcard to an invoice?')) {
         router.post(jobcards.convertToInvoice(props.jobcard.id).url);
+    }
+};
+
+const convertToQuote = () => {
+    if (confirm('Are you sure you want to convert this jobcard to a quote?')) {
+        router.post(jobcards.convertToQuote(props.jobcard.id).url);
     }
 };
 

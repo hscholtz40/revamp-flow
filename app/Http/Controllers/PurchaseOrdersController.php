@@ -213,6 +213,9 @@ class PurchaseOrdersController extends Controller
             'supplier', 
             'items.product.batches',
             'items.product.serialNumbers',
+            'items.taxRate',
+            'items.lineGroup',
+            'lineGroups',
             'user'
         ]);
         
@@ -425,6 +428,7 @@ class PurchaseOrdersController extends Controller
         }
 
         $purchaseOrder->load(['supplier', 'items.product', 'items.taxRate', 'items.lineGroup', 'lineGroups', 'company']);
+        $company = $purchaseOrder->company;
         
         $company = $purchaseOrder->company;
         $templateId = $request->get('template_id');
@@ -457,22 +461,10 @@ class PurchaseOrdersController extends Controller
         ]);
 
         $purchaseOrder->load(['supplier', 'items.product', 'items.taxRate', 'items.lineGroup', 'lineGroups', 'company']);
-        
-        // Get user's SMTP settings
-        $user = auth()->user();
-        if ($user->smtp_host && $user->smtp_username && $user->smtp_password) {
-            \Illuminate\Support\Facades\Config::set('mail.mailers.smtp.host', $user->smtp_host);
-            \Illuminate\Support\Facades\Config::set('mail.mailers.smtp.port', $user->smtp_port ?? 587);
-            \Illuminate\Support\Facades\Config::set('mail.mailers.smtp.username', $user->smtp_username);
-            \Illuminate\Support\Facades\Config::set('mail.mailers.smtp.password', $user->smtp_password);
-            \Illuminate\Support\Facades\Config::set('mail.mailers.smtp.encryption', $user->smtp_encryption ?? 'tls');
-            \Illuminate\Support\Facades\Config::set('mail.from.address', $user->smtp_username);
-            \Illuminate\Support\Facades\Config::set('mail.from.name', $user->name);
-        }
+        $company = $purchaseOrder->company;
 
         try {
             // Generate PDF
-            $company = $purchaseOrder->company;
             $templateId = $request->get('template_id');
             
             $pdfService = new \App\Services\PdfGenerationService();
@@ -484,8 +476,10 @@ class PurchaseOrdersController extends Controller
                 'purchaseOrder' => $purchaseOrder,
                 'customMessage' => $validated['customMessage'],
             ], function ($message) use ($validated, $purchaseOrder, $pdfContent, $company) {
+                $fromName = $company?->name ?: config('mail.from.name');
                 $message->to($validated['email'])
                     ->subject("Purchase Order {$purchaseOrder->po_number} - {$purchaseOrder->supplier->name}")
+                    ->from(config('mail.from.address'), $fromName)
                     ->attachData($pdfContent, "purchase-order-{$purchaseOrder->po_number}.pdf", [
                         'mime' => 'application/pdf',
                     ]);

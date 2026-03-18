@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Facades\DB;
 
 class Jobcard extends Model
@@ -48,6 +49,8 @@ class Jobcard extends Model
         'assigned_to_user_id',
         'assigned_to_team_id',
         'invoice_id',
+        'source_type',
+        'source_id',
         'job_number',
         'order_number',
         'title',
@@ -126,6 +129,11 @@ class Jobcard extends Model
     public function invoice(): BelongsTo
     {
         return $this->belongsTo(Invoice::class);
+    }
+
+    public function source(): MorphTo
+    {
+        return $this->morphTo('source', 'source_type', 'source_id');
     }
 
     public function statusTransitions(): HasMany
@@ -292,6 +300,78 @@ class Jobcard extends Model
     public function getRecipientPhoneAttribute(): ?string
     {
         return $this->phone ?: $this->contact?->phone ?: $this->customer?->phone;
+    }
+
+    /**
+     * Convert jobcard to quote
+     */
+    public function convertToQuote(): Quote
+    {
+        $this->load('lineItems.lineGroup', 'lineGroups');
+
+        $quote = Quote::create([
+            'company_id' => $this->company_id,
+            'customer_id' => $this->customer_id,
+            'contact_id' => $this->contact_id,
+            'email' => $this->email,
+            'phone' => $this->phone,
+            'quote_number' => Quote::generateQuoteNumber($this->company_id),
+            'order_number' => $this->order_number,
+            'title' => $this->title,
+            'description' => $this->description,
+            'status' => 'draft',
+            'expiry_date' => now()->addDays(30)->toDateString(),
+            'subtotal' => $this->subtotal,
+            'discount_amount' => $this->discount_amount,
+            'discount_percentage' => $this->discount_percentage,
+            'tax_rate' => $this->tax_rate,
+            'tax_amount' => $this->tax_amount,
+            'total' => $this->total,
+            'notes' => $this->notes,
+            'terms_conditions' => $this->terms_conditions,
+        ]);
+
+        $groupMap = [];
+        foreach ($this->lineGroups as $group) {
+            $newGroup = LineGroup::create([
+                'line_groupable_type' => Quote::class,
+                'line_groupable_id' => $quote->id,
+                'name' => $group->name,
+                'sort_order' => $group->sort_order,
+            ]);
+            $groupMap[$group->id] = $newGroup->id;
+        }
+
+        if (empty($groupMap)) {
+            $defaultGroup = LineGroup::createDefaultFor($quote);
+            $defaultGroupId = $defaultGroup->id;
+        } else {
+            $defaultGroupId = $groupMap[$this->lineGroups->first()?->id] ?? reset($groupMap);
+        }
+
+        foreach ($this->lineItems as $lineItem) {
+            $groupId = ($lineItem->line_group_id && isset($groupMap[$lineItem->line_group_id]))
+                ? $groupMap[$lineItem->line_group_id]
+                : $defaultGroupId;
+
+            QuoteLineItem::create([
+                'quote_id' => $quote->id,
+                'line_group_id' => $groupId,
+                'product_id' => $lineItem->product_id,
+                'description' => $lineItem->description,
+                'quantity' => $lineItem->quantity,
+                'unit_price' => $lineItem->unit_price,
+                'discount_amount' => $lineItem->discount_amount ?? 0,
+                'discount_percentage' => $lineItem->discount_percentage ?? 0,
+                'total' => $lineItem->total,
+                'tax_rate_id' => $lineItem->tax_rate_id,
+                'tax_amount' => $lineItem->tax_amount,
+                'account_id' => $lineItem->account_id,
+                'sort_order' => $lineItem->sort_order,
+            ]);
+        }
+
+        return $quote;
     }
 
     /**

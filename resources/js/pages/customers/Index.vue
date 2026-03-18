@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
+import EmailComposerModal from '@/components/EmailComposerModal.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import customers from '@/routes/customers';
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 interface Customer {
     id: number;
@@ -25,6 +26,14 @@ const props = defineProps<{
     };
     filters: { search?: string; sort_by?: string; sort_dir?: 'asc' | 'desc' };
     currentCompany: Company;
+    emailTemplates: {
+        id: number;
+        name: string;
+        subject: string;
+        html_template?: string | null;
+        css_styles?: string | null;
+        is_default?: boolean;
+    }[];
 }>();
 
 const search = ref(props.filters?.search ?? '');
@@ -34,6 +43,7 @@ const showSMSModal = ref(false);
 const showSMSResultModal = ref(false);
 const selectedCustomer = ref<Customer | null>(null);
 const smsResult = ref<{ success: boolean; message: string } | null>(null);
+const showEmailModal = ref(false);
 
 const smsForm = useForm({
     message: '',
@@ -79,6 +89,17 @@ const closeSMSResultModal = () => {
     smsResult.value = null;
     selectedCustomer.value = null;
 };
+
+const openEmailModal = (customer: Customer) => {
+    selectedCustomer.value = customer;
+    showEmailModal.value = true;
+};
+
+const emailSendUrl = computed(() => selectedCustomer.value ? `/customers/${selectedCustomer.value.id}/send-email` : null);
+const emailModalTitle = computed(() => `Send Email to ${selectedCustomer.value?.name || 'Customer'}`);
+const emailPreviewContext = computed(() => ({
+    customer: selectedCustomer.value ?? {},
+}));
 
 watch(search, (value) => {
     const params: Record<string, string> = {};
@@ -235,6 +256,13 @@ const setDefaultSales = (customer: Customer) => {
                                             Edit
                                         </Link>
                                         <button
+                                            v-if="c.email"
+                                            @click="openEmailModal(c)"
+                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                        >
+                                            Email
+                                        </button>
+                                        <button
                                             v-if="c.phone"
                                             @click="openSMSModal(c)"
                                             class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-green-700 bg-green-100 hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
@@ -357,6 +385,16 @@ const setDefaultSales = (customer: Customer) => {
                 </div>
             </div>
         </div>
+
+        <EmailComposerModal
+            :open="showEmailModal"
+            :title="emailModalTitle"
+            :send-url="emailSendUrl"
+            :templates="props.emailTemplates"
+            :preview-context="emailPreviewContext"
+            @close="showEmailModal = false"
+            @sent="selectedCustomer = null"
+        />
     </AppLayout>
     
 </template>

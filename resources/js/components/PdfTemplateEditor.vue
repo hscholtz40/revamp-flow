@@ -9,11 +9,13 @@ interface Props {
     module: string;
     disabled?: boolean;
     cssStyles?: string;
+    imageUploadUrl?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
     disabled: false,
     cssStyles: '',
+    imageUploadUrl: '/administration/pdf-templates/upload-image',
 });
 
 const emit = defineEmits<{
@@ -221,6 +223,24 @@ const moduleVariables: Record<string, Array<{ label: string; value: string; cate
         { label: 'Supplier Email', value: '{{purchaseOrder.supplier.email}}', category: 'Supplier' },
         // Line Items
         { label: 'Line Items Loop', value: '{{#each purchaseOrder.items}}{{this.description_with_code}}{{/each}}', category: 'Line Items' },
+    ],
+    'customer-contact': [
+        { label: 'Company Name', value: '{{company.name}}', category: 'Company' },
+        { label: 'Company Email', value: '{{company.email}}', category: 'Company' },
+        { label: 'Company Phone', value: '{{company.phone}}', category: 'Company' },
+        { label: 'Company Website', value: '{{company.website}}', category: 'Company' },
+        { label: 'Customer Name', value: '{{customer.name}}', category: 'Customer' },
+        { label: 'Customer Email', value: '{{customer.email}}', category: 'Customer' },
+        { label: 'Customer Phone', value: '{{customer.phone}}', category: 'Customer' },
+        { label: 'Customer Account Code', value: '{{customer.account_code}}', category: 'Customer' },
+        { label: 'Contact Name', value: '{{contact.name}}', category: 'Contact' },
+        { label: 'Contact Email', value: '{{contact.email}}', category: 'Contact' },
+        { label: 'Contact Phone', value: '{{contact.phone}}', category: 'Contact' },
+        { label: 'Contact Position', value: '{{contact.position}}', category: 'Contact' },
+        { label: 'Current User Name', value: '{{user.name}}', category: 'User' },
+        { label: 'Current User Email', value: '{{user.email}}', category: 'User' },
+        { label: 'Today Date', value: '{{date.today}}', category: 'Dates' },
+        { label: 'Current Date Time', value: '{{date.now}}', category: 'Dates' },
     ],
 };
 
@@ -2422,7 +2442,7 @@ onMounted(async () => {
             appendTo: '#traits-panel',
         },
         assetManager: {
-            upload: '/administration/pdf-templates/upload-image',
+            upload: props.imageUploadUrl,
             uploadName: 'image',
             multiUpload: false,
             headers: {

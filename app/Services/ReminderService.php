@@ -9,10 +9,11 @@ use App\Models\Payment;
 use App\Models\Quote;
 use App\Models\ReminderLog;
 use App\Models\ReminderSettings;
+use App\Models\SMSActivity;
 use App\Models\SMSSettings;
+use App\Models\User;
 use App\Models\WhatsAppSettings;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
@@ -80,64 +81,13 @@ class ReminderService
         return null;
     }
 
-    /**
-     * Configure SMTP settings for email sending.
-     * Uses company SMTP settings if available, otherwise falls back to user settings.
-     * 
-     * @return bool Returns true if SMTP was configured, false otherwise
-     */
-    protected function configureSmtp(Company $company): bool
+    protected function applyCompanyMailIdentity($mail, Company $company): void
     {
-        Config::set('mail.reply_to.address', $company->email ?: null);
-        Config::set('mail.reply_to.name', $company->name ?: null);
+        $mail->from(
+            config('mail.from.address'),
+            $company->name ?: config('mail.from.name')
+        );
 
-        // Use company SMTP settings if configured
-        if ($company->hasSmtpConfigured()) {
-            Config::set('mail.mailers.smtp.host', $company->smtp_host);
-            Config::set('mail.mailers.smtp.port', $company->smtp_port ?? 587);
-            Config::set('mail.mailers.smtp.username', $company->smtp_username);
-            Config::set('mail.mailers.smtp.password', $company->smtp_password);
-            Config::set('mail.mailers.smtp.encryption', $company->smtp_encryption ?? 'tls');
-            Config::set('mail.from.address', $company->smtp_from_email ?? $company->smtp_username ?? $company->email);
-            Config::set('mail.from.name', $company->smtp_from_name ?? $company->name);
-            
-            Log::info('Using company SMTP settings', [
-                'company_id' => $company->id,
-                'smtp_host' => $company->smtp_host,
-            ]);
-            
-            return true;
-        } else {
-            // Fallback to user SMTP settings
-            $user = $company->users()->first();
-            if ($user && $user->smtp_host && $user->smtp_username && $user->smtp_password) {
-                Config::set('mail.mailers.smtp.host', $user->smtp_host);
-                Config::set('mail.mailers.smtp.port', $user->smtp_port ?? 587);
-                Config::set('mail.mailers.smtp.username', $user->smtp_username);
-                Config::set('mail.mailers.smtp.password', $user->smtp_password);
-                Config::set('mail.mailers.smtp.encryption', $user->smtp_encryption ?? 'tls');
-                Config::set('mail.from.address', $user->smtp_from_email ?? $user->email);
-                Config::set('mail.from.name', $user->smtp_from_name ?? $user->name);
-                
-                Log::info('Using user SMTP settings as fallback', [
-                    'company_id' => $company->id,
-                    'user_id' => $user->id,
-                    'smtp_host' => $user->smtp_host,
-                ]);
-                
-                return true;
-            }
-        }
-        
-        Log::warning('No SMTP settings configured for company', [
-            'company_id' => $company->id,
-        ]);
-        
-        return false;
-    }
-
-    protected function applyCompanyReplyTo($mail, Company $company): void
-    {
         if (!empty($company->email)) {
             $mail->replyTo($company->email, $company->name ?? null);
         }
@@ -151,6 +101,46 @@ class ReminderService
     protected function getRecipientPhone($document): ?string
     {
         return $document->phone ?: $document->customer?->phone;
+    }
+
+    protected function logSmsActivityForDocument(
+        $document,
+        string $message,
+        string $status,
+        ?string $errorMessage = null,
+        ?array $providerResponse = null
+    ): void {
+        $companyId = (int) ($document->company_id ?? 0);
+        $customerId = (int) ($document->customer_id ?? 0);
+        $contactId = $document->contact_id ?? null;
+        $phoneNumber = $this->getRecipientPhone($document);
+
+        if ($companyId <= 0 || $customerId <= 0 || empty($phoneNumber)) {
+            return;
+        }
+
+        SMSActivity::create([
+            'customer_id' => $customerId,
+            'contact_id' => $contactId,
+            'user_id' => $this->resolveSmsActivityUserId($companyId),
+            'company_id' => $companyId,
+            'phone_number' => $phoneNumber,
+            'message' => $message,
+            'status' => in_array($status, ['sent', 'failed', 'pending'], true) ? $status : 'failed',
+            'error_message' => $errorMessage,
+            'bulksms_reference' => $providerResponse['reference'] ?? null,
+            'bulksms_response' => $providerResponse,
+        ]);
+    }
+
+    protected function resolveSmsActivityUserId(int $companyId): int
+    {
+        return User::query()
+            ->whereHas('companies', fn ($query) => $query->where('companies.id', $companyId))
+            ->orderBy('users.id')
+            ->value('users.id')
+            ?? User::query()->orderBy('id')->value('id')
+            ?? 1;
     }
 
     /**
@@ -316,15 +306,10 @@ class ReminderService
                 'company_name' => $invoice->company->name,
             ]);
 
-            // Configure SMTP settings
-            if (!$this->configureSmtp($invoice->company)) {
-                throw new \Exception('SMTP settings not configured for company');
-            }
-
             Mail::mailer('smtp')->raw($message, function ($mail) use ($invoice, $recipientEmail) {
                 $mail->to($recipientEmail)
                     ->subject("Reminder: Invoice {$invoice->invoice_number} is Overdue");
-                $this->applyCompanyReplyTo($mail, $invoice->company);
+                $this->applyCompanyMailIdentity($mail, $invoice->company);
             });
 
             $this->logReminder($invoice->company, 'overdue_invoice', 'email', $invoice, $recipientEmail, null, $message, 'sent');
@@ -367,6 +352,13 @@ class ReminderService
                 $result['success'] ? 'sent' : 'failed',
                 $result['success'] ? null : $result['message']
             );
+            $this->logSmsActivityForDocument(
+                $invoice,
+                $message,
+                $result['success'] ? 'sent' : 'failed',
+                $result['success'] ? null : ($result['message'] ?? null),
+                $result
+            );
 
         } catch (\Exception $e) {
             Log::error('Failed to send overdue invoice SMS', [
@@ -374,6 +366,13 @@ class ReminderService
                 'error' => $e->getMessage(),
             ]);
             $this->logReminder($invoice->company, 'overdue_invoice', 'sms', $invoice, null, $recipientPhone ?? null, '', 'failed', $e->getMessage());
+            $this->logSmsActivityForDocument(
+                $invoice,
+                '',
+                'failed',
+                $e->getMessage(),
+                ['error' => $e->getMessage()]
+            );
         }
     }
 
@@ -453,14 +452,10 @@ class ReminderService
                 'company_name' => $quote->company->name,
             ]);
 
-            if (!$this->configureSmtp($quote->company)) {
-                throw new \Exception('SMTP settings not configured for company');
-            }
-
             Mail::mailer('smtp')->raw($message, function ($mail) use ($quote, $recipientEmail) {
                 $mail->to($recipientEmail)
                     ->subject("Reminder: Quote {$quote->quote_number} Expires Soon");
-                $this->applyCompanyReplyTo($mail, $quote->company);
+                $this->applyCompanyMailIdentity($mail, $quote->company);
             });
 
             $this->logReminder($quote->company, 'expiring_quote', 'email', $quote, $recipientEmail, null, $message, 'sent');
@@ -503,6 +498,13 @@ class ReminderService
                 $result['success'] ? 'sent' : 'failed',
                 $result['success'] ? null : $result['message']
             );
+            $this->logSmsActivityForDocument(
+                $quote,
+                $message,
+                $result['success'] ? 'sent' : 'failed',
+                $result['success'] ? null : ($result['message'] ?? null),
+                $result
+            );
 
         } catch (\Exception $e) {
             Log::error('Failed to send expiring quote SMS', [
@@ -510,6 +512,13 @@ class ReminderService
                 'error' => $e->getMessage(),
             ]);
             $this->logReminder($quote->company, 'expiring_quote', 'sms', $quote, null, $recipientPhone ?? null, '', 'failed', $e->getMessage());
+            $this->logSmsActivityForDocument(
+                $quote,
+                '',
+                'failed',
+                $e->getMessage(),
+                ['error' => $e->getMessage()]
+            );
         }
     }
 
@@ -746,12 +755,10 @@ class ReminderService
                 'company_name' => $invoice->company->name,
             ]);
 
-            $this->configureSmtp($invoice->company);
-
             Mail::mailer('smtp')->raw($message, function ($mail) use ($invoice, $recipientEmail) {
                 $mail->to($recipientEmail)
                     ->subject("New Invoice {$invoice->invoice_number}");
-                $this->applyCompanyReplyTo($mail, $invoice->company);
+                $this->applyCompanyMailIdentity($mail, $invoice->company);
             });
 
             $this->logReminder($invoice->company, 'invoice_created', 'email', $invoice, $recipientEmail, null, $message, 'sent');
@@ -782,6 +789,13 @@ class ReminderService
                     'invoice_id' => $invoice->id,
                 ]);
                 $this->logReminder($invoice->company, 'invoice_created', 'sms', $invoice, null, $recipientPhone ?? null, '', 'failed', 'SMS service not available');
+                $this->logSmsActivityForDocument(
+                    $invoice,
+                    '',
+                    'failed',
+                    'SMS service not available',
+                    ['error' => 'SMS service not available']
+                );
                 return;
             }
 
@@ -809,6 +823,13 @@ class ReminderService
                 $result['success'] ? 'sent' : 'failed',
                 $result['success'] ? null : $result['message']
             );
+            $this->logSmsActivityForDocument(
+                $invoice,
+                $message,
+                $result['success'] ? 'sent' : 'failed',
+                $result['success'] ? null : ($result['message'] ?? null),
+                $result
+            );
 
         } catch (\Exception $e) {
             Log::error('Failed to send invoice created SMS', [
@@ -816,6 +837,13 @@ class ReminderService
                 'error' => $e->getMessage(),
             ]);
             $this->logReminder($invoice->company, 'invoice_created', 'sms', $invoice, null, $recipientPhone ?? null, '', 'failed', $e->getMessage());
+            $this->logSmsActivityForDocument(
+                $invoice,
+                '',
+                'failed',
+                $e->getMessage(),
+                ['error' => $e->getMessage()]
+            );
         }
     }
 
@@ -905,14 +933,10 @@ class ReminderService
                 'company_name' => $quote->company->name,
             ]);
 
-            if (!$this->configureSmtp($quote->company)) {
-                throw new \Exception('SMTP settings not configured for company');
-            }
-
             Mail::mailer('smtp')->raw($message, function ($mail) use ($quote, $recipientEmail) {
                 $mail->to($recipientEmail)
                     ->subject("New Quote {$quote->quote_number}");
-                $this->applyCompanyReplyTo($mail, $quote->company);
+                $this->applyCompanyMailIdentity($mail, $quote->company);
             });
 
             $this->logReminder($quote->company, 'quote_created', 'email', $quote, $recipientEmail, null, $message, 'sent');
@@ -943,6 +967,13 @@ class ReminderService
                     'quote_id' => $quote->id,
                 ]);
                 $this->logReminder($quote->company, 'quote_created', 'sms', $quote, null, $recipientPhone ?? null, '', 'failed', 'SMS service not available');
+                $this->logSmsActivityForDocument(
+                    $quote,
+                    '',
+                    'failed',
+                    'SMS service not available',
+                    ['error' => 'SMS service not available']
+                );
                 return;
             }
 
@@ -970,6 +1001,13 @@ class ReminderService
                 $result['success'] ? 'sent' : 'failed',
                 $result['success'] ? null : $result['message']
             );
+            $this->logSmsActivityForDocument(
+                $quote,
+                $message,
+                $result['success'] ? 'sent' : 'failed',
+                $result['success'] ? null : ($result['message'] ?? null),
+                $result
+            );
 
         } catch (\Exception $e) {
             Log::error('Failed to send quote created SMS', [
@@ -977,6 +1015,13 @@ class ReminderService
                 'error' => $e->getMessage(),
             ]);
             $this->logReminder($quote->company, 'quote_created', 'sms', $quote, null, $recipientPhone ?? null, '', 'failed', $e->getMessage());
+            $this->logSmsActivityForDocument(
+                $quote,
+                '',
+                'failed',
+                $e->getMessage(),
+                ['error' => $e->getMessage()]
+            );
         }
     }
 
@@ -1067,12 +1112,10 @@ class ReminderService
                 'company_name' => $invoice->company->name,
             ]);
 
-            $this->configureSmtp($invoice->company);
-
             Mail::mailer('smtp')->raw($message, function ($mail) use ($invoice, $recipientEmail) {
                 $mail->to($recipientEmail)
                     ->subject("Payment Received - Invoice {$invoice->invoice_number}");
-                $this->applyCompanyReplyTo($mail, $invoice->company);
+                $this->applyCompanyMailIdentity($mail, $invoice->company);
             });
 
             $this->logReminder($invoice->company, 'payment_received', 'email', $payment, $recipientEmail, null, $message, 'sent');
@@ -1110,6 +1153,13 @@ class ReminderService
                     'payment_id' => $payment->id,
                 ]);
                 $this->logReminder($invoice->company, 'payment_received', 'sms', $payment, null, $recipientPhone ?? null, '', 'failed', 'SMS service not available');
+                $this->logSmsActivityForDocument(
+                    $invoice,
+                    '',
+                    'failed',
+                    'SMS service not available',
+                    ['error' => 'SMS service not available']
+                );
                 return;
             }
 
@@ -1144,6 +1194,13 @@ class ReminderService
                     'payment_id' => $payment->id,
                 ]);
                 $this->logReminder($invoice->company, 'payment_received', 'sms', $payment, null, $recipientPhone ?? null, '', 'failed', 'SMS service not available after re-initialization');
+                $this->logSmsActivityForDocument(
+                    $invoice,
+                    '',
+                    'failed',
+                    'SMS service not available after re-initialization',
+                    ['error' => 'SMS service not available after re-initialization']
+                );
                 return;
             }
 
@@ -1182,6 +1239,13 @@ class ReminderService
                 $result['success'] ? 'sent' : 'failed',
                 $result['success'] ? null : ($result['message'] ?? 'Unknown error')
             );
+            $this->logSmsActivityForDocument(
+                $invoice,
+                $message,
+                $result['success'] ? 'sent' : 'failed',
+                $result['success'] ? null : ($result['message'] ?? null),
+                $result
+            );
 
             if (!$result['success']) {
                 Log::error('Payment received SMS failed', [
@@ -1203,6 +1267,13 @@ class ReminderService
             ]);
             $invoice = $payment->invoice;
             $this->logReminder($invoice->company, 'payment_received', 'sms', $payment, null, $invoice->customer->phone ?? null, '', 'failed', $e->getMessage());
+            $this->logSmsActivityForDocument(
+                $invoice,
+                '',
+                'failed',
+                $e->getMessage(),
+                ['error' => $e->getMessage()]
+            );
         }
     }
 
@@ -1433,14 +1504,10 @@ class ReminderService
                 'company_name' => $jobcard->company->name,
             ]);
 
-            if (!$this->configureSmtp($jobcard->company)) {
-                throw new \Exception('SMTP settings not configured for company');
-            }
-
             Mail::mailer('smtp')->raw($message, function ($mail) use ($jobcard, $recipientEmail) {
                 $mail->to($recipientEmail)
                     ->subject("New Jobcard {$jobcard->job_number}");
-                $this->applyCompanyReplyTo($mail, $jobcard->company);
+                $this->applyCompanyMailIdentity($mail, $jobcard->company);
             });
 
             $this->logReminder($jobcard->company, 'jobcard_created', 'email', $jobcard, $recipientEmail, null, $message, 'sent');
@@ -1471,6 +1538,13 @@ class ReminderService
                     'jobcard_id' => $jobcard->id,
                 ]);
                 $this->logReminder($jobcard->company, 'jobcard_created', 'sms', $jobcard, null, $recipientPhone ?? null, '', 'failed', 'SMS service not available');
+                $this->logSmsActivityForDocument(
+                    $jobcard,
+                    '',
+                    'failed',
+                    'SMS service not available',
+                    ['error' => 'SMS service not available']
+                );
                 return;
             }
 
@@ -1499,6 +1573,13 @@ class ReminderService
                 $result['success'] ? 'sent' : 'failed',
                 $result['success'] ? null : ($result['message'] ?? 'Unknown error')
             );
+            $this->logSmsActivityForDocument(
+                $jobcard,
+                $message,
+                $result['success'] ? 'sent' : 'failed',
+                $result['success'] ? null : ($result['message'] ?? null),
+                $result
+            );
 
         } catch (\Exception $e) {
             Log::error('Failed to send jobcard created SMS', [
@@ -1506,6 +1587,13 @@ class ReminderService
                 'error' => $e->getMessage(),
             ]);
             $this->logReminder($jobcard->company, 'jobcard_created', 'sms', $jobcard, null, $recipientPhone ?? null, '', 'failed', $e->getMessage());
+            $this->logSmsActivityForDocument(
+                $jobcard,
+                '',
+                'failed',
+                $e->getMessage(),
+                ['error' => $e->getMessage()]
+            );
         }
     }
 
@@ -1595,14 +1683,10 @@ class ReminderService
                 'company_name' => $jobcard->company->name,
             ]);
 
-            if (!$this->configureSmtp($jobcard->company)) {
-                throw new \Exception('SMTP settings not configured for company');
-            }
-
             Mail::mailer('smtp')->raw($message, function ($mail) use ($jobcard, $recipientEmail) {
                 $mail->to($recipientEmail)
                     ->subject("Jobcard {$jobcard->job_number} Status Updated");
-                $this->applyCompanyReplyTo($mail, $jobcard->company);
+                $this->applyCompanyMailIdentity($mail, $jobcard->company);
             });
 
             $this->logReminder($jobcard->company, 'jobcard_status_updated', 'email', $jobcard, $recipientEmail, null, $message, 'sent');
@@ -1633,6 +1717,13 @@ class ReminderService
                     'jobcard_id' => $jobcard->id,
                 ]);
                 $this->logReminder($jobcard->company, 'jobcard_status_updated', 'sms', $jobcard, null, $recipientPhone ?? null, '', 'failed', 'SMS service not available');
+                $this->logSmsActivityForDocument(
+                    $jobcard,
+                    '',
+                    'failed',
+                    'SMS service not available',
+                    ['error' => 'SMS service not available']
+                );
                 return;
             }
 
@@ -1661,6 +1752,13 @@ class ReminderService
                 $result['success'] ? 'sent' : 'failed',
                 $result['success'] ? null : ($result['message'] ?? 'Unknown error')
             );
+            $this->logSmsActivityForDocument(
+                $jobcard,
+                $message,
+                $result['success'] ? 'sent' : 'failed',
+                $result['success'] ? null : ($result['message'] ?? null),
+                $result
+            );
 
         } catch (\Exception $e) {
             Log::error('Failed to send jobcard status updated SMS', [
@@ -1668,6 +1766,13 @@ class ReminderService
                 'error' => $e->getMessage(),
             ]);
             $this->logReminder($jobcard->company, 'jobcard_status_updated', 'sms', $jobcard, null, $recipientPhone ?? null, '', 'failed', $e->getMessage());
+            $this->logSmsActivityForDocument(
+                $jobcard,
+                '',
+                'failed',
+                $e->getMessage(),
+                ['error' => $e->getMessage()]
+            );
         }
     }
 

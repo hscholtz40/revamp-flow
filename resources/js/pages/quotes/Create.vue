@@ -660,6 +660,37 @@ const props = defineProps<{
     chartOfAccounts: { id: number; account_code: string; account_name: string; account_type: string; is_default_sales: boolean }[];
     defaultSalesAccountId: number | null;
     defaultRoundingAccountId?: number | null;
+    prefill?: {
+        source_type?: string;
+        source_id?: number;
+        customer_id?: number | null;
+        contact_id?: number | null;
+        email?: string | null;
+        phone?: string | null;
+        order_number?: string | null;
+        title?: string | null;
+        description?: string | null;
+        status?: string | null;
+        expiry_date?: string | null;
+        tax_rate?: number | null;
+        discount_amount?: number | null;
+        discount_percentage?: number | null;
+        notes?: string | null;
+        terms_conditions?: string | null;
+        line_groups?: { name?: string | null; sort_order?: number | null }[];
+        line_items?: {
+            product_id?: number | null;
+            line_group_id?: number | null;
+            description?: string | null;
+            quantity?: number | null;
+            unit_price?: number | null;
+            discount_amount?: number | null;
+            discount_percentage?: number | null;
+            tax_rate_id?: number | null;
+            account_id?: number | null;
+            total?: number | null;
+        }[];
+    } | null;
 }>();
 
 const ROUNDING_LINE_DESCRIPTION = 'Rounding Adjustment';
@@ -701,6 +732,8 @@ const form = useForm({
     contact_id: null as number | null,
     email: '',
     phone: '',
+    source_type: null as string | null,
+    source_id: null as number | null,
     order_number: '',
     title: '',
     description: '',
@@ -738,6 +771,66 @@ if (props.defaultSalesCustomerId) {
         form.email = defaultCustomer.email || '';
         form.phone = defaultCustomer.phone || '';
         form.title = defaultCustomer.name;
+    }
+}
+
+if (props.prefill) {
+    const source = props.prefill;
+
+    form.customer_id = source.customer_id ? source.customer_id.toString() : '';
+    form.contact_id = source.contact_id ?? null;
+    form.email = source.email || '';
+    form.phone = source.phone || '';
+    form.source_type = source.source_type || null;
+    form.source_id = source.source_id ?? null;
+    form.order_number = source.order_number || '';
+    form.title = source.title || '';
+    form.description = source.description || '';
+    form.status = source.status || 'draft';
+    form.expiry_date = source.expiry_date || getDefaultExpiryDate();
+    form.tax_rate = Number(source.tax_rate ?? form.tax_rate) || 0;
+    form.discount_amount = Number(source.discount_amount ?? 0) || 0;
+    form.discount_percentage = Number(source.discount_percentage ?? 0) || 0;
+    form.notes = source.notes || '';
+    form.terms_conditions = source.terms_conditions || form.terms_conditions;
+
+    const prefillGroups = (source.line_groups || [])
+        .map((group, index) => ({
+            name: group?.name || `Group ${index + 1}`,
+            sort_order: Number(group?.sort_order ?? index),
+        }))
+        .sort((a, b) => a.sort_order - b.sort_order);
+    form.line_groups = prefillGroups.length > 0 ? prefillGroups : [{ name: 'Items', sort_order: 0 }];
+
+    const prefillItems = (source.line_items || []).map((item) => ({
+        product_id: item.product_id != null ? String(item.product_id) : null,
+        line_group_id: Number(item.line_group_id ?? 1) || 1,
+        description: item.description || '',
+        quantity: Number(item.quantity ?? 1) || 1,
+        unit_price: Number(item.unit_price ?? 0) || 0,
+        discount_amount: Number(item.discount_amount ?? 0) || 0,
+        discount_percentage: Number(item.discount_percentage ?? 0) || 0,
+        tax_rate_id: item.tax_rate_id ?? props.defaultSalesTaxRateId ?? null,
+        account_id: item.account_id ?? props.defaultSalesAccountId ?? null,
+        total: Number(item.total ?? 0) || 0,
+    }));
+    form.line_items = prefillItems.length > 0 ? prefillItems : [{
+        product_id: null,
+        line_group_id: 1,
+        description: '',
+        quantity: 1,
+        unit_price: 0,
+        discount_amount: 0,
+        discount_percentage: 0,
+        tax_rate_id: props.defaultSalesTaxRateId || null,
+        account_id: props.defaultSalesAccountId || null,
+        total: 0,
+    }];
+
+    const prefillCustomer = props.customers.find((customer) => customer.id === Number(source.customer_id));
+    if (prefillCustomer) {
+        selectedCustomer.value = prefillCustomer;
+        customerSearchQuery.value = prefillCustomer.name;
     }
 }
 
@@ -1253,7 +1346,7 @@ const quickCreateCustomer = async () => {
 watch(() => form.customer_id, (newCustomerId) => {
     if (newCustomerId) {
         const customer = props.customers.find(c => c.id == parseInt(newCustomerId));
-        if (customer) {
+        if (customer && !props.prefill?.title) {
             form.title = customer.name;
         }
     }
@@ -1289,6 +1382,8 @@ const submit = () => {
     form.transform((data) => ({
         ...data,
         contact_id: form.contact_id ?? null,
+        source_type: data.source_type ?? null,
+        source_id: data.source_id ?? null,
         line_groups: data.line_groups.map((group, index) => ({
             name: group.name,
             sort_order: index,

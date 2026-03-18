@@ -114,6 +114,15 @@
                                         <span>{{ sortIndicator('total') }}</span>
                                     </button>
                                 </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">Order Number</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">Description</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">Email</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">Phone</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">Subtotal</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">Discount</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">Tax</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">Created</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">Updated</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Actions
                                 </th>
@@ -151,6 +160,33 @@
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="text-sm font-medium text-gray-900">{{ quote.formatted_total }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap" style="display: none;">
+                                    <div class="text-sm text-gray-900">{{ quote.order_number || '-' }}</div>
+                                </td>
+                                <td class="px-6 py-4" style="display: none;">
+                                    <div class="text-sm text-gray-900 truncate max-w-xs">{{ quote.description || '-' }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap" style="display: none;">
+                                    <div class="text-sm text-gray-900">{{ quote.email || '-' }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap" style="display: none;">
+                                    <div class="text-sm text-gray-900">{{ quote.phone || '-' }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap" style="display: none;">
+                                    <div class="text-sm text-gray-900">R{{ Number(quote.subtotal || 0).toFixed(2) }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap" style="display: none;">
+                                    <div class="text-sm text-gray-900">R{{ Number(quote.discount_amount || 0).toFixed(2) }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap" style="display: none;">
+                                    <div class="text-sm text-gray-900">R{{ Number(quote.tax_amount || 0).toFixed(2) }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap" style="display: none;">
+                                    <div class="text-sm text-gray-900">{{ quote.created_at ? formatDate(quote.created_at) : '-' }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap" style="display: none;">
+                                    <div class="text-sm text-gray-900">{{ quote.updated_at ? formatDate(quote.updated_at) : '-' }}</div>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" @click.stop>
                                     <div class="flex items-center gap-2">
@@ -254,6 +290,14 @@ interface Quote {
     id: number;
     quote_number: string;
     title: string;
+    order_number?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    subtotal?: number;
+    discount_amount?: number;
+    tax_amount?: number;
+    created_at?: string;
+    updated_at?: string;
     customer?: {
         name: string;
     };

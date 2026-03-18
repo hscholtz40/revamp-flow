@@ -134,6 +134,30 @@
                                         <span>{{ sortIndicator('created_at') }}</span>
                                     </button>
                                 </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">
+                                    Order Number
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">
+                                    Description
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">
+                                    Email
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">
+                                    Phone
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">
+                                    Subtotal
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">
+                                    Discount
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">
+                                    Tax
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">
+                                    Updated
+                                </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Actions
                                 </th>
@@ -189,6 +213,30 @@
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="text-sm text-gray-900">{{ formatDate(invoice.created_at) }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap" style="display: none;">
+                                    <div class="text-sm text-gray-900">{{ invoice.order_number || '-' }}</div>
+                                </td>
+                                <td class="px-6 py-4" style="display: none;">
+                                    <div class="text-sm text-gray-900 truncate max-w-xs">{{ invoice.description || '-' }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap" style="display: none;">
+                                    <div class="text-sm text-gray-900">{{ invoice.email || '-' }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap" style="display: none;">
+                                    <div class="text-sm text-gray-900">{{ invoice.phone || '-' }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap" style="display: none;">
+                                    <div class="text-sm text-gray-900">{{ formatCurrency(invoice.subtotal || 0) }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap" style="display: none;">
+                                    <div class="text-sm text-gray-900">{{ formatCurrency(invoice.discount_amount || 0) }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap" style="display: none;">
+                                    <div class="text-sm text-gray-900">{{ formatCurrency(invoice.tax_amount || 0) }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap" style="display: none;">
+                                    <div class="text-sm text-gray-900">{{ formatDate(invoice.updated_at) }}</div>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" @click.stop>
                                     <div class="flex items-center gap-2">
@@ -298,6 +346,14 @@ interface Invoice {
     id: number;
     invoice_number: string;
     title: string;
+    description?: string | null;
+    order_number?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    subtotal?: number;
+    discount_amount?: number;
+    tax_amount?: number;
+    updated_at?: string;
     customer?: {
         name: string;
     };

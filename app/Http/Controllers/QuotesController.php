@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Company;
 use App\Models\Customer;
+use App\Models\EmailActivity;
 use App\Models\LineGroup;
 use App\Models\Quote;
 use App\Models\QuoteLineItem;
@@ -15,7 +15,6 @@ use App\Services\ReminderService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Config;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -96,7 +95,7 @@ class QuotesController extends Controller
     /**
      * Show the form for creating a new resource.
      */
-    public function create(): Response
+    public function create(Request $request): Response
     {
         $currentCompany = auth()->user()->getCurrentCompany();
         $customers = Customer::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name']);
@@ -111,6 +110,81 @@ class QuotesController extends Controller
         $defaultSalesAccount = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id);
         $defaultRoundingAccount = ChartOfAccount::getDefaultRoundingForCompany($currentCompany->id);
         $defaultSalesCustomer = Customer::getDefaultSalesForCompany($currentCompany->id);
+        $prefill = null;
+
+        if ($request->input('source_type') === 'jobcard' && $request->filled('source_id')) {
+            $sourceJobcard = Jobcard::where('company_id', $currentCompany->id)
+                ->with(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineItems.lineGroup', 'lineGroups'])
+                ->find($request->integer('source_id'));
+
+            if ($sourceJobcard) {
+                $groupSort = $sourceJobcard->lineGroups->sortBy('sort_order')->values();
+                $groupIdToIndex = [];
+                foreach ($groupSort as $index => $group) {
+                    $groupIdToIndex[$group->id] = $index + 1;
+                }
+
+                $prefillLineGroups = $groupSort->map(function ($group, $index) {
+                    return [
+                        'name' => $group->name ?: 'Items',
+                        'sort_order' => $index,
+                    ];
+                })->values()->toArray();
+                if (empty($prefillLineGroups)) {
+                    $prefillLineGroups = [['name' => 'Items', 'sort_order' => 0]];
+                }
+
+                $prefillLineItems = $sourceJobcard->lineItems->sortBy('sort_order')->map(function ($item) use ($groupIdToIndex) {
+                    return [
+                        'product_id' => $item->product_id,
+                        'line_group_id' => $groupIdToIndex[$item->line_group_id] ?? 1,
+                        'description' => $item->description,
+                        'quantity' => (int) ($item->quantity ?? 1),
+                        'unit_price' => (float) ($item->unit_price ?? 0),
+                        'discount_amount' => (float) ($item->discount_amount ?? 0),
+                        'discount_percentage' => (float) ($item->discount_percentage ?? 0),
+                        'tax_rate_id' => $item->tax_rate_id,
+                        'account_id' => $item->account_id,
+                        'total' => (float) ($item->total ?? 0),
+                    ];
+                })->values()->toArray();
+                if (empty($prefillLineItems)) {
+                    $prefillLineItems = [[
+                        'product_id' => null,
+                        'line_group_id' => 1,
+                        'description' => '',
+                        'quantity' => 1,
+                        'unit_price' => 0,
+                        'discount_amount' => 0,
+                        'discount_percentage' => 0,
+                        'tax_rate_id' => $defaultSalesTaxRate?->id,
+                        'account_id' => $defaultSalesAccount?->id,
+                        'total' => 0,
+                    ]];
+                }
+
+                $prefill = [
+                    'source_type' => 'jobcard',
+                    'source_id' => $sourceJobcard->id,
+                    'customer_id' => $sourceJobcard->customer_id,
+                    'contact_id' => $sourceJobcard->contact_id,
+                    'email' => $sourceJobcard->email,
+                    'phone' => $sourceJobcard->phone,
+                    'order_number' => $sourceJobcard->order_number,
+                    'title' => $sourceJobcard->title,
+                    'description' => $sourceJobcard->description,
+                    'tax_rate' => (float) ($sourceJobcard->tax_rate ?? 0),
+                    'discount_amount' => (float) ($sourceJobcard->discount_amount ?? 0),
+                    'discount_percentage' => (float) ($sourceJobcard->discount_percentage ?? 0),
+                    'notes' => $sourceJobcard->notes,
+                    'terms_conditions' => $sourceJobcard->terms_conditions,
+                    'line_groups' => $prefillLineGroups,
+                    'line_items' => $prefillLineItems,
+                ];
+
+                $defaultSalesCustomer = $sourceJobcard->customer;
+            }
+        }
 
         return Inertia::render('quotes/Create', [
             'customers' => $customers,
@@ -123,6 +197,7 @@ class QuotesController extends Controller
             'defaultSalesAccountId' => $defaultSalesAccount?->id,
             'defaultRoundingAccountId' => $defaultRoundingAccount?->id,
             'defaultSalesCustomerId' => $defaultSalesCustomer?->id,
+            'prefill' => $prefill,
         ]);
     }
 
@@ -138,6 +213,8 @@ class QuotesController extends Controller
             'contact_id' => ['nullable', 'exists:contacts,id'],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:255'],
+            'source_type' => ['nullable', 'in:jobcard'],
+            'source_id' => ['nullable', 'integer', 'required_with:source_type'],
             'order_number' => ['nullable', 'string', 'max:255'],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
@@ -163,6 +240,15 @@ class QuotesController extends Controller
             'line_items.*.line_group_id' => ['nullable', 'integer'],
         ]);
 
+        if (($validated['source_type'] ?? null) === 'jobcard' && !empty($validated['source_id'])) {
+            $sourceJobcard = Jobcard::where('company_id', $currentCompany->id)->find($validated['source_id']);
+            if (!$sourceJobcard) {
+                return back()
+                    ->withInput()
+                    ->withErrors(['source_id' => 'Selected source jobcard is invalid.']);
+            }
+        }
+
         // Create the quote
         $quote = Quote::create([
             'company_id' => $currentCompany->id,
@@ -170,6 +256,8 @@ class QuotesController extends Controller
             'contact_id' => $validated['contact_id'] ?? null,
             'email' => $validated['email'] ?? null,
             'phone' => $validated['phone'] ?? null,
+            'source_type' => $validated['source_type'] ?? null,
+            'source_id' => $validated['source_id'] ?? null,
             'quote_number' => Quote::generateQuoteNumber($currentCompany->id),
             'order_number' => $validated['order_number'] ?? null,
             'title' => $validated['title'],
@@ -240,7 +328,7 @@ class QuotesController extends Controller
      */
     public function show(Quote $quote): Response
     {
-        $quote->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineItems.lineGroup', 'lineGroups', 'company', 'invoice']);
+        $quote->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineItems.lineGroup', 'lineGroups', 'company', 'invoice', 'source']);
         
         $currentCompany = auth()->user()->getCurrentCompany();
         
@@ -255,6 +343,10 @@ class QuotesController extends Controller
         // Get default template IDs for both modules
         $defaultQuoteTemplateId = $pdfTemplates->where('module', 'quote')->where('is_default', true)->first()?->id ?? null;
         $defaultProformaTemplateId = $pdfTemplates->where('module', 'proforma-invoice')->where('is_default', true)->first()?->id ?? null;
+        $convertedJobcardId = Jobcard::where('company_id', $currentCompany->id)
+            ->where('source_type', 'quote')
+            ->where('source_id', $quote->id)
+            ->value('id');
         
         return Inertia::render('quotes/Show', [
             'quote' => $quote,
@@ -262,6 +354,7 @@ class QuotesController extends Controller
             'pdfTemplates' => $pdfTemplates,
             'defaultQuoteTemplateId' => $defaultQuoteTemplateId,
             'defaultProformaTemplateId' => $defaultProformaTemplateId,
+            'convertedJobcardId' => $convertedJobcardId,
         ]);
     }
 
@@ -434,13 +527,25 @@ class QuotesController extends Controller
      */
     public function convertToJobcard(Quote $quote): RedirectResponse
     {
-        $jobcard = $quote->convertToJobcard();
-        
-        // Update quote status to accepted when converted to jobcard
-        $quote->update(['status' => 'accepted']);
-        
-        return redirect()->route('jobcards.show', $jobcard)
-            ->with('success', 'Quote converted to jobcard successfully');
+        $currentCompany = auth()->user()->getCurrentCompany();
+        if ($quote->company_id !== $currentCompany->id) {
+            abort(403, 'Unauthorized access to quote.');
+        }
+
+        $existingJobcardId = Jobcard::where('company_id', $currentCompany->id)
+            ->where('source_type', 'quote')
+            ->where('source_id', $quote->id)
+            ->value('id');
+
+        if ($existingJobcardId) {
+            return redirect()->route('jobcards.show', $existingJobcardId)
+                ->with('info', 'This quote has already been converted to a jobcard.');
+        }
+
+        return redirect()->route('jobcards.create', [
+            'source_type' => 'quote',
+            'source_id' => $quote->id,
+        ]);
     }
 
     /**
@@ -448,35 +553,10 @@ class QuotesController extends Controller
      */
     public function convertToInvoice(Quote $quote): RedirectResponse
     {
-        try {
-            $invoice = $quote->convertToInvoice();
-            
-            // Update quote status to accepted and link to invoice
-            $updated = $quote->update(['status' => 'accepted', 'invoice_id' => $invoice->id]);
-            
-            // Refresh the quote to get updated data
-            $quote->refresh();
-            
-            // Log for debugging
-            \Log::info('Quote conversion debug', [
-                'quote_id' => $quote->id,
-                'invoice_id' => $invoice->id,
-                'update_success' => $updated,
-                'quote_invoice_id_after' => $quote->invoice_id
-            ]);
-            
-            return redirect()->route('invoices.show', $invoice)
-                ->with('success', 'Quote converted to invoice successfully');
-        } catch (\Exception $e) {
-            \Log::error('Quote conversion failed', [
-                'quote_id' => $quote->id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            
-            return redirect()->back()
-                ->withErrors(['message' => 'Failed to convert quote to invoice: ' . $e->getMessage()]);
-        }
+        return redirect()->route('invoices.create', [
+            'source_type' => 'quote',
+            'source_id' => $quote->id,
+        ]);
     }
 
     /**
@@ -485,6 +565,7 @@ class QuotesController extends Controller
     public function downloadPDF(Request $request, Quote $quote)
     {
         $quote->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company']);
+        $company = $quote->company;
         
         // Update status to sent when PDF is downloaded
         if ($quote->status === 'draft') {
@@ -510,6 +591,8 @@ class QuotesController extends Controller
      */
     public function emailQuote(Request $request, Quote $quote): RedirectResponse
     {
+        $currentCompany = auth()->user()->getCurrentCompany();
+
         $validated = $request->validate([
             'email' => ['required', 'string'],
             'message' => ['nullable', 'string'],
@@ -527,22 +610,10 @@ class QuotesController extends Controller
         }
 
         $quote->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company']);
-        
-        // Get user's SMTP settings
-        $user = auth()->user();
-        if ($user->smtp_host && $user->smtp_username && $user->smtp_password) {
-            Config::set('mail.mailers.smtp.host', $user->smtp_host);
-            Config::set('mail.mailers.smtp.port', $user->smtp_port ?? 587);
-            Config::set('mail.mailers.smtp.username', $user->smtp_username);
-            Config::set('mail.mailers.smtp.password', $user->smtp_password);
-            Config::set('mail.mailers.smtp.encryption', $user->smtp_encryption ?? 'tls');
-            Config::set('mail.from.address', $user->smtp_username);
-            Config::set('mail.from.name', $user->name);
-        }
+        $company = $quote->company;
 
         try {
             // Generate PDF
-            $company = $quote->company;
             $type = $validated['type'] ?? 'quotation'; // 'quotation' or 'proforma-invoice'
             $templateId = $request->get('template_id');
             
@@ -561,8 +632,10 @@ class QuotesController extends Controller
                 'quote' => $quote,
                 'customMessage' => $validated['message'],
             ], function ($message) use ($emails, $quote, $pdfContent, $filename, $subjectPrefix, $company) {
+                $fromName = $company?->name ?: config('mail.from.name');
                 $message->to($emails)
                     ->subject("{$subjectPrefix} {$quote->quote_number} - {$quote->title}")
+                    ->from(config('mail.from.address'), $fromName)
                     ->attachData($pdfContent, $filename, [
                         'mime' => 'application/pdf',
                     ]);
@@ -572,6 +645,29 @@ class QuotesController extends Controller
                 }
             });
 
+            $subject = "{$subjectPrefix} {$quote->quote_number} - {$quote->title}";
+            foreach ($emails as $recipientEmail) {
+                EmailActivity::create([
+                    'company_id' => $currentCompany->id,
+                    'customer_id' => $quote->customer_id,
+                    'contact_id' => $quote->contact_id,
+                    'user_id' => auth()->id(),
+                    'recipient_email' => $recipientEmail,
+                    'recipient_name' => null,
+                    'subject' => $subject,
+                    'body' => $validated['message'] ?? '',
+                    'email_type' => 'document',
+                    'related_type' => 'quote',
+                    'related_id' => $quote->id,
+                    'status' => 'sent',
+                    'metadata' => [
+                        'pdf_module' => $module,
+                        'pdf_template_id' => $templateId,
+                    ],
+                    'sent_at' => now(),
+                ]);
+            }
+
             // Update status to sent when email is sent successfully
             if ($quote->status === 'draft') {
                 $quote->update(['status' => 'sent']);
@@ -579,6 +675,26 @@ class QuotesController extends Controller
 
             return redirect()->back()->with('success', 'Quote emailed successfully');
         } catch (\Exception $e) {
+            $subject = ($validated['type'] ?? 'quotation') === 'proforma-invoice'
+                ? "Proforma Invoice {$quote->quote_number} - {$quote->title}"
+                : "Quote {$quote->quote_number} - {$quote->title}";
+            foreach ($emails as $recipientEmail) {
+                EmailActivity::create([
+                    'company_id' => $currentCompany->id,
+                    'customer_id' => $quote->customer_id,
+                    'contact_id' => $quote->contact_id,
+                    'user_id' => auth()->id(),
+                    'recipient_email' => $recipientEmail,
+                    'recipient_name' => null,
+                    'subject' => $subject,
+                    'body' => $validated['message'] ?? '',
+                    'email_type' => 'document',
+                    'related_type' => 'quote',
+                    'related_id' => $quote->id,
+                    'status' => 'failed',
+                    'error_message' => $e->getMessage(),
+                ]);
+            }
             return redirect()->back()->withErrors(['message' => 'Failed to send email: ' . $e->getMessage()]);
         }
     }

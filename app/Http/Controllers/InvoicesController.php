@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Company;
 use App\Models\Customer;
+use App\Models\EmailActivity;
 use App\Models\Invoice;
 use App\Models\InvoiceLineItem;
 use App\Models\LineGroup;
@@ -20,7 +20,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -156,12 +155,98 @@ class InvoicesController extends Controller
         } else {
             $selectedCustomer = Customer::getDefaultSalesForCompany($currentCompany->id);
         }
+        $prefill = null;
 
         $taxRates = TaxRate::where('company_id', $currentCompany->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'rate', 'is_default_sales']);
         $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
         $chartOfAccounts = ChartOfAccount::where('company_id', $currentCompany->id)->where('is_active', true)->ordered()->get(['id', 'account_code', 'account_name', 'account_type', 'is_default_sales']);
         $defaultSalesAccount = $this->resolveInvoiceFallbackAccount($currentCompany->id);
         $defaultRoundingAccount = ChartOfAccount::getDefaultRoundingForCompany($currentCompany->id);
+
+        if (in_array($request->input('source_type'), ['quote', 'jobcard'], true) && $request->filled('source_id')) {
+            $sourceType = $request->input('source_type');
+            $sourceId = $request->integer('source_id');
+            $source = null;
+
+            if ($sourceType === 'quote') {
+                $source = Quote::where('company_id', $currentCompany->id)
+                    ->with(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineItems.lineGroup', 'lineGroups'])
+                    ->find($sourceId);
+            } elseif ($sourceType === 'jobcard') {
+                $source = Jobcard::where('company_id', $currentCompany->id)
+                    ->with(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineItems.lineGroup', 'lineGroups'])
+                    ->find($sourceId);
+            }
+
+            if ($source) {
+                $selectedCustomer = $source->customer;
+                $sourceGroups = $source->lineGroups->sortBy('sort_order')->values();
+                $groupIdToIndex = [];
+                foreach ($sourceGroups as $index => $group) {
+                    $groupIdToIndex[$group->id] = $index + 1;
+                }
+
+                $lineGroups = $sourceGroups->map(function ($group, $index) {
+                    return [
+                        'name' => $group->name ?: 'Items',
+                        'sort_order' => $index,
+                    ];
+                })->values()->toArray();
+                if (empty($lineGroups)) {
+                    $lineGroups = [['name' => 'Items', 'sort_order' => 0]];
+                }
+
+                $lineItems = $source->lineItems->sortBy('sort_order')->map(function ($item) use ($groupIdToIndex) {
+                    return [
+                        'product_id' => $item->product_id,
+                        'line_group_id' => $groupIdToIndex[$item->line_group_id] ?? 1,
+                        'description' => $item->description,
+                        'quantity' => (int) ($item->quantity ?? 1),
+                        'unit_price' => (float) ($item->unit_price ?? 0),
+                        'discount_amount' => (float) ($item->discount_amount ?? 0),
+                        'discount_percentage' => (float) ($item->discount_percentage ?? 0),
+                        'total' => (float) ($item->total ?? 0),
+                        'tax_rate_id' => $item->tax_rate_id,
+                        'account_id' => $item->account_id,
+                        'serial_number_ids' => $item->serial_number_ids ?? [],
+                    ];
+                })->values()->toArray();
+                if (empty($lineItems)) {
+                    $lineItems = [[
+                        'product_id' => null,
+                        'line_group_id' => 1,
+                        'description' => '',
+                        'quantity' => 1,
+                        'unit_price' => 0,
+                        'discount_amount' => 0,
+                        'discount_percentage' => 0,
+                        'total' => 0,
+                        'tax_rate_id' => $defaultSalesTaxRate?->id,
+                        'account_id' => $defaultSalesAccount?->id,
+                        'serial_number_ids' => [],
+                    ]];
+                }
+
+                $prefill = [
+                    'source_type' => $sourceType,
+                    'source_id' => $source->id,
+                    'title' => $source->title,
+                    'description' => $source->description,
+                    'customer_id' => $source->customer_id,
+                    'contact_id' => $source->contact_id,
+                    'email' => $source->email,
+                    'phone' => $source->phone,
+                    'order_number' => $source->order_number,
+                    'tax_rate' => (float) ($source->tax_rate ?? 0),
+                    'discount_amount' => (float) ($source->discount_amount ?? 0),
+                    'discount_percentage' => (float) ($source->discount_percentage ?? 0),
+                    'notes' => $source->notes,
+                    'terms' => $source->terms ?? $source->terms_conditions,
+                    'line_groups' => $lineGroups,
+                    'line_items' => $lineItems,
+                ];
+            }
+        }
 
         return Inertia::render('invoices/Create', [
             'customers' => $customers,
@@ -176,6 +261,7 @@ class InvoicesController extends Controller
             'chartOfAccounts' => $chartOfAccounts,
             'defaultSalesAccountId' => $defaultSalesAccount?->id,
             'defaultRoundingAccountId' => $defaultRoundingAccount?->id,
+            'prefill' => $prefill,
         ]);
     }
 
@@ -413,6 +499,8 @@ class InvoicesController extends Controller
             'discount_percentage' => 'nullable|numeric|min:0|max:100',
             'notes' => 'nullable|string',
             'terms' => 'nullable|string',
+            'source_type' => 'nullable|in:quote,jobcard',
+            'source_id' => 'nullable|integer',
             'line_groups' => 'nullable|array|min:1',
             'line_groups.*.id' => 'nullable|integer',
             'line_groups.*.name' => 'required_with:line_groups|string|max:255',
@@ -457,6 +545,8 @@ class InvoicesController extends Controller
             'tax_rate' => $validated['tax_rate'],
             'notes' => $validated['notes'],
             'terms' => $validated['terms'],
+            'source_type' => $validated['source_type'] ?? null,
+            'source_id' => $validated['source_id'] ?? null,
         ]);
 
         $groupPayload = $validated['line_groups'] ?? [['name' => 'Items']];
@@ -569,6 +659,25 @@ class InvoicesController extends Controller
         $invoice->refresh();
         $invoice->load('customer', 'company');
 
+        if (($validated['source_type'] ?? null) === 'quote' && !empty($validated['source_id'])) {
+            $sourceQuote = Quote::where('company_id', $currentCompany->id)->find($validated['source_id']);
+            if ($sourceQuote) {
+                $sourceQuote->update([
+                    'status' => 'accepted',
+                    'invoice_id' => $invoice->id,
+                ]);
+            }
+        } elseif (($validated['source_type'] ?? null) === 'jobcard' && !empty($validated['source_id'])) {
+            $sourceJobcard = Jobcard::where('company_id', $currentCompany->id)->find($validated['source_id']);
+            if ($sourceJobcard) {
+                $sourceJobcard->update([
+                    'status' => 'completed',
+                    'completed_date' => now(),
+                    'invoice_id' => $invoice->id,
+                ]);
+            }
+        }
+
         // Send automated reminder if enabled
         try {
             $reminderService = new ReminderService();
@@ -597,7 +706,7 @@ class InvoicesController extends Controller
             abort(403, 'You do not have access to this invoice.');
         }
 
-        $invoice->load(['customer', 'contact', 'salesperson', 'lineItems.product', 'lineItems.taxRate', 'company', 'source', 'payments', 'creditNotes']);
+        $invoice->load(['customer', 'contact', 'salesperson', 'lineItems.product', 'lineItems.taxRate', 'lineItems.lineGroup', 'lineGroups', 'company', 'source', 'payments', 'creditNotes']);
         
         // Load serial numbers for line items that have serial_number_ids
         $invoice->load('lineItems');
@@ -1229,6 +1338,7 @@ class InvoicesController extends Controller
         }
 
         $invoice->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'company']);
+        $company = $invoice->company;
         
         // Load serial numbers for line items that have serial_number_ids
         foreach ($invoice->lineItems as $lineItem) {
@@ -1244,21 +1354,8 @@ class InvoicesController extends Controller
             return strtolower(trim((string) ($item->description ?? ''))) === 'rounding adjustment';
         })->values());
         
-        // Get user's SMTP settings
-        $user = auth()->user();
-        if ($user->smtp_host && $user->smtp_username && $user->smtp_password) {
-            Config::set('mail.mailers.smtp.host', $user->smtp_host);
-            Config::set('mail.mailers.smtp.port', $user->smtp_port ?? 587);
-            Config::set('mail.mailers.smtp.username', $user->smtp_username);
-            Config::set('mail.mailers.smtp.password', $user->smtp_password);
-            Config::set('mail.mailers.smtp.encryption', $user->smtp_encryption ?? 'tls');
-            Config::set('mail.from.address', $user->smtp_username);
-            Config::set('mail.from.name', $user->name);
-        }
-
         try {
             // Generate PDF
-            $company = $invoice->company;
             $templateId = $request->get('template_id');
             
             $pdfService = new \App\Services\PdfGenerationService();
@@ -1270,8 +1367,10 @@ class InvoicesController extends Controller
                 'invoice' => $invoice,
                 'customMessage' => $validated['customMessage'],
             ], function ($message) use ($emails, $invoice, $pdfContent, $company) {
+                $fromName = $company?->name ?: config('mail.from.name');
                 $message->to($emails)
                     ->subject("Invoice {$invoice->invoice_number} - {$invoice->title}")
+                    ->from(config('mail.from.address'), $fromName)
                     ->attachData($pdfContent, "invoice-{$invoice->invoice_number}.pdf", [
                         'mime' => 'application/pdf',
                     ]);
@@ -1281,6 +1380,28 @@ class InvoicesController extends Controller
                 }
             });
 
+            $subject = "Invoice {$invoice->invoice_number} - {$invoice->title}";
+            foreach ($emails as $recipientEmail) {
+                EmailActivity::create([
+                    'company_id' => $invoice->company_id,
+                    'customer_id' => $invoice->customer_id,
+                    'contact_id' => $invoice->contact_id,
+                    'user_id' => auth()->id(),
+                    'recipient_email' => $recipientEmail,
+                    'recipient_name' => null,
+                    'subject' => $subject,
+                    'body' => $validated['customMessage'] ?? '',
+                    'email_type' => 'document',
+                    'related_type' => 'invoice',
+                    'related_id' => $invoice->id,
+                    'status' => 'sent',
+                    'metadata' => [
+                        'pdf_template_id' => $templateId,
+                    ],
+                    'sent_at' => now(),
+                ]);
+            }
+
             // Update status to sent if it was draft
             if ($invoice->status === 'draft') {
                 $invoice->update(['status' => 'sent']);
@@ -1288,6 +1409,24 @@ class InvoicesController extends Controller
 
             return redirect()->back()->with('success', 'Invoice sent successfully to ' . implode(', ', $emails));
         } catch (\Exception $e) {
+            $subject = "Invoice {$invoice->invoice_number} - {$invoice->title}";
+            foreach ($emails as $recipientEmail) {
+                EmailActivity::create([
+                    'company_id' => $invoice->company_id,
+                    'customer_id' => $invoice->customer_id,
+                    'contact_id' => $invoice->contact_id,
+                    'user_id' => auth()->id(),
+                    'recipient_email' => $recipientEmail,
+                    'recipient_name' => null,
+                    'subject' => $subject,
+                    'body' => $validated['customMessage'] ?? '',
+                    'email_type' => 'document',
+                    'related_type' => 'invoice',
+                    'related_id' => $invoice->id,
+                    'status' => 'failed',
+                    'error_message' => $e->getMessage(),
+                ]);
+            }
             return redirect()->back()->withErrors(['message' => 'Failed to send email: ' . $e->getMessage()]);
         }
     }
@@ -1297,64 +1436,10 @@ class InvoicesController extends Controller
      */
     public function convertFromQuote(Quote $quote): RedirectResponse
     {
-        $currentCompany = auth()->user()->getCurrentCompany();
-        $salespersonId = auth()->id();
-        $defaultAccountId = $this->resolveInvoiceFallbackAccountId($currentCompany->id);
-        
-        // Generate invoice number
-        $invoiceNumber = Invoice::create([
-            'invoice_number' => Invoice::generateInvoiceNumber($currentCompany->id),
-            'order_number' => $quote->order_number,
-            'title' => $quote->title,
-            'description' => $quote->description,
-            'customer_id' => $quote->customer_id,
-            'contact_id' => $quote->contact_id,
-            'email' => $quote->email,
-            'phone' => $quote->phone,
-            'salesperson_id' => $salespersonId,
-            'company_id' => $currentCompany->id,
-            'invoice_date' => now()->toDateString(),
-            'due_date' => $this->resolveInvoiceDueDateFromCustomerTerms(
-                $quote->customer,
-                now()->startOfDay()
-            )->toDateString(),
-            'tax_rate' => $quote->tax_rate,
-            'notes' => $quote->notes,
-            'terms' => $quote->terms,
+        return redirect()->route('invoices.create', [
             'source_type' => 'quote',
             'source_id' => $quote->id,
         ]);
-
-        if (!$invoiceNumber->salesperson_id && $salespersonId) {
-            $invoiceNumber->update(['salesperson_id' => $salespersonId]);
-        }
-
-        // Copy line items
-        foreach ($quote->lineItems as $quoteLineItem) {
-            InvoiceLineItem::create([
-                'invoice_id' => $invoiceNumber->id,
-                'product_id' => $quoteLineItem->product_id,
-                'description' => $quoteLineItem->description,
-                'quantity' => $quoteLineItem->quantity,
-                'unit_price' => $quoteLineItem->unit_price,
-                'total' => $quoteLineItem->total,
-                'tax_rate_id' => $quoteLineItem->tax_rate_id,
-                'tax_amount' => $this->calculateInvoiceLineTaxAmount((float) $quoteLineItem->total, $quoteLineItem->tax_rate_id),
-                'account_id' => $quoteLineItem->account_id ?? $defaultAccountId,
-                'sort_order' => $quoteLineItem->sort_order,
-            ]);
-        }
-
-        $this->ensureConvertedInvoiceRoundingLine($invoiceNumber, $defaultAccountId);
-
-        // Calculate totals
-        $invoiceNumber->calculateTotals();
-
-        // Update quote status
-        $quote->update(['status' => 'accepted']);
-
-        return redirect()->route('invoices.show', $invoiceNumber)
-            ->with('success', 'Invoice created from quote successfully.');
     }
 
     /**
@@ -1362,98 +1447,10 @@ class InvoicesController extends Controller
      */
     public function convertFromJobcard(Jobcard $jobcard): RedirectResponse
     {
-        $currentCompany = auth()->user()->getCurrentCompany();
-        $salespersonId = auth()->id();
-        $defaultAccountId = $this->resolveInvoiceFallbackAccountId($currentCompany->id);
-        
-        // Generate invoice number
-        $invoiceNumber = Invoice::create([
-            'invoice_number' => Invoice::generateInvoiceNumber($currentCompany->id),
-            'order_number' => $jobcard->order_number,
-            'title' => $jobcard->title,
-            'description' => $jobcard->description,
-            'customer_id' => $jobcard->customer_id,
-            'contact_id' => $jobcard->contact_id,
-            'email' => $jobcard->email,
-            'phone' => $jobcard->phone,
-            'salesperson_id' => $salespersonId,
-            'company_id' => $currentCompany->id,
-            'invoice_date' => now()->toDateString(),
-            'due_date' => $this->resolveInvoiceDueDateFromCustomerTerms(
-                $jobcard->customer,
-                now()->startOfDay()
-            )->toDateString(),
-            'tax_rate' => $jobcard->tax_rate,
-            'notes' => $jobcard->notes,
-            'terms' => $jobcard->terms,
+        return redirect()->route('invoices.create', [
             'source_type' => 'jobcard',
             'source_id' => $jobcard->id,
         ]);
-
-        if (!$invoiceNumber->salesperson_id && $salespersonId) {
-            $invoiceNumber->update(['salesperson_id' => $salespersonId]);
-        }
-
-        // Copy line items
-        foreach ($jobcard->lineItems as $jobcardLineItem) {
-            InvoiceLineItem::create([
-                'invoice_id' => $invoiceNumber->id,
-                'product_id' => $jobcardLineItem->product_id,
-                'description' => $jobcardLineItem->description,
-                'quantity' => $jobcardLineItem->quantity,
-                'unit_price' => $jobcardLineItem->unit_price,
-                'total' => $jobcardLineItem->total,
-                'tax_rate_id' => $jobcardLineItem->tax_rate_id,
-                'tax_amount' => $this->calculateInvoiceLineTaxAmount((float) $jobcardLineItem->total, $jobcardLineItem->tax_rate_id),
-                'account_id' => $jobcardLineItem->account_id ?? $defaultAccountId,
-                'sort_order' => $jobcardLineItem->sort_order,
-            ]);
-        }
-
-        $this->ensureConvertedInvoiceRoundingLine($invoiceNumber, $defaultAccountId);
-
-        // Calculate totals
-        $invoiceNumber->calculateTotals();
-
-        // Update jobcard status to completed and link to invoice
-        $oldStatus = $jobcard->status;
-        $jobcard->update([
-            'status' => 'completed',
-            'completed_date' => now(),
-            'invoice_id' => $invoiceNumber->id,
-        ]);
-
-        // Send invoice created notification if enabled
-        // Load invoice relationships needed for notifications
-        $invoiceNumber->load('customer', 'company');
-        try {
-            $reminderService = new ReminderService();
-            $reminderService->sendInvoiceCreatedConfirmation($invoiceNumber);
-        } catch (\Exception $e) {
-            Log::error('Failed to send invoice created confirmation after jobcard conversion', [
-                'invoice_id' => $invoiceNumber->id,
-                'jobcard_id' => $jobcard->id,
-                'error' => $e->getMessage(),
-            ]);
-            // Don't fail the conversion if reminder fails
-        }
-
-        // Send jobcard status updated notification if status changed
-        if ($oldStatus !== 'completed') {
-            try {
-                $reminderService = new ReminderService();
-                $reminderService->sendJobcardStatusUpdatedConfirmation($jobcard, $oldStatus);
-            } catch (\Exception $e) {
-                Log::error('Failed to send jobcard status updated confirmation after conversion', [
-                    'jobcard_id' => $jobcard->id,
-                    'error' => $e->getMessage(),
-                ]);
-                // Don't fail the conversion if reminder fails
-            }
-        }
-
-        return redirect()->route('invoices.show', $invoiceNumber)
-            ->with('success', 'Invoice created from jobcard successfully.');
     }
 
     private function resolveInvoiceDueDateFromCustomerTerms(?Customer $customer, Carbon $invoiceDate): Carbon

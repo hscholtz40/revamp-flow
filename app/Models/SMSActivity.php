@@ -13,6 +13,7 @@ class SMSActivity extends Model
 
     protected $fillable = [
         'customer_id',
+        'contact_id',
         'user_id',
         'company_id',
         'phone_number',
@@ -30,6 +31,11 @@ class SMSActivity extends Model
     public function customer()
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function contact()
+    {
+        return $this->belongsTo(Contact::class);
     }
 
     public function user()

@@ -33,13 +33,6 @@ class Company extends Model
         'is_active',
         'is_default',
         'enable_pos',
-        'smtp_host',
-        'smtp_port',
-        'smtp_username',
-        'smtp_password',
-        'smtp_encryption',
-        'smtp_from_email',
-        'smtp_from_name',
         'whatsapp_business_number',
         'visible_modules',
         'bank_name',
@@ -62,17 +55,12 @@ class Company extends Model
         'is_active' => 'boolean',
         'is_default' => 'boolean',
         'enable_pos' => 'boolean',
-        'smtp_port' => 'integer',
         'visible_modules' => 'array',
         'invoice_number_next' => 'integer',
         'quote_number_next' => 'integer',
         'jobcard_number_next' => 'integer',
         'credit_note_number_next' => 'integer',
         'purchase_order_number_next' => 'integer',
-    ];
-
-    protected $hidden = [
-        'smtp_password',
     ];
 
     /**
@@ -191,14 +179,6 @@ class Company extends Model
     public function getReminderSettings(): ReminderSettings
     {
         return ReminderSettings::getForCompany($this->id);
-    }
-
-    /**
-     * Check if company has SMTP settings configured.
-     */
-    public function hasSmtpConfigured(): bool
-    {
-        return !empty($this->smtp_host) && !empty($this->smtp_username) && !empty($this->smtp_password);
     }
 
     /**

@@ -1,8 +1,25 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import EmailComposerModal from '@/components/EmailComposerModal.vue';
+import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import contacts from '@/routes/contacts';
-import { ref } from 'vue';
+import { computed, ref, watch } from 'vue';
+
+interface EmailActivity {
+    id: number;
+    recipient_email: string;
+    subject: string;
+    email_type: string;
+    related_type?: string | null;
+    status: 'sent' | 'failed' | string;
+    error_message?: string | null;
+    sent_at?: string | null;
+    created_at: string;
+    user?: {
+        id: number;
+        name: string;
+    } | null;
+}
 
 const props = defineProps<{
     contact: {
@@ -20,12 +37,32 @@ const props = defineProps<{
         created_at: string;
         updated_at: string;
     };
+    emailTemplates: {
+        id: number;
+        name: string;
+        subject: string;
+        html_template?: string | null;
+        css_styles?: string | null;
+        is_default?: boolean;
+    }[];
+    emailActivities: {
+        data: EmailActivity[];
+        links: { url: string | null; label: string; active: boolean }[];
+        current_page: number;
+        last_page: number;
+        per_page: number;
+        total: number;
+    };
+    filters?: {
+        email_per_page?: number;
+    };
 }>();
 
 // SMS functionality
 const showSMSModal = ref(false);
 const showSMSResultModal = ref(false);
 const smsResult = ref<{ success: boolean; message: string } | null>(null);
+const showEmailModal = ref(false);
 
 const smsForm = useForm({
     message: '',
@@ -64,6 +101,28 @@ const closeSMSResultModal = () => {
     showSMSResultModal.value = false;
     smsResult.value = null;
 };
+
+const openEmailModal = () => {
+    showEmailModal.value = true;
+};
+
+const emailSendUrl = computed(() => `/contacts/${props.contact.id}/send-email`);
+const emailModalTitle = computed(() => `Send Email to ${props.contact.name}`);
+const emailPreviewContext = computed(() => ({
+    contact: props.contact,
+    customer: props.contact.customer,
+}));
+
+const emailPerPage = ref(Number(props.filters?.email_per_page ?? 10));
+
+watch(emailPerPage, () => {
+    router.get(contacts.show(props.contact.id).url, {
+        email_per_page: emailPerPage.value,
+    }, {
+        preserveState: true,
+        replace: true,
+    });
+});
 </script>
 
 <template>
@@ -82,6 +141,13 @@ const closeSMSResultModal = () => {
                         <p class="text-sm text-gray-500 mt-1">Contact Details</p>
                     </div>
                     <div class="flex items-center gap-2">
+                        <button
+                            v-if="props.contact.email"
+                            @click="openEmailModal"
+                            class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                        >
+                            Email
+                        </button>
                         <button 
                             v-if="props.contact.phone"
                             @click="openSMSModal"
@@ -209,6 +275,91 @@ const closeSMSResultModal = () => {
                 </div>
             </div>
 
+            <!-- Email Activity Section -->
+            <div class="rounded-lg bg-white border border-gray-200 shadow-sm">
+                <div class="border-b border-gray-200 bg-blue-50 px-6 py-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold text-gray-900">Email Activity</h2>
+                            <p class="text-sm text-gray-600">Direct and document email history for this contact</p>
+                        </div>
+                        <span class="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-sm font-medium text-blue-800">
+                            {{ props.emailActivities?.total || 0 }} email{{ (props.emailActivities?.total || 0) !== 1 ? 's' : '' }}
+                        </span>
+                    </div>
+                </div>
+                <div class="p-6">
+                    <div class="mb-4 flex items-center justify-end">
+                        <div>
+                            <label class="mb-1 block text-sm font-medium text-gray-700">Results per page</label>
+                            <select
+                                v-model="emailPerPage"
+                                class="w-40 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                            >
+                                <option value="10">10 per page</option>
+                                <option value="25">25 per page</option>
+                                <option value="50">50 per page</option>
+                                <option value="100">100 per page</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div v-if="(props.emailActivities?.data || []).length === 0" class="py-8 text-center text-sm text-gray-500">
+                        No emails sent to this contact yet.
+                    </div>
+                    <div v-else class="space-y-3">
+                        <div
+                            v-for="activity in props.emailActivities?.data || []"
+                            :key="activity.id"
+                            class="rounded-lg border border-gray-200 bg-white p-4"
+                        >
+                            <div class="flex items-start justify-between gap-3">
+                                <div>
+                                    <div class="text-sm font-medium text-gray-900">{{ activity.subject }}</div>
+                                    <div class="text-xs text-gray-500 mt-1">
+                                        To: {{ activity.recipient_email }} •
+                                        {{ activity.related_type ? `${activity.related_type} email` : 'direct email' }}
+                                    </div>
+                                </div>
+                                <span
+                                    class="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium"
+                                    :class="activity.status === 'sent' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'"
+                                >
+                                    {{ activity.status }}
+                                </span>
+                            </div>
+                            <div class="mt-2 text-xs text-gray-500">
+                                {{ new Date(activity.sent_at || activity.created_at).toLocaleString() }}
+                                <span v-if="activity.user?.name"> • by {{ activity.user.name }}</span>
+                            </div>
+                            <div v-if="activity.error_message" class="mt-2 text-xs text-red-600">
+                                {{ activity.error_message }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="props.emailActivities?.last_page > 1" class="mt-6 pt-6 border-t border-gray-200">
+                        <div class="flex items-center justify-end gap-1">
+                            <Link
+                                v-for="link in props.emailActivities?.links || []"
+                                :key="link.label"
+                                :href="link.url || '#'"
+                                :preserve-scroll="true"
+                                :class="[
+                                    'px-3 py-1 text-sm rounded-md',
+                                    link.active
+                                        ? 'bg-blue-600 text-white'
+                                        : link.url
+                                            ? 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                                            : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                ]"
+                                v-html="link.label"
+                            />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Footer Information -->
             <div class="rounded-lg bg-gray-50 border border-gray-200 p-4">
                 <div class="flex items-center justify-between text-sm text-gray-500">
@@ -321,5 +472,14 @@ const closeSMSResultModal = () => {
                 </div>
             </div>
         </div>
+
+        <EmailComposerModal
+            :open="showEmailModal"
+            :title="emailModalTitle"
+            :send-url="emailSendUrl"
+            :templates="props.emailTemplates"
+            :preview-context="emailPreviewContext"
+            @close="showEmailModal = false"
+        />
     </AppLayout>
 </template>

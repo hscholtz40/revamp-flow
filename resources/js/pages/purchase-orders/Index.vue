@@ -93,6 +93,12 @@
                                         Total <span>{{ sortIndicator('total') }}</span>
                                     </button>
                                 </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">Subtotal</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">Tax</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">Notes</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">Terms</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">Created</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">Updated</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Actions
                                 </th>
@@ -128,6 +134,24 @@
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="text-sm font-medium text-gray-900">{{ formatCurrency(po.total) }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap" style="display: none;">
+                                    <div class="text-sm text-gray-900">{{ formatCurrency(po.subtotal || 0) }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap" style="display: none;">
+                                    <div class="text-sm text-gray-900">{{ formatCurrency(po.tax_amount || 0) }}</div>
+                                </td>
+                                <td class="px-6 py-4" style="display: none;">
+                                    <div class="text-sm text-gray-900 truncate max-w-xs">{{ po.notes || '-' }}</div>
+                                </td>
+                                <td class="px-6 py-4" style="display: none;">
+                                    <div class="text-sm text-gray-900 truncate max-w-xs">{{ po.terms || '-' }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap" style="display: none;">
+                                    <div class="text-sm text-gray-900">{{ po.created_at ? formatDate(po.created_at) : '-' }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap" style="display: none;">
+                                    <div class="text-sm text-gray-900">{{ po.updated_at ? formatDate(po.updated_at) : '-' }}</div>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" @click.stop>
                                 </td>
@@ -214,6 +238,12 @@ interface PurchaseOrder {
     order_date: string;
     expected_delivery_date: string | null;
     status: 'draft' | 'sent' | 'received' | 'cancelled';
+    subtotal?: number;
+    tax_amount?: number;
+    notes?: string | null;
+    terms?: string | null;
+    created_at?: string;
+    updated_at?: string;
     total: number;
 }
 

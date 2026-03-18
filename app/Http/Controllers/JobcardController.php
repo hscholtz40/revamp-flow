@@ -2,13 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Company;
 use App\Models\Contact;
 use App\Models\Customer;
+use App\Models\EmailActivity;
 use App\Models\Jobcard;
 use App\Models\JobcardLineItem;
 use App\Models\LineGroup;
 use App\Models\Product;
+use App\Models\Quote;
 use App\Models\TaxRate;
 use App\Models\ChartOfAccount;
 use App\Models\Team;
@@ -19,7 +20,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Config;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -127,7 +127,7 @@ class JobcardController extends Controller
     /**
      * Show the form for creating a new resource.
      */
-    public function create(): Response
+    public function create(Request $request): Response
     {
         $currentCompany = auth()->user()->getCurrentCompany();
         $customers = Customer::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name']);
@@ -145,6 +145,79 @@ class JobcardController extends Controller
         $defaultSalesAccount = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id);
         $defaultRoundingAccount = ChartOfAccount::getDefaultRoundingForCompany($currentCompany->id);
         $defaultSalesCustomer = Customer::getDefaultSalesForCompany($currentCompany->id);
+        $prefill = null;
+
+        if ($request->input('source_type') === 'quote' && $request->filled('source_id')) {
+            $sourceQuote = Quote::where('company_id', $currentCompany->id)
+                ->with(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineItems.lineGroup', 'lineGroups'])
+                ->find($request->integer('source_id'));
+
+            if ($sourceQuote) {
+                $groupSort = $sourceQuote->lineGroups->sortBy('sort_order')->values();
+                $groupIdToIndex = [];
+                foreach ($groupSort as $index => $group) {
+                    $groupIdToIndex[$group->id] = $index + 1;
+                }
+
+                $prefillLineGroups = $groupSort->map(function ($group, $index) {
+                    return [
+                        'name' => $group->name ?: 'Items',
+                        'sort_order' => $index,
+                    ];
+                })->values()->toArray();
+                if (empty($prefillLineGroups)) {
+                    $prefillLineGroups = [['name' => 'Items', 'sort_order' => 0]];
+                }
+
+                $prefillLineItems = $sourceQuote->lineItems->sortBy('sort_order')->map(function ($item) use ($groupIdToIndex) {
+                    return [
+                        'product_id' => $item->product_id,
+                        'line_group_id' => $groupIdToIndex[$item->line_group_id] ?? 1,
+                        'description' => $item->description,
+                        'quantity' => (int) ($item->quantity ?? 1),
+                        'unit_price' => (float) ($item->unit_price ?? 0),
+                        'discount_amount' => (float) ($item->discount_amount ?? 0),
+                        'discount_percentage' => (float) ($item->discount_percentage ?? 0),
+                        'tax_rate_id' => $item->tax_rate_id,
+                        'account_id' => $item->account_id,
+                    ];
+                })->values()->toArray();
+                if (empty($prefillLineItems)) {
+                    $prefillLineItems = [[
+                        'product_id' => null,
+                        'line_group_id' => 1,
+                        'description' => '',
+                        'quantity' => 1,
+                        'unit_price' => 0,
+                        'discount_amount' => 0,
+                        'discount_percentage' => 0,
+                        'tax_rate_id' => $defaultSalesTaxRate?->id,
+                        'account_id' => $defaultSalesAccount?->id,
+                    ]];
+                }
+
+                $prefill = [
+                    'source_type' => 'quote',
+                    'source_id' => $sourceQuote->id,
+                    'customer_id' => $sourceQuote->customer_id,
+                    'contact_id' => $sourceQuote->contact_id,
+                    'email' => $sourceQuote->email,
+                    'phone' => $sourceQuote->phone,
+                    'order_number' => $sourceQuote->order_number,
+                    'title' => $sourceQuote->title,
+                    'description' => $sourceQuote->description,
+                    'tax_rate' => (float) ($sourceQuote->tax_rate ?? 0),
+                    'discount_amount' => (float) ($sourceQuote->discount_amount ?? 0),
+                    'discount_percentage' => (float) ($sourceQuote->discount_percentage ?? 0),
+                    'notes' => $sourceQuote->notes,
+                    'terms_conditions' => $sourceQuote->terms_conditions,
+                    'line_groups' => $prefillLineGroups,
+                    'line_items' => $prefillLineItems,
+                ];
+
+                $defaultSalesCustomer = $sourceQuote->customer;
+            }
+        }
 
         return Inertia::render('jobcards/Create', [
             'customers' => $customers,
@@ -159,6 +232,7 @@ class JobcardController extends Controller
             'defaultSalesCustomerId' => $defaultSalesCustomer?->id,
             'currentCompany' => $currentCompany,
             'defaultTerms' => $currentCompany->default_jobcard_terms,
+            'prefill' => $prefill,
         ]);
     }
 
@@ -174,6 +248,8 @@ class JobcardController extends Controller
             'contact_id' => ['nullable', 'exists:contacts,id'],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:255'],
+            'source_type' => ['nullable', 'in:quote'],
+            'source_id' => ['nullable', 'integer', 'required_with:source_type'],
             'assigned_to_user_id' => ['nullable', 'exists:users,id'],
             'assigned_to_team_id' => ['nullable', 'exists:teams,id'],
             'order_number' => ['nullable', 'string', 'max:255'],
@@ -200,6 +276,15 @@ class JobcardController extends Controller
             'line_items.*.tax_rate_id' => ['nullable', 'exists:tax_rates,id'],
             'line_items.*.line_group_id' => ['nullable', 'integer'],
         ]);
+
+        if (($validated['source_type'] ?? null) === 'quote' && !empty($validated['source_id'])) {
+            $sourceQuote = Quote::where('company_id', $currentCompany->id)->find($validated['source_id']);
+            if (!$sourceQuote) {
+                return back()
+                    ->withInput()
+                    ->withErrors(['source_id' => 'Selected source quote is invalid.']);
+            }
+        }
 
         $validated['company_id'] = $currentCompany->id;
         $validated['job_number'] = Jobcard::generateJobNumber($currentCompany->id);
@@ -301,7 +386,7 @@ class JobcardController extends Controller
             }
         }
 
-        $jobcard->load(['customer', 'contact', 'assignedUser', 'assignedTeam', 'lineItems.product', 'lineItems.taxRate', 'lineItems.lineGroup', 'lineGroups', 'invoice', 'timeEntries.user']);
+        $jobcard->load(['customer', 'contact', 'assignedUser', 'assignedTeam', 'lineItems.product', 'lineItems.taxRate', 'lineItems.lineGroup', 'lineGroups', 'invoice', 'source', 'timeEntries.user']);
 
         $currentCompany = auth()->user()->getCurrentCompany();
         
@@ -313,6 +398,10 @@ class JobcardController extends Controller
             ->get(['id', 'name', 'is_default']);
         
         $defaultTemplateId = $pdfTemplates->where('is_default', true)->first()?->id ?? null;
+        $convertedQuoteId = Quote::where('company_id', $currentCompany->id)
+            ->where('source_type', 'jobcard')
+            ->where('source_id', $jobcard->id)
+            ->value('id');
         
         // Get running timer for current user and this jobcard
         $runningTimer = \App\Models\TimeEntry::getRunningEntry(auth()->id(), $jobcard->id);
@@ -329,6 +418,7 @@ class JobcardController extends Controller
             'canEditCompleted' => auth()->user()->canEditCompletedJobcards(),
             'pdfTemplates' => $pdfTemplates,
             'defaultTemplateId' => $defaultTemplateId,
+            'convertedQuoteId' => $convertedQuoteId,
             'runningTimer' => $runningTimer,
             'timeSummary' => $timeSummary,
         ]);
@@ -615,40 +705,11 @@ class JobcardController extends Controller
             return redirect()->back()->withErrors(['email' => 'At least one valid email is required.']);
         }
 
-        $user = auth()->user();
-        
-        // Check if user has SMTP settings configured
-        if (!$user->smtp_host || !$user->smtp_username || !$user->smtp_password) {
-            return redirect()->back()
-                ->withErrors(['message' => 'Please configure your SMTP settings in your user profile to send emails.']);
-        }
-
         try {
-            // Configure mail using user's SMTP settings
-            Config::set([
-                'mail.mailers.smtp.host' => $user->smtp_host,
-                'mail.mailers.smtp.port' => $user->smtp_port ?? 587,
-                'mail.mailers.smtp.username' => $user->smtp_username,
-                'mail.mailers.smtp.password' => $user->smtp_password,
-                'mail.mailers.smtp.encryption' => $user->smtp_encryption ?? 'tls',
-            ]);
-
-            // Log the SMTP configuration for debugging
-            \Log::info('Email Configuration', [
-                'host' => $user->smtp_host,
-                'port' => $user->smtp_port ?? 587,
-                'username' => $user->smtp_username,
-                'encryption' => $user->smtp_encryption ?? 'tls',
-                'from_email' => $user->smtp_from_email ?? $user->email,
-                'from_name' => $user->smtp_from_name ?? $user->name,
-                'to_email' => $emails,
-            ]);
-
             $jobcard->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company']);
 
             $subject = $validated['subject'] ?? "Jobcard #{$jobcard->job_number} - {$jobcard->title}";
-            $fromEmail = $user->smtp_from_email ?? $user->email;
-            $fromName = $user->smtp_from_name ?? $user->name;
+            $fromName = $currentCompany->name ?: config('mail.from.name');
 
             // Generate PDF
             $templateId = $request->get('template_id');
@@ -666,10 +727,10 @@ class JobcardController extends Controller
                 'jobcard' => $jobcard,
                 'company' => $currentCompany,
                 'customMessage' => $validated['message'] ?? '',
-            ], function ($message) use ($emails, $subject, $fromEmail, $fromName, $pdf, $filename, $currentCompany) {
+            ], function ($message) use ($emails, $subject, $fromName, $pdf, $filename, $currentCompany) {
                 $message->to($emails)
                     ->subject($subject)
-                    ->from($fromEmail, $fromName)
+                    ->from(config('mail.from.address'), $fromName)
                     ->attachData($pdf->output(), $filename, [
                         'mime' => 'application/pdf',
                     ]);
@@ -679,22 +740,58 @@ class JobcardController extends Controller
                 }
             });
 
+            foreach ($emails as $recipientEmail) {
+                EmailActivity::create([
+                    'company_id' => $currentCompany->id,
+                    'customer_id' => $jobcard->customer_id,
+                    'contact_id' => $jobcard->contact_id,
+                    'user_id' => auth()->id(),
+                    'recipient_email' => $recipientEmail,
+                    'recipient_name' => null,
+                    'subject' => $subject,
+                    'body' => $validated['message'] ?? '',
+                    'email_type' => 'document',
+                    'related_type' => 'jobcard',
+                    'related_id' => $jobcard->id,
+                    'status' => 'sent',
+                    'metadata' => [
+                        'pdf_template_id' => $templateId,
+                    ],
+                    'sent_at' => now(),
+                ]);
+            }
+
             \Log::info('Email sent successfully', [
                 'to' => $emails,
                 'subject' => $subject,
-                'from' => $fromEmail,
+                'from' => config('mail.from.address'),
             ]);
 
             return redirect()->back()
                 ->with('success', 'Jobcard sent successfully to ' . implode(', ', $emails));
 
         } catch (\Exception $e) {
+            $subject = $validated['subject'] ?? "Jobcard #{$jobcard->job_number} - {$jobcard->title}";
+            foreach ($emails as $recipientEmail) {
+                EmailActivity::create([
+                    'company_id' => $currentCompany->id,
+                    'customer_id' => $jobcard->customer_id,
+                    'contact_id' => $jobcard->contact_id,
+                    'user_id' => auth()->id(),
+                    'recipient_email' => $recipientEmail,
+                    'recipient_name' => null,
+                    'subject' => $subject,
+                    'body' => $validated['message'] ?? '',
+                    'email_type' => 'document',
+                    'related_type' => 'jobcard',
+                    'related_id' => $jobcard->id,
+                    'status' => 'failed',
+                    'error_message' => $e->getMessage(),
+                ]);
+            }
             \Log::error('Email sending failed', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
-                'smtp_host' => $user->smtp_host,
-                'smtp_port' => $user->smtp_port,
-                'smtp_username' => $user->smtp_username,
                 'to_email' => $emails,
             ]);
             
@@ -704,94 +801,46 @@ class JobcardController extends Controller
     }
 
     /**
+     * Convert jobcard to quote
+     */
+    public function convertToQuote(Jobcard $jobcard): RedirectResponse
+    {
+        $currentCompany = auth()->user()->getCurrentCompany();
+
+        if ($jobcard->company_id !== $currentCompany->id) {
+            abort(403, 'Unauthorized access to jobcard.');
+        }
+
+        $existingQuoteId = Quote::where('company_id', $currentCompany->id)
+            ->where('source_type', 'jobcard')
+            ->where('source_id', $jobcard->id)
+            ->value('id');
+
+        if ($existingQuoteId) {
+            return redirect()->route('quotes.show', $existingQuoteId)
+                ->with('info', 'This jobcard has already been converted to a quote.');
+        }
+
+        return redirect()->route('quotes.create', [
+            'source_type' => 'jobcard',
+            'source_id' => $jobcard->id,
+        ]);
+    }
+
+    /**
      * Convert jobcard to invoice
      */
     public function convertToInvoice(Jobcard $jobcard): RedirectResponse
     {
-        // Log the start of conversion
-        \Log::info('Jobcard conversion started', [
-            'jobcard_id' => $jobcard->id,
-            'current_invoice_id' => $jobcard->invoice_id,
-            'user_id' => auth()->id(),
-            'request_method' => request()->method(),
-            'request_url' => request()->url()
-        ]);
-        
         $currentCompany = auth()->user()->getCurrentCompany();
-        
-        // Ensure the jobcard belongs to the current company
+
         if ($jobcard->company_id !== $currentCompany->id) {
-            \Log::error('Jobcard conversion failed - company mismatch', [
-                'jobcard_id' => $jobcard->id,
-                'jobcard_company_id' => $jobcard->company_id,
-                'current_company_id' => $currentCompany->id
-            ]);
             abort(403, 'Unauthorized access to jobcard.');
         }
 
-        try {
-            $invoice = $jobcard->convertToInvoice();
-            
-            // Update jobcard to link to invoice and set status to completed
-            $oldStatus = $jobcard->status;
-            $updated = $jobcard->update([
-                'invoice_id' => $invoice->id,
-                'status' => 'completed',
-                'completed_date' => now(),
-            ]);
-            
-            // Refresh the jobcard to get updated data
-            $jobcard->refresh();
-            
-            // Send invoice created notification if enabled
-            // Load invoice relationships needed for notifications
-            $invoice->load('customer', 'company');
-            try {
-                $reminderService = new ReminderService();
-                $reminderService->sendInvoiceCreatedConfirmation($invoice);
-            } catch (\Exception $e) {
-                Log::error('Failed to send invoice created confirmation after jobcard conversion', [
-                    'invoice_id' => $invoice->id,
-                    'jobcard_id' => $jobcard->id,
-                    'error' => $e->getMessage(),
-                ]);
-                // Don't fail the conversion if reminder fails
-            }
-            
-            // Send jobcard status updated notification if status changed
-            if ($oldStatus !== 'completed') {
-                try {
-                    $reminderService = new ReminderService();
-                    $reminderService->sendJobcardStatusUpdatedConfirmation($jobcard, $oldStatus);
-                } catch (\Exception $e) {
-                    Log::error('Failed to send jobcard status updated confirmation after conversion', [
-                        'jobcard_id' => $jobcard->id,
-                        'error' => $e->getMessage(),
-                    ]);
-                    // Don't fail the conversion if reminder fails
-                }
-            }
-            
-            // Log for debugging
-            \Log::info('Jobcard conversion completed', [
-                'jobcard_id' => $jobcard->id,
-                'invoice_id' => $invoice->id,
-                'update_success' => $updated,
-                'jobcard_invoice_id_after' => $jobcard->invoice_id,
-                'jobcard_status' => $jobcard->status
-            ]);
-            
-            return redirect()->route('invoices.show', $invoice)
-                ->with('success', 'Jobcard converted to invoice successfully');
-        } catch (\Exception $e) {
-            \Log::error('Jobcard conversion failed', [
-                'jobcard_id' => $jobcard->id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            
-            return redirect()->back()
-                ->withErrors(['message' => 'Failed to convert jobcard to invoice: ' . $e->getMessage()]);
-        }
+        return redirect()->route('invoices.create', [
+            'source_type' => 'jobcard',
+            'source_id' => $jobcard->id,
+        ]);
     }
 }

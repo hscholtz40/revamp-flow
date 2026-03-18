@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Contact extends Model
 {
@@ -33,5 +34,15 @@ class Contact extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function emailActivities(): HasMany
+    {
+        return $this->hasMany(EmailActivity::class);
+    }
+
+    public function smsActivities(): HasMany
+    {
+        return $this->hasMany(SMSActivity::class);
     }
 }

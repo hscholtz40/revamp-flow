@@ -2,14 +2,16 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Company;
 use App\Models\Customer;
+use App\Models\EmailActivity;
+use App\Models\EmailTemplate;
 use App\Models\SMSSettings;
 use App\Models\SMSActivity;
 use App\Services\BulkSMSService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -48,6 +50,11 @@ class CustomersController extends Controller
                 'sort_dir' => $sortDir,
             ],
             'currentCompany' => $currentCompany,
+            'emailTemplates' => EmailTemplate::where('company_id', $currentCompany->id)
+                ->where('is_active', true)
+                ->orderByDesc('is_default')
+                ->orderBy('name')
+                ->get(['id', 'name', 'subject', 'html_template', 'css_styles', 'is_default']),
         ]);
     }
 
@@ -215,16 +222,31 @@ class CustomersController extends Controller
             ->orderBy('created_at', 'desc')
             ->paginate($smsPerPage, ['*'], 'sms_page');
 
+        $emailPerPage = $request->get('email_per_page', 10);
+        $emailActivities = EmailActivity::where('company_id', $currentCompany->id)
+            ->where('customer_id', $customer->id)
+            ->with('user')
+            ->orderByDesc('sent_at')
+            ->orderByDesc('created_at')
+            ->paginate($emailPerPage, ['*'], 'emails_page');
+
         return Inertia::render('customers/Show', [
             'customer' => $customer,
             'contacts' => $contacts,
             'smsActivities' => $smsActivities,
+            'emailActivities' => $emailActivities,
+            'emailTemplates' => EmailTemplate::where('company_id', $currentCompany->id)
+                ->where('is_active', true)
+                ->orderByDesc('is_default')
+                ->orderBy('name')
+                ->get(['id', 'name', 'subject', 'html_template', 'css_styles', 'is_default']),
             'filters' => [
                 'contact_search' => $request->get('contact_search'),
                 'contacts_per_page' => $contactsPerPage,
                 'sms_search' => $request->get('sms_search'),
                 'sms_status' => $request->get('sms_status'),
                 'sms_per_page' => $smsPerPage,
+                'email_per_page' => $emailPerPage,
             ],
         ]);
     }
@@ -328,6 +350,7 @@ class CustomersController extends Controller
         // Create SMS activity record
         $smsActivity = SMSActivity::create([
             'customer_id' => $customer->id,
+            'contact_id' => null,
             'user_id' => auth()->id(),
             'company_id' => $currentCompany->id,
             'phone_number' => $customer->phone,
@@ -380,6 +403,143 @@ class CustomersController extends Controller
         }
     }
 
+    /**
+     * Send email to a customer using an email template.
+     */
+    public function sendEmail(Request $request, Customer $customer): RedirectResponse
+    {
+        $validated = $request->validate([
+            'template_id' => ['nullable', 'exists:email_templates,id'],
+            'subject' => ['required', 'string', 'max:255'],
+            'body' => ['required', 'string'],
+        ]);
+
+        $currentCompany = auth()->user()->getCurrentCompany();
+        if ($customer->company_id !== $currentCompany->id) {
+            abort(403, 'Unauthorized access to customer.');
+        }
+
+        if (empty($customer->email)) {
+            return redirect()->back()->withErrors(['message' => 'Customer does not have an email address.']);
+        }
+
+        $template = null;
+        if (!empty($validated['template_id'])) {
+            $template = EmailTemplate::where('company_id', $currentCompany->id)
+                ->where('is_active', true)
+                ->findOrFail($validated['template_id']);
+        }
+
+        $contact = $customer->contacts()
+            ->orderByDesc('is_primary')
+            ->orderBy('name')
+            ->first();
+
+        $context = [
+            'company' => $currentCompany->toArray(),
+            'customer' => $customer->toArray(),
+            'contact' => $contact?->toArray() ?? [],
+            'user' => [
+                'name' => auth()->user()->name,
+                'email' => auth()->user()->email,
+            ],
+            'date' => [
+                'today' => now()->toDateString(),
+                'now' => now()->toDateTimeString(),
+            ],
+        ];
+
+        $subject = $this->renderTemplateString($validated['subject'], $context);
+        $renderedHtml = $this->renderTemplateString($validated['body'], $context);
+        if ($template && !empty($template->css_styles)) {
+            $renderedHtml = "<style>{$template->css_styles}</style>\n{$renderedHtml}";
+        }
+
+        try {
+            Mail::mailer('smtp')->send([], [], function ($message) use ($customer, $subject, $renderedHtml, $currentCompany) {
+                $fromName = $currentCompany->name ?: config('mail.from.name');
+                $message->to($customer->email, $customer->name)
+                    ->subject($subject)
+                    ->from(config('mail.from.address'), $fromName)
+                    ->html($renderedHtml);
+
+                if (!empty($currentCompany->email)) {
+                    $message->replyTo($currentCompany->email, $currentCompany->name ?? null);
+                }
+            });
+
+            EmailActivity::create([
+                'company_id' => $currentCompany->id,
+                'customer_id' => $customer->id,
+                'contact_id' => null,
+                'user_id' => auth()->id(),
+                'email_template_id' => $template?->id,
+                'recipient_email' => $customer->email,
+                'recipient_name' => $customer->name,
+                'subject' => $subject,
+                'body' => $renderedHtml,
+                'email_type' => 'direct',
+                'related_type' => 'customer',
+                'related_id' => $customer->id,
+                'status' => 'sent',
+                'sent_at' => now(),
+            ]);
+
+            return redirect()->back()->with('success', 'Email sent successfully to ' . $customer->email);
+        } catch (\Throwable $e) {
+            EmailActivity::create([
+                'company_id' => $currentCompany->id,
+                'customer_id' => $customer->id,
+                'contact_id' => null,
+                'user_id' => auth()->id(),
+                'email_template_id' => $template?->id,
+                'recipient_email' => $customer->email,
+                'recipient_name' => $customer->name,
+                'subject' => $subject,
+                'body' => $renderedHtml,
+                'email_type' => 'direct',
+                'related_type' => 'customer',
+                'related_id' => $customer->id,
+                'status' => 'failed',
+                'error_message' => $e->getMessage(),
+            ]);
+            return redirect()->back()->withErrors(['message' => 'Failed to send email: ' . $e->getMessage()]);
+        }
+    }
+
+    private function renderTemplateString(string $template, array $context): string
+    {
+        return preg_replace_callback('/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/', function ($matches) use ($context) {
+            $path = $matches[1] ?? '';
+            if ($path === '') {
+                return '';
+            }
+
+            $value = $this->resolveContextPath($context, $path);
+            if (is_bool($value)) {
+                return $value ? 'Yes' : 'No';
+            }
+
+            return is_scalar($value) ? (string) $value : '';
+        }, $template) ?? $template;
+    }
+
+    private function resolveContextPath(array $context, string $path): mixed
+    {
+        $segments = explode('.', $path);
+        $current = $context;
+
+        foreach ($segments as $segment) {
+            if (is_array($current) && array_key_exists($segment, $current)) {
+                $current = $current[$segment];
+                continue;
+            }
+
+            return '';
+        }
+
+        return $current;
+    }
 }
 
 

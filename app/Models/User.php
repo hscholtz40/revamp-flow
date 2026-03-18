@@ -27,13 +27,6 @@ class User extends Authenticatable
         'password',
         'user_type',
         'hourly_rate',
-        'smtp_host',
-        'smtp_port',
-        'smtp_username',
-        'smtp_password',
-        'smtp_encryption',
-        'smtp_from_email',
-        'smtp_from_name',
         'current_company_id',
     ];
 
@@ -45,7 +38,6 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
-        'smtp_password',
     ];
 
     /**
@@ -58,7 +50,6 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
-            'smtp_port' => 'integer',
             'hourly_rate' => 'decimal:2',
         ];
     }

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
+import EmailComposerModal from '@/components/EmailComposerModal.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import contacts from '@/routes/contacts';
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 interface Contact {
     id: number;
@@ -29,6 +30,14 @@ const props = defineProps<{
     };
     filters: { search?: string; sort_by?: string; sort_dir?: 'asc' | 'desc' };
     currentCompany: Company;
+    emailTemplates: {
+        id: number;
+        name: string;
+        subject: string;
+        html_template?: string | null;
+        css_styles?: string | null;
+        is_default?: boolean;
+    }[];
 }>();
 
 const search = ref(props.filters?.search ?? '');
@@ -76,6 +85,7 @@ const showSMSModal = ref(false);
 const showSMSResultModal = ref(false);
 const selectedContact = ref<Contact | null>(null);
 const smsResult = ref<{ success: boolean; message: string } | null>(null);
+const showEmailModal = ref(false);
 
 const smsForm = useForm({
     message: '',
@@ -118,6 +128,18 @@ const closeSMSResultModal = () => {
     smsResult.value = null;
     selectedContact.value = null;
 };
+
+const openEmailModal = (contact: Contact) => {
+    selectedContact.value = contact;
+    showEmailModal.value = true;
+};
+
+const emailSendUrl = computed(() => selectedContact.value ? `/contacts/${selectedContact.value.id}/send-email` : null);
+const emailModalTitle = computed(() => `Send Email to ${selectedContact.value?.name || 'Contact'}`);
+const emailPreviewContext = computed(() => ({
+    contact: selectedContact.value ?? {},
+    customer: selectedContact.value?.customer ?? {},
+}));
 </script>
 
 <template>
@@ -233,6 +255,13 @@ const closeSMSResultModal = () => {
                                         >
                                             Edit
                                         </Link>
+                                        <button
+                                            v-if="contact.email"
+                                            @click="openEmailModal(contact)"
+                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                        >
+                                            Email
+                                        </button>
                                         <button
                                             v-if="contact.phone"
                                             @click="openSMSModal(contact)"
@@ -364,5 +393,15 @@ const closeSMSResultModal = () => {
                 </div>
             </div>
         </div>
+
+        <EmailComposerModal
+            :open="showEmailModal"
+            :title="emailModalTitle"
+            :send-url="emailSendUrl"
+            :templates="props.emailTemplates"
+            :preview-context="emailPreviewContext"
+            @close="showEmailModal = false"
+            @sent="selectedContact = null"
+        />
     </AppLayout>
 </template>

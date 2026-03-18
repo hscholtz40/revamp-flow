@@ -56,6 +56,11 @@ class Customer extends Model
         return $this->hasMany(SMSActivity::class);
     }
 
+    public function emailActivities(): HasMany
+    {
+        return $this->hasMany(EmailActivity::class);
+    }
+
     public function invoices(): HasMany
     {
         return $this->hasMany(Invoice::class);

@@ -97,6 +97,12 @@
                                         Remaining <span>{{ sortIndicator('remaining_credit') }}</span>
                                     </button>
                                 </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">Reference</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">Description</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">Subtotal</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">Tax</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">Created</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">Updated</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Actions
                                 </th>
@@ -136,6 +142,24 @@
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="text-sm text-gray-900">{{ formatCurrency(cn.remaining_credit) }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap" style="display: none;">
+                                    <div class="text-sm text-gray-900">{{ cn.reference || '-' }}</div>
+                                </td>
+                                <td class="px-6 py-4" style="display: none;">
+                                    <div class="text-sm text-gray-900 truncate max-w-xs">{{ cn.description || '-' }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap" style="display: none;">
+                                    <div class="text-sm text-gray-900">{{ formatCurrency(cn.subtotal || 0) }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap" style="display: none;">
+                                    <div class="text-sm text-gray-900">{{ formatCurrency(cn.tax_amount || 0) }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap" style="display: none;">
+                                    <div class="text-sm text-gray-900">{{ cn.created_at ? formatDate(cn.created_at) : '-' }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap" style="display: none;">
+                                    <div class="text-sm text-gray-900">{{ cn.updated_at ? formatDate(cn.updated_at) : '-' }}</div>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" @click.stop>
                                     <div class="flex items-center gap-2">
@@ -237,6 +261,12 @@ interface CreditNote {
     id: number;
     credit_note_number: string;
     title: string | null;
+    reference?: string | null;
+    description?: string | null;
+    subtotal?: number;
+    tax_amount?: number;
+    created_at?: string;
+    updated_at?: string;
     customer?: Customer;
     invoice?: Invoice | null;
     status: string;

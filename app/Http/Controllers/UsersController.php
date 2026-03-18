@@ -64,13 +64,6 @@ class UsersController extends Controller
             'groups.*' => ['integer', 'exists:groups,id'],
             'companies' => ['array'],
             'companies.*' => ['integer', 'exists:companies,id'],
-            'smtp_host' => ['nullable', 'string', 'max:255'],
-            'smtp_port' => ['nullable', 'integer', 'min:1', 'max:65535'],
-            'smtp_username' => ['nullable', 'string', 'max:255'],
-            'smtp_password' => ['nullable', 'string', 'max:255'],
-            'smtp_encryption' => ['nullable', 'string', 'in:tls,ssl,none'],
-            'smtp_from_email' => ['nullable', 'email', 'max:255'],
-            'smtp_from_name' => ['nullable', 'string', 'max:255'],
         ]);
 
         $this->assertUserTypeWithinLicenseLimit($validated['user_type']);
@@ -83,16 +76,6 @@ class UsersController extends Controller
         if (!empty($validated['password'])) {
             $user->password = Hash::make($validated['password']);
         }
-        
-        // Set SMTP settings
-        $user->smtp_host = $validated['smtp_host'] ?? null;
-        $user->smtp_port = $validated['smtp_port'] ?? null;
-        $user->smtp_username = $validated['smtp_username'] ?? null;
-        $user->smtp_password = $validated['smtp_password'] ?? null;
-        $user->smtp_encryption = $validated['smtp_encryption'] ?? 'tls';
-        $user->smtp_from_email = $validated['smtp_from_email'] ?? null;
-        $user->smtp_from_name = $validated['smtp_from_name'] ?? null;
-        
         $user->save();
         if ($request->filled('groups')) {
             $user->groups()->sync($validated['groups']);
@@ -144,13 +127,6 @@ class UsersController extends Controller
             'groups.*' => ['integer', 'exists:groups,id'],
             'companies' => ['sometimes','array'],
             'companies.*' => ['integer', 'exists:companies,id'],
-            'smtp_host' => ['nullable', 'string', 'max:255'],
-            'smtp_port' => ['nullable', 'integer', 'min:1', 'max:65535'],
-            'smtp_username' => ['nullable', 'string', 'max:255'],
-            'smtp_password' => ['nullable', 'string', 'max:255'],
-            'smtp_encryption' => ['nullable', 'string', 'in:tls,ssl,none'],
-            'smtp_from_email' => ['nullable', 'email', 'max:255'],
-            'smtp_from_name' => ['nullable', 'string', 'max:255'],
         ]);
 
         $this->assertUserTypeWithinLicenseLimit($validated['user_type'], $user->id);
@@ -162,18 +138,6 @@ class UsersController extends Controller
         if (!empty($validated['password'])) {
             $user->password = Hash::make($validated['password']);
         }
-        
-        // Update SMTP settings
-        $user->smtp_host = $validated['smtp_host'] ?? null;
-        $user->smtp_port = $validated['smtp_port'] ?? null;
-        $user->smtp_username = $validated['smtp_username'] ?? null;
-        if (!empty($validated['smtp_password'])) {
-            $user->smtp_password = $validated['smtp_password'];
-        }
-        $user->smtp_encryption = $validated['smtp_encryption'] ?? 'tls';
-        $user->smtp_from_email = $validated['smtp_from_email'] ?? null;
-        $user->smtp_from_name = $validated['smtp_from_name'] ?? null;
-        
         $user->save();
         if ($request->has('groups')) {
             $user->groups()->sync($validated['groups'] ?? []);

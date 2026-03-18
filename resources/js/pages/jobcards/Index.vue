@@ -138,6 +138,15 @@
                                         <span>{{ sortIndicator('total') }}</span>
                                     </button>
                                 </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">Order Number</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">Description</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">Email</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">Phone</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">Start Date</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">Completed Date</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">Tax</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">Created</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-col-default-visible="false">Updated</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Actions
                                 </th>
@@ -203,6 +212,33 @@
                                 </td>
                                 <td v-if="!isLimitedUser" class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     {{ jobcard.formatted_total || 'R0.00' }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" style="display: none;">
+                                    {{ jobcard.order_number || '-' }}
+                                </td>
+                                <td class="px-6 py-4 text-sm text-gray-900" style="display: none;">
+                                    <div class="truncate max-w-xs">{{ jobcard.description || '-' }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" style="display: none;">
+                                    {{ jobcard.email || '-' }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" style="display: none;">
+                                    {{ jobcard.phone || '-' }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" style="display: none;">
+                                    {{ jobcard.start_date ? formatDate(jobcard.start_date) : '-' }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" style="display: none;">
+                                    {{ jobcard.completed_date ? formatDate(jobcard.completed_date) : '-' }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" style="display: none;">
+                                    R{{ Number(jobcard.tax_amount || 0).toFixed(2) }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" style="display: none;">
+                                    {{ jobcard.created_at ? formatDate(jobcard.created_at) : '-' }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" style="display: none;">
+                                    {{ jobcard.updated_at ? formatDate(jobcard.updated_at) : '-' }}
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" @click.stop>
                                     <div class="flex items-center gap-2">
@@ -296,6 +332,15 @@ interface Jobcard {
     job_number: string;
     title: string;
     status: string;
+    description?: string | null;
+    order_number?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    start_date?: string | null;
+    completed_date?: string | null;
+    tax_amount?: number | null;
+    created_at?: string;
+    updated_at?: string;
     due_date: string | null;
     formatted_total: string | null;
     customer: {
