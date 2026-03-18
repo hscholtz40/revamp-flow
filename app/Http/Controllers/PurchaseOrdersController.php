@@ -46,6 +46,57 @@ class PurchaseOrdersController extends Controller
                 $query->where('po_number', 'like', "%{$search}%");
             });
 
+        $columnFilters = collect($request->query())
+            ->filter(fn ($value, $key) => str_starts_with((string) $key, 'colf_'))
+            ->mapWithKeys(function ($value, $key) {
+                $trimmed = trim((string) $value);
+                return [substr((string) $key, 5) => $trimmed];
+            })
+            ->filter(fn ($value) => $value !== '');
+
+        foreach ($columnFilters as $filterKey => $filterValue) {
+            switch ($filterKey) {
+                case 'po_number':
+                    $query->where('po_number', 'like', "%{$filterValue}%");
+                    break;
+                case 'supplier':
+                    $query->whereHas('supplier', function ($q) use ($filterValue) {
+                        $q->where('name', 'like', "%{$filterValue}%");
+                    });
+                    break;
+                case 'order_date':
+                    $query->where('order_date', 'like', "%{$filterValue}%");
+                    break;
+                case 'expected_delivery':
+                    $query->where('expected_delivery_date', 'like', "%{$filterValue}%");
+                    break;
+                case 'status':
+                    $query->where('status', 'like', "%{$filterValue}%");
+                    break;
+                case 'total':
+                    $query->where('total', 'like', "%{$filterValue}%");
+                    break;
+                case 'subtotal':
+                    $query->where('subtotal', 'like', "%{$filterValue}%");
+                    break;
+                case 'tax':
+                    $query->where('tax_amount', 'like', "%{$filterValue}%");
+                    break;
+                case 'notes':
+                    $query->where('notes', 'like', "%{$filterValue}%");
+                    break;
+                case 'terms':
+                    $query->where('terms', 'like', "%{$filterValue}%");
+                    break;
+                case 'created':
+                    $query->where('created_at', 'like', "%{$filterValue}%");
+                    break;
+                case 'updated':
+                    $query->where('updated_at', 'like', "%{$filterValue}%");
+                    break;
+            }
+        }
+
         $sortableFields = ['po_number', 'supplier_name', 'order_date', 'expected_delivery_date', 'status', 'total', 'created_at'];
         if (!in_array($sortBy, $sortableFields, true)) {
             $sortBy = 'created_at';
@@ -70,6 +121,7 @@ class PurchaseOrdersController extends Controller
                 'search' => $request->string('search')->toString(),
                 'sort_by' => $sortBy,
                 'sort_dir' => $sortDir,
+                'column_filters' => $columnFilters->all(),
             ],
             'currentCompany' => $currentCompany,
             'suppliers' => Supplier::where('company_id', $currentCompany->id)

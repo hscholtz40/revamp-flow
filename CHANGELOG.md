@@ -81,6 +81,10 @@
 - Upgraded customer/contact email compose modals to include the visual Unlayer editor in-place (with manual HTML still available), while preserving live preview and stripping embedded design markers before send.
 - Fixed Unlayer editor sync so changing template/body content after mount now reloads into the designer view, ensuring preview content is reflected inside the editor instead of remaining stale.
 - Simplified the customer/contact email composer UI by removing the separate preview panel, giving the body editor full modal width for a cleaner compose experience.
+- Fixed list-view column filters so they now apply across the full dataset (server-side via URL filter params) instead of only filtering the currently loaded page rows.
+- Updated list-view column filter inputs to apply only on Enter key press, preventing disruptive table reload/filtering while users are still typing.
+- Fixed post-filter table rendering so rows no longer remain hidden until manual refresh; clearing a column filter and pressing Enter now consistently reloads and restores results immediately.
+- Hardened column-filter clearing behavior: clearing now triggers an immediate Inertia reload (including native search clear-button events) and forces fresh server-rendered rows to avoid stale filtered state.
 
 ## 2026-03-16 - version 1.7.6
 

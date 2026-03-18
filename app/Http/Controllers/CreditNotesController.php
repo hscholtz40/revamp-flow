@@ -50,6 +50,62 @@ class CreditNotesController extends Controller
             });
         }
 
+        $columnFilters = collect($request->query())
+            ->filter(fn ($value, $key) => str_starts_with((string) $key, 'colf_'))
+            ->mapWithKeys(function ($value, $key) {
+                $trimmed = trim((string) $value);
+                return [substr((string) $key, 5) => $trimmed];
+            })
+            ->filter(fn ($value) => $value !== '');
+
+        foreach ($columnFilters as $filterKey => $filterValue) {
+            switch ($filterKey) {
+                case 'number':
+                    $query->where('credit_note_number', 'like', "%{$filterValue}%");
+                    break;
+                case 'customer':
+                    $query->whereHas('customer', function ($q) use ($filterValue) {
+                        $q->where('name', 'like', "%{$filterValue}%");
+                    });
+                    break;
+                case 'invoice':
+                    $query->whereHas('invoice', function ($q) use ($filterValue) {
+                        $q->where('invoice_number', 'like', "%{$filterValue}%");
+                    });
+                    break;
+                case 'date':
+                    $query->where('credit_note_date', 'like', "%{$filterValue}%");
+                    break;
+                case 'status':
+                    $query->where('status', 'like', "%{$filterValue}%");
+                    break;
+                case 'total':
+                    $query->where('total', 'like', "%{$filterValue}%");
+                    break;
+                case 'remaining':
+                    $query->where('remaining_credit', 'like', "%{$filterValue}%");
+                    break;
+                case 'reference':
+                    $query->where('reference', 'like', "%{$filterValue}%");
+                    break;
+                case 'description':
+                    $query->where('description', 'like', "%{$filterValue}%");
+                    break;
+                case 'subtotal':
+                    $query->where('subtotal', 'like', "%{$filterValue}%");
+                    break;
+                case 'tax':
+                    $query->where('tax_amount', 'like', "%{$filterValue}%");
+                    break;
+                case 'created':
+                    $query->where('created_at', 'like', "%{$filterValue}%");
+                    break;
+                case 'updated':
+                    $query->where('updated_at', 'like', "%{$filterValue}%");
+                    break;
+            }
+        }
+
         $sortableFields = ['credit_note_number', 'customer_name', 'invoice_number', 'credit_note_date', 'status', 'total', 'remaining_credit', 'created_at'];
         if (!in_array($sortBy, $sortableFields, true)) {
             $sortBy = 'created_at';
@@ -79,7 +135,10 @@ class CreditNotesController extends Controller
             'creditNotes' => $creditNotes,
             'customers' => $customers,
             'currentCompany' => $currentCompany,
-            'filters' => $request->only(['status', 'customer_id', 'search', 'sort_by', 'sort_dir']),
+            'filters' => [
+                ...$request->only(['status', 'customer_id', 'search', 'sort_by', 'sort_dir']),
+                'column_filters' => $columnFilters->all(),
+            ],
         ]);
     }
 

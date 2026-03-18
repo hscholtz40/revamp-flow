@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { usePage } from '@inertiajs/vue3';
+import { router, usePage } from '@inertiajs/vue3';
 import { GripVertical, Settings2, X } from 'lucide-vue-next';
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue';
 
 interface ColumnPref {
     id: number;
     label: string;
+    filterKey: string;
     visible: boolean;
     order: number;
 }
@@ -18,7 +19,8 @@ const dragIndex = ref<number | null>(null);
 const isSaving = ref(false);
 const saveTimer = ref<ReturnType<typeof setTimeout> | null>(null);
 const loadTimer = ref<ReturnType<typeof setTimeout> | null>(null);
-const columnFilters = ref<Record<number, string>>({});
+const columnFilters = ref<Record<string, string>>({});
+const pendingColumnFilters = ref<Record<string, string>>({});
 
 const pageKey = computed(() => String(page.component ?? ''));
 const pageUrl = computed(() => String((page as any).url ?? ''));
@@ -28,22 +30,51 @@ function getMainTable(): HTMLTableElement | null {
     return document.querySelector('main table') as HTMLTableElement | null;
 }
 
+function normalizeFilterKey(input: string): string {
+    const key = (input || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .replace(/_+/g, '_');
+    return key || 'column';
+}
+
+function parseColumnFiltersFromUrl(url: string): Record<string, string> {
+    const queryPart = url.includes('?') ? url.split('?')[1] : '';
+    const params = new URLSearchParams(queryPart || '');
+    const parsed: Record<string, string> = {};
+    params.forEach((value, key) => {
+        if (!key.startsWith('colf_')) return;
+        const filterKey = key.slice(5);
+        if (!filterKey) return;
+        const trimmed = (value || '').trim();
+        if (!trimmed) return;
+        parsed[filterKey] = trimmed;
+    });
+    return parsed;
+}
+
 function extractColumnsFromTable(table: HTMLTableElement): ColumnPref[] {
     const headerRow = table.querySelector('thead tr');
     if (!headerRow) return [];
 
     const headerCells = Array.from(headerRow.children) as HTMLElement[];
-    return headerCells.map((cell, idx) => ({
-        id: idx,
-        // Use source textContent (not rendered innerText) so Tailwind uppercase styles
-        // don't force labels to appear in all-caps in the column editor.
-        label: (cell.dataset.colLabel || cell.textContent || `Column ${idx + 1}`)
+    return headerCells.map((cell, idx) => {
+        const label = (cell.dataset.colLabel || cell.textContent || `Column ${idx + 1}`)
             .replace(/[↕↑↓]/g, '')
             .replace(/\s+/g, ' ')
-            .trim(),
-        visible: cell.dataset.colDefaultVisible !== 'false',
-        order: idx,
-    }));
+            .trim();
+        const filterKey = cell.dataset.colFilterKey || normalizeFilterKey(label);
+        return {
+            id: idx,
+        // Use source textContent (not rendered innerText) so Tailwind uppercase styles
+        // don't force labels to appear in all-caps in the column editor.
+            label,
+            filterKey,
+            visible: cell.dataset.colDefaultVisible !== 'false',
+            order: idx,
+        };
+    });
 }
 
 function applyColumnsToTable(table: HTMLTableElement, prefs: ColumnPref[]) {
@@ -51,6 +82,7 @@ function applyColumnsToTable(table: HTMLTableElement, prefs: ColumnPref[]) {
     const sorted = [...prefs].sort((a, b) => a.order - b.order);
     const orderedIds = sorted.map((c) => c.id);
     const visibleById = new Map(sorted.map((c) => [c.id, c.visible]));
+    const filterKeyById = new Map(sorted.map((c) => [c.id, c.filterKey]));
     const orderedSet = new Set(orderedIds);
 
     rows.forEach((row) => {
@@ -60,6 +92,10 @@ function applyColumnsToTable(table: HTMLTableElement, prefs: ColumnPref[]) {
         cells.forEach((cell, idx) => {
             if (cell.dataset.colPrefId === undefined) {
                 cell.dataset.colPrefId = String(idx);
+            }
+            const cellId = Number(cell.dataset.colPrefId ?? idx);
+            if (Number.isFinite(cellId) && !cell.dataset.colFilterKey && filterKeyById.has(cellId)) {
+                cell.dataset.colFilterKey = filterKeyById.get(cellId) || `column_${cellId}`;
             }
         });
 
@@ -109,18 +145,32 @@ function ensureColumnFilterRow(table: HTMLTableElement) {
         filterRow.innerHTML = '';
         headerCells.forEach((headerCell, index) => {
             const id = Number(headerCell.dataset.colPrefId ?? index);
+            const filterKey = headerCell.dataset.colFilterKey || `column_${id}`;
             const cell = document.createElement('th');
             cell.className = 'px-2 py-2';
             cell.dataset.colPrefId = String(id);
+            cell.dataset.colFilterKey = filterKey;
             const input = document.createElement('input');
             input.type = 'search';
-            input.value = columnFilters.value[id] ?? '';
-            input.placeholder = 'Filter...';
+            input.value = pendingColumnFilters.value[filterKey] ?? columnFilters.value[filterKey] ?? '';
+            input.placeholder = 'Type and press Enter...';
             input.className = 'w-full rounded border border-gray-300 px-2 py-1 text-xs';
             input.addEventListener('input', (event) => {
                 const target = event.target as HTMLInputElement;
-                columnFilters.value[id] = target.value;
-                applyTableRowFilters(table);
+                pendingColumnFilters.value[filterKey] = target.value;
+            });
+            input.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter') return;
+                event.preventDefault();
+                const target = event.target as HTMLInputElement;
+                applySingleColumnFilter(filterKey, target.value);
+            });
+            input.addEventListener('search', (event) => {
+                const target = event.target as HTMLInputElement;
+                // Clicking the native "x" clear button should immediately refresh.
+                if (!target.value.trim()) {
+                    applySingleColumnFilter(filterKey, '');
+                }
             });
             cell.appendChild(input);
             filterRow!.appendChild(cell);
@@ -128,43 +178,68 @@ function ensureColumnFilterRow(table: HTMLTableElement) {
     } else {
         const filterCells = Array.from(filterRow.children) as HTMLElement[];
         filterCells.forEach((cell) => {
-            const id = Number(cell.dataset.colPrefId ?? -1);
+            const filterKey = cell.dataset.colFilterKey || '';
             const input = cell.querySelector('input') as HTMLInputElement | null;
-            if (input && Number.isFinite(id)) {
-                input.value = columnFilters.value[id] ?? '';
+            if (input && filterKey) {
+                input.value = pendingColumnFilters.value[filterKey] ?? columnFilters.value[filterKey] ?? '';
             }
         });
     }
 }
 
-function applyTableRowFilters(table: HTMLTableElement) {
-    const tbody = table.querySelector('tbody');
-    if (!tbody) return;
+function applySingleColumnFilter(filterKey: string, rawValue: string) {
+    const trimmed = (rawValue || '').trim();
+    const nextColumnFilters = { ...columnFilters.value };
+    const nextPendingFilters = { ...pendingColumnFilters.value };
 
-    const activeFilters = Object.entries(columnFilters.value)
-        .map(([id, value]) => ({ id: Number(id), value: (value || '').trim().toLowerCase() }))
-        .filter((entry) => Number.isFinite(entry.id) && entry.value.length > 0)
-        .filter((entry) => {
-            const col = columns.value.find((c) => c.id === entry.id);
-            return !col || col.visible;
-        });
+    if (trimmed) {
+        nextColumnFilters[filterKey] = trimmed;
+        nextPendingFilters[filterKey] = trimmed;
+    } else {
+        delete nextColumnFilters[filterKey];
+        delete nextPendingFilters[filterKey];
+    }
 
-    const rows = Array.from(tbody.querySelectorAll('tr')) as HTMLElement[];
+    columnFilters.value = nextColumnFilters;
+    pendingColumnFilters.value = nextPendingFilters;
+    queueFilterRequest();
+}
+
+function clearInlineRowVisibility(table: HTMLTableElement) {
+    const rows = Array.from(table.querySelectorAll('tbody tr')) as HTMLElement[];
     rows.forEach((row) => {
-        const cells = Array.from(row.children) as HTMLElement[];
-        const cellMap = new Map<number, HTMLElement>(
-            cells
-                .map((cell, idx) => [Number(cell.dataset.colPrefId ?? idx), cell] as const)
-                .filter(([id]) => Number.isFinite(id)),
-        );
+        row.style.display = '';
+    });
+}
 
-        const matches = activeFilters.every((filter) => {
-            const cell = cellMap.get(filter.id);
-            const text = (cell?.textContent || '').trim().toLowerCase();
-            return text.includes(filter.value);
-        });
+function queueFilterRequest() {
+    const currentUrl = pageUrl.value || '';
+    const [pathPart, queryPart = ''] = currentUrl.split('?');
+    const path = pathPart || window.location.pathname;
+    const params = new URLSearchParams(queryPart);
 
-        row.style.display = matches ? '' : 'none';
+    Array.from(params.keys()).forEach((key) => {
+        if (key.startsWith('colf_') || key === 'page') {
+            params.delete(key);
+        }
+    });
+
+    Object.entries(columnFilters.value).forEach(([filterKey, value]) => {
+        const trimmed = (value || '').trim();
+        if (trimmed) {
+            params.set(`colf_${filterKey}`, trimmed);
+        }
+    });
+
+    const payload: Record<string, string> = {};
+    params.forEach((value, key) => {
+        payload[key] = value;
+    });
+
+    router.get(path, payload, {
+        preserveState: false,
+        preserveScroll: true,
+        replace: true,
     });
 }
 
@@ -175,7 +250,8 @@ function applyCurrentPreferences() {
     applyColumnsToTable(table, columns.value);
     ensureColumnFilterRow(table);
     applyColumnsToTable(table, columns.value);
-    applyTableRowFilters(table);
+    // Server-side filtering controls row data; clear any old inline hides.
+    clearInlineRowVisibility(table);
 }
 
 function mergeWithStored(base: ColumnPref[], stored: ColumnPref[]): ColumnPref[] {
@@ -216,6 +292,8 @@ async function loadPreferences() {
     }
 
     hasTable.value = true;
+    columnFilters.value = parseColumnFiltersFromUrl(pageUrl.value);
+    pendingColumnFilters.value = { ...columnFilters.value };
 
     try {
         const params = new URLSearchParams({ page_key: pageKey.value });
@@ -292,6 +370,8 @@ function toggleVisibility(id: number) {
 
 function resetDefaults() {
     columnFilters.value = {};
+    pendingColumnFilters.value = {};
+    queueFilterRequest();
     updateColumns(
         [...columns.value]
             .sort((a, b) => a.id - b.id)

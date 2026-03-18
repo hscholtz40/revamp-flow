@@ -83,6 +83,80 @@ class JobcardController extends Controller
             });
         }
 
+        $columnFilters = collect($request->query())
+            ->filter(fn ($value, $key) => str_starts_with((string) $key, 'colf_'))
+            ->mapWithKeys(function ($value, $key) {
+                $trimmed = trim((string) $value);
+                return [substr((string) $key, 5) => $trimmed];
+            })
+            ->filter(fn ($value) => $value !== '');
+
+        foreach ($columnFilters as $filterKey => $filterValue) {
+            switch ($filterKey) {
+                case 'job_number':
+                    $query->where('job_number', 'like', "%{$filterValue}%");
+                    break;
+                case 'title':
+                    $query->where('title', 'like', "%{$filterValue}%");
+                    break;
+                case 'customer':
+                    $query->whereHas('customer', function ($q) use ($filterValue) {
+                        $q->where('name', 'like', "%{$filterValue}%");
+                    });
+                    break;
+                case 'invoice':
+                    $query->whereHas('invoice', function ($q) use ($filterValue) {
+                        $q->where('invoice_number', 'like', "%{$filterValue}%");
+                    });
+                    break;
+                case 'assigned_to':
+                    $query->where(function ($q) use ($filterValue) {
+                        $q->whereHas('assignedUser', function ($userQuery) use ($filterValue) {
+                            $userQuery->where('name', 'like', "%{$filterValue}%");
+                        })->orWhereHas('assignedTeam', function ($teamQuery) use ($filterValue) {
+                            $teamQuery->where('name', 'like', "%{$filterValue}%");
+                        });
+                    });
+                    break;
+                case 'status':
+                    $query->where('status', 'like', "%{$filterValue}%");
+                    break;
+                case 'due_date':
+                    $query->where('due_date', 'like', "%{$filterValue}%");
+                    break;
+                case 'total':
+                    $query->where('total', 'like', "%{$filterValue}%");
+                    break;
+                case 'order_number':
+                    $query->where('order_number', 'like', "%{$filterValue}%");
+                    break;
+                case 'description':
+                    $query->where('description', 'like', "%{$filterValue}%");
+                    break;
+                case 'email':
+                    $query->where('email', 'like', "%{$filterValue}%");
+                    break;
+                case 'phone':
+                    $query->where('phone', 'like', "%{$filterValue}%");
+                    break;
+                case 'start_date':
+                    $query->where('start_date', 'like', "%{$filterValue}%");
+                    break;
+                case 'completed_date':
+                    $query->where('completed_date', 'like', "%{$filterValue}%");
+                    break;
+                case 'tax':
+                    $query->where('tax_amount', 'like', "%{$filterValue}%");
+                    break;
+                case 'created':
+                    $query->where('created_at', 'like', "%{$filterValue}%");
+                    break;
+                case 'updated':
+                    $query->where('updated_at', 'like', "%{$filterValue}%");
+                    break;
+            }
+        }
+
         $sortableFields = ['job_number', 'title', 'customer_name', 'status', 'due_date', 'total', 'created_at'];
         if (!in_array($sortBy, $sortableFields, true)) {
             $sortBy = 'created_at';
@@ -118,6 +192,7 @@ class JobcardController extends Controller
                 'show_closed' => $showClosed,
                 'sort_by' => $sortBy,
                 'sort_dir' => $sortDir,
+                'column_filters' => $columnFilters->all(),
             ],
             'currentCompany' => $currentCompany,
             'canEditCompleted' => auth()->user()->canEditCompletedJobcards(),

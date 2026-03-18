@@ -59,6 +59,66 @@ class QuotesController extends Controller
             });
         }
 
+        $columnFilters = collect($request->query())
+            ->filter(fn ($value, $key) => str_starts_with((string) $key, 'colf_'))
+            ->mapWithKeys(function ($value, $key) {
+                $trimmed = trim((string) $value);
+                return [substr((string) $key, 5) => $trimmed];
+            })
+            ->filter(fn ($value) => $value !== '');
+
+        foreach ($columnFilters as $filterKey => $filterValue) {
+            switch ($filterKey) {
+                case 'quote':
+                    $query->where('quote_number', 'like', "%{$filterValue}%");
+                    break;
+                case 'title':
+                    $query->where('title', 'like', "%{$filterValue}%");
+                    break;
+                case 'customer':
+                    $query->whereHas('customer', function ($q) use ($filterValue) {
+                        $q->where('name', 'like', "%{$filterValue}%");
+                    });
+                    break;
+                case 'status':
+                    $query->where('status', 'like', "%{$filterValue}%");
+                    break;
+                case 'expiry_date':
+                    $query->where('expiry_date', 'like', "%{$filterValue}%");
+                    break;
+                case 'total':
+                    $query->where('total', 'like', "%{$filterValue}%");
+                    break;
+                case 'order_number':
+                    $query->where('order_number', 'like', "%{$filterValue}%");
+                    break;
+                case 'description':
+                    $query->where('description', 'like', "%{$filterValue}%");
+                    break;
+                case 'email':
+                    $query->where('email', 'like', "%{$filterValue}%");
+                    break;
+                case 'phone':
+                    $query->where('phone', 'like', "%{$filterValue}%");
+                    break;
+                case 'subtotal':
+                    $query->where('subtotal', 'like', "%{$filterValue}%");
+                    break;
+                case 'discount':
+                    $query->where('discount_amount', 'like', "%{$filterValue}%");
+                    break;
+                case 'tax':
+                    $query->where('tax_amount', 'like', "%{$filterValue}%");
+                    break;
+                case 'created':
+                    $query->where('created_at', 'like', "%{$filterValue}%");
+                    break;
+                case 'updated':
+                    $query->where('updated_at', 'like', "%{$filterValue}%");
+                    break;
+            }
+        }
+
         $sortableFields = ['quote_number', 'title', 'customer_name', 'status', 'expiry_date', 'total', 'created_at'];
         if (!in_array($sortBy, $sortableFields, true)) {
             $sortBy = 'created_at';
@@ -86,6 +146,7 @@ class QuotesController extends Controller
                 'show_closed' => $showClosed,
                 'sort_by' => $sortBy,
                 'sort_dir' => $sortDir,
+                'column_filters' => $columnFilters->all(),
             ],
             'currentCompany' => $currentCompany,
             'canEditCompleted' => auth()->user()->hasModulePermission('quotes', 'edit_completed'),
