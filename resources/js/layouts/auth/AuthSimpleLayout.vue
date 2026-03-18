@@ -33,7 +33,7 @@ defineProps<{
                             </div>
                             <div class="space-y-1">
                                 <h1 class="text-2xl font-bold text-gray-900">JobCardOnline</h1>
-                                <p class="text-sm text-gray-600">by InTouch Software</p>
+                                <p class="text-sm text-gray-600">by Nexora Software</p>
                             </div>
                         </Link>
                     </div>
