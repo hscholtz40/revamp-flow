@@ -326,7 +326,7 @@
 
                             <div
                                 v-for="groupedItem in groupBlock.items"
-                                :key="groupedItem.itemIndex"
+                                :key="groupedItem.item._uid || groupedItem.itemIndex"
                                 class="grid grid-cols-1 md:grid-cols-[3.5rem_1fr_6.5rem_9rem_8rem_5.5rem_8rem_2rem] gap-2 items-start py-3 px-1 border-t border-gray-100 transition-colors"
                                 :class="{ 'bg-blue-50/60': dragOverItemIndex === groupedItem.itemIndex, 'opacity-60': activeDragIndex === groupedItem.itemIndex }"
                                 draggable="true"
@@ -631,6 +631,7 @@ interface Company {
 }
 
 interface LineItem {
+    _uid: string;
     product_id: string | null;
     line_group_id?: number | null;
     description: string;
@@ -694,6 +695,8 @@ const props = defineProps<{
 }>();
 
 const ROUNDING_LINE_DESCRIPTION = 'Rounding Adjustment';
+const createLineItemUid = () =>
+    `line-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 const showProductSuggestions = ref<Record<number, boolean>>({});
 const discountTypes = ref<Record<number, 'amount' | 'percentage'>>({});
 const draggedItemIndex = ref<number | null>(null);
@@ -749,6 +752,7 @@ const form = useForm({
     ] as LineGroup[],
     line_items: [
         {
+            _uid: createLineItemUid(),
             product_id: null,
             line_group_id: 1,
             description: '',
@@ -803,6 +807,7 @@ if (props.prefill) {
     form.line_groups = prefillGroups.length > 0 ? prefillGroups : [{ name: 'Items', sort_order: 0 }];
 
     const prefillItems = (source.line_items || []).map((item) => ({
+        _uid: createLineItemUid(),
         product_id: item.product_id != null ? String(item.product_id) : null,
         line_group_id: Number(item.line_group_id ?? 1) || 1,
         description: item.description || '',
@@ -815,6 +820,7 @@ if (props.prefill) {
         total: Number(item.total ?? 0) || 0,
     }));
     form.line_items = prefillItems.length > 0 ? prefillItems : [{
+        _uid: createLineItemUid(),
         product_id: null,
         line_group_id: 1,
         description: '',
@@ -850,6 +856,7 @@ const normalizeLineItemOrder = () => {
 const addLineItem = (groupIndex = 0) => {
     const defaultGroupId = getDefaultGroupId(groupIndex);
     form.line_items.push({
+        _uid: createLineItemUid(),
         product_id: null,
         line_group_id: defaultGroupId,
         description: '',
@@ -1225,6 +1232,7 @@ const ensureRoundingAdjustmentLine = () => {
     }
 
     const roundingLine: LineItem = {
+        _uid: form.line_items[roundingIndex]?._uid || createLineItemUid(),
         product_id: null,
         line_group_id: 1,
         description: ROUNDING_LINE_DESCRIPTION,
@@ -1388,10 +1396,13 @@ const submit = () => {
             name: group.name,
             sort_order: index,
         })),
-        line_items: data.line_items.map((item) => ({
-            ...item,
-            line_group_id: item.line_group_id ?? 1,
-        })),
+        line_items: data.line_items.map((item) => {
+            const { _uid, ...rest } = item as LineItem;
+            return {
+                ...rest,
+                line_group_id: item.line_group_id ?? 1,
+            };
+        }),
     }))
         .post(quotes.store().url);
 };

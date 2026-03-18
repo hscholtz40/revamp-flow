@@ -35,6 +35,8 @@ const props = withDefaults(defineProps<Props>(), {
     chartOfAccounts: () => [],
     defaultPurchasingAccountId: null,
 });
+const createLineItemUid = () =>
+    `line-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
 // Track product search queries for each line item
 const productSearchQueries = ref<Record<number, string>>({});
@@ -45,6 +47,7 @@ const dragOverGroupId = ref<number | null>(null);
 const activeDragIndex = ref<number | null>(null);
 
 interface LineItem {
+    _uid: string;
     product_id: string | number;
     line_group_id?: number | null;
     quantity: number;
@@ -97,6 +100,7 @@ const groupedLineItems = computed(() =>
 
 function addLineItem(groupIndex = 0) {
     form.items.push({
+        _uid: createLineItemUid(),
         product_id: '',
         line_group_id: groupIndex + 1,
         quantity: 1,
@@ -388,10 +392,13 @@ function submit() {
             name: group.name,
             sort_order: index,
         })),
-        items: data.items.map((item) => ({
-            ...item,
-            line_group_id: item.line_group_id ?? 1,
-        })),
+        items: data.items.map((item) => {
+            const { _uid, ...rest } = item as LineItem;
+            return {
+                ...rest,
+                line_group_id: item.line_group_id ?? 1,
+            };
+        }),
     })).post(purchaseOrders.store().url);
 }
 </script>
@@ -548,7 +555,7 @@ function submit() {
 
                                     <div
                                         v-for="({ item, index }) in groupBlock.items"
-                                        :key="index"
+                                        :key="item._uid || index"
                                         class="border-t border-gray-100 py-3 px-1 transition-colors"
                                         :class="{ 'bg-blue-50/60': dragOverItemIndex === index, 'opacity-60': activeDragIndex === index }"
                                         draggable="true"

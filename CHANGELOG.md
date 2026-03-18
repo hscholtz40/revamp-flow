@@ -85,6 +85,7 @@
 - Updated list-view column filter inputs to apply only on Enter key press, preventing disruptive table reload/filtering while users are still typing.
 - Fixed post-filter table rendering so rows no longer remain hidden until manual refresh; clearing a column filter and pressing Enter now consistently reloads and restores results immediately.
 - Hardened column-filter clearing behavior: clearing now triggers an immediate Inertia reload (including native search clear-button events) and forces fresh server-rendered rows to avoid stale filtered state.
+- Fixed grouped line-item row identity drift in quote editors (and aligned the same safeguard in invoice, jobcard, credit-note, and purchase-order editors) by using stable per-row client IDs for Vue keys and excluding those IDs from payloads, preventing edits from applying to the wrong row after reordering/normalization.
 
 ## 2026-03-16 - version 1.7.6
 

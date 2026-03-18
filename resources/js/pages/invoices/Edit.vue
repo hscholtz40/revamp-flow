@@ -360,7 +360,7 @@
 
                             <div
                                 v-for="({ item, index }) in groupBlock.items"
-                                :key="index"
+                                :key="item._uid || index"
                                 class="border-t border-gray-100 py-3 px-1 transition-colors"
                                 :class="{ 'bg-blue-50/60': dragOverItemIndex === index, 'opacity-60': activeDragIndex === index }"
                                 :draggable="canEdit"
@@ -727,6 +727,7 @@ interface Company {
 }
 
 interface LineItem {
+    _uid: string;
     product_id: string | null;
     line_group_id?: number | null;
     description: string;
@@ -786,6 +787,8 @@ interface Props {
 const props = defineProps<Props>();
 const paymentTermsOptions = ['COD', 'Net 7 Days', 'Net 14 Days', 'Net 30 Days', 'Net 60 Days'];
 const ROUNDING_LINE_DESCRIPTION = 'Rounding Adjustment';
+const createLineItemUid = () =>
+    `line-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
 // Track product suggestions and discount types for each line item
 const showProductSuggestions = ref<Record<number, boolean>>({});
@@ -854,6 +857,7 @@ const form = useForm({
         sort_order: Number(group.sort_order ?? index),
     })),
     line_items: props.invoice.line_items.map(item => ({
+        _uid: (item as any).id ? `line-${(item as any).id}` : createLineItemUid(),
         product_id: item.product_id?.toString() || null,
         line_group_id: (item as any).line_group_id != null ? Number((item as any).line_group_id) : 1,
         description: item.description,
@@ -1178,6 +1182,7 @@ function ensureRoundingAdjustmentLine() {
     }
 
     const roundingLine: LineItem = {
+        _uid: form.line_items[roundingIndex]?._uid || createLineItemUid(),
         product_id: null,
         line_group_id: Number(form.line_groups[0]?.id) || 1,
         description: ROUNDING_LINE_DESCRIPTION,
@@ -1223,6 +1228,7 @@ const visibleGroupedLineItems = computed(() =>
 const addLineItem = (groupIndex = 0) => {
     const newIndex = form.line_items.length;
     form.line_items.push({
+        _uid: createLineItemUid(),
         product_id: null,
         line_group_id: getGroupValueByIndex(groupIndex),
         description: '',
@@ -1497,18 +1503,22 @@ const submit = () => {
             name: group.name,
             sort_order: index,
         })),
-        line_items: data.line_items.map((item) => ({
-            product_id: item.product_id,
-            description: item.description,
-            quantity: item.quantity,
-            unit_price: item.unit_price,
-            discount_amount: item.discount_amount ?? 0,
-            discount_percentage: item.discount_percentage ?? 0,
-            tax_rate_id: item.tax_rate_id ?? null,
-            account_id: item.account_id ?? null,
-            serial_number_ids: item.serial_number_ids ?? [],
-            line_group_id: item.line_group_id ?? getGroupValueByIndex(0),
-        })),
+        line_items: data.line_items.map((item) => {
+            const { _uid, ...rest } = item as LineItem;
+            return {
+                ...rest,
+                product_id: item.product_id,
+                description: item.description,
+                quantity: item.quantity,
+                unit_price: item.unit_price,
+                discount_amount: item.discount_amount ?? 0,
+                discount_percentage: item.discount_percentage ?? 0,
+                tax_rate_id: item.tax_rate_id ?? null,
+                account_id: item.account_id ?? null,
+                serial_number_ids: item.serial_number_ids ?? [],
+                line_group_id: item.line_group_id ?? getGroupValueByIndex(0),
+            };
+        }),
     }))
         .put(invoices.update(props.invoice.id).url);
 };

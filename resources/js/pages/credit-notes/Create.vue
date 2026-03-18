@@ -230,7 +230,7 @@
 
                             <div
                                 v-for="({ item, index }) in groupBlock.items"
-                                :key="index"
+                                :key="item._uid || index"
                                 class="border-t border-gray-100 py-3 px-1 transition-colors"
                                 :class="{ 'bg-blue-50/60': dragOverItemIndex === index, 'opacity-60': activeDragIndex === index }"
                                 draggable="true"
@@ -533,6 +533,7 @@ interface ProductOption {
 }
 
 interface LineItem {
+    _uid: string;
     product_id: number | null;
     line_group_id?: number | null;
     description: string;
@@ -550,6 +551,8 @@ interface LineGroup {
 }
 
 const props = defineProps<Props>();
+const createLineItemUid = () =>
+    `line-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
 const discountTypes = ref<Record<number, 'amount' | 'percentage'>>({});
 const showProductSuggestions = ref<Record<number, boolean>>({});
@@ -578,6 +581,7 @@ function buildLineItemsFromInvoice(): LineItem[] {
     if (!rawItems.length) return [];
 
     return rawItems.map((li: any) => ({
+        _uid: createLineItemUid(),
         product_id: li.product_id ?? null,
         line_group_id: 1,
         description: li.description ?? (li.product?.name ?? ''),
@@ -592,6 +596,7 @@ function buildLineItemsFromInvoice(): LineItem[] {
 
 function defaultLineItem(): LineItem {
     return {
+        _uid: createLineItemUid(),
         product_id: null,
         line_group_id: 1,
         description: '',
@@ -810,7 +815,7 @@ const groupedLineItems = computed(() =>
 
 function addLineItem(groupIndex = 0) {
     const idx = form.line_items.length;
-    form.line_items.push({ ...defaultLineItem(), line_group_id: groupIndex + 1 });
+    form.line_items.push({ ...defaultLineItem(), _uid: createLineItemUid(), line_group_id: groupIndex + 1 });
     discountTypes.value[idx] = 'amount';
     normalizeLineItemOrder();
 }
@@ -1090,10 +1095,13 @@ function submit() {
             name: group.name,
             sort_order: index,
         })),
-        line_items: data.line_items.map((item) => ({
-            ...item,
-            line_group_id: item.line_group_id ?? 1,
-        })),
+        line_items: data.line_items.map((item) => {
+            const { _uid, ...rest } = item as LineItem;
+            return {
+                ...rest,
+                line_group_id: item.line_group_id ?? 1,
+            };
+        }),
     })).post('/credit-notes');
 }
 </script>

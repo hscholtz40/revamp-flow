@@ -252,7 +252,7 @@
 
                             <div
                                 v-for="({ item, index }) in groupBlock.items"
-                                :key="index"
+                                :key="item._uid || index"
                                 class="border-t border-gray-100 py-3 px-1 transition-colors"
                                 :class="{ 'bg-blue-50/60': dragOverItemIndex === index, 'opacity-60': activeDragIndex === index }"
                                 draggable="true"
@@ -505,6 +505,8 @@ interface ProductOption {
 }
 
 const props = defineProps<Props>();
+const createLineItemUid = () =>
+    `line-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
 const creditNote = computed(() => props.creditNote);
 const currentCompany = computed(() => props.currentCompany);
@@ -526,6 +528,7 @@ const form = useForm({
     })),
     line_items: rawLineItems.value.length > 0
         ? rawLineItems.value.map((li: any) => ({
+              _uid: li.id ? `line-${li.id}` : createLineItemUid(),
               product_id: li.product_id ?? null,
               line_group_id: li.line_group_id != null ? Number(li.line_group_id) : 1,
               tax_rate_id: li.tax_rate_id ?? null,
@@ -539,6 +542,7 @@ const form = useForm({
           }))
         : [
               {
+                  _uid: createLineItemUid(),
                   product_id: null,
                   line_group_id: 1,
                   description: '',
@@ -792,6 +796,7 @@ const groupedLineItems = computed(() => {
 function addLineItem(groupIndex = 0) {
     const nextIndex = form.line_items.length;
     form.line_items.push({
+        _uid: createLineItemUid(),
         product_id: null,
         line_group_id: getGroupValueByIndex(groupIndex),
         tax_rate_id: props.defaultSalesTaxRateId ?? null,
@@ -1084,10 +1089,13 @@ function submit() {
             name: group.name,
             sort_order: index,
         })),
-        line_items: data.line_items.map((item: any) => ({
-            ...item,
-            line_group_id: item.line_group_id ?? getGroupValueByIndex(0),
-        })),
+        line_items: data.line_items.map((item: any) => {
+            const { _uid, ...rest } = item;
+            return {
+                ...rest,
+                line_group_id: item.line_group_id ?? getGroupValueByIndex(0),
+            };
+        }),
     })).put(`/credit-notes/${props.creditNote.id}`);
 }
 </script>

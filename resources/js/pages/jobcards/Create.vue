@@ -402,7 +402,7 @@
 
                             <div
                                 v-for="({ item, index }) in groupBlock.items"
-                                :key="index"
+                                :key="item._uid || index"
                                 class="grid grid-cols-1 md:grid-cols-[3.5rem_1fr_6.5rem_9rem_8rem_8rem_5.5rem_2rem] gap-2 items-start border-t border-gray-100 py-3 px-1 transition-colors"
                                 :class="{ 'bg-blue-50/60': dragOverItemIndex === index, 'opacity-60': activeDragIndex === index }"
                                 draggable="true"
@@ -714,6 +714,7 @@ interface Product {
 }
 
 interface LineItem {
+    _uid: string;
     product_id?: number | null;
     line_group_id?: number | null;
     description: string;
@@ -793,6 +794,8 @@ interface Props {
 
 const props = defineProps<Props>();
 const ROUNDING_LINE_DESCRIPTION = 'Rounding Adjustment';
+const createLineItemUid = () =>
+    `line-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
 const showProductSuggestions = ref<Record<number, boolean>>({});
 const discountTypes = ref<Record<number, 'amount' | 'percentage'>>({});
@@ -828,6 +831,7 @@ const form = useForm({
     ] as LineGroup[],
     line_items: [
         {
+            _uid: createLineItemUid(),
             product_id: null,
             line_group_id: 1,
             description: '',
@@ -895,6 +899,7 @@ if (props.prefill) {
     form.line_groups = prefillGroups.length > 0 ? prefillGroups : [{ name: 'Items', sort_order: 0 }];
 
     const prefillItems = (source.line_items || []).map((item) => ({
+        _uid: createLineItemUid(),
         product_id: item.product_id ?? null,
         line_group_id: Number(item.line_group_id ?? 1) || 1,
         description: item.description || '',
@@ -906,6 +911,7 @@ if (props.prefill) {
         account_id: item.account_id ?? props.defaultSalesAccountId ?? null,
     }));
     form.line_items = prefillItems.length > 0 ? prefillItems : [{
+        _uid: createLineItemUid(),
         product_id: null,
         line_group_id: 1,
         description: '',
@@ -1067,6 +1073,7 @@ const visibleGroupedLineItems = computed(() =>
 
 const addLineItem = (groupIndex = 0) => {
     form.line_items.push({
+        _uid: createLineItemUid(),
         product_id: null,
         line_group_id: groupIndex + 1,
         description: '',
@@ -1408,6 +1415,7 @@ const ensureRoundingAdjustmentLine = () => {
     }
 
     const roundingLine: LineItem = {
+        _uid: form.line_items[roundingIndex]?._uid || createLineItemUid(),
         product_id: null,
         line_group_id: 1,
         description: ROUNDING_LINE_DESCRIPTION,
@@ -1460,10 +1468,13 @@ const submit = () => {
             name: group.name,
             sort_order: index,
         })),
-        line_items: data.line_items.map((item) => ({
-            ...item,
-            line_group_id: item.line_group_id ?? 1,
-        })),
+        line_items: data.line_items.map((item) => {
+            const { _uid, ...rest } = item as LineItem;
+            return {
+                ...rest,
+                line_group_id: item.line_group_id ?? 1,
+            };
+        }),
     }))
         .post(jobcards.store().url);
 };

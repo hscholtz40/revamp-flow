@@ -347,7 +347,7 @@
 
                             <div
                                 v-for="groupedItem in groupBlock.items"
-                                :key="groupedItem.itemIndex"
+                                :key="groupedItem.item._uid || groupedItem.itemIndex"
                                 class="grid grid-cols-1 md:grid-cols-[3.5rem_1fr_6.5rem_9rem_8rem_5.5rem_8rem_2rem] gap-2 items-start py-3 px-1 border-t border-gray-100 transition-colors"
                                 :class="{ 'bg-blue-50/60': dragOverItemIndex === groupedItem.itemIndex, 'opacity-60': activeDragIndex === groupedItem.itemIndex }"
                                 :draggable="canEdit"
@@ -654,6 +654,7 @@ interface Company {
 
 interface LineItem {
     id?: number;
+    _uid: string;
     product_id: string | null;
     line_group_id?: number | null;
     description: string;
@@ -708,6 +709,8 @@ const props = defineProps<{
 }>();
 
 const ROUNDING_LINE_DESCRIPTION = 'Rounding Adjustment';
+const createLineItemUid = () =>
+    `line-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
 // Check if quote is completed (accepted status)
 const isCompleted = computed(() => props.quote.status === 'accepted');
@@ -770,6 +773,7 @@ const form = useForm({
     })),
     line_items: (props.quote.line_items ?? props.quote.lineItems ?? []).map((item: any) => ({
         id: item.id,
+        _uid: item.id ? `line-${item.id}` : createLineItemUid(),
         product_id: item.product_id?.toString() || null,
         line_group_id: item.line_group_id != null ? Number(item.line_group_id) : 1,
         description: item.description,
@@ -815,6 +819,7 @@ const normalizeLineItemOrder = () => {
 const addLineItem = (groupIndex = 0) => {
     const defaultGroupId = getDefaultGroupId(groupIndex);
     form.line_items.push({
+        _uid: createLineItemUid(),
         product_id: null,
         line_group_id: defaultGroupId,
         description: '',
@@ -1192,6 +1197,7 @@ const ensureRoundingAdjustmentLine = () => {
 
     const roundingLine: LineItem = {
         id: form.line_items[roundingIndex]?.id,
+        _uid: form.line_items[roundingIndex]?._uid || createLineItemUid(),
         product_id: null,
         line_group_id: getGroupValueByIndex(0),
         description: ROUNDING_LINE_DESCRIPTION,
@@ -1354,10 +1360,13 @@ const submit = () => {
             name: group.name,
             sort_order: index,
         })),
-        line_items: data.line_items.map((item) => ({
-            ...item,
-            line_group_id: item.line_group_id ?? getDefaultGroupId(),
-        })),
+        line_items: data.line_items.map((item) => {
+            const { _uid, ...rest } = item as LineItem;
+            return {
+                ...rest,
+                line_group_id: item.line_group_id ?? getDefaultGroupId(),
+            };
+        }),
     }))
         .put(quotes.update(props.quote.id).url);
 };
