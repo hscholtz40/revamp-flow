@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-03-20
+
+- Kept quote PDF type selection in the quote print/email flow (Quotation vs Proforma Invoice) and removed the company-level default quote PDF type setting so this remains a per-action choice.
+- Fixed quote PDF template filtering so quotation sends/downloads correctly target the `quote` template module (not `quotation`), ensuring Quote templates and defaults are selectable when printing/emailing.
+- Updated Quote `Download PDF` UX to always open a selection modal with explicit PDF type choice (Quotation or Proforma Invoice) before downloading, preventing implicit default-to-Quote behavior.
+- Set Quote `Download PDF` modal to preselect `Quotation` as the default PDF type while still allowing users to switch to `Proforma Invoice`.
+
 ## 2026-03-17 - version 1.7.7
 
 - Added line groups to all document line items: quotes, jobcards, invoices, credit notes, and purchase orders. Each document gets a default "Items" group when created; line groups are displayed on PDFs with group headers. Document conversions (quote→jobcard, quote→invoice, jobcard→invoice) copy line groups and assign line items to the corresponding groups.

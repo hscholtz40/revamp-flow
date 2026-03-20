@@ -53,46 +53,12 @@
                         >
                         {{ formatStatus(props.quote.status) }}
                     </span>
-                        <div class="relative">
-                            <button
-                                v-if="!props.pdfTemplates || props.pdfTemplates.length === 0"
-                                @click="downloadPDF('quotation')"
-                                class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                            >
-                                Download PDF
-                            </button>
-                            <div v-else>
-                                <button
-                                    @click="showDownloadDropdown = !showDownloadDropdown"
-                                    class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 flex items-center gap-2"
-                                >
-                                    Download PDF
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                                    </svg>
-                                </button>
-                                <div
-                                    v-if="showDownloadDropdown"
-                                    @click.stop
-                                    class="absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10"
-                                >
-                                    <div class="py-1">
-                                        <button
-                                            @click="showTemplateModal = true; selectedPdfType = 'quotation'; showDownloadDropdown = false;"
-                                            class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                                        >
-                                            Download Quotation
-                                        </button>
-                                        <button
-                                            @click="showTemplateModal = true; selectedPdfType = 'proforma-invoice'; showDownloadDropdown = false;"
-                                            class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                                        >
-                                            Download Proforma Invoice
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        <button
+                            @click="openDownloadModal"
+                            class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                        >
+                            Download PDF
+                        </button>
                         <button
                             @click="showEmailModal = true"
                             class="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
@@ -413,7 +379,7 @@
                                 class="w-full rounded border px-3 py-2"
                             >
                                 <option :value="null">Use System Template (Default)</option>
-                                <option v-for="template in props.pdfTemplates.filter(t => t.module === emailForm.type)" :key="template.id" :value="template.id">
+                                <option v-for="template in emailTemplates" :key="template.id" :value="template.id">
                                     {{ template.name }}
                                 </option>
                             </select>
@@ -484,10 +450,23 @@
                 <div class="mt-3 text-center">
                     <h3 class="text-lg font-medium text-gray-900 mb-4">Select PDF Template</h3>
                     <div class="mb-4">
+                        <label for="pdf_type_select" class="block text-sm font-medium text-gray-700 mb-1">PDF Type</label>
+                        <select
+                            id="pdf_type_select"
+                            v-model="selectedPdfType"
+                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        >
+                            <option :value="null">Select PDF Type</option>
+                            <option value="quotation">Quotation</option>
+                            <option value="proforma-invoice">Proforma Invoice</option>
+                        </select>
+                    </div>
+                    <div class="mb-4">
                         <label for="template_select" class="block text-sm font-medium text-gray-700 mb-1">Choose Template</label>
                         <select
                             id="template_select"
                             v-model="selectedTemplateId"
+                            :disabled="!selectedPdfType"
                             class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                         >
                             <option :value="null">Use System Template (Default)</option>
@@ -506,8 +485,9 @@
                         </button>
                         <button
                             type="button"
-                            @click="downloadPDF(selectedPdfType || 'quotation')"
-                            class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                            @click="downloadPDF(selectedPdfType)"
+                            :disabled="!selectedPdfType"
+                            class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                         >
                             Download
                         </button>
@@ -527,7 +507,7 @@ import invoices from '@/routes/invoices';
 import jobcards from '@/routes/jobcards';
 import products from '@/routes/products';
 import customers from '@/routes/customers';
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch } from 'vue';
 
 interface Customer {
     id: number;
@@ -652,7 +632,6 @@ watch(showEmailModal, (open) => {
         emailRecipientError.value = '';
     }
 });
-const showDownloadDropdown = ref(false);
 const showResultDialog = ref(false);
 const showTemplateModal = ref(false);
 const selectedPdfType = ref<string | null>(null);
@@ -682,7 +661,7 @@ const emailRecipients = ref<string[]>(parseInitialEmails(initialEmailStr));
 const emailForm = useForm({
     email: initialEmailStr,
     message: '',
-    type: 'quotation',
+    type: 'quotation' as 'quotation' | 'proforma-invoice',
     template_id: null as number | null,
 });
 
@@ -702,12 +681,16 @@ const updateStatus = (status: string) => {
     });
 };
 
+const getModuleForPdfType = (type: string | null | undefined): 'quote' | 'proforma-invoice' => {
+    return type === 'proforma-invoice' ? 'proforma-invoice' : 'quote';
+};
+
 // Computed property to filter templates by selected PDF type
 const filteredTemplates = computed(() => {
     if (!props.pdfTemplates || !selectedPdfType.value) {
         return [];
     }
-    return props.pdfTemplates.filter(t => t.module === selectedPdfType.value);
+    return props.pdfTemplates.filter(t => t.module === getModuleForPdfType(selectedPdfType.value));
 });
 
 // Initialize selected template ID based on PDF type
@@ -719,7 +702,34 @@ watch(selectedPdfType, (newType) => {
     }
 }, { immediate: true });
 
-const downloadPDF = (type: string = 'quotation') => {
+const getDefaultTemplateIdForType = (type: 'quotation' | 'proforma-invoice') => {
+    return type === 'proforma-invoice'
+        ? (props.defaultProformaTemplateId ?? null)
+        : (props.defaultQuoteTemplateId ?? null);
+};
+
+const emailTemplates = computed(() => {
+    if (!props.pdfTemplates) {
+        return [];
+    }
+    return props.pdfTemplates.filter((template) => template.module === getModuleForPdfType(emailForm.type));
+});
+
+watch(() => emailForm.type, (newType) => {
+    emailForm.template_id = getDefaultTemplateIdForType(newType);
+}, { immediate: true });
+
+const openDownloadModal = () => {
+    selectedPdfType.value = 'quotation';
+    selectedTemplateId.value = null;
+    showTemplateModal.value = true;
+};
+
+const downloadPDF = (type: string | null) => {
+    if (!type) {
+        return;
+    }
+
     const url = new URL(quotes.downloadPdf(props.quote.id).url, window.location.origin);
     url.searchParams.set('type', type);
     if (selectedTemplateId.value) {
@@ -731,22 +741,6 @@ const downloadPDF = (type: string = 'quotation') => {
     selectedPdfType.value = null;
 };
 
-// Close dropdown when clicking outside
-const handleClickOutside = (event: MouseEvent) => {
-    const target = event.target as HTMLElement;
-    if (!target.closest('.relative')) {
-        showDownloadDropdown.value = false;
-    }
-};
-
-onMounted(() => {
-    document.addEventListener('click', handleClickOutside);
-});
-
-onUnmounted(() => {
-    document.removeEventListener('click', handleClickOutside);
-});
-
 const emailRecipientError = ref('');
 
 const sendEmail = () => {
@@ -756,15 +750,6 @@ const sendEmail = () => {
         return;
     }
     emailForm.email = emailRecipients.value.join(', ');
-    // Set template_id based on the selected type if no template is manually selected
-    if (!emailForm.template_id) {
-        if (emailForm.type === 'quotation' && props.defaultQuoteTemplateId) {
-            emailForm.template_id = props.defaultQuoteTemplateId;
-        } else if (emailForm.type === 'proforma-invoice' && props.defaultProformaTemplateId) {
-            emailForm.template_id = props.defaultProformaTemplateId;
-        }
-    }
-    
     emailForm.post(quotes.email(props.quote.id).url, {
         onSuccess: (page) => {
             showEmailModal.value = false;
