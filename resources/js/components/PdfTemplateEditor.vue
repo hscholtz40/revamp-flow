@@ -655,9 +655,6 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
         </div>
     </div>
 </div>
-<div class="payment-clause">
-    Goods will only be released once payment has reflected in our account.
-</div>
 <div class="footer">
     <div class="footer-left">
         JobCard Online (Registered to {{company.name}})
