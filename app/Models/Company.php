@@ -11,6 +11,22 @@ class Company extends Model
 {
     use HasFactory;
 
+    public const DEFAULT_JOBCARD_STATUS_LABELS = [
+        'draft' => 'Draft',
+        'pending' => 'Pending',
+        'in_progress' => 'In Progress',
+        'completed' => 'Completed',
+        'cancelled' => 'Cancelled',
+    ];
+
+    public const DEFAULT_QUOTE_STATUS_LABELS = [
+        'draft' => 'Draft',
+        'sent' => 'Sent',
+        'accepted' => 'Accepted',
+        'rejected' => 'Rejected',
+        'expired' => 'Expired',
+    ];
+
     /**
      * Restrict route binding to companies the authenticated user may access.
      *
@@ -74,6 +90,8 @@ class Company extends Model
         'purchase_order_number_next',
         'locale_decimal_separator',
         'locale_thousands_separator',
+        'jobcard_status_labels',
+        'quote_status_labels',
     ];
 
     /**
@@ -94,6 +112,8 @@ class Company extends Model
         'credit_note_number_next' => 'integer',
         'purchase_order_number_next' => 'integer',
         'smtp_password' => 'encrypted',
+        'jobcard_status_labels' => 'array',
+        'quote_status_labels' => 'array',
     ];
 
     /**
@@ -118,6 +138,48 @@ class Company extends Model
     public function formatCurrencyZar(float|int|string|null $amount, int $decimals = 2): string
     {
         return 'R'.$this->formatNumber($amount, $decimals);
+    }
+
+    /**
+     * @return array<int, array{value: string, label: string}>
+     */
+    public function getJobcardStatusOptions(): array
+    {
+        return $this->buildStatusOptions(
+            self::DEFAULT_JOBCARD_STATUS_LABELS,
+            is_array($this->jobcard_status_labels) ? $this->jobcard_status_labels : []
+        );
+    }
+
+    /**
+     * @return array<int, array{value: string, label: string}>
+     */
+    public function getQuoteStatusOptions(): array
+    {
+        return $this->buildStatusOptions(
+            self::DEFAULT_QUOTE_STATUS_LABELS,
+            is_array($this->quote_status_labels) ? $this->quote_status_labels : []
+        );
+    }
+
+    /**
+     * @param  array<string, string>  $defaults
+     * @param  array<string, mixed>  $overrides
+     * @return array<int, array{value: string, label: string}>
+     */
+    private function buildStatusOptions(array $defaults, array $overrides): array
+    {
+        $options = [];
+        foreach ($defaults as $value => $label) {
+            $override = $overrides[$value] ?? null;
+            $resolved = is_string($override) && trim($override) !== '' ? trim($override) : $label;
+            $options[] = [
+                'value' => $value,
+                'label' => $resolved,
+            ];
+        }
+
+        return $options;
     }
 
     /**

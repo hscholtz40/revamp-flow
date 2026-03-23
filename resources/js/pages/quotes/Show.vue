@@ -573,6 +573,7 @@ interface Quote {
 interface Props {
     quote: Quote;
     canEditCompleted: boolean;
+    statusOptions: Array<{ value: string; label: string }>;
     pdfTemplates?: Array<{ id: number; name: string; module: string; is_default: boolean }>;
     defaultQuoteTemplateId?: number | null;
     defaultProformaTemplateId?: number | null;
@@ -673,13 +674,7 @@ const emailForm = useForm({
     template_id: null as number | null,
 });
 
-const statusOptions = [
-    { value: 'draft', label: 'Draft' },
-    { value: 'sent', label: 'Sent' },
-    { value: 'accepted', label: 'Accepted' },
-    { value: 'rejected', label: 'Rejected' },
-    { value: 'expired', label: 'Expired' },
-];
+const statusOptions = computed(() => props.statusOptions || []);
 
 const updateStatus = (status: string) => {
     router.patch(quotes.updateStatus(props.quote.id).url, {

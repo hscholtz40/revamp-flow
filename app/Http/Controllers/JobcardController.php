@@ -485,6 +485,7 @@ class JobcardController extends Controller
         return Inertia::render('jobcards/Show', [
             'jobcard' => $jobcard,
             'canEditCompleted' => auth()->user()->canEditCompletedJobcards(),
+            'statusOptions' => $currentCompany->getJobcardStatusOptions(),
             'pdfTemplates' => $pdfTemplates,
             'defaultTemplateId' => $defaultTemplateId,
             'convertedQuoteId' => $convertedQuoteId,

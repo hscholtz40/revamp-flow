@@ -416,6 +416,7 @@ class QuotesController extends Controller
         return Inertia::render('quotes/Show', [
             'quote' => $quote,
             'canEditCompleted' => auth()->user()->hasModulePermission('quotes', 'edit_completed'),
+            'statusOptions' => $currentCompany->getQuoteStatusOptions(),
             'pdfTemplates' => $pdfTemplates,
             'defaultQuoteTemplateId' => $defaultQuoteTemplateId,
             'defaultProformaTemplateId' => $defaultProformaTemplateId,

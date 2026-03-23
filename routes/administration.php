@@ -18,6 +18,8 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::put('/administration/document-numbering', [AdministrationController::class, 'updateDocumentNumbering'])->name('administration.document-numbering.update');
     Route::get('/administration/localization', [AdministrationController::class, 'localization'])->name('administration.localization');
     Route::put('/administration/localization', [AdministrationController::class, 'updateLocalization'])->name('administration.localization.update');
+    Route::get('/administration/status-editor', [AdministrationController::class, 'statusEditor'])->name('administration.status-editor');
+    Route::put('/administration/status-editor', [AdministrationController::class, 'updateStatusEditor'])->name('administration.status-editor.update');
     
     // Database Upgrade route
     Route::post('/administration/upgrade-database', [AdministrationController::class, 'upgradeDatabase'])->name('administration.upgrade-database');

@@ -685,6 +685,7 @@ interface Jobcard {
 interface Props {
     jobcard: Jobcard;
     canEditCompleted: boolean;
+    statusOptions: Array<{ value: string; label: string }>;
     pdfTemplates?: Array<{ id: number; name: string; module: string; is_default: boolean }>;
     defaultTemplateId?: number | null;
     convertedQuoteId?: number | null;
@@ -744,14 +745,7 @@ const roundingAdjustment = computed(() => {
     }, 0);
 });
 
-// Status options for the status bar
-const statusOptions = [
-    { value: 'draft', label: 'Draft' },
-    { value: 'pending', label: 'Pending' },
-    { value: 'in_progress', label: 'In Progress' },
-    { value: 'completed', label: 'Completed' },
-    { value: 'cancelled', label: 'Cancelled' },
-];
+const statusOptions = computed(() => props.statusOptions || []);
 
 // Computed property to check if user can edit the jobcard
 const canEditJobcard = computed(() => {
