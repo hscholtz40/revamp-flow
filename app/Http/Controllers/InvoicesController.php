@@ -304,6 +304,9 @@ class InvoicesController extends Controller
                     ]];
                 }
 
+                $source->loadMissing('customer');
+                $prefillPaymentTerms = trim((string) ($source->customer?->terms ?? 'COD')) ?: 'COD';
+
                 $prefill = [
                     'source_type' => $sourceType,
                     'source_id' => $source->id,
@@ -318,7 +321,8 @@ class InvoicesController extends Controller
                     'discount_amount' => (float) ($source->discount_amount ?? 0),
                     'discount_percentage' => (float) ($source->discount_percentage ?? 0),
                     'notes' => $source->notes,
-                    'terms' => $source->terms ?? $source->terms_conditions,
+                    'terms' => $prefillPaymentTerms,
+                    'terms_conditions' => $source->terms_conditions,
                     'line_groups' => $lineGroups,
                     'line_items' => $lineItems,
                 ];
@@ -330,7 +334,7 @@ class InvoicesController extends Controller
             'products' => $products,
             'users' => $users,
             'selectedCustomer' => $selectedCustomer,
-            'defaultTerms' => $currentCompany->default_invoice_terms,
+            'defaultTermsConditions' => $currentCompany->default_invoice_terms,
             'currentUser' => auth()->user(),
             'currentCompany' => $currentCompany,
             'taxRates' => $taxRates,
@@ -377,7 +381,7 @@ class InvoicesController extends Controller
             'products' => $products,
             'selectedCustomer' => $selectedCustomer,
             'currentCompany' => $currentCompany,
-            'defaultTerms' => $currentCompany->default_invoice_terms,
+            'defaultTermsConditions' => $currentCompany->default_invoice_terms,
             'printPdfUrl' => $printPdfUrl,
             'defaultSalesTaxRate' => $defaultSalesTaxRate ? [
                 'id' => $defaultSalesTaxRate->id,
@@ -406,6 +410,7 @@ class InvoicesController extends Controller
             'invoice_date' => 'required|date',
             'notes' => 'nullable|string',
             'terms' => 'nullable|string|max:255',
+            'terms_conditions' => 'nullable|string',
             'line_items' => 'required|array|min:1',
             'line_items.*.product_id' => ['nullable', CompanyScopedRules::product($cid)],
             'line_items.*.description' => 'required|string',
@@ -447,6 +452,7 @@ class InvoicesController extends Controller
                 'tax_rate' => 0,
                 'notes' => $validated['notes'] ?? null,
                 'terms' => $terms,
+                'terms_conditions' => $validated['terms_conditions'] ?? null,
             ]);
 
             // POS invoices should always retain the currently logged-in user as salesperson.
@@ -583,7 +589,8 @@ class InvoicesController extends Controller
             'discount_amount' => 'nullable|numeric|min:0',
             'discount_percentage' => 'nullable|numeric|min:0|max:100',
             'notes' => 'nullable|string',
-            'terms' => 'nullable|string',
+            'terms' => 'nullable|string|max:255',
+            'terms_conditions' => 'nullable|string',
             'source_type' => 'nullable|in:quote,jobcard',
             'source_id' => 'nullable|integer',
             'line_groups' => 'nullable|array|min:1',
@@ -634,6 +641,7 @@ class InvoicesController extends Controller
             'discount_percentage' => $validated['discount_percentage'] ?? 0,
             'notes' => $validated['notes'],
             'terms' => $validated['terms'],
+            'terms_conditions' => $validated['terms_conditions'] ?? null,
             'source_type' => $validated['source_type'] ?? null,
             'source_id' => $validated['source_id'] ?? null,
         ]);
@@ -968,7 +976,8 @@ class InvoicesController extends Controller
             'discount_amount' => 'nullable|numeric|min:0',
             'discount_percentage' => 'nullable|numeric|min:0|max:100',
             'notes' => 'nullable|string',
-            'terms' => 'nullable|string',
+            'terms' => 'nullable|string|max:255',
+            'terms_conditions' => 'nullable|string',
             'line_groups' => 'nullable|array|min:1',
             'line_groups.*.id' => 'nullable|integer',
             'line_groups.*.name' => 'required_with:line_groups|string|max:255',
@@ -1005,6 +1014,7 @@ class InvoicesController extends Controller
             'tax_rate' => $validated['tax_rate'],
             'notes' => $validated['notes'],
             'terms' => $validated['terms'],
+            'terms_conditions' => $validated['terms_conditions'] ?? null,
         ];
 
         // Only update salesperson if user has permission

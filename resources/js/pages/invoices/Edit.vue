@@ -657,10 +657,30 @@
                             <label class="block text-sm font-medium text-gray-700 mb-1">Payment Terms</label>
                             <select v-model="form.terms" class="w-full rounded border px-3 py-2"
                                 :class="{ 'border-red-500': form.errors.terms }">
+                                <option
+                                    v-if="form.terms && !paymentTermsOptions.includes(form.terms)"
+                                    :value="form.terms"
+                                >
+                                    {{ form.terms }} (current value — choose a standard term or edit T&amp;C below)
+                                </option>
                                 <option v-for="term in paymentTermsOptions" :key="term" :value="term">{{ term }}</option>
                             </select>
                             <div v-if="form.errors.terms" class="text-red-500 text-sm mt-1">
                                 {{ form.errors.terms }}
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">Used to calculate due date (COD, Net days, etc.).</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Terms &amp; Conditions</label>
+                            <textarea
+                                v-model="form.terms_conditions"
+                                rows="5"
+                                class="w-full rounded border px-3 py-2"
+                                :class="{ 'border-red-500': form.errors.terms_conditions }"
+                            />
+                            <div v-if="form.errors.terms_conditions" class="text-red-500 text-sm mt-1">
+                                {{ form.errors.terms_conditions }}
                             </div>
                         </div>
                     </div>
@@ -764,6 +784,7 @@ interface Invoice {
     tax_rate: number;
     notes?: string;
     terms?: string;
+    terms_conditions?: string | null;
     line_items: LineItem[];
     line_groups?: LineGroup[];
     lineGroups?: LineGroup[];
@@ -853,6 +874,7 @@ const form = useForm({
     discount_percentage: props.invoice.discount_percentage || 0,
     notes: props.invoice.notes || '',
     terms: props.invoice.terms || '',
+    terms_conditions: props.invoice.terms_conditions || '',
     line_groups: ((props.invoice.line_groups ?? props.invoice.lineGroups ?? []) as any[]).map((group: any, index: number) => ({
         id: group.id,
         name: group.name || `Group ${index + 1}`,

@@ -63,7 +63,8 @@ const moduleVariables: Record<string, Array<{ label: string; value: string; cate
         { label: 'Document title (Tax Invoice / Invoice)', value: '{{invoice.document_title}}', category: 'Invoice' },
         { label: 'Total', value: '{{invoice.total}}', category: 'Invoice' },
         { label: 'Notes', value: '{{invoice.notes}}', category: 'Invoice' },
-        { label: 'Terms', value: '{{invoice.terms}}', category: 'Invoice' },
+        { label: 'Payment terms (COD, Net 30, etc.)', value: '{{invoice.terms}}', category: 'Invoice' },
+        { label: 'Terms & Conditions (body text)', value: '{{invoice.terms_conditions}}', category: 'Invoice' },
         // Customer variables
         { label: 'Customer Name', value: '{{invoice.customer.name}}', category: 'Customer' },
         { label: 'Customer Account Code', value: '{{invoice.customer.account_code}}', category: 'Customer' },
@@ -637,7 +638,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
     <h4>Notes</h4>
     <p>{{invoice.notes}}</p>
     <h4>Terms & Conditions</h4>
-    <p>{{invoice.terms}}</p>
+    <p>{{invoice.terms_conditions}}</p>
 </div>
 <div class="signature-section">
     <div class="signature-row">

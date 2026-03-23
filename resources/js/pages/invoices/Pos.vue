@@ -26,6 +26,7 @@ const props = defineProps<{
     printPdfUrl?: string | null;
     defaultSalesTaxRate: { id: number; name: string; rate: number } | null;
     defaultSalesAccountLabel: string | null;
+    defaultTermsConditions?: string | null;
 }>();
 
 const { formatCurrency } = useNumberFormat();
@@ -49,6 +50,7 @@ const form = useForm({
     invoice_date: new Date().toISOString().split('T')[0],
     due_date: new Date().toISOString().split('T')[0],
     terms: (props.selectedCustomer?.terms || 'COD').trim() || 'COD',
+    terms_conditions: props.defaultTermsConditions || '',
     notes: '',
     payment_method: '',
     amount_paid: 0,

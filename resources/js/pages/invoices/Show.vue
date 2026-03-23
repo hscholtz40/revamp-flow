@@ -266,10 +266,10 @@
                     </div>
 
                     <!-- Notes and Terms -->
-                    <div v-if="props.invoice.notes || props.invoice.terms" class="rounded-lg bg-white border border-gray-200 shadow-sm">
+                    <div v-if="props.invoice.notes || props.invoice.terms_conditions" class="rounded-lg bg-white border border-gray-200 shadow-sm">
                         <div class="border-b border-gray-200 bg-gray-50 px-6 py-4">
                             <h2 class="text-lg font-semibold text-gray-900">Additional Information</h2>
-                            <p class="text-sm text-gray-600">Notes and terms for this invoice</p>
+                            <p class="text-sm text-gray-600">Notes and terms &amp; conditions for this invoice</p>
                         </div>
                         <div class="p-6">
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -277,9 +277,9 @@
                                     <label class="block text-sm font-medium text-gray-700">Notes</label>
                                     <p class="text-sm text-gray-600 whitespace-pre-wrap">{{ props.invoice.notes }}</p>
                                 </div>
-                                <div v-if="props.invoice.terms">
-                                    <label class="block text-sm font-medium text-gray-700">Terms & Conditions</label>
-                                    <p class="text-sm text-gray-600 whitespace-pre-wrap">{{ props.invoice.terms }}</p>
+                                <div v-if="props.invoice.terms_conditions">
+                                    <label class="block text-sm font-medium text-gray-700">Terms &amp; Conditions</label>
+                                    <p class="text-sm text-gray-600 whitespace-pre-wrap">{{ props.invoice.terms_conditions }}</p>
                                 </div>
                             </div>
                         </div>
@@ -332,6 +332,10 @@
                             <div>
                                 <label class="block text-sm font-medium text-gray-500">Due Date</label>
                                 <p class="mt-1 text-sm text-gray-900">{{ formatDate(props.invoice.due_date) }}</p>
+                            </div>
+                            <div v-if="props.invoice.terms">
+                                <label class="block text-sm font-medium text-gray-500">Payment Terms</label>
+                                <p class="mt-1 text-sm text-gray-900">{{ props.invoice.terms }}</p>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-500">Status</label>
@@ -869,6 +873,7 @@ interface Invoice {
     phone?: string | null;
     notes?: string;
     terms?: string;
+    terms_conditions?: string | null;
     source_type?: string;
     source_id?: number;
     updated_at: string;

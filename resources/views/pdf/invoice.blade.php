@@ -642,15 +642,15 @@
         </div>
     </div>
 
-    @if($invoice->notes || $invoice->terms)
+    @if($invoice->notes || $invoice->terms_conditions)
     <div class="terms-section">
         @if($invoice->notes)
             <h4>Notes</h4>
             <p>{{ $invoice->notes }}</p>
         @endif
-        @if($invoice->terms)
+        @if($invoice->terms_conditions)
             <h4>Terms & Conditions</h4>
-            <p>{{ $invoice->terms }}</p>
+            <p>{{ $invoice->terms_conditions }}</p>
         @endif
     </div>
     @endif

@@ -39,6 +39,7 @@ class Invoice extends Model
         'notes',
         'xero_invoice_id',
         'terms',
+        'terms_conditions',
         'source_type',
         'source_id',
         'xero_updated_at',

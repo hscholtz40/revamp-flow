@@ -682,15 +682,15 @@ function submitReminderSettings() {
                         <div class="space-y-6">
                             <!-- Invoice Terms -->
                             <div>
-                                <label class="mb-1 block text-sm font-medium">Default Invoice Terms</label>
+                                <label class="mb-1 block text-sm font-medium">Default Invoice Terms &amp; Conditions</label>
                                 <textarea
                                     v-model="form.default_invoice_terms"
                                     rows="4"
                                     class="w-full rounded border px-3 py-2"
-                                    placeholder="Enter default terms and conditions for invoices (e.g., payment terms, late fees, etc.)"
+                                    placeholder="Default legal / commercial terms shown on new invoices (not payment terms like COD — those come from the customer record)"
                                 ></textarea>
                                 <div v-if="form.errors.default_invoice_terms" class="mt-1 text-sm text-red-600">{{ form.errors.default_invoice_terms }}</div>
-                                <p class="mt-1 text-xs text-gray-500">These terms will be pre-filled when creating new invoices.</p>
+                                <p class="mt-1 text-xs text-gray-500">Pre-fills the invoice Terms &amp; Conditions field. Payment terms (COD, Net 30, etc.) use each customer’s payment terms.</p>
                             </div>
 
                             <!-- Quote Terms -->

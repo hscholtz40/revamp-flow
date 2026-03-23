@@ -346,8 +346,14 @@
 
             @if($invoice->terms)
                 <div class="customer-section">
-                    <div class="section-title">Terms & Conditions</div>
+                    <div class="section-title">Payment Terms</div>
                     <div>{{ $invoice->terms }}</div>
+                </div>
+            @endif
+            @if($invoice->terms_conditions)
+                <div class="customer-section">
+                    <div class="section-title">Terms & Conditions</div>
+                    <div>{{ $invoice->terms_conditions }}</div>
                 </div>
             @endif
         </div>

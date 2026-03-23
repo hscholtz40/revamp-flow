@@ -297,6 +297,9 @@ class Quote extends Model
         // Ensure line items are loaded
         $this->load('lineItems');
 
+        $this->loadMissing('customer');
+        $paymentTerms = trim((string) ($this->customer?->terms ?? 'COD')) ?: 'COD';
+
         $invoice = Invoice::create([
             'company_id' => $this->company_id,
             'customer_id' => $this->customer_id,
@@ -318,7 +321,8 @@ class Quote extends Model
             'tax_amount' => $this->tax_amount,
             'total' => $this->total,
             'notes' => $this->notes,
-            'terms' => $this->terms_conditions,
+            'terms' => $paymentTerms,
+            'terms_conditions' => $this->terms_conditions,
             'source_type' => 'quote',
             'source_id' => $this->id,
         ]);
