@@ -502,9 +502,22 @@ class XeroService
     private function assertRequestBudgetWithinLimit(string $method, string $url): void
     {
         $budgetPerMinute = max(0, (int) config('services.xero.request_budget_per_minute', 0));
+        $budgetPerDay = max(0, (int) config('services.xero.request_budget_per_day', 0));
         $companyId = $this->settings->company_id ?? null;
         if (! $companyId) {
             return;
+        }
+
+        if ($budgetPerDay > 0) {
+            $dayWindow = now()->format('Ymd');
+            $dayTotal = (int) Cache::get("xero_request_usage_company_{$companyId}_{$dayWindow}_total", 0);
+            if ($dayTotal >= $budgetPerDay) {
+                throw new \Exception(
+                    "Local Xero daily request budget exceeded ({$budgetPerDay}/day, currently {$dayTotal}) for company {$companyId}. "
+                    .'Increase XERO_REQUEST_BUDGET_PER_DAY, widen sync intervals, or reduce import/export limits in config. Last attempted: '
+                    .strtoupper($method).' '.$url
+                );
+            }
         }
 
         $requestCount = $this->trackRequestMetric($companyId, $method, $url);
@@ -597,6 +610,7 @@ class XeroService
             'minute_total' => $minuteTotal,
             'day_total' => $dayTotal,
             'budget_per_minute' => max(0, (int) config('services.xero.request_budget_per_minute', 0)),
+            'budget_per_day' => max(0, (int) config('services.xero.request_budget_per_day', 0)),
             'top_endpoints' => array_slice($endpointCounts, 0, max(1, $topLimit)),
             'captured_at' => $now->toIso8601String(),
         ];

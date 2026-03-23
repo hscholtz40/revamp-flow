@@ -11,16 +11,35 @@ Artisan::command('inspire', function () {
 // Schedule Xero token refresh to run every 20 minutes to prevent expiration
 Schedule::command('xero:refresh-tokens')->cron('*/20 * * * *');
 
-// Stagger Xero sync commands to reduce burst traffic and daily API pressure.
-Schedule::command('xero:sync-invoices')->everyMinute()->withoutOverlapping();
-Schedule::command('xero:sync-invoices-from-xero')->everyMinute()->withoutOverlapping();
-Schedule::command('xero:sync-customers')->everyMinute()->withoutOverlapping();
-Schedule::command('xero:sync-products')->everyMinute()->withoutOverlapping();
-Schedule::command('xero:sync-suppliers')->everyMinute()->withoutOverlapping();
-Schedule::command('xero:sync-quotes')->everyMinute()->withoutOverlapping();
-Schedule::command('xero:sync-credit-notes')->everyMinute()->withoutOverlapping();
-Schedule::command('xero:sync-purchase-orders')->everyMinute()->withoutOverlapping();
-Schedule::command('xero:sync-payments')->everyMinute()->withoutOverlapping();
+/*
+ * Xero sync: run on a 15-minute cadence by default, with each job offset by 1 minute so
+ * nine Artisan commands do not fire HTTP bursts in the same second. Works with cron
+ * every 15 minutes for schedule:run (or every minute). Tune via XERO_SYNC_BASE_MINUTES in .env
+ * (see config/services.php).
+ */
+$xeroSyncBaseMinutes = config('services.xero.sync_schedule_base_minutes', [0, 15, 30, 45]);
+
+$xeroSyncCommands = [
+    'xero:sync-invoices',
+    'xero:sync-invoices-from-xero',
+    'xero:sync-customers',
+    'xero:sync-products',
+    'xero:sync-suppliers',
+    'xero:sync-quotes',
+    'xero:sync-credit-notes',
+    'xero:sync-purchase-orders',
+    'xero:sync-payments',
+];
+
+foreach ($xeroSyncCommands as $index => $signature) {
+    $minutes = array_map(
+        static fn (int $m): int => ($m + $index) % 60,
+        $xeroSyncBaseMinutes
+    );
+    sort($minutes);
+    $minuteList = implode(',', $minutes);
+    Schedule::command($signature)->cron("{$minuteList} * * * *")->withoutOverlapping(90);
+}
 
 // Schedule automated reminders to run daily at 9 AM
 Schedule::command('reminders:send')->dailyAt('09:00');
