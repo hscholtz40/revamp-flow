@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\BankAccount;
 use App\Models\ChartOfAccount;
 use App\Models\Company;
+use App\Models\Contact;
 use App\Models\CreditNote;
 use App\Models\CreditNoteLineItem;
 use App\Models\Customer;
@@ -55,6 +56,9 @@ class XeroService
     private $baseUrl = 'https://api.xero.com';
 
     private array $cachedXeroContacts = [];
+
+    /** @var array<string, array|null> */
+    private array $xeroSingleContactCache = [];
 
     private array $cachedXeroAccounts = [];
 
@@ -915,6 +919,7 @@ class XeroService
 
                     if ($existingCustomer) {
                         if (! $this->xeroUpdatedAtChanged($existingCustomer, $xeroContact)) {
+                            $this->syncCustomerContactsFromXero($existingCustomer, $xeroContact);
                             $results[] = [
                                 'customer_id' => $existingCustomer->id,
                                 'customer_name' => $xeroContact['Name'],
@@ -1484,13 +1489,20 @@ class XeroService
                             continue;
                         }
 
-                        // Check payment status in both systems
-                        $isPaidInXero = ($xeroInvoice['AmountDue'] ?? $xeroInvoice['AmountOwing'] ?? $xeroInvoice['Total'] ?? 0) <= 0.01;
+                        // Check payment status in both systems (never use Total as amount owing — breaks paid detection)
+                        $isPaidInXero = $this->isXeroInvoiceFullyPaid($xeroInvoice);
                         $isPaidLocally = $invoice->isFullyPaid();
+                        $hasUnsyncedPaymentsToXero = $invoice->payments()
+                            ->where(function ($query) {
+                                $query->whereNull('xero_payment_id')
+                                    ->orWhereNull('xero_synced_at')
+                                    ->orWhereColumn('payments.updated_at', '>', 'payments.xero_synced_at');
+                            })
+                            ->exists();
 
-                        // If paid in both systems and there are no local changes to export, skip updating.
-                        // If local data changed after last Xero sync, we still attempt export.
-                        if ($isPaidInXero && $isPaidLocally && ! $hasLocalChangesForExport) {
+                        // If paid in both systems and there are no local changes to export, skip updating —
+                        // unless JCO still has payments not linked in Xero (reconcile instead of skipping forever).
+                        if ($isPaidInXero && $isPaidLocally && ! $hasLocalChangesForExport && ! $hasUnsyncedPaymentsToXero) {
                             Log::info('Invoice is fully paid in both systems, skipping update', [
                                 'invoice_id' => $invoice->id,
                                 'invoice_number' => $invoice->invoice_number,
@@ -1507,6 +1519,47 @@ class XeroService
                             ];
 
                             continue;
+                        }
+
+                        if ($isPaidInXero && $isPaidLocally && $hasUnsyncedPaymentsToXero) {
+                            Log::info('Invoice paid both sides but local payments missing Xero link; reconciling from Xero', [
+                                'invoice_id' => $invoice->id,
+                                'invoice_number' => $invoice->invoice_number,
+                                'xero_invoice_id' => $invoice->xero_invoice_id,
+                            ]);
+                            try {
+                                $this->syncPaymentsForInvoiceFromXero($invoice, $xeroInvoice);
+                                $invoice->refresh();
+                                $this->invalidateXeroInvoiceCache($invoice->xero_invoice_id);
+                                $paymentResults = $this->syncPaymentsToXero($invoice);
+                                $linkedOrPushed = collect($paymentResults)->whereIn('status', ['success'])->count();
+                                if ($linkedOrPushed > 0) {
+                                    $results[] = [
+                                        'invoice_id' => $invoice->id,
+                                        'invoice_number' => $invoice->invoice_number,
+                                        'status' => 'payments_reconciled',
+                                        'message' => "Reconciled {$linkedOrPushed} payment(s) with Xero",
+                                    ];
+                                }
+                            } catch (\Exception $e) {
+                                Log::error('Failed to reconcile payments with Xero for fully paid invoice', [
+                                    'invoice_id' => $invoice->id,
+                                    'invoice_number' => $invoice->invoice_number,
+                                    'error' => $e->getMessage(),
+                                ]);
+                            }
+
+                            $invoice->refresh();
+                            $stillUnsynced = $invoice->payments()
+                                ->where(function ($query) {
+                                    $query->whereNull('xero_payment_id')
+                                        ->orWhereNull('xero_synced_at')
+                                        ->orWhereColumn('payments.updated_at', '>', 'payments.xero_synced_at');
+                                })
+                                ->exists();
+                            if (! $stillUnsynced && ! $hasLocalChangesForExport) {
+                                continue;
+                            }
                         }
 
                         // If paid in Xero but not locally, import payments from Xero
@@ -2494,16 +2547,23 @@ class XeroService
 
             if ($invoice) {
                 $status = $this->mapXeroStatusToLocal($xeroInvoice['Status']);
-                $updated = $this->updateModelIfChanged($invoice, [
+                $updatePayload = [
                     'status' => $status,
                     ...$this->getXeroTimestamps($xeroInvoice),
-                ], 'invoice', [
+                ];
+                if (! $invoice->xero_invoice_id && ! empty($xeroInvoice['InvoiceID'])) {
+                    $updatePayload['xero_invoice_id'] = $xeroInvoice['InvoiceID'];
+                }
+                $updated = $this->updateModelIfChanged($invoice, $updatePayload, 'invoice', [
                     'invoice_id' => $invoice->id,
                     'xero_invoice_id' => $xeroInvoiceId,
                 ]);
                 if ($updated) {
                     $this->alignLocalUpdatedAtWithXero($invoice);
                 }
+
+                $invoice->refresh();
+                $this->maybeImportInvoicePaymentsFromXero($invoice, $xeroInvoice);
 
                 Log::info("Updated invoice {$invoice->id} status to {$status} from Xero");
             }
@@ -2527,17 +2587,84 @@ class XeroService
     }
 
     /**
+     * Whether Xero shows the invoice as fully settled (do not fall back to Total — that is not amount owing).
+     */
+    private function isXeroInvoiceFullyPaid(array $xeroInvoice): bool
+    {
+        $due = $xeroInvoice['AmountDue'] ?? $xeroInvoice['AmountOwing'] ?? null;
+        if ($due !== null) {
+            return (float) $due <= 0.01;
+        }
+
+        return strtoupper((string) ($xeroInvoice['Status'] ?? '')) === 'PAID';
+    }
+
+    /**
+     * Import Xero-side payments into JCO when webhook or inbound invoice updates would otherwise only change status.
+     */
+    private function maybeImportInvoicePaymentsFromXero(Invoice $invoice, array $xeroInvoice): void
+    {
+        if (! $this->settings->sync_invoices_to_xero && ! $this->settings->sync_invoices_from_xero) {
+            return;
+        }
+
+        $xeroStatus = strtoupper((string) ($xeroInvoice['Status'] ?? ''));
+        if (in_array($xeroStatus, ['VOIDED', 'DELETED'], true)) {
+            return;
+        }
+
+        if (! $invoice->xero_invoice_id && ! empty($xeroInvoice['InvoiceID'])) {
+            $invoice->update(['xero_invoice_id' => $xeroInvoice['InvoiceID']]);
+            $invoice->refresh();
+        }
+
+        if (! $invoice->xero_invoice_id) {
+            return;
+        }
+
+        $dueRaw = $xeroInvoice['AmountDue'] ?? $xeroInvoice['AmountOwing'] ?? null;
+        $xeroShowsFullyPaid = $this->isXeroInvoiceFullyPaid($xeroInvoice);
+        $hasPaymentLines = ! empty($xeroInvoice['Payments']) && is_array($xeroInvoice['Payments']) && count($xeroInvoice['Payments']) > 0;
+
+        $invoice->refresh();
+        $localRemaining = (float) $invoice->remaining_balance;
+        $xeroHasLessOutstandingThanLocal = $dueRaw !== null && (float) $dueRaw < $localRemaining - 0.02;
+
+        if (! $xeroShowsFullyPaid && ! $hasPaymentLines && ! $xeroHasLessOutstandingThanLocal) {
+            return;
+        }
+
+        try {
+            $this->syncPaymentsForInvoiceFromXero($invoice, $xeroInvoice);
+            $invoice->refresh();
+            $this->syncLocalStatusAfterPaymentChange($invoice, null);
+        } catch (\Exception $e) {
+            Log::error('Failed to import invoice payments from Xero after invoice update', [
+                'invoice_id' => $invoice->id,
+                'xero_invoice_id' => $invoice->xero_invoice_id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
      * Get Xero contact by ID (used for individual lookups when needed)
      */
     private function getXeroContact(string $contactId): ?array
     {
+        if (array_key_exists($contactId, $this->xeroSingleContactCache)) {
+            return $this->xeroSingleContactCache[$contactId];
+        }
+
         try {
             $response = $this->makeXeroRequest('get', $this->baseUrl.'/api.xro/2.0/Contacts/'.$contactId);
 
             if ($response->successful()) {
                 $result = $response->json();
+                $contact = $result['Contacts'][0] ?? null;
+                $this->xeroSingleContactCache[$contactId] = $contact;
 
-                return $result['Contacts'][0] ?? null;
+                return $contact;
             }
         } catch (\Exception $e) {
             Log::error('Failed to get Xero contact', [
@@ -2545,6 +2672,8 @@ class XeroService
                 'error' => $e->getMessage(),
             ]);
         }
+
+        $this->xeroSingleContactCache[$contactId] = null;
 
         return null;
     }
@@ -2876,6 +3005,9 @@ class XeroService
         ])) {
             $this->alignLocalUpdatedAtWithXero($customer);
         }
+
+        $customer->refresh();
+        $this->syncCustomerContactsFromXero($customer, $xeroCustomer);
     }
 
     /**
@@ -2918,7 +3050,113 @@ class XeroService
         $customer = Customer::create($customerData);
         $this->alignLocalUpdatedAtWithXero($customer);
 
+        $customer->refresh();
+        $this->syncCustomerContactsFromXero($customer, $xeroContact);
+
         return $customer;
+    }
+
+    /**
+     * Upsert JCO contacts from Xero ContactPersons (list responses often omit them — fetch single contact when needed).
+     */
+    private function syncCustomerContactsFromXero(Customer $customer, array $xeroContact): void
+    {
+        $contactId = $xeroContact['ContactID'] ?? $customer->xero_contact_id;
+        if (! $contactId) {
+            return;
+        }
+
+        $persons = $xeroContact['ContactPersons'] ?? null;
+        if (! is_array($persons) || count($persons) === 0) {
+            $detailed = $this->getXeroContact((string) $contactId);
+            if (is_array($detailed) && ! empty($detailed['ContactPersons']) && is_array($detailed['ContactPersons'])) {
+                $persons = $detailed['ContactPersons'];
+            } else {
+                return;
+            }
+        }
+
+        $companyId = $customer->company_id;
+        $customer->refresh();
+
+        $touchedContactIds = [];
+        $primaryAmongTouched = null;
+
+        foreach ($persons as $person) {
+            if (! is_array($person)) {
+                continue;
+            }
+
+            $first = trim((string) ($person['FirstName'] ?? ''));
+            $last = trim((string) ($person['LastName'] ?? ''));
+            $name = trim($first.' '.$last);
+            $emailRaw = trim((string) ($person['EmailAddress'] ?? ''));
+            $email = strtolower($emailRaw);
+            if ($email !== '' && ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $email = '';
+            }
+
+            if ($name === '' && $email !== '') {
+                $name = $email;
+            }
+            if ($name === '') {
+                continue;
+            }
+
+            $includeInEmails = filter_var($person['IncludeInEmails'] ?? false, FILTER_VALIDATE_BOOL);
+
+            $query = Contact::query()
+                ->where('company_id', $companyId)
+                ->where('customer_id', $customer->id);
+
+            $existing = null;
+            if ($email !== '') {
+                $existing = (clone $query)->whereRaw('LOWER(email) = ?', [$email])->first();
+            }
+            if (! $existing) {
+                $existing = (clone $query)->whereRaw('LOWER(name) = ?', [strtolower($name)])->first();
+            }
+
+            $payload = [
+                'name' => $name,
+                'email' => $email !== '' ? $email : null,
+                'is_primary' => false,
+            ];
+
+            if ($existing) {
+                $existing->update($payload);
+                $touchedId = $existing->id;
+            } else {
+                $created = Contact::create([
+                    'company_id' => $companyId,
+                    'customer_id' => $customer->id,
+                    ...$payload,
+                ]);
+                $touchedId = $created->id;
+            }
+
+            $touchedContactIds[] = $touchedId;
+            if ($includeInEmails && $primaryAmongTouched === null) {
+                $primaryAmongTouched = $touchedId;
+            }
+        }
+
+        if ($touchedContactIds === []) {
+            return;
+        }
+
+        if ($primaryAmongTouched === null) {
+            $primaryAmongTouched = $touchedContactIds[0];
+        }
+
+        Contact::where('company_id', $companyId)
+            ->where('customer_id', $customer->id)
+            ->whereIn('id', $touchedContactIds)
+            ->update(['is_primary' => false]);
+
+        Contact::where('company_id', $companyId)
+            ->whereKey($primaryAmongTouched)
+            ->update(['is_primary' => true]);
     }
 
     private function resolveCustomerEmailFromXero(array $xeroContact, int $companyId): string
@@ -4455,6 +4693,8 @@ class XeroService
                 }
             }
         }
+
+        $this->maybeImportInvoicePaymentsFromXero($invoice, $xeroInvoice);
     }
 
     /**
@@ -4617,11 +4857,25 @@ class XeroService
             ];
         }
 
-        // Check if invoice is already fully paid in Xero (use 0.01 tolerance for rounding)
         $xeroInvoice = $xeroInvoice ?? $this->getXeroInvoiceCached($invoice->xero_invoice_id);
         $amountDue = $xeroInvoice['AmountDue'] ?? $xeroInvoice['AmountOwing'] ?? null;
-        if ($xeroInvoice && $amountDue !== null && (float) $amountDue <= 0.01) {
-            Log::info('Skipping payment creation - invoice already fully paid in Xero', [
+
+        // Invoice already settled in Xero: try to link this JCO payment to an existing Xero payment instead of POSTing.
+        if ($xeroInvoice && $this->isXeroInvoiceFullyPaid($xeroInvoice)) {
+            $this->syncPaymentsForInvoiceFromXero($invoice, $xeroInvoice);
+            $this->invalidateXeroInvoiceCache($invoice->xero_invoice_id);
+            $payment->refresh();
+            if (! empty($payment->xero_payment_id)) {
+                return [
+                    'payment_id' => $payment->id,
+                    'amount' => $payment->amount,
+                    'status' => 'success',
+                    'message' => 'Linked to existing Xero payment',
+                    'xero_payment_id' => $payment->xero_payment_id,
+                ];
+            }
+
+            Log::info('Skipping payment creation - invoice already fully paid in Xero (no link match for this payment)', [
                 'invoice_id' => $invoice->id,
                 'xero_invoice_id' => $invoice->xero_invoice_id,
                 'amount_due' => $amountDue,
@@ -4632,7 +4886,7 @@ class XeroService
                 'payment_id' => $payment->id,
                 'amount' => $payment->amount,
                 'status' => 'skipped',
-                'message' => 'Invoice is already fully paid in Xero (Amount Due: '.$amountDue.')',
+                'message' => 'Invoice is already fully paid in Xero; could not match this payment to a Xero payment',
             ];
         }
 
