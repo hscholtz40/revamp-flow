@@ -144,18 +144,24 @@ class SuppliersController extends Controller
     /**
      * Display the specified supplier.
      */
-    public function show(Supplier $supplier): Response
+    public function show(Supplier $supplier, Request $request): Response
     {
         $this->authorize('view', $supplier);
 
-        $currentCompany = auth()->user()->getCurrentCompany();
+        $purchaseOrdersPerPage = (int) $request->get('po_per_page', 10);
+        if ($purchaseOrdersPerPage <= 0) {
+            $purchaseOrdersPerPage = 10;
+        }
 
-        $supplier->load(['products', 'purchaseOrders' => function ($query) {
-            $query->orderBy('created_at', 'desc')->limit(10);
-        }]);
+        $supplier->load(['products']);
+
+        $purchaseOrders = $supplier->purchaseOrders()
+            ->orderByDesc('created_at')
+            ->paginate($purchaseOrdersPerPage, ['id', 'po_number', 'status', 'total', 'created_at'], 'po_page');
 
         return Inertia::render('suppliers/Show', [
             'supplier' => $supplier,
+            'purchaseOrders' => $purchaseOrders,
         ]);
     }
 

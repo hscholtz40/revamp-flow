@@ -3,8 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
+use App\Models\CreditNote;
 use App\Models\EmailActivity;
 use App\Models\EmailTemplate;
+use App\Models\Invoice;
+use App\Models\Jobcard;
+use App\Models\Quote;
 use App\Models\SMSActivity;
 use App\Models\SMSSettings;
 use App\Services\BulkSMSService;
@@ -12,6 +16,7 @@ use App\Support\CompanyScopedRules;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -228,11 +233,48 @@ class CustomersController extends Controller
             ->orderByDesc('created_at')
             ->paginate($emailPerPage, ['*'], 'emails_page');
 
+        $accountHistoryPerPage = (int) $request->get('account_history_per_page', 10);
+        if ($accountHistoryPerPage <= 0) {
+            $accountHistoryPerPage = 10;
+        }
+
+        $jobcardHistory = Jobcard::query()
+            ->where('company_id', $currentCompany->id)
+            ->where('customer_id', $customer->id)
+            ->selectRaw("'jobcard' AS document_type, id AS document_id, job_number AS document_number, status, total, created_at AS document_date");
+
+        $quoteHistory = Quote::query()
+            ->where('company_id', $currentCompany->id)
+            ->where('customer_id', $customer->id)
+            ->selectRaw("'quote' AS document_type, id AS document_id, quote_number AS document_number, status, total, created_at AS document_date");
+
+        $invoiceHistory = Invoice::query()
+            ->where('company_id', $currentCompany->id)
+            ->where('customer_id', $customer->id)
+            ->selectRaw("'invoice' AS document_type, id AS document_id, invoice_number AS document_number, status, total, created_at AS document_date");
+
+        $creditNoteHistory = CreditNote::query()
+            ->where('company_id', $currentCompany->id)
+            ->where('customer_id', $customer->id)
+            ->selectRaw("'credit_note' AS document_type, id AS document_id, credit_note_number AS document_number, status, total, created_at AS document_date");
+
+        $accountHistory = DB::query()
+            ->fromSub(
+                $jobcardHistory
+                    ->unionAll($quoteHistory)
+                    ->unionAll($invoiceHistory)
+                    ->unionAll($creditNoteHistory),
+                'account_history'
+            )
+            ->orderByDesc('document_date')
+            ->paginate($accountHistoryPerPage, ['*'], 'account_history_page');
+
         return Inertia::render('customers/Show', [
             'customer' => $customer,
             'contacts' => $contacts,
             'smsActivities' => $smsActivities,
             'emailActivities' => $emailActivities,
+            'accountHistory' => $accountHistory,
             'emailTemplates' => EmailTemplate::where('company_id', $currentCompany->id)
                 ->where('is_active', true)
                 ->orderByDesc('is_default')
@@ -245,6 +287,7 @@ class CustomersController extends Controller
                 'sms_status' => $request->get('sms_status'),
                 'sms_per_page' => $smsPerPage,
                 'email_per_page' => $emailPerPage,
+                'account_history_per_page' => $accountHistoryPerPage,
             ],
         ]);
     }
