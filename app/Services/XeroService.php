@@ -1456,8 +1456,7 @@ class XeroService
                     ->orWhereHas('payments', function ($paymentQuery) {
                         $paymentQuery->where(function ($unsyncedPaymentQuery) {
                             $unsyncedPaymentQuery->whereNull('payments.xero_payment_id')
-                                ->orWhereNull('payments.xero_synced_at')
-                                ->orWhereColumn('payments.updated_at', '>', 'payments.xero_synced_at');
+                                ->orWhereNull('payments.xero_synced_at');
                         });
                     });
             })
@@ -1516,8 +1515,7 @@ class XeroService
                         $hasUnsyncedPaymentsToXero = $invoice->payments()
                             ->where(function ($query) {
                                 $query->whereNull('xero_payment_id')
-                                    ->orWhereNull('xero_synced_at')
-                                    ->orWhereColumn('payments.updated_at', '>', 'payments.xero_synced_at');
+                                    ->orWhereNull('xero_synced_at');
                             })
                             ->exists();
 
@@ -1574,8 +1572,7 @@ class XeroService
                             $stillUnsynced = $invoice->payments()
                                 ->where(function ($query) {
                                     $query->whereNull('xero_payment_id')
-                                        ->orWhereNull('xero_synced_at')
-                                        ->orWhereColumn('payments.updated_at', '>', 'payments.xero_synced_at');
+                                        ->orWhereNull('xero_synced_at');
                                 })
                                 ->exists();
                             if (! $stillUnsynced && ! $hasLocalChangesForExport) {
@@ -1702,7 +1699,7 @@ class XeroService
                 // so Xero receives invoice + payment in the same sync run.
                 if ($invoice->isFullyPaid()) {
                     try {
-                        $paymentResults = $this->syncPaymentsToXero($invoice, $xeroInvoice);
+                        $paymentResults = $this->syncPaymentsToXero($invoice);
                         $successCount = collect($paymentResults)->where('status', 'success')->count();
 
                         if ($successCount > 0) {
@@ -4922,7 +4919,7 @@ class XeroService
     /**
      * Sync payments to Xero for a specific invoice
      */
-    public function syncPaymentsToXero(Invoice $invoice, ?array $xeroInvoice = null): array
+    public function syncPaymentsToXero(Invoice $invoice): array
     {
         if (! $this->settings->sync_invoices_to_xero) {
             return ['skipped' => true, 'message' => 'Invoice sync to Xero is disabled'];
@@ -4936,8 +4933,7 @@ class XeroService
         $payments = $invoice->payments()
             ->where(function ($query) {
                 $query->whereNull('xero_payment_id')
-                    ->orWhereNull('xero_synced_at')
-                    ->orWhereColumn('payments.updated_at', '>', 'payments.xero_synced_at');
+                    ->orWhereNull('xero_synced_at');
             })
             ->orderBy('id')
             ->get();
@@ -4981,7 +4977,7 @@ class XeroService
      */
     private function createPaymentInXero(Invoice $invoice, Payment $payment): array
     {
-        if (! empty($payment->xero_payment_id) && ! empty($payment->xero_synced_at) && ! $payment->updated_at->gt($payment->xero_synced_at)) {
+        if (! empty($payment->xero_payment_id) && ! empty($payment->xero_synced_at)) {
             return [
                 'payment_id' => $payment->id,
                 'amount' => $payment->amount,
@@ -5072,23 +5068,25 @@ class XeroService
         $result = $response->json();
         $xeroPayment = $result['Payments'][0] ?? [];
 
-        $syncStamp = now();
-        if (! empty($xeroPayment['UpdatedDateUTC'])) {
-            $syncStamp = $this->parseXeroDate($xeroPayment['UpdatedDateUTC']);
+        if (empty($xeroPayment['PaymentID'])) {
+            Log::error('Xero payment creation returned success without PaymentID', [
+                'payment_id' => $payment->id,
+                'invoice_id' => $invoice->id,
+                'response_keys' => array_keys($result),
+            ]);
+            throw new \Exception('Xero did not return a PaymentID after creating the payment; not saving sync state to avoid duplicate posts.');
         }
 
-        if (! empty($xeroPayment['PaymentID'])) {
-            $payment->update([
-                'xero_payment_id' => $xeroPayment['PaymentID'],
-                'xero_synced_at' => $syncStamp,
-            ]);
-        }
+        $payment->update([
+            'xero_payment_id' => $xeroPayment['PaymentID'],
+            'xero_synced_at' => now(),
+        ]);
 
         return [
             'payment_id' => $payment->id,
             'amount' => $payment->amount,
             'status' => 'success',
-            'xero_payment_id' => $xeroPayment['PaymentID'] ?? null,
+            'xero_payment_id' => $xeroPayment['PaymentID'],
         ];
     }
 
@@ -6799,8 +6797,7 @@ class XeroService
         $payments = $creditNote->payments()
             ->where(function ($query) {
                 $query->whereNull('xero_payment_id')
-                    ->orWhereNull('xero_synced_at')
-                    ->orWhereColumn('payments.updated_at', '>', 'payments.xero_synced_at');
+                    ->orWhereNull('xero_synced_at');
             })
             ->orderBy('id')
             ->get();
@@ -6836,7 +6833,7 @@ class XeroService
 
     private function createCreditNotePaymentInXero(CreditNote $creditNote, Payment $payment): array
     {
-        if (! empty($payment->xero_payment_id) && ! empty($payment->xero_synced_at) && ! $payment->updated_at->gt($payment->xero_synced_at)) {
+        if (! empty($payment->xero_payment_id) && ! empty($payment->xero_synced_at)) {
             return [
                 'payment_id' => $payment->id,
                 'amount' => $payment->amount,
@@ -6874,20 +6871,26 @@ class XeroService
 
         $result = $response->json();
         $xeroPayment = $result['Payments'][0] ?? [];
-        $syncStamp = ! empty($xeroPayment['UpdatedDateUTC']) ? $this->parseXeroDate($xeroPayment['UpdatedDateUTC']) : now();
 
-        if (! empty($xeroPayment['PaymentID'])) {
-            $payment->update([
-                'xero_payment_id' => $xeroPayment['PaymentID'],
-                'xero_synced_at' => $syncStamp,
+        if (empty($xeroPayment['PaymentID'])) {
+            Log::error('Xero credit note payment creation returned success without PaymentID', [
+                'payment_id' => $payment->id,
+                'credit_note_id' => $creditNote->id,
+                'response_keys' => array_keys($result),
             ]);
+            throw new \Exception('Xero did not return a PaymentID after creating the credit note payment; not saving sync state to avoid duplicate posts.');
         }
+
+        $payment->update([
+            'xero_payment_id' => $xeroPayment['PaymentID'],
+            'xero_synced_at' => now(),
+        ]);
 
         return [
             'payment_id' => $payment->id,
             'amount' => $payment->amount,
             'status' => 'success',
-            'xero_payment_id' => $xeroPayment['PaymentID'] ?? null,
+            'xero_payment_id' => $xeroPayment['PaymentID'],
         ];
     }
 
