@@ -2,6 +2,7 @@
 
 ## 2026-03-23
 
+- Reduced Xero API request pressure by lowering scheduler frequencies for non-critical sync jobs, moving payment-import execution from `xero:sync-invoices` to `xero:sync-invoices-from-xero`, and removing immediate payment-create sync from the UI path so payment export is handled by the scheduled `xero:sync-payments` command.
 - Extended Xero customer/supplier import sync to also process Xero `ContactPersons`, creating/updating linked JCO contacts during import-only flow so customer and supplier contact people are available in JCO.
 - Expanded JCO contacts schema to support supplier-linked contacts and persisted Xero contact-person linkage (`xero_contact_person_id`) for idempotent re-sync updates without duplicate contacts.
 

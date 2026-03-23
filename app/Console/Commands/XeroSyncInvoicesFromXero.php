@@ -70,6 +70,30 @@ class XeroSyncInvoicesFromXero extends Command
                         $this->info("  Successfully imported {$createdCount} invoices and updated {$updatedCount} invoices from Xero.");
                     }
                 }
+
+                $this->info("  Syncing payments from Xero...");
+                try {
+                    $paymentSyncFromXero = $xeroService->syncPaymentsFromXero();
+
+                    if (isset($paymentSyncFromXero['skipped']) && $paymentSyncFromXero['skipped'] === true) {
+                        $message = $paymentSyncFromXero['message'] ?? 'Payment sync skipped';
+                        $this->info("  {$message}");
+                    } else {
+                        $createdPayments = $paymentSyncFromXero['created'] ?? 0;
+                        $skippedPayments = is_numeric($paymentSyncFromXero['skipped'] ?? null) ? $paymentSyncFromXero['skipped'] : 0;
+                        $paymentErrors = $paymentSyncFromXero['errors'] ?? 0;
+
+                        if ($paymentErrors > 0) {
+                            $this->warn("  Imported {$createdPayments} payments from Xero, {$skippedPayments} skipped, {$paymentErrors} failed.");
+                        } elseif ($createdPayments > 0 || $skippedPayments > 0) {
+                            $this->info("  Imported {$createdPayments} payments from Xero" . ($skippedPayments > 0 ? ", {$skippedPayments} skipped" : '') . ".");
+                        } else {
+                            $this->info("  No new payments found in Xero from the last hour.");
+                        }
+                    }
+                } catch (\Exception $e) {
+                    $this->warn("  Failed to sync payments from Xero: " . $e->getMessage());
+                }
                 
             } catch (\Exception $e) {
                 $this->error("  Failed to import invoices for {$settings->company->name}: " . $e->getMessage());

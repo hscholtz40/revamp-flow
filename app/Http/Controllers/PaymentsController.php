@@ -56,27 +56,8 @@ class PaymentsController extends Controller
             $invoice->update(['status' => 'paid']);
         }
 
-        // Sync payment to Xero if invoice is synced to Xero
-        if ($invoice->xero_invoice_id) {
-            try {
-                $xeroService = new XeroService($currentCompany);
-                if ($xeroService->isConfigured()) {
-                    $xeroService->syncPaymentsToXero($invoice);
-                    Log::info("Payment synced to Xero", [
-                        'payment_id' => $payment->id,
-                        'invoice_id' => $invoice->id,
-                        'amount' => $payment->amount
-                    ]);
-                }
-            } catch (\Exception $e) {
-                Log::error('Failed to sync payment to Xero', [
-                    'payment_id' => $payment->id,
-                    'invoice_id' => $invoice->id,
-                    'error' => $e->getMessage()
-                ]);
-                // Don't fail the payment creation if Xero sync fails
-            }
-        }
+        // Payment export is handled by scheduled sync (xero:sync-payments)
+        // to avoid duplicate request bursts from both UI and scheduler paths.
 
         // Send automated reminder if enabled
         try {
