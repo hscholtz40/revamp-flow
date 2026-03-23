@@ -13,9 +13,13 @@ Schedule::command('xero:refresh-tokens')->cron('*/20 * * * *');
 
 /*
  * Xero sync: run on a 15-minute cadence by default, with each job offset by 1 minute so
- * nine Artisan commands do not fire HTTP bursts in the same second. Works with cron
- * every 15 minutes for schedule:run (or every minute). Tune via XERO_SYNC_BASE_MINUTES in .env
- * (see config/services.php).
+ * nine Artisan commands do not fire HTTP bursts in the same second.
+ *
+ * Important: server cron often runs `schedule:run` *every minute* — that only means Laravel
+ * checks what is due. Each command below has its own minute list (e.g. credit notes at
+ * :06, :21, :36, :51), not every minute. Use `php artisan schedule:list` to verify.
+ *
+ * Tune cadence via XERO_SYNC_BASE_MINUTES in .env (see config/services.php).
  */
 $xeroSyncBaseMinutes = config('services.xero.sync_schedule_base_minutes', [0, 15, 30, 45]);
 

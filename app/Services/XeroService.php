@@ -681,7 +681,7 @@ class XeroService
                     $xeroCustomer = $xeroContactsMap[$customer->xero_contact_id];
 
                     if ($this->isXeroRecordNewerThanLocal($customer, $xeroCustomer)) {
-                        $this->updateCustomerFromXero($customer, $xeroCustomer);
+                        $this->updateCustomerFromXero($customer, $xeroCustomer, true);
                         $results[] = [
                             'customer_id' => $customer->id,
                             'customer_name' => $customer->name,
@@ -907,6 +907,7 @@ class XeroService
         $currentCompany = $this->getCompany();
         $results = [];
         $syncStartedAt = now();
+        $lastCustomersSyncAtUtc = $this->getLastSyncedAtCarbonUtcForModule(self::SYNC_MODULE_CUSTOMERS);
 
         try {
             $xeroContacts = $this->fetchXeroContacts(self::SYNC_MODULE_CUSTOMERS, $forceFullFetch);
@@ -917,6 +918,12 @@ class XeroService
                     if (empty($xeroContact['Name'])) {
                         continue;
                     }
+
+                    $fetchContactPersonsViaDetailApi = $this->shouldFetchXeroContactPersonsViaDetailApi(
+                        $xeroContact,
+                        $lastCustomersSyncAtUtc,
+                        $forceFullFetch
+                    );
 
                     // Check if customer already exists in app by Xero contact ID
                     $existingCustomer = Customer::where('company_id', $currentCompany->id)
@@ -933,7 +940,7 @@ class XeroService
 
                     if ($existingCustomer) {
                         if (! $this->xeroUpdatedAtChanged($existingCustomer, $xeroContact)) {
-                            $this->syncCustomerContactsFromXero($existingCustomer, $xeroContact);
+                            $this->syncCustomerContactsFromXero($existingCustomer, $xeroContact, $fetchContactPersonsViaDetailApi);
                             $results[] = [
                                 'customer_id' => $existingCustomer->id,
                                 'customer_name' => $xeroContact['Name'],
@@ -943,7 +950,7 @@ class XeroService
 
                             continue;
                         }
-                        $this->updateCustomerFromXero($existingCustomer, $xeroContact);
+                        $this->updateCustomerFromXero($existingCustomer, $xeroContact, $fetchContactPersonsViaDetailApi);
                         $results[] = [
                             'customer_id' => $existingCustomer->id,
                             'customer_name' => $xeroContact['Name'],
@@ -952,7 +959,7 @@ class XeroService
                         ];
                     } else {
                         // Create new customer
-                        $customer = $this->createCustomerFromXero($xeroContact, $currentCompany);
+                        $customer = $this->createCustomerFromXero($xeroContact, $currentCompany, $fetchContactPersonsViaDetailApi);
                         $results[] = [
                             'customer_id' => $customer->id,
                             'customer_name' => $xeroContact['Name'],
@@ -1762,6 +1769,7 @@ class XeroService
             $cursorKey = self::getInitialSyncCursorCacheKey($currentCompany->id, 'invoice');
             $paginationKey = self::getInitialSyncPaginationCacheKey($currentCompany->id, 'invoice');
             $lastSync = $this->getLastSyncDatetimeForModule(self::SYNC_MODULE_INVOICES);
+            $lastInvoicesSyncAtUtc = $this->getLastSyncedAtCarbonUtcForModule(self::SYNC_MODULE_INVOICES);
             $fullSyncCompleted = (bool) Cache::get($fullSyncCompletedKey, false);
             if (! $fullSyncCompleted && $hasAnyLocalInvoices && ! empty($lastSync)) {
                 $fullSyncCompleted = true;
@@ -1829,11 +1837,17 @@ class XeroService
                             if ($invoiceProcessingKey !== null && isset($processedInvoiceKeys[$invoiceProcessingKey])) {
                                 continue;
                             }
-                            $xeroInvoice = $this->hydrateInvoiceDetails($xeroInvoice);
-
-                            $existingInvoice = Invoice::where('company_id', $currentCompany->id)
-                                ->where('xero_invoice_id', $xeroInvoice['InvoiceID'] ?? null)
-                                ->first();
+                            $existingInvoice = $this->findLocalInvoiceForXeroImportRow($currentCompany, $xeroInvoice);
+                            $fetchFullInvoice = $this->shouldHydrateXeroInvoiceListRow(
+                                $xeroInvoice,
+                                $lastInvoicesSyncAtUtc,
+                                $isBackfillMode,
+                                $existingInvoice
+                            );
+                            $xeroInvoice = $this->hydrateInvoiceDetails($xeroInvoice, $fetchFullInvoice);
+                            if ($existingInvoice === null) {
+                                $existingInvoice = $this->findLocalInvoiceForXeroImportRow($currentCompany, $xeroInvoice);
+                            }
 
                             if (! $existingInvoice) {
                                 $invoice = $this->createInvoiceFromXero($xeroInvoice, $currentCompany);
@@ -1985,26 +1999,21 @@ class XeroService
                             continue;
                         }
 
-                        $xeroInvoice = $this->hydrateInvoiceDetails($xeroInvoice);
+                        $existingInvoice = $this->findLocalInvoiceForXeroImportRow($currentCompany, $xeroInvoice);
+                        $fetchFullInvoice = $this->shouldHydrateXeroInvoiceListRow(
+                            $xeroInvoice,
+                            $lastInvoicesSyncAtUtc,
+                            $isBackfillMode,
+                            $existingInvoice
+                        );
+                        $xeroInvoice = $this->hydrateInvoiceDetails($xeroInvoice, $fetchFullInvoice);
+                        if ($existingInvoice === null) {
+                            $existingInvoice = $this->findLocalInvoiceForXeroImportRow($currentCompany, $xeroInvoice);
+                        }
 
                         // Skip if invoice doesn't have required fields
                         if (empty($xeroInvoice['InvoiceNumber']) && empty($xeroInvoice['Reference'])) {
                             continue;
-                        }
-
-                        // Check if invoice already exists in app by Xero invoice ID
-                        $existingInvoice = Invoice::where('company_id', $currentCompany->id)
-                            ->where('xero_invoice_id', $xeroInvoice['InvoiceID'])
-                            ->first();
-
-                        // If not found by Xero ID, check by invoice number
-                        if (! $existingInvoice) {
-                            $invoiceNumber = $xeroInvoice['InvoiceNumber'] ?? $xeroInvoice['Reference'] ?? null;
-                            if ($invoiceNumber) {
-                                $existingInvoice = Invoice::where('company_id', $currentCompany->id)
-                                    ->where('invoice_number', $invoiceNumber)
-                                    ->first();
-                            }
                         }
 
                         if ($existingInvoice) {
@@ -2855,6 +2864,19 @@ class XeroService
         return $state?->last_synced_at?->toDateTimeString();
     }
 
+    private function getLastSyncedAtCarbonUtcForModule(string $module): ?\Carbon\Carbon
+    {
+        $state = XeroSyncState::where('company_id', $this->getCompany()->id)
+            ->where('module', $module)
+            ->first();
+
+        if (! $state?->last_synced_at) {
+            return null;
+        }
+
+        return $state->last_synced_at->copy()->utc();
+    }
+
     private function recordSyncDatetimeForModule(string $module, \Carbon\CarbonInterface $syncedAt): void
     {
         XeroSyncState::updateOrCreate(
@@ -2979,7 +3001,7 @@ class XeroService
     /**
      * Update customer from Xero data
      */
-    private function updateCustomerFromXero(Customer $customer, array $xeroCustomer): void
+    private function updateCustomerFromXero(Customer $customer, array $xeroCustomer, bool $fetchMissingContactPersonsViaApi = true): void
     {
         $resolvedEmail = $this->resolveCustomerEmailFromXero($xeroCustomer, $customer->company_id);
         $updateData = [
@@ -3021,13 +3043,13 @@ class XeroService
         }
 
         $customer->refresh();
-        $this->syncCustomerContactsFromXero($customer, $xeroCustomer);
+        $this->syncCustomerContactsFromXero($customer, $xeroCustomer, $fetchMissingContactPersonsViaApi);
     }
 
     /**
      * Create customer from Xero contact data
      */
-    private function createCustomerFromXero(array $xeroContact, Company $company): Customer
+    private function createCustomerFromXero(array $xeroContact, Company $company, bool $fetchMissingContactPersonsViaApi = true): Customer
     {
         $customerData = [
             'company_id' => $company->id,
@@ -3065,15 +3087,39 @@ class XeroService
         $this->alignLocalUpdatedAtWithXero($customer);
 
         $customer->refresh();
-        $this->syncCustomerContactsFromXero($customer, $xeroContact);
+        $this->syncCustomerContactsFromXero($customer, $xeroContact, $fetchMissingContactPersonsViaApi);
 
         return $customer;
     }
 
     /**
+     * Whether to call GET /Contacts/{id} when the list payload omits ContactPersons.
+     * After a customers-from-Xero run completes, we only need that extra call if Xero's contact
+     * was updated since that run (or this is the first run / a forced full fetch).
+     */
+    private function shouldFetchXeroContactPersonsViaDetailApi(array $xeroContact, ?\Carbon\Carbon $lastCustomersSyncAtUtc, bool $forceFullFetch): bool
+    {
+        if ($forceFullFetch) {
+            return true;
+        }
+
+        if ($lastCustomersSyncAtUtc === null) {
+            return true;
+        }
+
+        if (empty($xeroContact['UpdatedDateUTC'])) {
+            return true;
+        }
+
+        $xeroUpdated = $this->parseXeroDate($xeroContact['UpdatedDateUTC'])->utc();
+
+        return $xeroUpdated->greaterThan($lastCustomersSyncAtUtc);
+    }
+
+    /**
      * Upsert JCO contacts from Xero ContactPersons (list responses often omit them — fetch single contact when needed).
      */
-    private function syncCustomerContactsFromXero(Customer $customer, array $xeroContact): void
+    private function syncCustomerContactsFromXero(Customer $customer, array $xeroContact, bool $fetchMissingContactPersonsViaApi = true): void
     {
         $contactId = $xeroContact['ContactID'] ?? $customer->xero_contact_id;
         if (! $contactId) {
@@ -3082,6 +3128,10 @@ class XeroService
 
         $persons = $xeroContact['ContactPersons'] ?? null;
         if (! is_array($persons) || count($persons) === 0) {
+            if (! $fetchMissingContactPersonsViaApi) {
+                return;
+            }
+
             $detailed = $this->getXeroContact((string) $contactId);
             if (is_array($detailed) && ! empty($detailed['ContactPersons']) && is_array($detailed['ContactPersons'])) {
                 $persons = $detailed['ContactPersons'];
@@ -4508,11 +4558,81 @@ class XeroService
         return null;
     }
 
-    private function hydrateInvoiceDetails(array $xeroInvoice): array
+    /**
+     * Resolve a local invoice from a Xero list/partial invoice payload (before or after hydrate).
+     */
+    private function findLocalInvoiceForXeroImportRow(Company $company, array $xeroInvoice): ?Invoice
+    {
+        if (! empty($xeroInvoice['InvoiceID'])) {
+            $byId = Invoice::where('company_id', $company->id)
+                ->where('xero_invoice_id', $xeroInvoice['InvoiceID'])
+                ->first();
+            if ($byId) {
+                return $byId;
+            }
+        }
+
+        $invoiceNumber = $xeroInvoice['InvoiceNumber'] ?? $xeroInvoice['Reference'] ?? null;
+        if ($invoiceNumber) {
+            return Invoice::where('company_id', $company->id)
+                ->where('invoice_number', $invoiceNumber)
+                ->first();
+        }
+
+        return null;
+    }
+
+    /**
+     * Whether to GET /Invoices/{id} when the list row is missing line items and/or invoice number.
+     * Skips the extra call when Xero's UpdatedDateUTC is not after the last completed invoice import
+     * (except during backfill, first run, missing timestamps, or local invoice needs line backfill).
+     */
+    private function shouldHydrateXeroInvoiceListRow(
+        array $xeroInvoice,
+        ?\Carbon\Carbon $lastInvoicesSyncAtUtc,
+        bool $isBackfillMode,
+        ?Invoice $existingLocal
+    ): bool {
+        $hasLineItems = isset($xeroInvoice['LineItems']) && is_array($xeroInvoice['LineItems']) && count($xeroInvoice['LineItems']) > 0;
+        $hasNumber = ! empty($xeroInvoice['InvoiceNumber']) || ! empty($xeroInvoice['Reference']);
+        if (! empty($xeroInvoice['InvoiceID']) && $hasLineItems && $hasNumber) {
+            return false;
+        }
+
+        if (empty($xeroInvoice['InvoiceID'])) {
+            return false;
+        }
+
+        if ($isBackfillMode) {
+            return true;
+        }
+
+        if ($lastInvoicesSyncAtUtc === null) {
+            return true;
+        }
+
+        if (empty($xeroInvoice['UpdatedDateUTC'])) {
+            return true;
+        }
+
+        if ($existingLocal && $existingLocal->lineItems()->count() === 0) {
+            return true;
+        }
+
+        $xeroUpdated = $this->parseXeroDate($xeroInvoice['UpdatedDateUTC'])->utc();
+
+        return $xeroUpdated->greaterThan($lastInvoicesSyncAtUtc);
+    }
+
+    private function hydrateInvoiceDetails(array $xeroInvoice, bool $fetchFullInvoiceWhenIncomplete = true): array
     {
         $hasLineItems = isset($xeroInvoice['LineItems']) && is_array($xeroInvoice['LineItems']) && count($xeroInvoice['LineItems']) > 0;
         $hasNumber = ! empty($xeroInvoice['InvoiceNumber']) || ! empty($xeroInvoice['Reference']);
         if ((empty($xeroInvoice['InvoiceID'])) || ($hasLineItems && $hasNumber)) {
+            return $xeroInvoice;
+        }
+
+        if (! $fetchFullInvoiceWhenIncomplete) {
             return $xeroInvoice;
         }
 
@@ -4813,7 +4933,6 @@ class XeroService
         }
 
         $results = [];
-        // Do not pass cached xeroInvoice - each payment needs fresh AmountDue after prior payments in batch
         $payments = $invoice->payments()
             ->where(function ($query) {
                 $query->whereNull('xero_payment_id')
@@ -4833,7 +4952,7 @@ class XeroService
 
         foreach ($payments as $payment) {
             try {
-                $result = $this->createPaymentInXero($invoice, $payment, null);
+                $result = $this->createPaymentInXero($invoice, $payment);
 
                 // Use the result from createPaymentInXero (which may include 'skipped' status)
                 $results[] = $result;
@@ -4860,7 +4979,7 @@ class XeroService
     /**
      * Create payment in Xero
      */
-    private function createPaymentInXero(Invoice $invoice, Payment $payment, ?array $xeroInvoice = null): array
+    private function createPaymentInXero(Invoice $invoice, Payment $payment): array
     {
         if (! empty($payment->xero_payment_id) && ! empty($payment->xero_synced_at) && ! $payment->updated_at->gt($payment->xero_synced_at)) {
             return [
@@ -4871,62 +4990,20 @@ class XeroService
             ];
         }
 
-        $xeroInvoice = $xeroInvoice ?? $this->getXeroInvoiceCached($invoice->xero_invoice_id);
-        $amountDue = $xeroInvoice['AmountDue'] ?? $xeroInvoice['AmountOwing'] ?? null;
-
-        // Invoice already settled in Xero: try to link this JCO payment to an existing Xero payment instead of POSTing.
-        if ($xeroInvoice && $this->isXeroInvoiceFullyPaid($xeroInvoice)) {
-            $this->syncPaymentsForInvoiceFromXero($invoice, $xeroInvoice);
-            $this->invalidateXeroInvoiceCache($invoice->xero_invoice_id);
-            $payment->refresh();
-            if (! empty($payment->xero_payment_id)) {
-                return [
-                    'payment_id' => $payment->id,
-                    'amount' => $payment->amount,
-                    'status' => 'success',
-                    'message' => 'Linked to existing Xero payment',
-                    'xero_payment_id' => $payment->xero_payment_id,
-                ];
-            }
-
-            Log::info('Skipping payment creation - invoice already fully paid in Xero (no link match for this payment)', [
-                'invoice_id' => $invoice->id,
-                'xero_invoice_id' => $invoice->xero_invoice_id,
-                'amount_due' => $amountDue,
-                'payment_amount' => $payment->amount,
-            ]);
-
-            return [
-                'payment_id' => $payment->id,
-                'amount' => $payment->amount,
-                'status' => 'skipped',
-                'message' => 'Invoice is already fully paid in Xero; could not match this payment to a Xero payment',
-            ];
-        }
-
-        // Cap payment amount to Xero AmountDue when available (never exceed outstanding balance in Xero).
-        // Do not cap by local remaining_balance here: for fully paid local invoices this is 0,
-        // which incorrectly blocks outbound payment creation.
-        $xeroAmountDue = $amountDue !== null ? (float) $amountDue : null;
-        $amountToSend = (float) $payment->amount;
-        if ($xeroAmountDue !== null && $xeroAmountDue >= 0) {
-            $amountToSend = min($amountToSend, $xeroAmountDue);
-        }
-        $amountToSend = round($amountToSend, 2);
+        $amountToSend = round((float) $payment->amount, 2);
 
         if ($amountToSend <= 0) {
-            Log::info('Skipping payment creation - no amount due to apply', [
+            Log::info('Skipping payment creation - zero or negative amount', [
                 'invoice_id' => $invoice->id,
                 'payment_id' => $payment->id,
                 'payment_amount' => $payment->amount,
-                'xero_amount_due' => $xeroAmountDue,
             ]);
 
             return [
                 'payment_id' => $payment->id,
                 'amount' => $payment->amount,
                 'status' => 'skipped',
-                'message' => 'No amount due on invoice in Xero (Xero: '.($xeroAmountDue ?? 'unknown').', payment: '.$payment->amount.')',
+                'message' => 'Payment amount must be greater than zero',
             ];
         }
 
@@ -5005,8 +5082,6 @@ class XeroService
                 'xero_payment_id' => $xeroPayment['PaymentID'],
                 'xero_synced_at' => $syncStamp,
             ]);
-            // Invalidate cache so next payment in batch gets fresh AmountDue
-            $this->invalidateXeroInvoiceCache($invoice->xero_invoice_id);
         }
 
         return [
