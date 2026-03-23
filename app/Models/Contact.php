@@ -14,6 +14,8 @@ class Contact extends Model
     protected $fillable = [
         'company_id',
         'customer_id',
+        'supplier_id',
+        'xero_contact_person_id',
         'name',
         'email',
         'phone',
@@ -34,6 +36,11 @@ class Contact extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function supplier(): BelongsTo
+    {
+        return $this->belongsTo(Supplier::class);
     }
 
     public function emailActivities(): HasMany

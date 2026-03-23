@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\XeroSettings;
+use App\Models\Contact;
 use App\Models\Customer;
 use App\Models\Supplier;
 use App\Models\Product;
@@ -892,6 +893,7 @@ class XeroService
 
                     if ($existingCustomer) {
                         if (!$this->xeroUpdatedAtChanged($existingCustomer, $xeroContact)) {
+                            $this->syncContactPersonsFromXero($xeroContact, $currentCompany->id, $existingCustomer->id, null);
                             $results[] = [
                                 'customer_id' => $existingCustomer->id,
                                 'customer_name' => $xeroContact['Name'],
@@ -901,6 +903,7 @@ class XeroService
                             continue;
                         }
                         $this->updateCustomerFromXero($existingCustomer, $xeroContact);
+                        $this->syncContactPersonsFromXero($xeroContact, $currentCompany->id, $existingCustomer->id, null);
                         $results[] = [
                             'customer_id' => $existingCustomer->id,
                             'customer_name' => $xeroContact['Name'],
@@ -910,6 +913,7 @@ class XeroService
                     } else {
                         // Create new customer
                         $customer = $this->createCustomerFromXero($xeroContact, $currentCompany);
+                        $this->syncContactPersonsFromXero($xeroContact, $currentCompany->id, $customer->id, null);
                         $results[] = [
                             'customer_id' => $customer->id,
                             'customer_name' => $xeroContact['Name'],
@@ -2987,6 +2991,7 @@ class XeroService
 
                     if ($existingSupplier) {
                         if (!$this->xeroUpdatedAtChanged($existingSupplier, $xeroContact)) {
+                            $this->syncContactPersonsFromXero($xeroContact, $currentCompany->id, null, $existingSupplier->id);
                             $results[] = [
                                 'supplier_id' => $existingSupplier->id,
                                 'supplier_name' => $xeroContact['Name'],
@@ -2996,6 +3001,7 @@ class XeroService
                             continue;
                         }
                         $this->updateSupplierFromXero($existingSupplier, $xeroContact);
+                        $this->syncContactPersonsFromXero($xeroContact, $currentCompany->id, null, $existingSupplier->id);
                         $results[] = [
                             'supplier_id' => $existingSupplier->id,
                             'supplier_name' => $xeroContact['Name'],
@@ -3005,6 +3011,7 @@ class XeroService
                     } else {
                         // Create new supplier
                         $supplier = $this->createSupplierFromXero($xeroContact, $currentCompany);
+                        $this->syncContactPersonsFromXero($xeroContact, $currentCompany->id, null, $supplier->id);
                         $results[] = [
                             'supplier_id' => $supplier->id,
                             'supplier_name' => $xeroContact['Name'],
@@ -3201,6 +3208,88 @@ class XeroService
         }
 
         return null;
+    }
+
+    /**
+     * Create/update JCO contacts from Xero ContactPersons for a customer or supplier.
+     * This is intentionally one-way (Xero -> JCO) during import sync.
+     */
+    private function syncContactPersonsFromXero(array $xeroContact, int $companyId, ?int $customerId = null, ?int $supplierId = null): void
+    {
+        if (empty($xeroContact['ContactPersons']) || (!is_array($xeroContact['ContactPersons']))) {
+            return;
+        }
+
+        if (!$customerId && !$supplierId) {
+            return;
+        }
+
+        foreach ($xeroContact['ContactPersons'] as $contactPerson) {
+            $name = trim((string) ($contactPerson['FirstName'] ?? ''));
+            $lastName = trim((string) ($contactPerson['LastName'] ?? ''));
+            $fullName = trim($name . ' ' . $lastName);
+
+            if ($fullName === '') {
+                continue;
+            }
+
+            $payload = [
+                'company_id' => $companyId,
+                'customer_id' => $customerId,
+                'supplier_id' => $supplierId,
+                'name' => $fullName,
+                'email' => $this->normalizeNullableString($contactPerson['EmailAddress'] ?? null),
+                'phone' => $this->normalizeNullableString($contactPerson['PhoneNumber'] ?? null),
+                'position' => !empty($contactPerson['IncludeInEmails']) ? 'Primary Contact' : null,
+                'xero_contact_person_id' => $this->normalizeNullableString($contactPerson['ContactPersonID'] ?? null),
+                'is_primary' => false,
+            ];
+
+            $existingContact = null;
+            if (!empty($payload['xero_contact_person_id'])) {
+                $existingContact = Contact::where('company_id', $companyId)
+                    ->where('xero_contact_person_id', $payload['xero_contact_person_id'])
+                    ->where(function ($query) use ($customerId, $supplierId) {
+                        if ($customerId) {
+                            $query->where('customer_id', $customerId);
+                        } else {
+                            $query->where('supplier_id', $supplierId);
+                        }
+                    })
+                    ->first();
+            }
+
+            if (!$existingContact) {
+                $existingContact = Contact::where('company_id', $companyId)
+                    ->where('name', $fullName)
+                    ->when($customerId, fn ($query) => $query->where('customer_id', $customerId))
+                    ->when($supplierId, fn ($query) => $query->where('supplier_id', $supplierId))
+                    ->first();
+            }
+
+            if ($existingContact) {
+                $this->updateModelIfChanged($existingContact, $payload, 'contact', [
+                    'contact_id' => $existingContact->id,
+                    'company_id' => $companyId,
+                    'customer_id' => $customerId,
+                    'supplier_id' => $supplierId,
+                    'xero_contact_person_id' => $payload['xero_contact_person_id'],
+                ]);
+                continue;
+            }
+
+            Contact::create($payload);
+        }
+    }
+
+    private function normalizeNullableString(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $trimmed = trim((string) $value);
+        return $trimmed === '' ? null : $trimmed;
     }
 
     /**

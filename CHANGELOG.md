@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-03-23
+
+- Extended Xero customer/supplier import sync to also process Xero `ContactPersons`, creating/updating linked JCO contacts during import-only flow so customer and supplier contact people are available in JCO.
+- Expanded JCO contacts schema to support supplier-linked contacts and persisted Xero contact-person linkage (`xero_contact_person_id`) for idempotent re-sync updates without duplicate contacts.
+
 ## 2026-03-20
 
 - Kept quote PDF type selection in the quote print/email flow (Quotation vs Proforma Invoice) and removed the company-level default quote PDF type setting so this remains a per-action choice.

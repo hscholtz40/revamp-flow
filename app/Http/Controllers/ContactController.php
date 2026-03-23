@@ -29,6 +29,7 @@ class ContactController extends Controller
 
         $query = Contact::with('customer')
             ->where('company_id', $currentCompany->id)
+            ->whereNotNull('customer_id')
             ->when($customerId, fn ($q) => $q->where('customer_id', $customerId))
             ->when($search, function ($q) use ($search) {
                 $q->where(function ($q2) use ($search) {
@@ -70,6 +71,7 @@ class ContactController extends Controller
         
         $contactsQuery = Contact::with('customer')
             ->where('company_id', $currentCompany->id)
+            ->whereNotNull('customer_id')
             ->when($request->string('search'), function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('name', 'like', "%{$search}%")
