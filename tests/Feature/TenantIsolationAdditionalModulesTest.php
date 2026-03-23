@@ -98,7 +98,6 @@ test('route model binding blocks cross-company access for additional major modul
         'name' => 'Cross Report',
         'entity_type' => 'invoice',
         'config' => json_encode(['columns' => []], JSON_THROW_ON_ERROR),
-        'filters' => json_encode([], JSON_THROW_ON_ERROR),
         'created_at' => now(),
         'updated_at' => now(),
     ]);
