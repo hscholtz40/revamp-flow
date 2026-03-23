@@ -40,7 +40,7 @@ class TaxRateController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $currentCompany = auth()->user()->getCurrentCompany();
-        
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'code' => ['nullable', 'string', 'max:50'],
@@ -52,21 +52,21 @@ class TaxRateController extends Controller
         ]);
 
         $validated['company_id'] = $currentCompany->id;
-        
+
         // If setting as default sales, unset other default sales for this company
         if ($validated['is_default_sales'] ?? false) {
             TaxRate::where('company_id', $currentCompany->id)
                 ->where('is_default_sales', true)
                 ->update(['is_default_sales' => false]);
         }
-        
+
         // If setting as default purchasing, unset other default purchasing for this company
         if ($validated['is_default_purchasing'] ?? false) {
             TaxRate::where('company_id', $currentCompany->id)
                 ->where('is_default_purchasing', true)
                 ->update(['is_default_purchasing' => false]);
         }
-        
+
         TaxRate::create($validated);
 
         return redirect()->route('administration.tax-rates.index')
@@ -78,11 +78,7 @@ class TaxRateController extends Controller
      */
     public function show(TaxRate $taxRate): Response
     {
-        $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($taxRate->company_id !== $currentCompany->id) {
-            abort(403, 'Unauthorized access to tax rate.');
-        }
+        $this->authorize('view', $taxRate);
 
         return Inertia::render('administration/tax-rates/Show', [
             'taxRate' => $taxRate,
@@ -94,11 +90,7 @@ class TaxRateController extends Controller
      */
     public function edit(TaxRate $taxRate): Response
     {
-        $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($taxRate->company_id !== $currentCompany->id) {
-            abort(403, 'Unauthorized access to tax rate.');
-        }
+        $this->authorize('update', $taxRate);
 
         return Inertia::render('administration/tax-rates/Edit', [
             'taxRate' => $taxRate,
@@ -110,11 +102,9 @@ class TaxRateController extends Controller
      */
     public function update(Request $request, TaxRate $taxRate): RedirectResponse
     {
+        $this->authorize('update', $taxRate);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($taxRate->company_id !== $currentCompany->id) {
-            abort(403, 'Unauthorized access to tax rate.');
-        }
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -133,7 +123,7 @@ class TaxRateController extends Controller
                 ->where('id', '!=', $taxRate->id)
                 ->update(['is_default_sales' => false]);
         }
-        
+
         // If setting as default purchasing, unset other default purchasing for this company
         if ($validated['is_default_purchasing'] ?? false) {
             TaxRate::where('company_id', $currentCompany->id)
@@ -141,7 +131,7 @@ class TaxRateController extends Controller
                 ->where('id', '!=', $taxRate->id)
                 ->update(['is_default_purchasing' => false]);
         }
-        
+
         $taxRate->update($validated);
 
         return redirect()->route('administration.tax-rates.index')
@@ -153,11 +143,9 @@ class TaxRateController extends Controller
      */
     public function destroy(TaxRate $taxRate): RedirectResponse
     {
+        $this->authorize('delete', $taxRate);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($taxRate->company_id !== $currentCompany->id) {
-            abort(403, 'Unauthorized access to tax rate.');
-        }
 
         // Check if tax rate is being used in any line items
         $usedInInvoiceItems = \App\Models\InvoiceLineItem::where('tax_rate_id', $taxRate->id)->exists();

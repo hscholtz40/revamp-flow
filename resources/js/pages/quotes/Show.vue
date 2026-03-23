@@ -17,19 +17,28 @@
                         <div class="flex items-center gap-4">
                             <span class="text-sm font-medium text-gray-700">Current Status:</span>
                             <div class="flex items-center gap-2">
-                                <button
-                                    v-for="status in statusOptions"
-                                    :key="status.value"
-                                    @click="updateStatus(status.value)"
-                                    :class="[
-                                        'px-3 py-1 text-sm font-medium rounded-md transition-colors',
-                                        props.quote.status === status.value
-                                            ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
-                                    ]"
+                                <template v-if="hasQuotesEdit">
+                                    <button
+                                        v-for="status in statusOptions"
+                                        :key="status.value"
+                                        @click="updateStatus(status.value)"
+                                        :class="[
+                                            'px-3 py-1 text-sm font-medium rounded-md transition-colors',
+                                            props.quote.status === status.value
+                                                ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
+                                        ]"
+                                    >
+                                        {{ status.label }}
+                                    </button>
+                                </template>
+                                <span
+                                    v-else
+                                    :class="getStatusBadgeClass(props.quote.status)"
+                                    class="inline-flex px-3 py-1 text-sm font-semibold rounded-full"
                                 >
-                                    {{ status.label }}
-                                </button>
+                                    {{ formatStatus(props.quote.status) }}
+                                </span>
                             </div>
                         </div>
                         <div class="text-sm text-gray-500">
@@ -66,7 +75,7 @@
                             Email
                         </button>
                         <button
-                            v-if="!props.convertedJobcardId"
+                            v-if="hasQuotesEdit && !props.convertedJobcardId"
                             @click="convertToJobcard"
                             class="rounded-md bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
                         >
@@ -80,7 +89,7 @@
                             View Jobcard
                         </Link>
                         <button
-                            v-if="!props.quote.invoice_id"
+                            v-if="hasQuotesEdit && !props.quote.invoice_id"
                             @click="convertToInvoice"
                             class="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
                         >
@@ -100,13 +109,6 @@
                         >
                             Edit
                         </Link>
-                        <span
-                            v-else
-                            class="rounded-md bg-gray-400 px-4 py-2 text-sm font-medium text-white cursor-not-allowed"
-                            title="Cannot edit accepted quotes without permission"
-                        >
-                            Edit
-                        </span>
                     </div>
                 </div>
             </div>
@@ -499,6 +501,7 @@
 </template>
 
 <script setup lang="ts">
+import { useAuthAbility } from '@/composables/useAuthAbilities';
 import AppLayout from '@/layouts/AppLayout.vue';
 import EmailRecipientsInput from '@/components/EmailRecipientsInput.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
@@ -577,6 +580,8 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+
+const hasQuotesEdit = useAuthAbility('quotes', 'edit');
 const isRoundingAdjustmentLine = (item: LineItem) => {
     return (item.description || '').trim().toLowerCase() === 'rounding adjustment';
 };
@@ -644,6 +649,9 @@ const emailResult = ref({
 
 // Computed property to check if user can edit the quote
 const canEditQuote = computed(() => {
+    if (!hasQuotesEdit.value) {
+        return false;
+    }
     if (props.quote.status !== 'accepted') {
         return true;
     }

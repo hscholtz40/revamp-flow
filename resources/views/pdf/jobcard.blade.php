@@ -533,25 +533,25 @@
                     @foreach($group->items->sortBy('sort_order') as $item)
                 <tr>
                     <td>{{ $item->description ?? 'Work Description' }}{{ ($item->product && ($item->product->sku ?? $item->product->barcode)) ? ' (' . ($item->product->sku ?? $item->product->barcode) . ')' : '' }}</td>
-                    <td class="text-right">{{ number_format($item->quantity ?? 0, 2) }}</td>
-                    <td class="text-right">R{{ number_format($item->unit_price ?? 0, 2) }}</td>
+                    <td class="text-right">{{ $company->formatNumber($item->quantity ?? 0, 2) }}</td>
+                    <td class="text-right">{{ $company->formatCurrencyZar($item->unit_price ?? 0) }}</td>
                     <td class="text-right">
                         @if(($item->discount_percentage ?? 0) > 0)
-                            {{ number_format($item->discount_percentage, 2) }}%
+                            {{ $company->formatNumber($item->discount_percentage, 2) }}%
                         @elseif(($item->discount_amount ?? 0) > 0)
-                            R{{ number_format($item->discount_amount, 2) }}
+                            {{ $company->formatCurrencyZar($item->discount_amount) }}
                         @else
                             —
                         @endif
                     </td>
                     <td class="text-right">
                         @if($item->taxRate)
-                            R{{ number_format($item->tax_amount ?? 0, 2) }}
+                            {{ $company->formatCurrencyZar($item->tax_amount ?? 0) }}
                         @else
                             —
                         @endif
                     </td>
-                    <td class="text-right">R{{ number_format($item->total ?? 0, 2) }}</td>
+                    <td class="text-right">{{ $company->formatCurrencyZar($item->total ?? 0) }}</td>
                 </tr>
                     @endforeach
             @endforeach
@@ -571,29 +571,29 @@
     <div class="totals-section">
         <div class="total-row">
             <span>Subtotal:</span>
-            <span>R{{ number_format($jobcard->subtotal ?? 0, 2) }}</span>
+            <span>{{ $company->formatCurrencyZar($jobcard->subtotal ?? 0) }}</span>
         </div>
         @if(($jobcard->tax_amount ?? 0) > 0)
         <div class="total-row">
             <span>Tax:</span>
-            <span>R{{ number_format($jobcard->tax_amount, 2) }}</span>
+            <span>{{ $company->formatCurrencyZar($jobcard->tax_amount) }}</span>
         </div>
         @endif
         @if(($jobcard->discount_amount ?? 0) > 0)
         <div class="total-row">
             <span>Discount:</span>
-            <span>-R{{ number_format($jobcard->discount_amount, 2) }}</span>
+            <span>-{{ $company->formatCurrencyZar($jobcard->discount_amount) }}</span>
         </div>
         @endif
         @if(abs($roundingAdjustment) > 0.0001)
         <div class="total-row">
             <span>Rounding Adjustment:</span>
-            <span>R{{ number_format($roundingAdjustment, 2) }}</span>
+            <span>{{ $company->formatCurrencyZar($roundingAdjustment) }}</span>
         </div>
         @endif
         <div class="total-row final">
             <span>Total:</span>
-            <span>R{{ number_format($jobcard->total ?? 0, 2) }}</span>
+            <span>{{ $company->formatCurrencyZar($jobcard->total ?? 0) }}</span>
         </div>
     </div>
     

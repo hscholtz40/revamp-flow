@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useAuthAbility } from '@/composables/useAuthAbilities';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
@@ -46,6 +47,11 @@ interface Props {
 
 const props = defineProps<Props>();
 
+const canReportsCreate = useAuthAbility('reports', 'create');
+const canReportsEdit = useAuthAbility('reports', 'edit');
+const canReportsDelete = useAuthAbility('reports', 'delete');
+const canReportsView = useAuthAbility('reports', 'view');
+
 const deleteReport = (reportId: number) => {
     if (confirm('Are you sure you want to delete this report?')) {
         router.delete(`/reports/${reportId}`);
@@ -53,6 +59,9 @@ const deleteReport = (reportId: number) => {
 };
 
 const useTemplate = (templateId: number) => {
+    if (!canReportsCreate.value) {
+        return;
+    }
     router.get('/reports/create', { template_id: templateId });
 };
 
@@ -77,7 +86,11 @@ const deleteTemplate = (templateId: number, event: Event) => {
             <!-- Header -->
             <div class="flex items-center justify-between gap-3 mb-6">
                 <h1 class="text-2xl font-bold text-gray-900">Reports</h1>
-                <Link href="/reports/create" class="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 flex items-center gap-2">
+                <Link
+                    v-if="canReportsCreate"
+                    href="/reports/create"
+                    class="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 flex items-center gap-2"
+                >
                     <Plus class="w-4 h-4" />
                     Run Report
                 </Link>
@@ -88,6 +101,7 @@ const deleteTemplate = (templateId: number, event: Event) => {
                 <h2 class="text-lg font-semibold text-gray-900 mb-4">Built-in Reports</h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <Link
+                        v-if="canReportsView"
                         href="/reports/jobcard-detail"
                         class="bg-white rounded-lg border p-4 hover:shadow-md transition-shadow flex items-start gap-3"
                     >
@@ -127,6 +141,7 @@ const deleteTemplate = (templateId: number, event: Event) => {
                                     Default
                                 </span>
                                 <Link
+                                    v-if="canReportsEdit"
                                     :href="`/reports/templates/${template.id}/edit`"
                                     @click="editTemplate(template.id, $event)"
                                     class="text-gray-600 hover:text-gray-900"
@@ -135,6 +150,7 @@ const deleteTemplate = (templateId: number, event: Event) => {
                                     <Edit class="w-4 h-4" />
                                 </Link>
                                 <button
+                                    v-if="canReportsDelete"
                                     @click="deleteTemplate(template.id, $event)"
                                     class="text-red-600 hover:text-red-900"
                                     title="Delete Template"
@@ -231,12 +247,14 @@ const deleteTemplate = (templateId: number, event: Event) => {
                                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium" @click.stop>
                                     <div class="flex items-center justify-end gap-2">
                                         <Link
+                                            v-if="canReportsEdit"
                                             :href="`/reports/${report.id}/edit`"
                                             class="text-gray-600 hover:text-gray-900"
                                         >
                                             <Edit class="w-4 h-4" />
                                         </Link>
                                         <button
+                                            v-if="canReportsDelete"
                                             @click="deleteReport(report.id)"
                                             class="text-red-600 hover:text-red-900"
                                         >

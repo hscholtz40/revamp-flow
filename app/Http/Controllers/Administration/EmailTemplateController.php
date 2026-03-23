@@ -61,10 +61,7 @@ class EmailTemplateController extends Controller
 
     public function edit(EmailTemplate $emailTemplate): Response
     {
-        $company = auth()->user()->getCurrentCompany();
-        if ($emailTemplate->company_id !== $company->id) {
-            abort(403, 'You do not have access to this template.');
-        }
+        $this->authorize('update', $emailTemplate);
 
         return Inertia::render('administration/email-templates/Edit', [
             'template' => $emailTemplate,
@@ -74,10 +71,9 @@ class EmailTemplateController extends Controller
 
     public function update(Request $request, EmailTemplate $emailTemplate): RedirectResponse
     {
+        $this->authorize('update', $emailTemplate);
+
         $company = auth()->user()->getCurrentCompany();
-        if ($emailTemplate->company_id !== $company->id) {
-            abort(403, 'You do not have access to this template.');
-        }
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -101,10 +97,7 @@ class EmailTemplateController extends Controller
 
     public function destroy(EmailTemplate $emailTemplate): RedirectResponse
     {
-        $company = auth()->user()->getCurrentCompany();
-        if ($emailTemplate->company_id !== $company->id) {
-            abort(403, 'You do not have access to this template.');
-        }
+        $this->authorize('delete', $emailTemplate);
 
         $emailTemplate->delete();
 
@@ -134,4 +127,3 @@ class EmailTemplateController extends Controller
         return response()->json(['error' => 'No image provided'], 400);
     }
 }
-

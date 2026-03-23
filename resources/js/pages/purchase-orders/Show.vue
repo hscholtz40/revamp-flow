@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import { useAuthAbility } from '@/composables/useAuthAbilities';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { ArrowLeft, Package, Building2, Calendar, FileText, CheckCircle, XCircle, Download, Mail } from 'lucide-vue-next';
+import { ArrowLeft, Package, Building2, Calendar, FileText, CheckCircle, XCircle, Download, Mail, Edit, Trash2 } from 'lucide-vue-next';
 import { ref, computed } from 'vue';
 import purchaseOrders from '@/routes/purchase-orders';
 import products from '@/routes/products';
@@ -86,6 +87,26 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+
+const canPurchaseOrdersEdit = useAuthAbility('purchase-orders', 'edit');
+const canPurchaseOrdersDelete = useAuthAbility('purchase-orders', 'delete');
+
+const canEditPurchaseOrder = computed(() => {
+    if (props.purchaseOrder.status === 'received') {
+        return false;
+    }
+    return !(props.purchaseOrder.items || []).some((i) => (Number(i.quantity_received) || 0) > 0);
+});
+
+const canDeletePurchaseOrder = computed(() => props.purchaseOrder.status !== 'received');
+
+function deletePurchaseOrder() {
+    if (!confirm(`Are you sure you want to delete purchase order ${props.purchaseOrder.po_number}?`)) {
+        return;
+    }
+    router.delete(purchaseOrders.destroy(props.purchaseOrder.id).url);
+}
+
 const isRoundingAdjustmentLine = (item: PurchaseOrderItem) => {
     return (item.description || '').trim().toLowerCase() === 'rounding adjustment';
 };
@@ -299,6 +320,23 @@ const sendEmail = () => {
                         <span :class="getStatusColor(props.purchaseOrder.status)" class="inline-flex rounded-full px-3 py-1 text-sm font-semibold capitalize">
                             {{ props.purchaseOrder.status }}
                         </span>
+                        <Link
+                            v-if="canPurchaseOrdersEdit && canEditPurchaseOrder"
+                            :href="purchaseOrders.edit(props.purchaseOrder.id).url"
+                            class="flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                        >
+                            <Edit class="h-4 w-4" />
+                            Edit
+                        </Link>
+                        <button
+                            v-if="canPurchaseOrdersDelete && canDeletePurchaseOrder"
+                            type="button"
+                            class="flex items-center gap-2 rounded-md border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
+                            @click="deletePurchaseOrder"
+                        >
+                            <Trash2 class="h-4 w-4" />
+                            Delete
+                        </button>
                         <button
                             v-if="!props.pdfTemplates || props.pdfTemplates.length === 0"
                             @click="downloadPDF"

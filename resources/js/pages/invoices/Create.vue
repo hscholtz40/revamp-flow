@@ -653,6 +653,7 @@
 
 <script setup lang="ts">
 import ContactSelector from '@/components/ContactSelector.vue';
+import { useNumberFormat } from '@/composables/useNumberFormat';
 import { matchesProductSearch } from '@/composables/productSearch';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, watch, ref } from 'vue';
@@ -764,6 +765,7 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+const { formatCurrency } = useNumberFormat();
 const paymentTermsOptions = ['COD', 'Net 7 Days', 'Net 14 Days', 'Net 30 Days', 'Net 60 Days'];
 const ROUNDING_LINE_DESCRIPTION = 'Rounding Adjustment';
 const createLineItemUid = () =>
@@ -901,6 +903,11 @@ if (props.prefill) {
         selectedCustomer.value = prefillCustomer;
         customerSearchQuery.value = prefillCustomer.name;
     }
+
+    form.line_items.forEach((item, index) => {
+        discountTypes.value[index] =
+            (Number(item.discount_percentage) || 0) > 0 ? 'percentage' : 'amount';
+    });
 }
 
 const parseCustomerTermsToDays = (terms?: string) => {
@@ -1348,13 +1355,6 @@ const handleDiscountTypeChange = (index: number, event: Event) => {
         item.discount_amount = 0;
         item.discount_percentage = 0;
     }
-};
-
-const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-ZA', {
-        style: 'currency',
-        currency: 'ZAR',
-    }).format(amount || 0);
 };
 
 // Calculate subtotal before discounts

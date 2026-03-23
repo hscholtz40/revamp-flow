@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\StockMovement;
 use App\Services\StockService;
+use App\Support\CompanyScopedRules;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -29,10 +31,10 @@ class StockMovementsController extends Controller
         $sortBy = $request->input('sort_by', 'created_at');
         $sortDir = $request->input('sort_dir', 'desc') === 'asc' ? 'asc' : 'desc';
         $sortableFields = ['created_at', 'quantity', 'stock_before', 'stock_after', 'type', 'reference', 'product_name', 'user_name'];
-        if (!in_array($sortBy, $sortableFields, true)) {
+        if (! in_array($sortBy, $sortableFields, true)) {
             $sortBy = 'created_at';
         }
-        
+
         $movementsQuery = StockMovement::where('company_id', $currentCompany->id)
             ->with(['product', 'user'])
             ->when($request->filled('product_id'), function ($query) use ($request) {
@@ -88,7 +90,7 @@ class StockMovementsController extends Controller
     {
         $currentCompany = auth()->user()->getCurrentCompany();
         $user = auth()->user();
-        
+
         // Get companies the user has access to (excluding current company for transfers)
         if ($user->companies()->count() === 0) {
             $companies = \App\Models\Company::where('is_active', true)
@@ -102,10 +104,10 @@ class StockMovementsController extends Controller
                 ->orderBy('companies.name')
                 ->get(['companies.id', 'companies.name']);
         }
-        
+
         $products = Product::where('company_id', $currentCompany->id)
             ->where('track_stock', true)
-            ->with(['serialNumbers' => function($query) {
+            ->with(['serialNumbers' => function ($query) {
                 $query->where('status', 'available');
             }])
             ->orderBy('name')
@@ -126,7 +128,7 @@ class StockMovementsController extends Controller
                     })->toArray(),
                 ];
             });
-        
+
         return Inertia::render('stock-movements/Create', [
             'product_id' => $request->integer('product_id'),
             'products' => $products,
@@ -142,30 +144,31 @@ class StockMovementsController extends Controller
     {
         $currentCompany = auth()->user()->getCurrentCompany();
         $user = auth()->user();
-        
-        $validated = $request->validate([
-            'product_id' => ['required', 'exists:products,id'],
+
+        $cid = $currentCompany->id;
+
+        $validator = Validator::make($request->all(), [
+            'product_id' => ['required', CompanyScopedRules::product($cid)],
             'type' => ['required', 'string', 'in:in,out,adjustment,transfer'],
             'quantity' => ['required', 'integer', 'min:1'],
             'unit_cost' => ['nullable', 'numeric', 'min:0'],
             'to_company_id' => ['required_if:type,transfer', 'nullable', 'exists:companies,id'],
             'serial_number_ids' => ['nullable', 'array'],
-            'serial_number_ids.*' => ['exists:product_serial_numbers,id'],
+            'serial_number_ids.*' => [CompanyScopedRules::productSerialNumberForCompany($cid)],
             'reference' => ['nullable', 'string', 'max:255'],
             'reference_type' => ['nullable', 'string', 'max:255'],
             'reference_id' => ['nullable', 'integer'],
             'notes' => ['nullable', 'string'],
         ]);
+        $validator->after(CompanyScopedRules::afterTransferDestinationCompanyAccessible());
+        $validator->after(CompanyScopedRules::afterValidateStockMovementSerials($cid));
+        $validated = $validator->validate();
 
         $product = Product::findOrFail($validated['product_id']);
-        
-        if ($product->company_id !== $currentCompany->id) {
-            abort(403, 'Unauthorized access to product.');
-        }
 
         try {
             $quantity = $validated['quantity'];
-            
+
             if ($validated['type'] === 'adjustment') {
                 $this->stockService->adjustStock(
                     $product,
@@ -175,10 +178,10 @@ class StockMovementsController extends Controller
             } elseif ($validated['type'] === 'transfer') {
                 // Validate user has access to destination company
                 $toCompanyId = $validated['to_company_id'];
-                if (!$user->hasAccessToCompany($toCompanyId)) {
+                if (! $user->hasAccessToCompany($toCompanyId)) {
                     abort(403, 'You do not have access to the destination company.');
                 }
-                
+
                 $this->stockService->transferStock(
                     $product,
                     $toCompanyId,
@@ -223,14 +226,12 @@ class StockMovementsController extends Controller
      */
     public function show(StockMovement $stockMovement): Response
     {
+        $this->authorize('view', $stockMovement);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($stockMovement->company_id !== $currentCompany->id) {
-            abort(403, 'Unauthorized access to stock movement.');
-        }
 
         $stockMovement->load(['product', 'user', 'toCompany', 'serialNumber']);
-        
+
         // Load reference if it exists (polymorphic relationship)
         // Skip loading reference for 'transfer' type as it's not a model class
         if ($stockMovement->reference_type && $stockMovement->reference_id && $stockMovement->reference_type !== 'transfer') {
@@ -246,39 +247,39 @@ class StockMovementsController extends Controller
                 ]);
             }
         }
-        
+
         // Get serial numbers for this movement
         // When tracking serial numbers, each movement record has one serial number
         // For transfers with multiple serials, multiple movement records are created
         $serialNumbers = [];
-        
+
         // Get the serial number for this movement if it exists
         if ($stockMovement->product_serial_number_id && $stockMovement->serialNumber) {
             $serialNumbers[] = $stockMovement->serialNumber;
         }
-        
+
         // For transfers, try to find related movements with serial numbers
         // Look for movements with the same to_company_id and created around the same time
         if ($stockMovement->type === 'transfer' && $stockMovement->to_company_id) {
             $createdAt = \Carbon\Carbon::parse($stockMovement->created_at);
-            $relatedMovements = \App\Models\StockMovement::where(function($query) use ($stockMovement, $createdAt) {
+            $relatedMovements = \App\Models\StockMovement::where(function ($query) use ($stockMovement, $createdAt) {
                 // Find other movements in the same transfer operation
                 // They should have the same to_company_id and be created within a few seconds
                 $query->where('to_company_id', $stockMovement->to_company_id)
-                      ->where('product_id', $stockMovement->product_id)
-                      ->whereBetween('created_at', [
-                          $createdAt->copy()->subSeconds(5),
-                          $createdAt->copy()->addSeconds(5)
-                      ])
-                      ->where('id', '!=', $stockMovement->id);
+                    ->where('product_id', $stockMovement->product_id)
+                    ->whereBetween('created_at', [
+                        $createdAt->copy()->subSeconds(5),
+                        $createdAt->copy()->addSeconds(5),
+                    ])
+                    ->where('id', '!=', $stockMovement->id);
             })
-            ->whereNotNull('product_serial_number_id')
-            ->with('serialNumber')
-            ->get();
-            
+                ->whereNotNull('product_serial_number_id')
+                ->with('serialNumber')
+                ->get();
+
             // Add serial numbers from related movements
             foreach ($relatedMovements as $relatedMovement) {
-                if ($relatedMovement->serialNumber && !collect($serialNumbers)->contains('id', $relatedMovement->serialNumber->id)) {
+                if ($relatedMovement->serialNumber && ! collect($serialNumbers)->contains('id', $relatedMovement->serialNumber->id)) {
                     $serialNumbers[] = $relatedMovement->serialNumber;
                 }
             }
@@ -286,7 +287,7 @@ class StockMovementsController extends Controller
 
         // Convert to array and add serial numbers
         $movementData = $stockMovement->toArray();
-        $movementData['serialNumbers'] = collect($serialNumbers)->map(function($serial) {
+        $movementData['serialNumbers'] = collect($serialNumbers)->map(function ($serial) {
             return $serial ? [
                 'id' => $serial->id,
                 'serial_number' => $serial->serial_number,

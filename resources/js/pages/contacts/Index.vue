@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useAuthAbility } from '@/composables/useAuthAbilities';
 import AppLayout from '@/layouts/AppLayout.vue';
 import EmailComposerModal from '@/components/EmailComposerModal.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
@@ -22,6 +23,10 @@ interface Company {
     id: number;
     name: string;
 }
+
+const canContactsCreate = useAuthAbility('contacts', 'create');
+const canContactsEdit = useAuthAbility('contacts', 'edit');
+const canContactsDelete = useAuthAbility('contacts', 'delete');
 
 const props = defineProps<{
     contacts: {
@@ -78,6 +83,13 @@ const toggleSort = (field: string) => {
 const sortIndicator = (field: string) => {
     if (sortBy.value !== field) return '↕';
     return sortDir.value === 'asc' ? '↑' : '↓';
+};
+
+const deleteContact = (contact: Contact) => {
+    if (!confirm(`Are you sure you want to delete contact "${contact.name}"?`)) {
+        return;
+    }
+    router.delete(contacts.destroy(contact.id).url);
 };
 
 // SMS functionality
@@ -158,7 +170,11 @@ const emailPreviewContext = computed(() => ({
             <!-- Header -->
             <div class="flex items-center justify-between gap-3 mb-6">
                 <h1 class="text-2xl font-bold text-gray-900">Contacts</h1>
-                <Link :href="contacts.create().url" class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                <Link
+                    v-if="canContactsCreate"
+                    :href="contacts.create().url"
+                    class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                >
                     New Contact
                 </Link>
             </div>
@@ -250,6 +266,7 @@ const emailPreviewContext = computed(() => ({
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" @click.stop>
                                     <div class="flex items-center gap-2">
                                         <Link
+                                            v-if="canContactsEdit"
                                             :href="contacts.edit(contact.id).url"
                                             class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                                         >
@@ -268,6 +285,14 @@ const emailPreviewContext = computed(() => ({
                                             class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-green-700 bg-green-100 hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                                         >
                                             SMS
+                                        </button>
+                                        <button
+                                            v-if="canContactsDelete"
+                                            type="button"
+                                            @click="deleteContact(contact)"
+                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                                        >
+                                            Delete
                                         </button>
                                     </div>
                                 </td>

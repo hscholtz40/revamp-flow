@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
+use App\Traits\ScopedToCurrentCompanyRouteBinding;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class TimeEntry extends Model
 {
-    use HasFactory;
+    use HasFactory, ScopedToCurrentCompanyRouteBinding;
 
     protected $fillable = [
         'company_id',
@@ -89,7 +90,7 @@ class TimeEntry extends Model
      */
     public function getTotalAmountAttribute(): float
     {
-        if (!$this->is_billable || !$this->hourly_rate) {
+        if (! $this->is_billable || ! $this->hourly_rate) {
             return 0;
         }
 
@@ -101,7 +102,7 @@ class TimeEntry extends Model
      */
     public function getFormattedTotalAmountAttribute(): string
     {
-        return 'R' . number_format($this->total_amount, 2);
+        return 'R'.number_format($this->total_amount, 2);
     }
 
     /**
@@ -121,12 +122,12 @@ class TimeEntry extends Model
      */
     public function stopTimer(): void
     {
-        if (!$this->started_at) {
+        if (! $this->started_at) {
             return;
         }
 
         $duration = now()->diffInMinutes($this->started_at);
-        
+
         $this->update([
             'status' => 'completed',
             'end_time' => now()->toTimeString(),
@@ -140,12 +141,12 @@ class TimeEntry extends Model
      */
     public function pauseTimer(): void
     {
-        if ($this->status !== 'running' || !$this->started_at) {
+        if ($this->status !== 'running' || ! $this->started_at) {
             return;
         }
 
         $duration = now()->diffInMinutes($this->started_at);
-        
+
         $this->update([
             'status' => 'paused',
             'duration_minutes' => $this->duration_minutes + $duration,

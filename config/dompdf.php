@@ -236,7 +236,7 @@ return [
         'enable_php' => false,
 
         /**
-         * Rnable inline JavaScript
+         * Enable inline JavaScript
          *
          * If this setting is set to true then DOMPDF will automatically insert JavaScript code contained
          * within <script type="text/javascript"> ... </script> tags as written into the PDF.
@@ -245,7 +245,7 @@ return [
          *
          * @var bool
          */
-        'enable_javascript' => true,
+        'enable_javascript' => false,
 
         /**
          * Enable remote file access

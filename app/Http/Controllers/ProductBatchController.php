@@ -16,11 +16,7 @@ class ProductBatchController extends Controller
      */
     public function index(Product $product): Response
     {
-        $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($product->company_id !== $currentCompany->id) {
-            abort(403);
-        }
+        $this->authorize('view', $product);
 
         $batches = $product->batches()
             ->orderBy('expiry_date', 'asc')
@@ -38,11 +34,7 @@ class ProductBatchController extends Controller
      */
     public function create(Product $product): Response
     {
-        $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($product->company_id !== $currentCompany->id) {
-            abort(403);
-        }
+        $this->authorize('view', $product);
 
         return Inertia::render('products/batches/Create', [
             'product' => $product,
@@ -54,11 +46,9 @@ class ProductBatchController extends Controller
      */
     public function store(Request $request, Product $product): RedirectResponse
     {
+        $this->authorize('view', $product);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($product->company_id !== $currentCompany->id) {
-            abort(403);
-        }
 
         $validated = $request->validate([
             'batch_number' => ['required', 'string', 'max:255', 'unique:product_batches,batch_number'],
@@ -83,11 +73,7 @@ class ProductBatchController extends Controller
      */
     public function show(Product $product, ProductBatch $batch): Response
     {
-        $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($batch->company_id !== $currentCompany->id || $batch->product_id !== $product->id) {
-            abort(403);
-        }
+        $this->authorize('manageBatch', [$product, $batch]);
 
         $batch->load('serialNumbers', 'stockMovements');
 
@@ -102,11 +88,7 @@ class ProductBatchController extends Controller
      */
     public function edit(Product $product, ProductBatch $batch): Response
     {
-        $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($batch->company_id !== $currentCompany->id || $batch->product_id !== $product->id) {
-            abort(403);
-        }
+        $this->authorize('manageBatch', [$product, $batch]);
 
         return Inertia::render('products/batches/Edit', [
             'product' => $product,
@@ -119,14 +101,10 @@ class ProductBatchController extends Controller
      */
     public function update(Request $request, Product $product, ProductBatch $batch): RedirectResponse
     {
-        $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($batch->company_id !== $currentCompany->id || $batch->product_id !== $product->id) {
-            abort(403);
-        }
+        $this->authorize('manageBatch', [$product, $batch]);
 
         $validated = $request->validate([
-            'batch_number' => ['required', 'string', 'max:255', 'unique:product_batches,batch_number,' . $batch->id],
+            'batch_number' => ['required', 'string', 'max:255', 'unique:product_batches,batch_number,'.$batch->id],
             'manufacture_date' => ['nullable', 'date'],
             'expiry_date' => ['nullable', 'date', 'after_or_equal:manufacture_date'],
             'quantity' => ['required', 'integer', 'min:0'],
@@ -145,11 +123,7 @@ class ProductBatchController extends Controller
      */
     public function destroy(Product $product, ProductBatch $batch): RedirectResponse
     {
-        $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($batch->company_id !== $currentCompany->id || $batch->product_id !== $product->id) {
-            abort(403);
-        }
+        $this->authorize('manageBatch', [$product, $batch]);
 
         $batch->delete();
 

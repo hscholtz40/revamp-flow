@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useAuthAbility } from '@/composables/useAuthAbilities';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { Building2, Mail, Phone, MapPin, Edit, ArrowLeft, Package, FileText } from 'lucide-vue-next';
@@ -28,6 +29,8 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+
+const canSuppliersEdit = useAuthAbility('suppliers', 'edit');
 </script>
 
 <template>
@@ -53,6 +56,7 @@ const props = defineProps<Props>();
                     </div>
                     <div class="flex items-center gap-2">
                         <Link
+                            v-if="canSuppliersEdit"
                             :href="suppliers.edit(props.supplier.id).url"
                             class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                         >

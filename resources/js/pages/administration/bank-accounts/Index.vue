@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useNumberFormat } from '@/composables/useNumberFormat';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { Plus, Edit, Trash2, Eye, Building2 } from 'lucide-vue-next';
@@ -25,6 +26,7 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+const { formatCurrency } = useNumberFormat();
 
 function deleteBankAccount(bankAccount: BankAccount) {
     if (confirm(`Are you sure you want to delete "${bankAccount.account_name}"?`)) {
@@ -32,12 +34,6 @@ function deleteBankAccount(bankAccount: BankAccount) {
     }
 }
 
-function formatCurrency(amount: number, currency: string = 'ZAR'): string {
-    return new Intl.NumberFormat('en-ZA', {
-        style: 'currency',
-        currency: currency,
-    }).format(amount);
-}
 </script>
 
 <template>

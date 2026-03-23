@@ -12,8 +12,16 @@ class AdminUserSeeder extends Seeder
 {
     public function run(): void
     {
-        $adminEmail = env('ADMIN_EMAIL', 'admin@example.com');
-        $adminPassword = env('ADMIN_PASSWORD', 'password');
+        $adminEmail = config('installer.bootstrap_admin_email') ?: env('ADMIN_EMAIL');
+        $adminPassword = config('installer.bootstrap_admin_password') ?: env('ADMIN_PASSWORD');
+
+        if (! is_string($adminEmail) || $adminEmail === '' || ! is_string($adminPassword) || $adminPassword === '') {
+            if ($this->command) {
+                $this->command->warn('AdminUserSeeder skipped: set ADMIN_EMAIL and ADMIN_PASSWORD in the environment for this run only, or run the web installer (credentials are not stored in .env).');
+            }
+
+            return;
+        }
 
         // Ensure Admin group exists (GroupSeeder also handles this, but safe here)
         $adminGroup = Group::firstOrCreate(
@@ -41,12 +49,10 @@ class AdminUserSeeder extends Seeder
         $defaultCompany = Company::getDefault();
         if ($defaultCompany) {
             $admin->companies()->syncWithoutDetaching([$defaultCompany->id]);
-            if (!$admin->current_company_id) {
+            if (! $admin->current_company_id) {
                 $admin->current_company_id = $defaultCompany->id;
                 $admin->save();
             }
         }
     }
 }
-
-

@@ -136,7 +136,7 @@
                 <div class="detail-row">
                     <span class="detail-label">Total Amount:</span>
                     <span class="detail-value" style="font-weight: bold; font-size: 18px; color: #059669;">
-                        R{{ number_format($purchaseOrder->total, 2, '.', ',') }}
+                        {{ $purchaseOrder->company->formatCurrencyZar($purchaseOrder->total) }}
                     </span>
                 </div>
             </div>

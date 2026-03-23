@@ -41,7 +41,7 @@ class BankAccountController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $currentCompany = auth()->user()->getCurrentCompany();
-        
+
         $validated = $request->validate([
             'account_name' => ['required', 'string', 'max:255'],
             'account_number' => ['required', 'string', 'max:50'],
@@ -56,14 +56,14 @@ class BankAccountController extends Controller
         ]);
 
         $validated['company_id'] = $currentCompany->id;
-        
+
         // If setting as default, unset other defaults for this company
         if ($validated['is_default'] ?? false) {
             BankAccount::where('company_id', $currentCompany->id)
                 ->where('is_default', true)
                 ->update(['is_default' => false]);
         }
-        
+
         BankAccount::create($validated);
 
         return redirect()->route('administration.bank-accounts.index')
@@ -75,11 +75,7 @@ class BankAccountController extends Controller
      */
     public function show(BankAccount $bankAccount): Response
     {
-        $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($bankAccount->company_id !== $currentCompany->id) {
-            abort(403, 'Unauthorized access to bank account.');
-        }
+        $this->authorize('view', $bankAccount);
 
         return Inertia::render('administration/bank-accounts/Show', [
             'bankAccount' => $bankAccount,
@@ -91,11 +87,7 @@ class BankAccountController extends Controller
      */
     public function edit(BankAccount $bankAccount): Response
     {
-        $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($bankAccount->company_id !== $currentCompany->id) {
-            abort(403, 'Unauthorized access to bank account.');
-        }
+        $this->authorize('update', $bankAccount);
 
         return Inertia::render('administration/bank-accounts/Edit', [
             'bankAccount' => $bankAccount,
@@ -107,11 +99,9 @@ class BankAccountController extends Controller
      */
     public function update(Request $request, BankAccount $bankAccount): RedirectResponse
     {
+        $this->authorize('update', $bankAccount);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($bankAccount->company_id !== $currentCompany->id) {
-            abort(403, 'Unauthorized access to bank account.');
-        }
 
         $validated = $request->validate([
             'account_name' => ['required', 'string', 'max:255'],
@@ -145,11 +135,7 @@ class BankAccountController extends Controller
      */
     public function destroy(BankAccount $bankAccount): RedirectResponse
     {
-        $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($bankAccount->company_id !== $currentCompany->id) {
-            abort(403, 'Unauthorized access to bank account.');
-        }
+        $this->authorize('delete', $bankAccount);
 
         $bankAccount->delete();
 

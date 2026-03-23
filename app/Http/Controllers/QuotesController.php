@@ -2,20 +2,21 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ChartOfAccount;
 use App\Models\Customer;
 use App\Models\EmailActivity;
-use App\Models\LineGroup;
+use App\Models\Jobcard;
+use App\Models\Product;
 use App\Models\Quote;
 use App\Models\QuoteLineItem;
-use App\Models\Product;
 use App\Models\TaxRate;
-use App\Models\ChartOfAccount;
-use App\Models\Jobcard;
 use App\Services\ReminderService;
+use App\Support\CompanyScopedRules;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
-use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\Validator;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -26,16 +27,18 @@ class QuotesController extends Controller
      */
     public function index(Request $request): Response
     {
+        $this->authorize('viewAny', Quote::class);
+
         $currentCompany = auth()->user()->getCurrentCompany();
         $sortBy = $request->input('sort_by', 'created_at');
         $sortDir = $request->input('sort_dir', 'desc') === 'asc' ? 'asc' : 'desc';
-        
+
         $query = Quote::with(['customer'])
             ->where('company_id', $currentCompany->id);
 
         // Hide closed (accepted/rejected) quotes unless "show closed" is checked
         $showClosed = filter_var($request->input('show_closed', false), FILTER_VALIDATE_BOOLEAN);
-        if (!$showClosed) {
+        if (! $showClosed) {
             $query->whereNotIn('status', ['accepted', 'rejected']);
         }
 
@@ -52,10 +55,10 @@ class QuotesController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('quote_number', 'like', "%{$search}%")
-                  ->orWhere('title', 'like', "%{$search}%")
-                  ->orWhereHas('customer', function ($customerQuery) use ($search) {
-                      $customerQuery->where('name', 'like', "%{$search}%");
-                  });
+                    ->orWhere('title', 'like', "%{$search}%")
+                    ->orWhereHas('customer', function ($customerQuery) use ($search) {
+                        $customerQuery->where('name', 'like', "%{$search}%");
+                    });
             });
         }
 
@@ -63,6 +66,7 @@ class QuotesController extends Controller
             ->filter(fn ($value, $key) => str_starts_with((string) $key, 'colf_'))
             ->mapWithKeys(function ($value, $key) {
                 $trimmed = trim((string) $value);
+
                 return [substr((string) $key, 5) => $trimmed];
             })
             ->filter(fn ($value) => $value !== '');
@@ -120,7 +124,7 @@ class QuotesController extends Controller
         }
 
         $sortableFields = ['quote_number', 'title', 'customer_name', 'status', 'expiry_date', 'total', 'created_at'];
-        if (!in_array($sortBy, $sortableFields, true)) {
+        if (! in_array($sortBy, $sortableFields, true)) {
             $sortBy = 'created_at';
         }
 
@@ -158,6 +162,8 @@ class QuotesController extends Controller
      */
     public function create(Request $request): Response
     {
+        $this->authorize('create', Quote::class);
+
         $currentCompany = auth()->user()->getCurrentCompany();
         $customers = Customer::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name']);
         $products = Product::where('company_id', $currentCompany->id)
@@ -267,11 +273,14 @@ class QuotesController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
+        $this->authorize('create', Quote::class);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        
-        $validated = $request->validate([
-            'customer_id' => ['required', 'exists:customers,id'],
-            'contact_id' => ['nullable', 'exists:contacts,id'],
+        $cid = $currentCompany->id;
+
+        $validator = Validator::make($request->all(), [
+            'customer_id' => ['required', CompanyScopedRules::customer($cid)],
+            'contact_id' => ['nullable', CompanyScopedRules::contactForRequest($cid)],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:255'],
             'source_type' => ['nullable', 'in:jobcard'],
@@ -295,20 +304,13 @@ class QuotesController extends Controller
             'line_items.*.unit_price' => ['required', 'numeric'],
             'line_items.*.discount_amount' => ['nullable', 'numeric', 'min:0'],
             'line_items.*.discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'line_items.*.product_id' => ['nullable', 'exists:products,id'],
-            'line_items.*.tax_rate_id' => ['nullable', 'exists:tax_rates,id'],
-            'line_items.*.account_id' => ['nullable', 'exists:chart_of_accounts,id'],
+            'line_items.*.product_id' => ['nullable', CompanyScopedRules::product($cid)],
+            'line_items.*.tax_rate_id' => ['nullable', CompanyScopedRules::taxRate($cid)],
+            'line_items.*.account_id' => ['nullable', CompanyScopedRules::chartOfAccount($cid)],
             'line_items.*.line_group_id' => ['nullable', 'integer'],
         ]);
-
-        if (($validated['source_type'] ?? null) === 'jobcard' && !empty($validated['source_id'])) {
-            $sourceJobcard = Jobcard::where('company_id', $currentCompany->id)->find($validated['source_id']);
-            if (!$sourceJobcard) {
-                return back()
-                    ->withInput()
-                    ->withErrors(['source_id' => 'Selected source jobcard is invalid.']);
-            }
-        }
+        $validator->after(CompanyScopedRules::afterSourceJobcardInCompany($cid));
+        $validated = $validator->validate();
 
         // Create the quote
         $quote = Quote::create([
@@ -370,7 +372,7 @@ class QuotesController extends Controller
 
         // Send automated reminder if enabled
         try {
-            $reminderService = new ReminderService();
+            $reminderService = new ReminderService;
             $reminderService->sendQuoteCreatedConfirmation($quote);
         } catch (\Exception $e) {
             \Log::error('Failed to send quote created confirmation', [
@@ -389,10 +391,12 @@ class QuotesController extends Controller
      */
     public function show(Quote $quote): Response
     {
+        $this->authorize('view', $quote);
+
         $quote->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineItems.lineGroup', 'lineGroups', 'company', 'invoice', 'source']);
-        
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        
+
         // Get available PDF templates for quotes and proforma invoices
         $pdfTemplates = \App\Models\PdfTemplate::where('company_id', $currentCompany->id)
             ->whereIn('module', ['quote', 'proforma-invoice'])
@@ -400,7 +404,7 @@ class QuotesController extends Controller
             ->orderBy('module')
             ->orderBy('name')
             ->get(['id', 'name', 'module', 'is_default']);
-        
+
         // Get default template IDs for both modules
         $defaultQuoteTemplateId = $pdfTemplates->where('module', 'quote')->where('is_default', true)->first()?->id ?? null;
         $defaultProformaTemplateId = $pdfTemplates->where('module', 'proforma-invoice')->where('is_default', true)->first()?->id ?? null;
@@ -408,7 +412,7 @@ class QuotesController extends Controller
             ->where('source_type', 'quote')
             ->where('source_id', $quote->id)
             ->value('id');
-        
+
         return Inertia::render('quotes/Show', [
             'quote' => $quote,
             'canEditCompleted' => auth()->user()->hasModulePermission('quotes', 'edit_completed'),
@@ -424,6 +428,8 @@ class QuotesController extends Controller
      */
     public function edit(Quote $quote): Response
     {
+        $this->authorize('update', $quote);
+
         $currentCompany = auth()->user()->getCurrentCompany();
         $quote->load(['customer', 'contact', 'lineItems.product', 'lineItems.lineGroup', 'lineGroups']);
         $customers = Customer::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name', 'email', 'phone', 'account_code']);
@@ -460,9 +466,13 @@ class QuotesController extends Controller
      */
     public function update(Request $request, Quote $quote): RedirectResponse
     {
+        $this->authorize('update', $quote);
+
+        $cid = $quote->company_id;
+
         $validated = $request->validate([
-            'customer_id' => ['required', 'exists:customers,id'],
-            'contact_id' => ['nullable', 'exists:contacts,id'],
+            'customer_id' => ['required', CompanyScopedRules::customer($cid)],
+            'contact_id' => ['nullable', CompanyScopedRules::contactForRequest($cid)],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:255'],
             'order_number' => ['nullable', 'string', 'max:255'],
@@ -484,21 +494,11 @@ class QuotesController extends Controller
             'line_items.*.unit_price' => ['required', 'numeric'],
             'line_items.*.discount_amount' => ['nullable', 'numeric', 'min:0'],
             'line_items.*.discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'line_items.*.product_id' => ['nullable', 'exists:products,id'],
-            'line_items.*.tax_rate_id' => ['nullable', 'exists:tax_rates,id'],
-            'line_items.*.account_id' => ['nullable', 'exists:chart_of_accounts,id'],
+            'line_items.*.product_id' => ['nullable', CompanyScopedRules::product($cid)],
+            'line_items.*.tax_rate_id' => ['nullable', CompanyScopedRules::taxRate($cid)],
+            'line_items.*.account_id' => ['nullable', CompanyScopedRules::chartOfAccount($cid)],
             'line_items.*.line_group_id' => ['nullable', 'integer'],
         ]);
-
-        // Check if user can edit completed quotes (accepted status)
-        $canEditCompleted = auth()->user()->hasModulePermission('quotes', 'edit_completed');
-        $isCompleted = $quote->status === 'accepted';
-        
-        // If quote is completed (accepted) and user can't edit completed, prevent update
-        if ($isCompleted && !$canEditCompleted) {
-            return redirect()->back()
-                ->with('error', 'You cannot edit an accepted quote.');
-        }
 
         // Update the quote
         $quote->update([
@@ -564,7 +564,10 @@ class QuotesController extends Controller
      */
     public function destroy(Quote $quote): RedirectResponse
     {
+        $this->authorize('delete', $quote);
+
         $quote->delete();
+
         return redirect()->route('quotes.index')
             ->with('success', 'Quote deleted successfully');
     }
@@ -574,6 +577,8 @@ class QuotesController extends Controller
      */
     public function updateStatus(Request $request, Quote $quote): RedirectResponse
     {
+        $this->authorize('update', $quote);
+
         $validated = $request->validate([
             'status' => ['required', 'in:draft,sent,accepted,rejected,expired'],
         ]);
@@ -588,10 +593,9 @@ class QuotesController extends Controller
      */
     public function convertToJobcard(Quote $quote): RedirectResponse
     {
+        $this->authorize('convertToJobcard', $quote);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        if ($quote->company_id !== $currentCompany->id) {
-            abort(403, 'Unauthorized access to quote.');
-        }
 
         $existingJobcardId = Jobcard::where('company_id', $currentCompany->id)
             ->where('source_type', 'quote')
@@ -614,6 +618,8 @@ class QuotesController extends Controller
      */
     public function convertToInvoice(Quote $quote): RedirectResponse
     {
+        $this->authorize('convertToInvoice', $quote);
+
         return redirect()->route('invoices.create', [
             'source_type' => 'quote',
             'source_id' => $quote->id,
@@ -625,25 +631,28 @@ class QuotesController extends Controller
      */
     public function downloadPDF(Request $request, Quote $quote)
     {
+        $this->authorize('view', $quote);
+
         $quote->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company']);
         $company = $quote->company;
-        
+
         // Update status to sent when PDF is downloaded
         if ($quote->status === 'draft') {
             $quote->update(['status' => 'sent']);
         }
-        
+
         $company = $quote->company;
         $type = $request->get('type', 'quotation'); // 'quotation' or 'proforma-invoice'
         $templateId = $request->get('template_id');
-        
+
         $module = $type === 'proforma-invoice' ? 'proforma-invoice' : 'quote';
-        $filename = $type === 'proforma-invoice' 
-            ? "proforma-invoice-{$quote->quote_number}.pdf" 
+        $filename = $type === 'proforma-invoice'
+            ? "proforma-invoice-{$quote->quote_number}.pdf"
             : "quote-{$quote->quote_number}.pdf";
-        
-        $pdfService = new \App\Services\PdfGenerationService();
+
+        $pdfService = new \App\Services\PdfGenerationService;
         $pdf = $pdfService->generatePdf($module, compact('quote', 'company'), $company, $templateId);
+
         return $pdf->download($filename);
     }
 
@@ -652,6 +661,8 @@ class QuotesController extends Controller
      */
     public function emailQuote(Request $request, Quote $quote): RedirectResponse
     {
+        $this->authorize('update', $quote);
+
         $currentCompany = auth()->user()->getCurrentCompany();
 
         $validated = $request->validate([
@@ -662,7 +673,7 @@ class QuotesController extends Controller
 
         $emails = array_unique(array_filter(array_map('trim', explode(',', $validated['email']))));
         foreach ($emails as $e) {
-            if (!filter_var($e, FILTER_VALIDATE_EMAIL)) {
+            if (! filter_var($e, FILTER_VALIDATE_EMAIL)) {
                 return redirect()->back()->withErrors(['email' => "Invalid email address: {$e}"]);
             }
         }
@@ -677,17 +688,17 @@ class QuotesController extends Controller
             // Generate PDF
             $type = $validated['type'] ?? 'quotation'; // 'quotation' or 'proforma-invoice'
             $templateId = $request->get('template_id');
-            
+
             $module = $type === 'proforma-invoice' ? 'proforma-invoice' : 'quote';
-            $filename = $type === 'proforma-invoice' 
-                ? "proforma-invoice-{$quote->quote_number}.pdf" 
+            $filename = $type === 'proforma-invoice'
+                ? "proforma-invoice-{$quote->quote_number}.pdf"
                 : "quote-{$quote->quote_number}.pdf";
             $subjectPrefix = $type === 'proforma-invoice' ? 'Proforma Invoice' : 'Quote';
-            
-            $pdfService = new \App\Services\PdfGenerationService();
+
+            $pdfService = new \App\Services\PdfGenerationService;
             $pdf = $pdfService->generatePdf($module, compact('quote', 'company'), $company, $templateId);
             $pdfContent = $pdf->output();
-            
+
             // Send email
             Mail::mailer('smtp')->send('emails.quote', [
                 'quote' => $quote,
@@ -701,7 +712,7 @@ class QuotesController extends Controller
                         'mime' => 'application/pdf',
                     ]);
 
-                if (!empty($company->email)) {
+                if (! empty($company->email)) {
                     $message->replyTo($company->email, $company->name ?? null);
                 }
             });
@@ -756,7 +767,8 @@ class QuotesController extends Controller
                     'error_message' => $e->getMessage(),
                 ]);
             }
-            return redirect()->back()->withErrors(['message' => 'Failed to send email: ' . $e->getMessage()]);
+
+            return redirect()->back()->withErrors(['message' => 'Failed to send email: '.$e->getMessage()]);
         }
     }
 }

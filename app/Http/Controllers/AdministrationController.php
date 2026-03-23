@@ -220,6 +220,51 @@ class AdministrationController extends Controller
         return redirect()->back()->with('success', 'Document numbering settings updated.');
     }
 
+    public function localization(): Response
+    {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        if (! $currentCompany) {
+            abort(404, 'No active company selected.');
+        }
+
+        return Inertia::render('administration/Localization', [
+            'localization' => [
+                'locale_decimal_separator' => $currentCompany->locale_decimal_separator ?: '.',
+                'locale_thousands_separator' => $currentCompany->locale_thousands_separator ?? ',',
+            ],
+            'company' => [
+                'id' => $currentCompany->id,
+                'name' => $currentCompany->name,
+            ],
+        ]);
+    }
+
+    public function updateLocalization(Request $request): RedirectResponse
+    {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        if (! $currentCompany) {
+            abort(404, 'No active company selected.');
+        }
+
+        $validated = $request->validate([
+            'locale_decimal_separator' => ['required', 'string', 'max:8'],
+            'locale_thousands_separator' => ['required', 'string', 'max:8'],
+        ]);
+
+        if ($validated['locale_decimal_separator'] === $validated['locale_thousands_separator']) {
+            return redirect()->back()
+                ->withErrors(['locale_thousands_separator' => 'Thousands separator must differ from the decimal separator.'])
+                ->withInput();
+        }
+
+        $currentCompany->update([
+            'locale_decimal_separator' => $validated['locale_decimal_separator'],
+            'locale_thousands_separator' => $validated['locale_thousands_separator'],
+        ]);
+
+        return redirect()->back()->with('success', 'Localization settings updated.');
+    }
+
     private function normalizePrefix(?string $value): ?string
     {
         if ($value === null) {

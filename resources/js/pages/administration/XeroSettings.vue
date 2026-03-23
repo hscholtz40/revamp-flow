@@ -18,7 +18,7 @@
             </div>
             
             <!-- Refresh Token Warning -->
-            <div v-if="settings.tenant_name && !settings.refresh_token && !settings.needs_reauthorization" class="bg-orange-100 border border-orange-400 text-orange-700 px-4 py-3 rounded">
+            <div v-if="settings.tenant_name && !settings.has_refresh_token && !settings.needs_reauthorization" class="bg-orange-100 border border-orange-400 text-orange-700 px-4 py-3 rounded">
                 <div class="flex items-center justify-between">
                     <div>
                         <strong>Warning:</strong> Your Xero connection is missing a refresh token. 
@@ -132,8 +132,10 @@
                                     type="password"
                                     class="w-full rounded border px-3 py-2"
                                     :class="{ 'border-red-500': form.errors.client_secret }"
-                                    placeholder="Enter Xero Client Secret"
+                                    :placeholder="settings.has_client_secret ? 'Leave blank to keep existing secret' : 'Enter Xero Client Secret'"
+                                    autocomplete="off"
                                 />
+                                <p v-if="settings.has_client_secret" class="text-xs text-gray-500 mt-1">Leave blank to keep your current client secret.</p>
                                 <div v-if="form.errors.client_secret" class="text-red-500 text-sm mt-1">
                                     {{ form.errors.client_secret }}
                                 </div>
@@ -141,7 +143,7 @@
                         </div>
 
                         <!-- Authorization Section -->
-                        <div v-if="form.client_id && form.client_secret" class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <div v-if="oauthCredentialsReady" class="bg-blue-50 border border-blue-200 rounded-lg p-4">
                             <div class="flex items-center justify-between">
                                 <div>
                                     <h4 class="text-sm font-medium text-blue-900">
@@ -163,7 +165,7 @@
                                     <p class="text-sm font-medium text-green-700">Connected</p>
                                     <p class="text-xs text-green-600">{{ settings.tenant_name }}</p>
                                     <button
-                                        v-if="!settings.refresh_token"
+                                        v-if="!settings.has_refresh_token"
                                         type="button"
                                         @click="authorize"
                                         class="mt-2 text-xs bg-orange-600 text-white px-2 py-1 rounded hover:bg-orange-700"
@@ -715,10 +717,12 @@ interface Props {
         id: number;
         is_enabled: boolean;
         client_id: string | null;
-        client_secret: string | null;
         tenant_id: string | null;
         tenant_name: string | null;
-        refresh_token: string | null;
+        has_client_secret: boolean;
+        has_access_token: boolean;
+        has_refresh_token: boolean;
+        is_connected: boolean;
         needs_reauthorization: boolean;
         sync_customers: boolean;
         sync_products: boolean;
@@ -778,7 +782,7 @@ const xeroApiUsage = computed(() => props.xeroApiUsage);
 const form = useForm({
     is_enabled: props.settings.is_enabled,
     client_id: props.settings.client_id || '',
-    client_secret: props.settings.client_secret || '',
+    client_secret: '',
     sync_customers: props.settings.sync_customers,
     sync_products: props.settings.sync_products,
     sync_invoices: props.settings.sync_invoices,
@@ -801,11 +805,16 @@ const form = useForm({
     sync_chart_of_accounts_from_xero: props.settings.sync_chart_of_accounts_from_xero,
 });
 
+const oauthCredentialsReady = computed(() => {
+    const id = (form.client_id || '').trim();
+    return Boolean(id && (form.client_secret.trim() !== '' || props.settings.has_client_secret));
+});
+
 // Watch for prop changes and update form when company switches
 watch(() => props.settings, (newSettings) => {
     form.is_enabled = newSettings.is_enabled;
     form.client_id = newSettings.client_id || '';
-    form.client_secret = newSettings.client_secret || '';
+    form.client_secret = '';
     form.sync_customers = newSettings.sync_customers;
     form.sync_products = newSettings.sync_products;
     form.sync_invoices = newSettings.sync_invoices;
@@ -830,13 +839,13 @@ watch(() => props.settings, (newSettings) => {
 
 const statusText = computed(() => {
     if (!form.is_enabled) return 'Disabled';
-    if (!props.settings.tenant_name) return 'Not Connected';
+    if (!props.settings.is_connected) return 'Not Connected';
     return 'Connected';
 });
 
 const statusClass = computed(() => {
     if (!form.is_enabled) return 'bg-gray-100 text-gray-800';
-    if (!props.settings.tenant_name) return 'bg-yellow-100 text-yellow-800';
+    if (!props.settings.is_connected) return 'bg-yellow-100 text-yellow-800';
     return 'bg-green-100 text-green-800';
 });
 

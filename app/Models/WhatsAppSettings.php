@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Traits\ScopedToCurrentCompanyRouteBinding;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class WhatsAppSettings extends Model
 {
+    use ScopedToCurrentCompanyRouteBinding;
+
     protected $table = 'whatsapp_settings';
 
     protected $fillable = [
@@ -20,12 +23,15 @@ class WhatsAppSettings extends Model
     ];
 
     protected $hidden = [
+        'api_key',
         'api_secret',
     ];
 
     protected function casts(): array
     {
         return [
+            'api_key' => 'encrypted',
+            'api_secret' => 'encrypted',
             'is_active' => 'boolean',
         ];
     }
@@ -44,15 +50,15 @@ class WhatsAppSettings extends Model
     public static function getCurrent(): ?self
     {
         $user = auth()->user();
-        if (!$user) {
+        if (! $user) {
             return null;
         }
-        
+
         $currentCompany = $user->getCurrentCompany();
-        if (!$currentCompany) {
+        if (! $currentCompany) {
             return null;
         }
-        
+
         return static::where('company_id', $currentCompany->id)->first();
     }
 
@@ -66,6 +72,7 @@ class WhatsAppSettings extends Model
 
     /**
      * Get the active WhatsApp settings (for backward compatibility)
+     *
      * @deprecated Use getCurrent() instead
      */
     public static function getActive(): ?self
@@ -79,6 +86,7 @@ class WhatsAppSettings extends Model
     public static function isConfigured(): bool
     {
         $settings = static::getCurrent();
+
         return $settings && $settings->is_active && $settings->api_key && $settings->from_number;
     }
 
@@ -88,6 +96,7 @@ class WhatsAppSettings extends Model
     public static function isConfiguredForCompany(int $companyId): bool
     {
         $settings = static::getForCompany($companyId);
+
         return $settings && $settings->is_active && $settings->api_key && $settings->from_number;
     }
 }

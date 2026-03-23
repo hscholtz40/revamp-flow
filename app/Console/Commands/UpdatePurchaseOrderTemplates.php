@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 class UpdatePurchaseOrderTemplates extends Command
 {
     protected $signature = 'templates:update-purchase-order';
+
     protected $description = 'Update existing purchase order templates with correct syntax';
 
     public function handle()
@@ -15,14 +16,14 @@ class UpdatePurchaseOrderTemplates extends Command
         $templates = PdfTemplate::where('module', 'purchase-order')
             ->where('is_default', true)
             ->get();
-        
+
         $this->info("Updating {$templates->count()} purchase order templates...");
-        
+
         foreach ($templates as $template) {
             /** @var \App\Models\PdfTemplate $template */
             $html = $template->html_template;
             $css = $template->css_styles ?? '';
-            
+
             // Fix logo path references
             $html = str_replace('{{company.getLogoPathForPdf}}', '{{company.logo_path_for_pdf}}', $html);
             $html = str_replace('{{#if company.logo_path}}', '{{#if company.logo_path_for_pdf}}', $html);
@@ -55,6 +56,17 @@ class UpdatePurchaseOrderTemplates extends Command
                 $html
             );
             $html = str_replace(
+                '<p>{{purchaseOrder.notes}}</p>',
+                '<p>{{{purchaseOrder.notes}}}</p>',
+                $html
+            );
+            $html = str_replace(
+                '<p>{{purchaseOrder.terms}}</p>',
+                '<p>{{{purchaseOrder.terms}}}</p>',
+                $html
+            );
+
+            $html = str_replace(
                 '<td>
                 <strong>{{this.product.name}}</strong>
                 {{#if this.product.sku}}
@@ -70,16 +82,16 @@ class UpdatePurchaseOrderTemplates extends Command
                 "<td>{{this.product.sku}}</td>\n            <td>{{this.description}}</td>\n            <td class=\"text-right\">{{this.quantity}}</td>\n            <td class=\"text-right\">R{{this.unit_cost}}</td>\n            <td class=\"text-right\">{{#if this.taxRate}}R{{this.tax_amount}}{{else}}—{{/if}}</td>\n            <td class=\"text-right\">R{{this.total}}</td>",
                 $html
             );
-            
+
             $template->html_template = $html;
             $template->css_styles = $css;
             $template->save();
-            
+
             $this->info("Updated template: {$template->name} (ID: {$template->id})");
         }
-        
-        $this->info("Completed!");
+
+        $this->info('Completed!');
+
         return Command::SUCCESS;
     }
 }
-

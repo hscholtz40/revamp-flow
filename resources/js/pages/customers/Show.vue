@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useAuthAbility } from '@/composables/useAuthAbilities';
 import AppLayout from '@/layouts/AppLayout.vue';
 import EmailComposerModal from '@/components/EmailComposerModal.vue';
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
@@ -45,6 +46,12 @@ interface EmailActivity {
         name: string;
     } | null;
 }
+
+const canCustomersEdit = useAuthAbility('customers', 'edit');
+const canCustomersDelete = useAuthAbility('customers', 'delete');
+const canContactsCreate = useAuthAbility('contacts', 'create');
+const canContactsEdit = useAuthAbility('contacts', 'edit');
+const canContactsDelete = useAuthAbility('contacts', 'delete');
 
 const props = defineProps<{
     customer: {
@@ -103,6 +110,20 @@ const props = defineProps<{
         is_default?: boolean
     }[]
 }>()
+
+const deleteCustomer = () => {
+    if (!confirm(`Are you sure you want to delete customer "${props.customer.name}"?`)) {
+        return;
+    }
+    router.delete(customers.destroy(props.customer.id).url);
+};
+
+const deleteContact = (contact: Contact) => {
+    if (!confirm(`Are you sure you want to delete contact "${contact.name}"?`)) {
+        return;
+    }
+    router.delete(contacts.destroy(contact.id).url);
+};
 
 // SMS functionality
 const showSMSModal = ref(false);
@@ -247,12 +268,21 @@ watch([contactSearch, contactsPerPage, smsSearch, smsStatus, smsPerPage, emailPe
                         >
                             Send SMS
                         </button>
-                        <Link 
-                            :href="customers.edit(props.customer.id).url" 
+                        <Link
+                            v-if="canCustomersEdit"
+                            :href="customers.edit(props.customer.id).url"
                             class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                         >
                             Edit
                         </Link>
+                        <button
+                            v-if="canCustomersDelete"
+                            type="button"
+                            @click="deleteCustomer"
+                            class="rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                        >
+                            Delete
+                        </button>
                         <Link 
                             :href="customers.index().url" 
                             class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
@@ -357,8 +387,9 @@ watch([contactSearch, contactsPerPage, smsSearch, smsStatus, smsPerPage, emailPe
                             <p class="text-sm text-gray-600">Manage customer contacts and relationships</p>
                         </div>
                         <div class="flex items-center gap-2">
-                            <Link 
-                                :href="contacts.create().url + '?customer_id=' + props.customer.id" 
+                            <Link
+                                v-if="canContactsCreate"
+                                :href="contacts.create().url + '?customer_id=' + props.customer.id"
                                 class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                             >
                                 Add Contact
@@ -445,12 +476,21 @@ watch([contactSearch, contactsPerPage, smsSearch, smsStatus, smsPerPage, emailPe
                                 >
                                     View
                                 </Link>
-                                <Link 
-                                    :href="contacts.edit(contact.id).url" 
+                                <Link
+                                    v-if="canContactsEdit"
+                                    :href="contacts.edit(contact.id).url"
                                     class="rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700"
                                 >
                                     Edit
                                 </Link>
+                                <button
+                                    v-if="canContactsDelete"
+                                    type="button"
+                                    @click="deleteContact(contact)"
+                                    class="rounded-md border border-red-300 bg-white px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+                                >
+                                    Delete
+                                </button>
                             </div>
                         </div>
                     </div>

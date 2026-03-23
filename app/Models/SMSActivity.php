@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use App\Traits\ScopedToCurrentCompanyRouteBinding;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class SMSActivity extends Model
 {
-    use HasFactory;
+    use HasFactory, ScopedToCurrentCompanyRouteBinding;
 
     protected $table = 'sms_activities';
 

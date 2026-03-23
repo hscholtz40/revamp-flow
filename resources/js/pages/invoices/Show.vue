@@ -17,19 +17,28 @@
                         <div class="flex items-center gap-4">
                             <span class="text-sm font-medium text-gray-700">Current Status:</span>
                             <div class="flex items-center gap-2">
-                                <button
-                                    v-for="status in statusOptions"
-                                    :key="status.value"
-                                    @click="updateStatus(status.value)"
-                                    :class="[
-                                        'px-3 py-1 text-sm font-medium rounded-md transition-colors',
-                                        props.invoice.status === status.value
-                                            ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
-                                    ]"
+                                <template v-if="props.canEditInvoices">
+                                    <button
+                                        v-for="status in statusOptions"
+                                        :key="status.value"
+                                        @click="updateStatus(status.value)"
+                                        :class="[
+                                            'px-3 py-1 text-sm font-medium rounded-md transition-colors',
+                                            props.invoice.status === status.value
+                                                ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
+                                        ]"
+                                    >
+                                        {{ status.label }}
+                                    </button>
+                                </template>
+                                <span
+                                    v-else
+                                    :class="getStatusBadgeClass(props.invoice.status)"
+                                    class="inline-flex px-3 py-1 text-sm font-semibold rounded-full"
                                 >
-                                    {{ status.label }}
-                                </button>
+                                    {{ formatStatus(props.invoice.status) }}
+                                </span>
                             </div>
                         </div>
                         <div class="text-sm text-gray-500">
@@ -69,13 +78,14 @@
                             </button>
                         </div>
                         <button
+                            v-if="canEditInvoice"
                             @click="showEmailModal = true"
                             class="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
                         >
                             Email
                         </button>
                         <button
-                            v-if="(props.invoice.remaining_balance || props.invoice.total) > 0"
+                            v-if="canEditInvoice && (props.invoice.remaining_balance || props.invoice.total) > 0"
                             @click="showPaymentModal = true"
                             class="rounded-md bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
                         >
@@ -95,13 +105,6 @@
                         >
                             Edit
                         </Link>
-                        <span
-                            v-else
-                            class="rounded-md bg-gray-400 px-4 py-2 text-sm font-medium text-white cursor-not-allowed"
-                            title="Cannot edit paid invoices without permission"
-                        >
-                            Edit
-                        </span>
                     </div>
                 </div>
             </div>
@@ -707,8 +710,10 @@ import quotes from '@/routes/quotes';
 import jobcards from '@/routes/jobcards';
 import products from '@/routes/products';
 import customers from '@/routes/customers';
+import { useNumberFormat } from '@/composables/useNumberFormat';
 
 const page = usePage();
+const { formatCurrency } = useNumberFormat();
 const canCreateCreditNote = computed(() => !!(page.props.auth as any)?.abilities?.['credit-notes']?.create);
 
 interface SerialNumber {
@@ -869,13 +874,6 @@ const formatDate = (date: string) => {
 
 const formatDateTime = (date: string) => {
     return new Date(date).toLocaleString();
-};
-
-const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-ZA', {
-        style: 'currency',
-        currency: 'ZAR',
-    }).format(amount || 0);
 };
 
 const formatStatus = (status: string) => {

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useAuthAbility } from '@/composables/useAuthAbilities';
 import AppLayout from '@/layouts/AppLayout.vue';
 import EmailComposerModal from '@/components/EmailComposerModal.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
@@ -18,6 +19,10 @@ interface Company {
     id: number;
     name: string;
 }
+
+const canCustomersCreate = useAuthAbility('customers', 'create');
+const canCustomersEdit = useAuthAbility('customers', 'edit');
+const canCustomersDelete = useAuthAbility('customers', 'delete');
 
 const props = defineProps<{
     customers: {
@@ -144,6 +149,13 @@ const sortIndicator = (field: string) => {
 const setDefaultSales = (customer: Customer) => {
     router.post(`/customers/${customer.id}/set-default-sales`);
 };
+
+const deleteCustomer = (customer: Customer) => {
+    if (!confirm(`Are you sure you want to delete customer "${customer.name}"?`)) {
+        return;
+    }
+    router.delete(customers.destroy(customer.id).url);
+};
 </script>
 
 <template>
@@ -162,7 +174,11 @@ const setDefaultSales = (customer: Customer) => {
             <!-- Header -->
             <div class="flex items-center justify-between gap-3 mb-6">
                 <h1 class="text-2xl font-bold text-gray-900">Customers</h1>
-                <Link :href="customers.create().url" class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                <Link
+                    v-if="canCustomersCreate"
+                    :href="customers.create().url"
+                    class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                >
                     New Customer
                 </Link>
             </div>
@@ -250,6 +266,7 @@ const setDefaultSales = (customer: Customer) => {
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" @click.stop>
                                     <div class="flex items-center gap-2">
                                         <Link
+                                            v-if="canCustomersEdit"
                                             :href="customers.edit(c.id).url"
                                             class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                                         >
@@ -270,11 +287,19 @@ const setDefaultSales = (customer: Customer) => {
                                             SMS
                                         </button>
                                         <button
-                                            v-if="!c.is_default_sales"
+                                            v-if="canCustomersEdit && !c.is_default_sales"
                                             @click="setDefaultSales(c)"
                                             class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                                         >
                                             Set Default
+                                        </button>
+                                        <button
+                                            v-if="canCustomersDelete"
+                                            type="button"
+                                            @click="deleteCustomer(c)"
+                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                                        >
+                                            Delete
                                         </button>
                                     </div>
                                 </td>

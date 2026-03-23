@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useNumberFormat } from '@/composables/useNumberFormat';
+import { useAuthAbility } from '@/composables/useAuthAbilities';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { dashboard } from '@/routes';
 import customers from '@/routes/customers';
@@ -67,9 +69,27 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+const { formatCurrency } = useNumberFormat();
 
 const page = usePage();
 const isLimitedUser = computed(() => (page.props.auth as any)?.user?.user_type === 'limited');
+
+const canQuotesCreate = useAuthAbility('quotes', 'create');
+const canQuotesView = useAuthAbility('quotes', 'view');
+const canInvoicesCreateAbility = useAuthAbility('invoices', 'create');
+const canInvoicesView = useAuthAbility('invoices', 'view');
+const canJobcardsCreate = useAuthAbility('jobcards', 'create');
+const canJobcardsList = useAuthAbility('jobcards', 'list');
+const canCustomersCreate = useAuthAbility('customers', 'create');
+
+const showDocumentQuickActions = computed(
+    () =>
+        canQuotesCreate.value ||
+        canInvoicesCreateAbility.value ||
+        (props.canCreateInvoices && props.isPosEnabled) ||
+        canJobcardsCreate.value ||
+        canCustomersCreate.value,
+);
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -77,13 +97,6 @@ const breadcrumbs: BreadcrumbItem[] = [
         href: dashboard().url,
     },
 ];
-
-const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-ZA', {
-        style: 'currency',
-        currency: 'ZAR',
-    }).format(amount);
-};
 
 // Bar chart height calculation
 const getBarHeight = (revenue: number) => {
@@ -207,20 +220,20 @@ const getStatusColor = (status: string) => {
             </div>
 
             <!-- Quick Actions -->
-            <Card v-if="!isLimitedUser">
+            <Card v-if="!isLimitedUser && showDocumentQuickActions">
                 <CardHeader>
                     <CardTitle>Quick Actions</CardTitle>
                     <CardDescription>Create new items quickly</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <div class="grid gap-2 md:grid-cols-4">
-                        <Button as-child class="w-full justify-start">
+                        <Button v-if="canQuotesCreate" as-child class="w-full justify-start">
                             <Link :href="quotes.create().url">
                                 <FileText class="mr-2 h-4 w-4" />
                                 New Quote
                             </Link>
                         </Button>
-                        <Button as-child class="w-full justify-start" variant="outline">
+                        <Button v-if="canInvoicesCreateAbility" as-child class="w-full justify-start" variant="outline">
                             <Link :href="invoices.create().url">
                                 <Receipt class="mr-2 h-4 w-4" />
                                 New Invoice
@@ -232,13 +245,13 @@ const getStatusColor = (status: string) => {
                                 POS
                             </Link>
                         </Button>
-                        <Button as-child class="w-full justify-start" variant="outline">
+                        <Button v-if="canJobcardsCreate" as-child class="w-full justify-start" variant="outline">
                             <Link :href="jobcards.create().url">
                                 <Wrench class="mr-2 h-4 w-4" />
                                 New Jobcard
                             </Link>
                         </Button>
-                        <Button as-child class="w-full justify-start" variant="outline">
+                        <Button v-if="canCustomersCreate" as-child class="w-full justify-start" variant="outline">
                             <Link :href="customers.create().url">
                                 <UserPlus class="mr-2 h-4 w-4" />
                                 New Customer
@@ -400,7 +413,7 @@ const getStatusColor = (status: string) => {
                 <CardContent>
                     <div class="grid gap-6 md:grid-cols-3">
                         <!-- Recent Quotes -->
-                        <div v-if="!isLimitedUser && recentActivity.recent_quotes.length > 0">
+                        <div v-if="!isLimitedUser && canQuotesView && recentActivity.recent_quotes.length > 0">
                             <h4 class="text-sm font-medium mb-2">Recent Quotes</h4>
                             <div class="space-y-2">
                                 <Link 
@@ -425,7 +438,7 @@ const getStatusColor = (status: string) => {
                 </div>
                         
                         <!-- Recent Invoices -->
-                        <div v-if="!isLimitedUser && recentActivity.recent_invoices.length > 0">
+                        <div v-if="!isLimitedUser && canInvoicesView && recentActivity.recent_invoices.length > 0">
                             <h4 class="text-sm font-medium mb-2">Recent Invoices</h4>
                             <div class="space-y-2">
                                 <Link 
@@ -450,7 +463,7 @@ const getStatusColor = (status: string) => {
             </div>
 
                         <!-- Recent Jobcards -->
-                        <div v-if="recentActivity.recent_jobcards.length > 0">
+                        <div v-if="canJobcardsList && recentActivity.recent_jobcards.length > 0">
                             <h4 class="text-sm font-medium mb-2">Recent Jobcards</h4>
                             <div class="space-y-2">
                                 <Link 

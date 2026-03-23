@@ -85,7 +85,7 @@
                                 <th v-if="!isLimitedUser" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rate</th>
                                 <th v-if="!isLimitedUser" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                <th v-if="!isLimitedUser" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                <th v-if="showTimesheetActions" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
@@ -125,7 +125,7 @@
                                         {{ entry.status }}
                                     </span>
                                 </td>
-                                <td v-if="!isLimitedUser" class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <td v-if="showTimesheetActions" class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                     <button
                                         @click="deleteEntry(entry.id)"
                                         class="text-red-600 hover:text-red-900"
@@ -135,7 +135,7 @@
                                 </td>
                             </tr>
                             <tr v-if="timeEntries.data.length === 0">
-                                <td :colspan="isLimitedUser ? 5 : 8" class="px-6 py-4 text-center text-sm text-gray-500">
+                                <td :colspan="timesheetTableColspan" class="px-6 py-4 text-center text-sm text-gray-500">
                                     No time entries found
                                 </td>
                             </tr>
@@ -171,6 +171,7 @@
 </template>
 
 <script setup lang="ts">
+import { useAuthAbility } from '@/composables/useAuthAbilities';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
@@ -203,6 +204,14 @@ const props = defineProps<Props>();
 
 const page = usePage();
 const isLimitedUser = computed(() => (page.props.auth as any)?.user?.user_type === 'limited');
+const canTimesheetDelete = useAuthAbility('timesheet', 'delete');
+const showTimesheetActions = computed(() => !isLimitedUser.value && canTimesheetDelete.value);
+const timesheetTableColspan = computed(() => {
+    if (isLimitedUser.value) {
+        return 5;
+    }
+    return showTimesheetActions.value ? 8 : 7;
+});
 
 const filters = ref({
     jobcard_id: props.filters.jobcard_id || '',

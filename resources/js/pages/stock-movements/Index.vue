@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useAuthAbility } from '@/composables/useAuthAbilities';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
@@ -53,6 +54,8 @@ interface Props {
     };
     products?: Product[];
 }
+
+const canStockMovementsCreate = useAuthAbility('stock-movements', 'create');
 
 const props = withDefaults(defineProps<Props>(), {
     movements: () => ({ 
@@ -141,6 +144,7 @@ function getTypeColor(type: string) {
                     <p class="text-gray-600">Track all stock movements and inventory changes</p>
                 </div>
                 <Link
+                    v-if="canStockMovementsCreate"
                     :href="stockMovements.create().url"
                     class="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
                 >

@@ -60,6 +60,7 @@ const moduleVariables: Record<string, Array<{ label: string; value: string; cate
         { label: 'Invoice Status', value: '{{invoice.status}}', category: 'Invoice' },
         { label: 'Subtotal', value: '{{invoice.subtotal}}', category: 'Invoice' },
         { label: 'Tax Amount', value: '{{invoice.tax_amount}}', category: 'Invoice' },
+        { label: 'Document title (Tax Invoice / Invoice)', value: '{{invoice.document_title}}', category: 'Invoice' },
         { label: 'Total', value: '{{invoice.total}}', category: 'Invoice' },
         { label: 'Notes', value: '{{invoice.notes}}', category: 'Invoice' },
         { label: 'Terms', value: '{{invoice.terms}}', category: 'Invoice' },
@@ -512,7 +513,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
     text-align: right;
 }`,
         html: `<div class="page-header">Page 1 of 1</div>
-<div class="document-title">Tax Invoice</div>
+<div class="document-title">{{invoice.document_title}}</div>
 <div class="company-section">
     <div class="company-left">
         <img src="{{company.getLogoPathForPdf()}}" alt="Company Logo" class="company-logo">
@@ -3133,6 +3134,10 @@ watch(() => props.modelValue, (newValue) => {
                     >
                         Import Default Template
                     </button>
+                    <p v-pre class="text-xs text-gray-600 leading-snug mb-3">
+                        Placeholders: use <code class="bg-gray-200 px-0.5 rounded">{{ customer.name }}</code> for plain text (HTML is escaped).
+                        Use <code class="bg-gray-200 px-0.5 rounded">{{{ invoice.notes }}}</code> only when a field must render stored HTML (e.g. terms).
+                    </p>
                 </div>
                 <div id="blocks-panel" class="panel-section panel-section-scrollable">
                     <h3 class="panel-title">Blocks</h3>

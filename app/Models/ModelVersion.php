@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Traits\ScopedToCurrentCompanyRouteBinding;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 class ModelVersion extends Model
 {
+    use ScopedToCurrentCompanyRouteBinding;
+
     protected $fillable = [
         'user_id',
         'company_id',
@@ -101,8 +104,8 @@ class ModelVersion extends Model
     public function restore(): bool
     {
         $model = $this->versionable;
-        
-        if (!$model) {
+
+        if (! $model) {
             return false;
         }
 
@@ -125,7 +128,7 @@ class ModelVersion extends Model
                 ->where('versionable_id', $this->versionable_id)
                 ->max('version_number') + 1,
             'data' => $this->data,
-            'reason' => 'Restored from version ' . $this->version_number,
+            'reason' => 'Restored from version '.$this->version_number,
             'is_current' => true,
         ]);
 

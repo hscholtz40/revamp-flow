@@ -838,6 +838,11 @@ if (props.prefill) {
         selectedCustomer.value = prefillCustomer;
         customerSearchQuery.value = prefillCustomer.name;
     }
+
+    form.line_items.forEach((item, index) => {
+        discountTypes.value[index] =
+            (Number(item.discount_percentage) || 0) > 0 ? 'percentage' : 'amount';
+    });
 }
 
 const normalizeLineItemOrder = () => {

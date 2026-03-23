@@ -1,10 +1,14 @@
 <script setup lang="ts">
+import { useAuthAbility } from '@/composables/useAuthAbilities';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import users from '@/routes/users';
 import { ref, watch } from 'vue';
 
 interface User { id: number; name: string; email: string; user_type: 'standard' | 'limited' | 'info' }
+
+const canUsersCreate = useAuthAbility('users', 'create');
+const canUsersEdit = useAuthAbility('users', 'edit');
 
 const props = defineProps<{
     users: { data: User[] };
@@ -33,7 +37,7 @@ watch(search, (value) => {
 
         <div class="flex items-center justify-between gap-3 p-4">
             <input v-model="search" type="search" placeholder="Search users..." class="w-full max-w-sm rounded border px-3 py-2" />
-            <Link :href="users.create().url" class="rounded bg-blue-600 px-3 py-2 text-white">New User</Link>
+            <Link v-if="canUsersCreate" :href="users.create().url" class="rounded bg-blue-600 px-3 py-2 text-white">New User</Link>
         </div>
 
         <div class="p-4">
@@ -73,7 +77,7 @@ watch(search, (value) => {
                                 </span>
                             </td>
                             <td class="p-2 text-right" @click.stop>
-                                <Link :href="users.edit(u.id).url" class="rounded bg-gray-200 px-2 py-1">Edit</Link>
+                                <Link v-if="canUsersEdit" :href="users.edit(u.id).url" class="rounded bg-gray-200 px-2 py-1">Edit</Link>
                             </td>
                         </tr>
                     </tbody>

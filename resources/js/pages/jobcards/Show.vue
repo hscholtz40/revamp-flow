@@ -17,23 +17,32 @@
                         <div class="flex items-center gap-4">
                             <span class="text-sm font-medium text-gray-700">Current Status:</span>
                             <div class="flex items-center gap-2">
-                                <button
-                                    v-for="status in statusOptions"
-                                    :key="status.value"
-                                    @click="updateStatus(status.value)"
-                                    :disabled="!canUpdateStatus(status.value)"
-                                    :class="[
-                                        'px-3 py-1 text-sm font-medium rounded-md transition-colors',
-                                        props.jobcard.status === status.value
-                                            ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200',
-                                        !canUpdateStatus(status.value)
-                                            ? 'opacity-50 cursor-not-allowed'
-                                            : 'cursor-pointer'
-                                    ]"
+                                <template v-if="hasJobcardEdit">
+                                    <button
+                                        v-for="status in statusOptions"
+                                        :key="status.value"
+                                        @click="updateStatus(status.value)"
+                                        :disabled="!canUpdateStatus(status.value)"
+                                        :class="[
+                                            'px-3 py-1 text-sm font-medium rounded-md transition-colors',
+                                            props.jobcard.status === status.value
+                                                ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200',
+                                            !canUpdateStatus(status.value)
+                                                ? 'opacity-50 cursor-not-allowed'
+                                                : 'cursor-pointer'
+                                        ]"
+                                    >
+                                        {{ status.label }}
+                                    </button>
+                                </template>
+                                <span
+                                    v-else
+                                    :class="getStatusBadgeClass(props.jobcard.status)"
+                                    class="inline-flex px-3 py-1 text-sm font-semibold rounded-full"
                                 >
-                                    {{ status.label }}
-                                </button>
+                                    {{ formatStatus(props.jobcard.status) }}
+                                </span>
                             </div>
                         </div>
                         <div class="text-sm text-gray-500">
@@ -72,6 +81,7 @@
                             Download PDF
                         </button>
                         <button
+                            v-if="hasJobcardEdit"
                             @click="showEmailModal = true"
                             class="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
                         >
@@ -79,7 +89,7 @@
                         </button>
                         <template v-if="!isLimitedUser">
                             <button
-                                v-if="!props.convertedQuoteId"
+                                v-if="hasJobcardEdit && !props.convertedQuoteId"
                                 @click="convertToQuote"
                                 class="rounded-md bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
                             >
@@ -93,7 +103,7 @@
                                 View Quote
                             </Link>
                             <button
-                                v-if="!props.jobcard.invoice_id"
+                                v-if="hasJobcardEdit && !props.jobcard.invoice_id"
                                 @click="convertToInvoice"
                                 class="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
                             >
@@ -113,13 +123,6 @@
                             >
                                 Edit
                             </Link>
-                            <span
-                                v-else
-                                class="rounded-md bg-gray-400 px-4 py-2 text-sm font-medium text-white cursor-not-allowed"
-                                title="Cannot edit completed jobcards without permission"
-                            >
-                                Edit
-                            </span>
                         </template>
                     </div>
                 </div>
@@ -412,6 +415,7 @@
                         <div class="p-6">
                             <div class="space-y-3">
                                 <Link
+                                    v-if="canEditJobcard"
                                     :href="jobcards.edit(props.jobcard.id).url"
                                     class="block w-full rounded-md bg-blue-600 px-4 py-2 text-center text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                                 >
@@ -424,13 +428,6 @@
                                 >
                                     Delete Jobcard
                                 </button>
-                                <span
-                                    v-else
-                                    class="block w-full rounded-md border border-gray-300 px-4 py-2 text-center text-sm font-medium text-gray-500 cursor-not-allowed"
-                                    title="Cannot delete completed jobcards without permission"
-                                >
-                                    Delete Jobcard
-                                </span>
                             </div>
                         </div>
                     </div>
@@ -576,6 +573,7 @@
 </template>
 
 <script setup lang="ts">
+import { useAuthAbility } from '@/composables/useAuthAbilities';
 import AppLayout from '@/layouts/AppLayout.vue';
 import EmailRecipientsInput from '@/components/EmailRecipientsInput.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
@@ -589,6 +587,8 @@ import TimeTracking from '@/components/TimeTracking.vue';
 
 const page = usePage();
 const isLimitedUser = computed(() => (page.props.auth as any)?.user?.user_type === 'limited');
+const hasJobcardEdit = useAuthAbility('jobcards', 'edit');
+const hasJobcardDelete = useAuthAbility('jobcards', 'delete');
 
 interface Product {
     id: number;
@@ -755,6 +755,9 @@ const statusOptions = [
 
 // Computed property to check if user can edit the jobcard
 const canEditJobcard = computed(() => {
+    if (!hasJobcardEdit.value) {
+        return false;
+    }
     if (props.jobcard.status !== 'completed') {
         return true;
     }
@@ -763,6 +766,9 @@ const canEditJobcard = computed(() => {
 
 // Computed property to check if user can delete the jobcard
 const canDeleteJobcard = computed(() => {
+    if (!hasJobcardDelete.value) {
+        return false;
+    }
     if (props.jobcard.status !== 'completed') {
         return true;
     }
@@ -771,6 +777,9 @@ const canDeleteJobcard = computed(() => {
 
 // Function to check if user can update to a specific status
 const canUpdateStatus = (status: string) => {
+    if (!hasJobcardEdit.value) {
+        return false;
+    }
     if (status === props.jobcard.status) {
         return false; // Can't update to the same status
     }

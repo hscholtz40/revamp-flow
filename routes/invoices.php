@@ -14,15 +14,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/invoices/{invoice}/edit', [InvoicesController::class, 'edit'])->middleware('module.permission:invoices,edit')->name('invoices.edit');
     Route::put('/invoices/{invoice}', [InvoicesController::class, 'update'])->middleware('module.permission:invoices,edit')->name('invoices.update');
     Route::delete('/invoices/{invoice}', [InvoicesController::class, 'destroy'])->middleware('module.permission:invoices,delete')->name('invoices.destroy');
-    
+
     // Additional routes
     Route::patch('/invoices/{invoice}/status', [InvoicesController::class, 'updateStatus'])->middleware('module.permission:invoices,edit')->name('invoices.update-status');
     Route::get('/invoices/{invoice}/download-pdf', [InvoicesController::class, 'downloadPdf'])->middleware('module.permission:invoices,view')->name('invoices.download-pdf');
     Route::get('/invoices/{invoice}/print-pdf', [InvoicesController::class, 'printPdf'])->middleware('module.permission:invoices,view')->name('invoices.print-pdf');
-    Route::post('/invoices/{invoice}/email', [InvoicesController::class, 'email'])->middleware('module.permission:invoices,view')->name('invoices.email');
-    
+    Route::post('/invoices/{invoice}/email', [InvoicesController::class, 'email'])->middleware('module.permission:invoices,edit')->name('invoices.email');
+
     // Payment routes
-    Route::post('/payments', [PaymentsController::class, 'store'])->middleware('module.permission:invoices,view')->name('payments.store');
+    Route::post('/payments', [PaymentsController::class, 'store'])->middleware('module.permission:invoices,edit')->name('payments.store');
     Route::delete('/payments/{payment}', [PaymentsController::class, 'destroy'])->middleware('module.permission:invoices,edit')->name('payments.destroy');
-    
+
 });

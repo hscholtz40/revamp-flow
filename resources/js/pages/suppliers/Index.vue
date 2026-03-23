@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useAuthAbility } from '@/composables/useAuthAbilities';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
@@ -36,6 +37,10 @@ const props = withDefaults(defineProps<Props>(), {
     suppliers: () => ({ data: [], links: [], meta: {} }),
     filters: () => ({}),
 });
+
+const canSuppliersCreate = useAuthAbility('suppliers', 'create');
+const canSuppliersEdit = useAuthAbility('suppliers', 'edit');
+const canSuppliersDelete = useAuthAbility('suppliers', 'delete');
 
 const search = ref(props.filters?.search || '');
 const activeOnly = ref(props.filters?.active_only || false);
@@ -122,6 +127,7 @@ function deleteSupplier(supplier: Supplier) {
                     <p class="text-gray-600">Manage your suppliers and vendors</p>
                 </div>
                 <Link
+                    v-if="canSuppliersCreate"
                     :href="suppliers.create().url"
                     class="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
                 >
@@ -238,12 +244,14 @@ function deleteSupplier(supplier: Supplier) {
                                 <td class="whitespace-nowrap px-6 py-4 text-right text-sm font-medium" @click.stop>
                                     <div class="flex items-center justify-end gap-2">
                                         <Link
+                                            v-if="canSuppliersEdit"
                                             :href="suppliers.edit(supplier.id).url"
                                             class="text-indigo-600 hover:text-indigo-900"
                                         >
                                             <Edit class="h-4 w-4" />
                                         </Link>
                                         <button
+                                            v-if="canSuppliersDelete"
                                             @click="deleteSupplier(supplier)"
                                             class="text-red-600 hover:text-red-900"
                                         >
@@ -255,7 +263,14 @@ function deleteSupplier(supplier: Supplier) {
                         </template>
                         <tr v-else>
                             <td colspan="6" class="px-6 py-8 text-center text-sm text-gray-500">
-                                No suppliers found. <Link :href="suppliers.create().url" class="text-blue-600 hover:text-blue-900">Create your first supplier</Link>
+                                No suppliers found.
+                                <Link
+                                    v-if="canSuppliersCreate"
+                                    :href="suppliers.create().url"
+                                    class="text-blue-600 hover:text-blue-900"
+                                >
+                                    Create your first supplier
+                                </Link>
                             </td>
                         </tr>
                     </tbody>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useNumberFormat } from '@/composables/useNumberFormat';
 import { matchesProductSearch } from '@/composables/productSearch';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
@@ -26,6 +27,8 @@ const props = defineProps<{
     defaultSalesTaxRate: { id: number; name: string; rate: number } | null;
     defaultSalesAccountLabel: string | null;
 }>();
+
+const { formatCurrency } = useNumberFormat();
 
 const paymentTermsOptions = ['COD', 'Net 7 Days', 'Net 14 Days', 'Net 30 Days', 'Net 60 Days'];
 const paymentMethodOptions = [
@@ -254,11 +257,6 @@ const canCompleteSale = computed(() =>
     hasAtLeastOneLineItem.value &&
     areLineItemsValid.value
 );
-
-const formatCurrency = (amount: number) => new Intl.NumberFormat('en-ZA', {
-    style: 'currency',
-    currency: 'ZAR',
-}).format(amount || 0);
 
 const makeEmptyLineItem = () => ({
     product_id: null as number | null,

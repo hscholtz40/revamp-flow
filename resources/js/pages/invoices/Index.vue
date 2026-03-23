@@ -247,13 +247,6 @@
                                         >
                                             Edit
                                         </Link>
-                                        <span
-                                            v-else
-                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-gray-500 bg-gray-100 cursor-not-allowed"
-                                            title="Cannot edit paid invoices without permission"
-                                        >
-                                            Edit
-                                        </span>
                                         <button
                                             v-if="canDeleteInvoice(invoice)"
                                             @click="deleteInvoice(invoice.id)"
@@ -261,13 +254,6 @@
                                         >
                                             Delete
                                         </button>
-                                        <span
-                                            v-else
-                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-gray-500 bg-gray-100 cursor-not-allowed"
-                                            title="Cannot delete paid invoices without permission"
-                                        >
-                                            Delete
-                                        </span>
                                     </div>
                                 </td>
                             </tr>
@@ -337,6 +323,8 @@
 </template>
 
 <script setup lang="ts">
+import { useNumberFormat } from '@/composables/useNumberFormat';
+import { useAuthAbility } from '@/composables/useAuthAbilities';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -406,13 +394,16 @@ interface Props {
         sort_by?: string;
         sort_dir?: 'asc' | 'desc';
     };
-    canEditInvoices: boolean;
     canEditCompleted: boolean;
     canCreateInvoices: boolean;
     isPosEnabled: boolean;
 }
 
 const props = defineProps<Props>();
+const { formatCurrency } = useNumberFormat();
+
+const canInvoicesEdit = useAuthAbility('invoices', 'edit');
+const canInvoicesDelete = useAuthAbility('invoices', 'delete');
 
 const search = ref(props.filters.search || '');
 const status = ref(props.filters.status || '');
@@ -423,7 +414,7 @@ const sortDir = ref<'asc' | 'desc'>(props.filters.sort_dir || 'desc');
 
 // Helper functions for edit/delete permissions
 const canEditInvoice = (invoice: Invoice) => {
-    if (!props.canEditInvoices) {
+    if (!canInvoicesEdit.value) {
         return false;
     }
     if (invoice.status !== 'paid') {
@@ -433,7 +424,7 @@ const canEditInvoice = (invoice: Invoice) => {
 };
 
 const canDeleteInvoice = (invoice: Invoice) => {
-    if (!props.canEditInvoices) {
+    if (!canInvoicesDelete.value) {
         return false;
     }
     if (invoice.status !== 'paid') {
@@ -492,13 +483,6 @@ const sortIndicator = (field: string) => {
 
 const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString();
-};
-
-const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-ZA', {
-        style: 'currency',
-        currency: 'ZAR',
-    }).format(amount);
 };
 
 const getStatusBadgeClass = (status: string) => {

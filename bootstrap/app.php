@@ -1,9 +1,10 @@
 <?php
 
-use App\Http\Middleware\HandleAppearance;
-use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\EnsureLicenseInfrastructureAccess;
 use App\Http\Middleware\EnsureModulePermission;
 use App\Http\Middleware\EnsureUserIsAdministrator;
+use App\Http\Middleware\HandleAppearance;
+use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -23,6 +24,10 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
+        $middleware->validateCsrfTokens(except: [
+            'xero/webhook',
+        ]);
+
         $middleware->web(append: [
             HandleAppearance::class,
             HandleInertiaRequests::class,
@@ -33,9 +38,11 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'module.permission' => EnsureModulePermission::class,
+            'timesheet.permission' => \App\Http\Middleware\EnsureTimesheetPermission::class,
             'admin' => EnsureUserIsAdministrator::class,
             'licensing' => \App\Http\Middleware\EnsureLicensingInstance::class,
             'license.api.auth' => \App\Http\Middleware\AuthenticateLicenseApiRequest::class,
+            'license.infrastructure' => EnsureLicenseInfrastructureAccess::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

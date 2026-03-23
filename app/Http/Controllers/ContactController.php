@@ -6,9 +6,10 @@ use App\Models\Contact;
 use App\Models\Customer;
 use App\Models\EmailActivity;
 use App\Models\EmailTemplate;
-use App\Models\SMSSettings;
 use App\Models\SMSActivity;
+use App\Models\SMSSettings;
 use App\Services\BulkSMSService;
+use App\Support\CompanyScopedRules;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -55,6 +56,7 @@ class ContactController extends Controller
             ]),
         ]);
     }
+
     /**
      * Display a listing of the resource.
      */
@@ -64,10 +66,10 @@ class ContactController extends Controller
         $sortBy = $request->input('sort_by', 'name');
         $sortDir = $request->input('sort_dir', 'asc') === 'desc' ? 'desc' : 'asc';
         $sortableFields = ['name', 'customer_name', 'email', 'phone', 'position', 'is_primary', 'created_at'];
-        if (!in_array($sortBy, $sortableFields, true)) {
+        if (! in_array($sortBy, $sortableFields, true)) {
             $sortBy = 'name';
         }
-        
+
         $contactsQuery = Contact::with('customer')
             ->where('company_id', $currentCompany->id)
             ->when($request->string('search'), function ($query, $search) {
@@ -130,9 +132,10 @@ class ContactController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $currentCompany = auth()->user()->getCurrentCompany();
-        
+        $cid = $currentCompany->id;
+
         $validated = $request->validate([
-            'customer_id' => ['required', 'exists:customers,id'],
+            'customer_id' => ['required', CompanyScopedRules::customer($cid)],
             'name' => ['required', 'string', 'max:255'],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
@@ -163,8 +166,10 @@ class ContactController extends Controller
     {
         $currentCompany = auth()->user()->getCurrentCompany();
 
+        $cid = $currentCompany->id;
+
         $validated = $request->validate([
-            'customer_id' => ['required', 'exists:customers,id'],
+            'customer_id' => ['required', CompanyScopedRules::customer($cid)],
             'name' => ['required', 'string', 'max:255'],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
@@ -198,10 +203,9 @@ class ContactController extends Controller
      */
     public function show(Contact $contact, Request $request): Response
     {
+        $this->authorize('view', $contact);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        if ($contact->company_id !== $currentCompany->id) {
-            abort(403, 'Unauthorized access to contact.');
-        }
 
         $contact->load('customer');
         $emailPerPage = $request->get('email_per_page', 10);
@@ -245,8 +249,10 @@ class ContactController extends Controller
      */
     public function update(Request $request, Contact $contact): RedirectResponse
     {
+        $cid = $contact->company_id;
+
         $validated = $request->validate([
-            'customer_id' => ['required', 'exists:customers,id'],
+            'customer_id' => ['required', CompanyScopedRules::customer($cid)],
             'name' => ['required', 'string', 'max:255'],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
@@ -286,26 +292,23 @@ class ContactController extends Controller
      */
     public function sendSMS(Request $request, Contact $contact): RedirectResponse
     {
+        $this->authorize('view', $contact);
+
         $validated = $request->validate([
             'message' => ['required', 'string', 'max:160'],
         ]);
 
         $currentCompany = auth()->user()->getCurrentCompany();
-        
-        // Ensure the contact belongs to the current company
-        if ($contact->company_id !== $currentCompany->id) {
-            abort(403, 'Unauthorized access to contact.');
-        }
 
         // Check if contact has a phone number
-        if (!$contact->phone) {
+        if (! $contact->phone) {
             return redirect()->back()
                 ->withErrors(['message' => 'Contact does not have a phone number.']);
         }
 
         // Get system SMS settings
         $smsSettings = SMSSettings::getActive();
-        if (!$smsSettings || !$smsSettings->is_active) {
+        if (! $smsSettings || ! $smsSettings->is_active) {
             return redirect()->back()
                 ->withErrors(['message' => 'SMS functionality is not configured or disabled. Please contact your administrator.']);
         }
@@ -341,7 +344,7 @@ class ContactController extends Controller
                 ]);
 
                 return redirect()->back()
-                    ->with('success', 'SMS sent successfully to ' . $contact->name);
+                    ->with('success', 'SMS sent successfully to '.$contact->name);
             } else {
                 // Update activity as failed
                 $smsActivity->update([
@@ -350,7 +353,7 @@ class ContactController extends Controller
                 ]);
 
                 return redirect()->back()
-                    ->withErrors(['message' => 'Failed to send SMS: ' . ($result['message'] ?? 'Unknown error')]);
+                    ->withErrors(['message' => 'Failed to send SMS: '.($result['message'] ?? 'Unknown error')]);
             }
         } catch (\Exception $e) {
             // Update activity as failed
@@ -360,7 +363,7 @@ class ContactController extends Controller
             ]);
 
             return redirect()->back()
-                ->withErrors(['message' => 'Failed to send SMS: ' . $e->getMessage()]);
+                ->withErrors(['message' => 'Failed to send SMS: '.$e->getMessage()]);
         }
     }
 
@@ -369,23 +372,22 @@ class ContactController extends Controller
      */
     public function sendEmail(Request $request, Contact $contact): RedirectResponse
     {
+        $this->authorize('view', $contact);
+
+        $currentCompany = auth()->user()->getCurrentCompany();
+
         $validated = $request->validate([
-            'template_id' => ['nullable', 'exists:email_templates,id'],
+            'template_id' => ['nullable', CompanyScopedRules::emailTemplate($currentCompany->id)],
             'subject' => ['required', 'string', 'max:255'],
             'body' => ['required', 'string'],
         ]);
-
-        $currentCompany = auth()->user()->getCurrentCompany();
-        if ($contact->company_id !== $currentCompany->id) {
-            abort(403, 'Unauthorized access to contact.');
-        }
 
         if (empty($contact->email)) {
             return redirect()->back()->withErrors(['message' => 'Contact does not have an email address.']);
         }
 
         $template = null;
-        if (!empty($validated['template_id'])) {
+        if (! empty($validated['template_id'])) {
             $template = EmailTemplate::where('company_id', $currentCompany->id)
                 ->where('is_active', true)
                 ->findOrFail($validated['template_id']);
@@ -409,7 +411,7 @@ class ContactController extends Controller
 
         $subject = $this->renderTemplateString($validated['subject'], $context);
         $renderedHtml = $this->renderTemplateString($validated['body'], $context);
-        if ($template && !empty($template->css_styles)) {
+        if ($template && ! empty($template->css_styles)) {
             $renderedHtml = "<style>{$template->css_styles}</style>\n{$renderedHtml}";
         }
 
@@ -421,7 +423,7 @@ class ContactController extends Controller
                     ->from(config('mail.from.address'), $fromName)
                     ->html($renderedHtml);
 
-                if (!empty($currentCompany->email)) {
+                if (! empty($currentCompany->email)) {
                     $message->replyTo($currentCompany->email, $currentCompany->name ?? null);
                 }
             });
@@ -443,7 +445,7 @@ class ContactController extends Controller
                 'sent_at' => now(),
             ]);
 
-            return redirect()->back()->with('success', 'Email sent successfully to ' . $contact->email);
+            return redirect()->back()->with('success', 'Email sent successfully to '.$contact->email);
         } catch (\Throwable $e) {
             EmailActivity::create([
                 'company_id' => $currentCompany->id,
@@ -461,7 +463,8 @@ class ContactController extends Controller
                 'status' => 'failed',
                 'error_message' => $e->getMessage(),
             ]);
-            return redirect()->back()->withErrors(['message' => 'Failed to send email: ' . $e->getMessage()]);
+
+            return redirect()->back()->withErrors(['message' => 'Failed to send email: '.$e->getMessage()]);
         }
     }
 
@@ -490,6 +493,7 @@ class ContactController extends Controller
         foreach ($segments as $segment) {
             if (is_array($current) && array_key_exists($segment, $current)) {
                 $current = $current[$segment];
+
                 continue;
             }
 

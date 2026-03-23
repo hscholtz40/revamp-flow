@@ -45,6 +45,8 @@ return [
     ],
 
     'xero' => [
+        // HMAC key from Xero Developer Portal → your app → Webhooks (required for POST /xero/webhook).
+        'webhook_key' => env('XERO_WEBHOOK_KEY'),
         // Optional per-company safety ceiling. Set 0 to disable.
         'request_budget_per_minute' => env('XERO_REQUEST_BUDGET_PER_MINUTE', 50),
         // Throttle invoice imports so a single run doesn't consume excessive resources.

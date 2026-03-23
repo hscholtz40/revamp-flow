@@ -14,7 +14,11 @@
             <!-- Header -->
             <div class="flex items-center justify-between gap-3 mb-6">
                 <h1 class="text-2xl font-bold text-gray-900">Quotes</h1>
-                <Link :href="quotes.create().url" class="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">
+                <Link
+                    v-if="canQuotesCreate"
+                    :href="quotes.create().url"
+                    class="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+                >
                     New Quote
                 </Link>
             </div>
@@ -197,13 +201,6 @@
                                         >
                                             Edit
                                         </Link>
-                                        <span
-                                            v-else
-                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-gray-500 bg-gray-100 cursor-not-allowed"
-                                            title="Cannot edit accepted quotes without permission"
-                                        >
-                                            Edit
-                                        </span>
                                         <button
                                             v-if="canDeleteQuote(quote)"
                                             @click="deleteQuote(quote)"
@@ -211,13 +208,6 @@
                                         >
                                             Delete
                                         </button>
-                                        <span
-                                            v-else
-                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-gray-500 bg-gray-100 cursor-not-allowed"
-                                            title="Cannot delete accepted quotes without permission"
-                                        >
-                                            Delete
-                                        </span>
                                     </div>
                                 </td>
                             </tr>
@@ -281,6 +271,7 @@
 </template>
 
 <script setup lang="ts">
+import { useAuthAbility } from '@/composables/useAuthAbilities';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import quotes from '@/routes/quotes';
@@ -346,8 +337,15 @@ const showClosed = ref(props.filters.show_closed ?? false);
 const sortBy = ref(props.filters.sort_by || 'quote_number');
 const sortDir = ref<'asc' | 'desc'>(props.filters.sort_dir || 'desc');
 
+const canQuotesCreate = useAuthAbility('quotes', 'create');
+const canQuotesEdit = useAuthAbility('quotes', 'edit');
+const canQuotesDelete = useAuthAbility('quotes', 'delete');
+
 // Helper functions for edit/delete permissions
 const canEditQuote = (quote: Quote) => {
+    if (!canQuotesEdit.value) {
+        return false;
+    }
     if (quote.status !== 'accepted') {
         return true;
     }
@@ -355,6 +353,9 @@ const canEditQuote = (quote: Quote) => {
 };
 
 const canDeleteQuote = (quote: Quote) => {
+    if (!canQuotesDelete.value) {
+        return false;
+    }
     if (quote.status !== 'accepted') {
         return true;
     }

@@ -22,6 +22,7 @@ class SMSSettings extends Model
     protected function casts(): array
     {
         return [
+            'bulksms_password' => 'encrypted',
             'is_active' => 'boolean',
         ];
     }
@@ -40,6 +41,7 @@ class SMSSettings extends Model
     public static function isConfigured(): bool
     {
         $settings = static::getActive();
+
         return $settings && $settings->bulksms_username && $settings->bulksms_password;
     }
 }

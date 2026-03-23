@@ -2,25 +2,25 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Contact;
+use App\Models\ChartOfAccount;
 use App\Models\Customer;
 use App\Models\EmailActivity;
 use App\Models\Jobcard;
 use App\Models\JobcardLineItem;
-use App\Models\LineGroup;
 use App\Models\Product;
 use App\Models\Quote;
 use App\Models\TaxRate;
-use App\Models\ChartOfAccount;
 use App\Models\Team;
 use App\Models\User;
 use App\Services\ReminderService;
 use App\Services\StockService;
+use App\Support\CompanyScopedRules;
+use App\Support\SafeLog;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -34,13 +34,13 @@ class JobcardController extends Controller
         $currentCompany = auth()->user()->getCurrentCompany();
         $sortBy = $request->input('sort_by', 'created_at');
         $sortDir = $request->input('sort_dir', 'desc') === 'asc' ? 'asc' : 'desc';
-        
+
         $query = Jobcard::with(['customer', 'assignedUser', 'assignedTeam', 'invoice'])
             ->where('company_id', $currentCompany->id);
 
         // Hide closed (completed/cancelled) jobcards unless "show closed" is checked
         $showClosed = filter_var($request->input('show_closed', false), FILTER_VALIDATE_BOOLEAN);
-        if (!$showClosed) {
+        if (! $showClosed) {
             $query->whereNotIn('status', ['completed', 'cancelled']);
         }
 
@@ -76,10 +76,10 @@ class JobcardController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('job_number', 'like', "%{$search}%")
-                  ->orWhere('title', 'like', "%{$search}%")
-                  ->orWhereHas('customer', function ($customerQuery) use ($search) {
-                      $customerQuery->where('name', 'like', "%{$search}%");
-                  });
+                    ->orWhere('title', 'like', "%{$search}%")
+                    ->orWhereHas('customer', function ($customerQuery) use ($search) {
+                        $customerQuery->where('name', 'like', "%{$search}%");
+                    });
             });
         }
 
@@ -87,6 +87,7 @@ class JobcardController extends Controller
             ->filter(fn ($value, $key) => str_starts_with((string) $key, 'colf_'))
             ->mapWithKeys(function ($value, $key) {
                 $trimmed = trim((string) $value);
+
                 return [substr((string) $key, 5) => $trimmed];
             })
             ->filter(fn ($value) => $value !== '');
@@ -158,7 +159,7 @@ class JobcardController extends Controller
         }
 
         $sortableFields = ['job_number', 'title', 'customer_name', 'status', 'due_date', 'total', 'created_at'];
-        if (!in_array($sortBy, $sortableFields, true)) {
+        if (! in_array($sortBy, $sortableFields, true)) {
             $sortBy = 'created_at';
         }
 
@@ -317,16 +318,17 @@ class JobcardController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $currentCompany = auth()->user()->getCurrentCompany();
-        
+        $cid = $currentCompany->id;
+
         $validated = $request->validate([
-            'customer_id' => ['required', 'exists:customers,id'],
-            'contact_id' => ['nullable', 'exists:contacts,id'],
+            'customer_id' => ['required', CompanyScopedRules::customer($cid)],
+            'contact_id' => ['nullable', CompanyScopedRules::contactForRequest($cid)],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:255'],
             'source_type' => ['nullable', 'in:quote'],
             'source_id' => ['nullable', 'integer', 'required_with:source_type'],
             'assigned_to_user_id' => ['nullable', 'exists:users,id'],
-            'assigned_to_team_id' => ['nullable', 'exists:teams,id'],
+            'assigned_to_team_id' => ['nullable', CompanyScopedRules::team($cid)],
             'order_number' => ['nullable', 'string', 'max:255'],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
@@ -342,19 +344,19 @@ class JobcardController extends Controller
             'line_groups.*.id' => ['nullable', 'integer'],
             'line_groups.*.name' => ['required_with:line_groups', 'string', 'max:255'],
             'line_items' => ['required', 'array', 'min:1'],
-            'line_items.*.product_id' => ['nullable', 'exists:products,id'],
+            'line_items.*.product_id' => ['nullable', CompanyScopedRules::product($cid)],
             'line_items.*.description' => ['required', 'string', 'max:255'],
             'line_items.*.quantity' => ['required', 'integer', 'min:1'],
             'line_items.*.unit_price' => ['required', 'numeric'],
             'line_items.*.discount_amount' => ['nullable', 'numeric', 'min:0'],
             'line_items.*.discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'line_items.*.tax_rate_id' => ['nullable', 'exists:tax_rates,id'],
+            'line_items.*.tax_rate_id' => ['nullable', CompanyScopedRules::taxRate($cid)],
             'line_items.*.line_group_id' => ['nullable', 'integer'],
         ]);
 
-        if (($validated['source_type'] ?? null) === 'quote' && !empty($validated['source_id'])) {
+        if (($validated['source_type'] ?? null) === 'quote' && ! empty($validated['source_id'])) {
             $sourceQuote = Quote::where('company_id', $currentCompany->id)->find($validated['source_id']);
-            if (!$sourceQuote) {
+            if (! $sourceQuote) {
                 return back()
                     ->withInput()
                     ->withErrors(['source_id' => 'Selected source quote is invalid.']);
@@ -385,7 +387,7 @@ class JobcardController extends Controller
         $defaultGroupId = reset($groupMap);
 
         // Create line items and deduct stock
-        $stockService = new StockService();
+        $stockService = new StockService;
         foreach ($lineItemsPayload as $index => $lineItemData) {
             $lineItem = new JobcardLineItem([
                 'line_group_id' => $groupMap[(string) ($lineItemData['line_group_id'] ?? '')] ?? $defaultGroupId,
@@ -432,7 +434,7 @@ class JobcardController extends Controller
 
         // Send automated reminder if enabled
         try {
-            $reminderService = new ReminderService();
+            $reminderService = new ReminderService;
             $reminderService->sendJobcardCreatedConfirmation($jobcard);
         } catch (\Exception $e) {
             Log::error('Failed to send jobcard created confirmation', [
@@ -451,43 +453,35 @@ class JobcardController extends Controller
      */
     public function show(Jobcard $jobcard): Response
     {
-        // Limited users can only view jobcards assigned to them or their teams
-        if (auth()->user()->isLimitedUser()) {
-            $teamIds = auth()->user()->teams()->pluck('teams.id')->toArray();
-            $isAssignedToUser = $jobcard->assigned_to_user_id === auth()->id();
-            $isAssignedToTeam = $jobcard->assigned_to_team_id && in_array($jobcard->assigned_to_team_id, $teamIds);
-            if (!$isAssignedToUser && !$isAssignedToTeam) {
-                abort(403, 'You do not have access to this jobcard.');
-            }
-        }
+        $this->authorize('view', $jobcard);
 
         $jobcard->load(['customer', 'contact', 'assignedUser', 'assignedTeam', 'lineItems.product', 'lineItems.taxRate', 'lineItems.lineGroup', 'lineGroups', 'invoice', 'source', 'timeEntries.user']);
 
         $currentCompany = auth()->user()->getCurrentCompany();
-        
+
         // Get available PDF templates for jobcards
         $pdfTemplates = \App\Models\PdfTemplate::where('company_id', $currentCompany->id)
             ->where('module', 'jobcard')
             ->where('is_active', true)
             ->orderBy('name')
             ->get(['id', 'name', 'is_default']);
-        
+
         $defaultTemplateId = $pdfTemplates->where('is_default', true)->first()?->id ?? null;
         $convertedQuoteId = Quote::where('company_id', $currentCompany->id)
             ->where('source_type', 'jobcard')
             ->where('source_id', $jobcard->id)
             ->value('id');
-        
+
         // Get running timer for current user and this jobcard
         $runningTimer = \App\Models\TimeEntry::getRunningEntry(auth()->id(), $jobcard->id);
-        
+
         // Calculate time summary
         $timeSummary = [
             'total_hours' => $jobcard->timeEntries->sum('duration_minutes') / 60,
             'billable_hours' => $jobcard->timeEntries->where('is_billable', true)->sum('duration_minutes') / 60,
             'total_amount' => $jobcard->timeEntries->where('is_billable', true)->sum('total_amount'),
         ];
-        
+
         return Inertia::render('jobcards/Show', [
             'jobcard' => $jobcard,
             'canEditCompleted' => auth()->user()->canEditCompletedJobcards(),
@@ -505,7 +499,7 @@ class JobcardController extends Controller
     public function edit(Jobcard $jobcard): Response
     {
         // Check if user can edit completed jobcards
-        if ($jobcard->status === 'completed' && !auth()->user()->canEditCompletedJobcards()) {
+        if ($jobcard->status === 'completed' && ! auth()->user()->canEditCompletedJobcards()) {
             return redirect()->route('jobcards.show', $jobcard)
                 ->with('error', 'You do not have permission to edit completed jobcards.');
         }
@@ -548,13 +542,15 @@ class JobcardController extends Controller
      */
     public function update(Request $request, Jobcard $jobcard): RedirectResponse
     {
+        $cid = $jobcard->company_id;
+
         $validated = $request->validate([
-            'customer_id' => ['required', 'exists:customers,id'],
-            'contact_id' => ['nullable', 'exists:contacts,id'],
+            'customer_id' => ['required', CompanyScopedRules::customer($cid)],
+            'contact_id' => ['nullable', CompanyScopedRules::contactForRequest($cid)],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:255'],
             'assigned_to_user_id' => ['nullable', 'exists:users,id'],
-            'assigned_to_team_id' => ['nullable', 'exists:teams,id'],
+            'assigned_to_team_id' => ['nullable', CompanyScopedRules::team($cid)],
             'order_number' => ['nullable', 'string', 'max:255'],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
@@ -571,15 +567,15 @@ class JobcardController extends Controller
             'line_groups.*.id' => ['nullable', 'integer'],
             'line_groups.*.name' => ['required_with:line_groups', 'string', 'max:255'],
             'line_items' => ['required', 'array', 'min:1'],
-            'line_items.*.id' => ['nullable', 'exists:jobcard_line_items,id'],
-            'line_items.*.product_id' => ['nullable', 'exists:products,id'],
+            'line_items.*.id' => ['nullable', CompanyScopedRules::jobcardLineItemForJobcard($jobcard->id)],
+            'line_items.*.product_id' => ['nullable', CompanyScopedRules::product($cid)],
             'line_items.*.description' => ['required', 'string', 'max:255'],
             'line_items.*.quantity' => ['required', 'integer', 'min:1'],
             'line_items.*.unit_price' => ['required', 'numeric'],
             'line_items.*.discount_amount' => ['nullable', 'numeric', 'min:0'],
             'line_items.*.discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'line_items.*.tax_rate_id' => ['nullable', 'exists:tax_rates,id'],
-            'line_items.*.account_id' => ['nullable', 'exists:chart_of_accounts,id'],
+            'line_items.*.tax_rate_id' => ['nullable', CompanyScopedRules::taxRate($cid)],
+            'line_items.*.account_id' => ['nullable', CompanyScopedRules::chartOfAccount($cid)],
             'line_items.*.line_group_id' => ['nullable', 'integer'],
         ]);
 
@@ -657,25 +653,17 @@ class JobcardController extends Controller
      */
     public function updateStatus(Request $request, Jobcard $jobcard): RedirectResponse
     {
-        // Limited users can only update status on jobcards assigned to them or their teams
-        if (auth()->user()->isLimitedUser()) {
-            $teamIds = auth()->user()->teams()->pluck('teams.id')->toArray();
-            $isAssignedToUser = $jobcard->assigned_to_user_id === auth()->id();
-            $isAssignedToTeam = $jobcard->assigned_to_team_id && in_array($jobcard->assigned_to_team_id, $teamIds);
-            if (!$isAssignedToUser && !$isAssignedToTeam) {
-                abort(403, 'You do not have access to this jobcard.');
-            }
-        }
+        $this->authorize('updateStatus', $jobcard);
 
         $request->validate([
             'status' => 'required|in:draft,pending,in_progress,completed,cancelled',
         ]);
 
         $newStatus = $request->status;
-        
+
         // Check if user can edit completed jobcards
         if ($jobcard->status === 'completed' && $newStatus !== 'completed') {
-            if (!auth()->user()->canEditCompletedJobcards()) {
+            if (! auth()->user()->canEditCompletedJobcards()) {
                 return redirect()->back()
                     ->with('error', 'You do not have permission to edit completed jobcards.');
             }
@@ -683,18 +671,18 @@ class JobcardController extends Controller
 
         $oldStatus = $jobcard->status;
         $jobcard->status = $newStatus;
-        
+
         // Set completed_date if status is completed
-        if ($newStatus === 'completed' && !$jobcard->completed_date) {
+        if ($newStatus === 'completed' && ! $jobcard->completed_date) {
             $jobcard->completed_date = now();
         }
-        
+
         $jobcard->save();
 
         // Send automated reminder if enabled and status actually changed
         if ($oldStatus !== $newStatus) {
             try {
-                $reminderService = new ReminderService();
+                $reminderService = new ReminderService;
                 $reminderService->sendJobcardStatusUpdatedConfirmation($jobcard, $oldStatus);
             } catch (\Exception $e) {
                 Log::error('Failed to send jobcard status updated confirmation', [
@@ -715,7 +703,7 @@ class JobcardController extends Controller
     public function destroy(Jobcard $jobcard): RedirectResponse
     {
         // Check if user can delete completed jobcards
-        if ($jobcard->status === 'completed' && !auth()->user()->canEditCompletedJobcards()) {
+        if ($jobcard->status === 'completed' && ! auth()->user()->canEditCompletedJobcards()) {
             return redirect()->back()
                 ->with('error', 'You do not have permission to delete completed jobcards.');
         }
@@ -731,24 +719,21 @@ class JobcardController extends Controller
      */
     public function print(Request $request, Jobcard $jobcard)
     {
+        $this->authorize('view', $jobcard);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        
-        // Ensure the jobcard belongs to the current company
-        if ($jobcard->company_id !== $currentCompany->id) {
-            abort(403, 'Unauthorized access to jobcard.');
-        }
 
         $jobcard->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company']);
         $templateId = $request->get('template_id');
 
-        $pdfService = new \App\Services\PdfGenerationService();
+        $pdfService = new \App\Services\PdfGenerationService;
         $pdf = $pdfService->generatePdf('jobcard', [
             'jobcard' => $jobcard,
             'company' => $currentCompany,
         ], $currentCompany, $templateId);
 
-        $filename = 'jobcard-' . $jobcard->job_number . '.pdf';
-        
+        $filename = 'jobcard-'.$jobcard->job_number.'.pdf';
+
         return $pdf->download($filename);
     }
 
@@ -757,12 +742,9 @@ class JobcardController extends Controller
      */
     public function email(Request $request, Jobcard $jobcard): RedirectResponse
     {
+        $this->authorize('view', $jobcard);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        
-        // Ensure the jobcard belongs to the current company
-        if ($jobcard->company_id !== $currentCompany->id) {
-            abort(403, 'Unauthorized access to jobcard.');
-        }
 
         $validated = $request->validate([
             'email' => ['required', 'string'],
@@ -772,7 +754,7 @@ class JobcardController extends Controller
 
         $emails = array_unique(array_filter(array_map('trim', explode(',', $validated['email']))));
         foreach ($emails as $e) {
-            if (!filter_var($e, FILTER_VALIDATE_EMAIL)) {
+            if (! filter_var($e, FILTER_VALIDATE_EMAIL)) {
                 return redirect()->back()->withErrors(['email' => "Invalid email address: {$e}"]);
             }
         }
@@ -788,15 +770,15 @@ class JobcardController extends Controller
 
             // Generate PDF
             $templateId = $request->get('template_id');
-            
-            $pdfService = new \App\Services\PdfGenerationService();
+
+            $pdfService = new \App\Services\PdfGenerationService;
             $pdf = $pdfService->generatePdf('jobcard', [
                 'jobcard' => $jobcard,
                 'company' => $currentCompany,
                 'customMessage' => $validated['message'] ?? '',
             ], $currentCompany, $templateId);
 
-            $filename = 'jobcard-' . $jobcard->job_number . '.pdf';
+            $filename = 'jobcard-'.$jobcard->job_number.'.pdf';
 
             Mail::mailer('smtp')->send('emails.jobcard-pdf', [
                 'jobcard' => $jobcard,
@@ -810,7 +792,7 @@ class JobcardController extends Controller
                         'mime' => 'application/pdf',
                     ]);
 
-                if (!empty($currentCompany->email)) {
+                if (! empty($currentCompany->email)) {
                     $message->replyTo($currentCompany->email, $currentCompany->name ?? null);
                 }
             });
@@ -836,14 +818,14 @@ class JobcardController extends Controller
                 ]);
             }
 
-            \Log::info('Email sent successfully', [
+            \Log::info('Email sent successfully', SafeLog::redactContext([
                 'to' => $emails,
-                'subject' => $subject,
+                'subject' => SafeLog::excerpt($subject, 120),
                 'from' => config('mail.from.address'),
-            ]);
+            ]));
 
             return redirect()->back()
-                ->with('success', 'Jobcard sent successfully to ' . implode(', ', $emails));
+                ->with('success', 'Jobcard sent successfully to '.implode(', ', $emails));
 
         } catch (\Exception $e) {
             $subject = $validated['subject'] ?? "Jobcard #{$jobcard->job_number} - {$jobcard->title}";
@@ -864,14 +846,14 @@ class JobcardController extends Controller
                     'error_message' => $e->getMessage(),
                 ]);
             }
-            \Log::error('Email sending failed', [
+            \Log::error('Email sending failed', SafeLog::redactContext([
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'to_email' => $emails,
-            ]);
-            
+                'to' => $emails,
+                'jobcard_id' => $jobcard->id,
+            ]));
+
             return redirect()->back()
-                ->withErrors(['message' => 'Failed to send email: ' . $e->getMessage()]);
+                ->withErrors(['message' => 'Failed to send email: '.$e->getMessage()]);
         }
     }
 
@@ -880,11 +862,9 @@ class JobcardController extends Controller
      */
     public function convertToQuote(Jobcard $jobcard): RedirectResponse
     {
-        $currentCompany = auth()->user()->getCurrentCompany();
+        $this->authorize('convertToQuote', $jobcard);
 
-        if ($jobcard->company_id !== $currentCompany->id) {
-            abort(403, 'Unauthorized access to jobcard.');
-        }
+        $currentCompany = auth()->user()->getCurrentCompany();
 
         $existingQuoteId = Quote::where('company_id', $currentCompany->id)
             ->where('source_type', 'jobcard')
@@ -907,11 +887,9 @@ class JobcardController extends Controller
      */
     public function convertToInvoice(Jobcard $jobcard): RedirectResponse
     {
-        $currentCompany = auth()->user()->getCurrentCompany();
+        $this->authorize('convertToInvoice', $jobcard);
 
-        if ($jobcard->company_id !== $currentCompany->id) {
-            abort(403, 'Unauthorized access to jobcard.');
-        }
+        $currentCompany = auth()->user()->getCurrentCompany();
 
         return redirect()->route('invoices.create', [
             'source_type' => 'jobcard',

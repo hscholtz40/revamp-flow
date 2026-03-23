@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Tax Invoice #{{ $invoice->invoice_number ?? 'N/A' }}</title>
+    <title>{{ $invoice->getPdfDocumentTitle() }} #{{ $invoice->invoice_number ?? 'N/A' }}</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -340,7 +340,7 @@
                 <img src="{{ $company->getLogoPathForPdf() }}" alt="Company Logo" class="company-logo">
             @endif
         </div>
-        <div class="document-title">Tax Invoice</div>
+        <div class="document-title">{{ $invoice->getPdfDocumentTitle() }}</div>
     </div>
     
     <div class="company-section">
@@ -554,25 +554,25 @@
                         @endif
                     </td>
                     <td>{{ ($item->product->sku ?? $item->product->barcode ?? $item->product->item_code ?? '—') }}</td>
-                    <td class="text-right">{{ number_format($item->quantity ?? 0, 2) }}</td>
-                    <td class="text-right">R{{ number_format($item->unit_price ?? 0, 2) }}</td>
+                    <td class="text-right">{{ $company->formatNumber($item->quantity ?? 0, 2) }}</td>
+                    <td class="text-right">{{ $company->formatCurrencyZar($item->unit_price ?? 0) }}</td>
                     <td class="text-right">
                         @if(($item->discount_percentage ?? 0) > 0)
-                            {{ number_format($item->discount_percentage, 2) }}%
+                            {{ $company->formatNumber($item->discount_percentage, 2) }}%
                         @elseif(($item->discount_amount ?? 0) > 0)
-                            R{{ number_format($item->discount_amount, 2) }}
+                            {{ $company->formatCurrencyZar($item->discount_amount) }}
                         @else
                             —
                         @endif
                     </td>
                     <td class="text-right">
                         @if($item->taxRate)
-                            R{{ number_format($item->tax_amount ?? 0, 2) }}
+                            {{ $company->formatCurrencyZar($item->tax_amount ?? 0) }}
                         @else
                             —
                         @endif
                     </td>
-                    <td class="text-right">R{{ number_format($item->total ?? 0, 2) }}</td>
+                    <td class="text-right">{{ $company->formatCurrencyZar($item->total ?? 0) }}</td>
                 </tr>
                     @endforeach
             @endforeach
@@ -593,29 +593,29 @@
     <div class="totals-section">
         <div class="total-row">
             <span>Subtotal:</span>
-            <span>R{{ number_format($invoice->subtotal ?? 0, 2) }}</span>
+            <span>{{ $company->formatCurrencyZar($invoice->subtotal ?? 0) }}</span>
         </div>
         @if(($invoice->tax_amount ?? 0) > 0)
         <div class="total-row">
             <span>Tax:</span>
-            <span>R{{ number_format($invoice->tax_amount, 2) }}</span>
+            <span>{{ $company->formatCurrencyZar($invoice->tax_amount) }}</span>
         </div>
         @endif
         @if(($invoice->discount_amount ?? 0) > 0)
         <div class="total-row">
             <span>Discount:</span>
-            <span>-R{{ number_format($invoice->discount_amount, 2) }}</span>
+            <span>-{{ $company->formatCurrencyZar($invoice->discount_amount) }}</span>
         </div>
         @endif
         @if(abs($roundingAdjustment) > 0.0001)
         <div class="total-row">
             <span>Rounding Adjustment:</span>
-            <span>R{{ number_format($roundingAdjustment, 2) }}</span>
+            <span>{{ $company->formatCurrencyZar($roundingAdjustment) }}</span>
         </div>
         @endif
         <div class="total-row final">
             <span>Total:</span>
-            <span>R{{ number_format($invoice->total ?? 0, 2) }}</span>
+            <span>{{ $company->formatCurrencyZar($invoice->total ?? 0) }}</span>
         </div>
     </div>
 

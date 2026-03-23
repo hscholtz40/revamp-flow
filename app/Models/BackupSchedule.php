@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Traits\ScopedToCurrentCompanyRouteBinding;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class BackupSchedule extends Model
 {
+    use ScopedToCurrentCompanyRouteBinding;
+
     protected $fillable = [
         'company_id',
         'name',
@@ -37,15 +40,15 @@ class BackupSchedule extends Model
     public function calculateNextRun(): void
     {
         $timezone = $this->timezone ?: 'UTC';
-        
+
         // Parse the time in the schedule's timezone
         $timeParts = explode(':', $this->time);
-        $hour = (int)($timeParts[0] ?? 0);
-        $minute = (int)($timeParts[1] ?? 0);
-        
+        $hour = (int) ($timeParts[0] ?? 0);
+        $minute = (int) ($timeParts[1] ?? 0);
+
         // Get current time in the schedule's timezone
         $nowInTimezone = now($timezone);
-        
+
         switch ($this->frequency) {
             case 'daily':
                 $nextRun = $nowInTimezone->copy()->setTime($hour, $minute, 0);
@@ -53,17 +56,17 @@ class BackupSchedule extends Model
                     $nextRun->addDay();
                 }
                 break;
-                
+
             case 'weekly':
                 $dayOfWeek = $this->day_of_week ?: 'monday';
                 $dayMap = [
                     'sunday' => 0, 'monday' => 1, 'tuesday' => 2, 'wednesday' => 3,
-                    'thursday' => 4, 'friday' => 5, 'saturday' => 6
+                    'thursday' => 4, 'friday' => 5, 'saturday' => 6,
                 ];
                 $targetDay = $dayMap[strtolower($dayOfWeek)] ?? 1;
                 $nextRun = $nowInTimezone->copy()->next($targetDay)->setTime($hour, $minute, 0);
                 break;
-                
+
             case 'monthly':
                 $dayOfMonth = $this->day_of_month ?: 1;
                 $nextRun = $nowInTimezone->copy()->day($dayOfMonth)->setTime($hour, $minute, 0);
@@ -71,14 +74,13 @@ class BackupSchedule extends Model
                     $nextRun->addMonth();
                 }
                 break;
-                
+
             default:
                 $nextRun = $nowInTimezone->addDay();
         }
-        
+
         // Convert to UTC for storage
         $this->next_run_at = $nextRun->utc();
         $this->save();
     }
 }
-

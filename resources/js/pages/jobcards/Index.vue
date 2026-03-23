@@ -14,7 +14,11 @@
             <!-- Header -->
             <div class="flex items-center justify-between gap-3 mb-6">
                 <h1 class="text-2xl font-bold text-gray-900">Jobcards</h1>
-                <Link v-if="!isLimitedUser" :href="jobcards.create().url" class="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">
+                <Link
+                    v-if="!isLimitedUser && canJobcardsCreate"
+                    :href="jobcards.create().url"
+                    class="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+                >
                     New Jobcard
                 </Link>
             </div>
@@ -250,13 +254,6 @@
                                             >
                                                 Edit
                                             </Link>
-                                            <span
-                                                v-else
-                                                class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-gray-500 bg-gray-100 cursor-not-allowed"
-                                                title="Cannot edit completed jobcards without permission"
-                                            >
-                                                Edit
-                                            </span>
                                             <button
                                                 v-if="canDeleteJobcard(jobcard)"
                                                 @click="deleteJobcard(jobcard)"
@@ -264,13 +261,6 @@
                                             >
                                                 Delete
                                             </button>
-                                            <span
-                                                v-else
-                                                class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-gray-500 bg-gray-100 cursor-not-allowed"
-                                                title="Cannot delete completed jobcards without permission"
-                                            >
-                                                Delete
-                                            </span>
                                         </template>
                                     </div>
                                 </td>
@@ -309,6 +299,7 @@
 
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useAuthAbility } from '@/composables/useAuthAbilities';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { ref, computed, watch, nextTick } from 'vue';
 import jobcards from '@/routes/jobcards';
@@ -316,6 +307,9 @@ import invoices from '@/routes/invoices';
 
 const page = usePage();
 const isLimitedUser = computed(() => (page.props.auth as any)?.user?.user_type === 'limited');
+const canJobcardsCreate = useAuthAbility('jobcards', 'create');
+const canJobcardsEdit = useAuthAbility('jobcards', 'edit');
+const canJobcardsDelete = useAuthAbility('jobcards', 'delete');
 
 interface AppUser {
     id: number;
@@ -449,6 +443,9 @@ const sortIndicator = (field: string) => {
 };
 
 const canEditJobcard = (jobcard: Jobcard) => {
+    if (!canJobcardsEdit.value) {
+        return false;
+    }
     if (jobcard.status !== 'completed') {
         return true;
     }
@@ -456,6 +453,9 @@ const canEditJobcard = (jobcard: Jobcard) => {
 };
 
 const canDeleteJobcard = (jobcard: Jobcard) => {
+    if (!canJobcardsDelete.value) {
+        return false;
+    }
     if (jobcard.status !== 'completed') {
         return true;
     }

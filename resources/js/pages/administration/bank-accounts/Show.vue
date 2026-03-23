@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useNumberFormat } from '@/composables/useNumberFormat';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ArrowLeft, Edit, Trash2, Building2, Calendar, CreditCard } from 'lucide-vue-next';
@@ -25,13 +26,7 @@ interface Props {
 }
 
 const props = defineProps<Props>();
-
-function formatCurrency(amount: number, currency: string): string {
-    return new Intl.NumberFormat('en-ZA', {
-        style: 'currency',
-        currency: currency,
-    }).format(amount);
-}
+const { formatCurrency } = useNumberFormat();
 
 function deleteBankAccount() {
     if (confirm(`Are you sure you want to delete "${props.bankAccount.account_name}"?`)) {

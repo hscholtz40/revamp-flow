@@ -2,14 +2,18 @@
 
 namespace App\Services;
 
+use App\Support\SafeLog;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class BulkSMSService
 {
     private $username;
+
     private $password;
+
     private $senderName;
+
     private $baseUrl = 'https://api.bulksms.com/v1/messages';
 
     public function __construct($username, $password, $senderName = null)
@@ -22,8 +26,8 @@ class BulkSMSService
     /**
      * Send an SMS message
      *
-     * @param string $to Phone number (with country code, e.g., +27123456789)
-     * @param string $message SMS message content
+     * @param  string  $to  Phone number (with country code, e.g., +27123456789)
+     * @param  string  $message  SMS message content
      * @return array Response from BulkSMS API
      */
     public function sendSMS($to, $message)
@@ -33,7 +37,7 @@ class BulkSMSService
             $to = $this->cleanPhoneNumber($to);
 
             // Validate phone number
-            if (!$this->isValidPhoneNumber($to)) {
+            if (! $this->isValidPhoneNumber($to)) {
                 throw new \Exception('Invalid phone number format');
             }
 
@@ -48,11 +52,11 @@ class BulkSMSService
                 $data['from'] = $this->senderName;
             }
 
-            Log::info('Sending SMS via BulkSMS', [
+            Log::info('Sending SMS via BulkSMS', SafeLog::redactContext([
                 'to' => $to,
                 'message_length' => strlen($message),
                 'sender' => $this->senderName,
-            ]);
+            ]));
 
             // Make the API request
             $response = Http::withBasicAuth($this->username, $this->password)
@@ -62,16 +66,16 @@ class BulkSMSService
             $responseData = $response->json();
 
             // Check HTTP status first
-            if (!$response->successful()) {
-                Log::error('SMS sending failed - HTTP error', [
+            if (! $response->successful()) {
+                Log::error('SMS sending failed - HTTP error', SafeLog::redactContext([
                     'to' => $to,
-                    'status' => $response->status(),
-                    'response' => $responseData,
-                ]);
+                    'http_status' => $response->status(),
+                    'response_excerpt' => SafeLog::excerpt(json_encode($responseData ?: []), 300),
+                ]));
 
                 return [
                     'success' => false,
-                    'message' => 'Failed to send SMS: ' . ($responseData['error']['message'] ?? 'HTTP ' . $response->status()),
+                    'message' => 'Failed to send SMS: '.($responseData['error']['message'] ?? 'HTTP '.$response->status()),
                     'data' => $responseData,
                 ];
             }
@@ -87,9 +91,9 @@ class BulkSMSService
                 if (isset($message['status'])) {
                     $statusType = $message['status']['type'] ?? null;
                     $statusId = $message['status']['id'] ?? null;
-                    
+
                     // Check for failure statuses
-                    if ($statusType === 'FAILED' || 
+                    if ($statusType === 'FAILED' ||
                         (is_string($statusId) && str_contains(strtoupper($statusId), 'FAILED')) ||
                         (is_string($statusId) && str_contains(strtoupper($statusId), 'NOT_SENT'))) {
                         $hasFailure = true;
@@ -99,12 +103,12 @@ class BulkSMSService
             }
 
             if ($hasFailure) {
-                $errorMessage = 'SMS failed: ' . implode(', ', $failureMessages);
-                Log::error('SMS sending failed - message status indicates failure', [
+                $errorMessage = 'SMS failed: '.implode(', ', $failureMessages);
+                Log::error('SMS sending failed - message status indicates failure', SafeLog::redactContext([
                     'to' => $to,
-                    'response' => $responseData,
+                    'response_excerpt' => SafeLog::excerpt(json_encode($responseData ?: []), 300),
                     'failure_statuses' => $failureMessages,
-                ]);
+                ]));
 
                 return [
                     'success' => false,
@@ -114,10 +118,10 @@ class BulkSMSService
             }
 
             // Success - HTTP status is OK and message status indicates success
-            Log::info('SMS sent successfully', [
+            Log::info('SMS sent successfully', SafeLog::redactContext([
                 'to' => $to,
-                'response' => $responseData,
-            ]);
+                'response_excerpt' => SafeLog::excerpt(json_encode($responseData ?: []), 200),
+            ]));
 
             return [
                 'success' => true,
@@ -126,15 +130,14 @@ class BulkSMSService
             ];
 
         } catch (\Exception $e) {
-            Log::error('SMS service error', [
+            Log::error('SMS service error', SafeLog::redactContext([
                 'to' => $to,
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
+            ]));
 
             return [
                 'success' => false,
-                'message' => 'SMS service error: ' . $e->getMessage(),
+                'message' => 'SMS service error: '.$e->getMessage(),
                 'data' => null,
             ];
         }
@@ -143,7 +146,7 @@ class BulkSMSService
     /**
      * Clean phone number by removing spaces, dashes, and other characters
      *
-     * @param string $phoneNumber
+     * @param  string  $phoneNumber
      * @return string
      */
     private function cleanPhoneNumber($phoneNumber)
@@ -152,12 +155,12 @@ class BulkSMSService
         $cleaned = preg_replace('/[^\d+]/', '', $phoneNumber);
 
         // If it doesn't start with +, assume it's a South African number and add +27
-        if (!str_starts_with($cleaned, '+')) {
+        if (! str_starts_with($cleaned, '+')) {
             // Remove leading 0 if present
             if (str_starts_with($cleaned, '0')) {
                 $cleaned = substr($cleaned, 1);
             }
-            $cleaned = '+27' . $cleaned;
+            $cleaned = '+27'.$cleaned;
         }
 
         return $cleaned;
@@ -166,7 +169,7 @@ class BulkSMSService
     /**
      * Validate phone number format
      *
-     * @param string $phoneNumber
+     * @param  string  $phoneNumber
      * @return bool
      */
     private function isValidPhoneNumber($phoneNumber)
@@ -202,7 +205,7 @@ class BulkSMSService
         } catch (\Exception $e) {
             return [
                 'success' => false,
-                'message' => 'Error getting balance: ' . $e->getMessage(),
+                'message' => 'Error getting balance: '.$e->getMessage(),
                 'data' => null,
             ];
         }

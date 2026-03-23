@@ -49,10 +49,10 @@ class HandleInertiaRequests extends Middleware
         // Skip ALL database operations if app is not installed yet OR if we're on installer routes
         $isInstalled = file_exists(base_path('.installed'));
         $isInstallerRoute = $request->routeIs('install.*');
-        
+
         // If .installed file doesn't exist but user is authenticated, treat as installed
         // This handles cases where the file was deleted but the app is actually installed
-        if (!$isInstalled) {
+        if (! $isInstalled) {
             try {
                 // Check if user is authenticated - if so, app is likely installed
                 $hasAuthenticatedUser = $request->user() !== null || auth()->check();
@@ -63,9 +63,9 @@ class HandleInertiaRequests extends Middleware
                 // If we can't check auth, assume not installed
             }
         }
-        
+
         // Early return if not installed or on installer route - skip all DB operations
-        if (!$isInstalled || $isInstallerRoute) {
+        if (! $isInstalled || $isInstallerRoute) {
             return [
                 ...parent::share($request),
                 'name' => config('app.name'),
@@ -75,22 +75,26 @@ class HandleInertiaRequests extends Middleware
                 'quote' => ['message' => trim($message), 'author' => trim($author)],
                 'currentCompany' => null,
                 'companies' => collect(),
+                'numberFormat' => [
+                    'decimal_separator' => '.',
+                    'thousands_separator' => ',',
+                ],
                 'flash' => $sharedFlash,
                 'auth' => [
                     'user' => null,
                     'abilities' => null,
                 ],
                 'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
-            'isLicensingInstance' => config('app.is_licensing_instance'),
+                'isLicensingInstance' => config('app.is_licensing_instance'),
             ];
         }
-        
+
         // Get user directly from request (handles authentication)
         $parentShare = parent::share($request);
-        
+
         // Try multiple ways to get the user
         $user = $request->user() ?? auth()->user() ?? auth()->guard('web')->user();
-        
+
         // Serialize user to array if it exists (only include safe fields)
         $userData = null;
         if ($user) {
@@ -99,6 +103,7 @@ class HandleInertiaRequests extends Middleware
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
+                    'is_administrator' => $user->isAdministrator(),
                     'user_type' => $user->user_type ?? 'standard',
                     'hourly_rate' => $user->hourly_rate,
                     'avatar' => null, // Can be added later if needed
@@ -111,15 +116,15 @@ class HandleInertiaRequests extends Middleware
                 $userData = null;
             }
         }
-        
+
         // Get user-specific company data (only if installed and user exists)
         $currentCompany = null;
         $companies = collect();
-        
+
         if ($user) {
             try {
                 $currentCompany = $user->getCurrentCompany();
-                
+
                 // Get companies the user has access to
                 if ($user->companies()->count() === 0) {
                     // User has access to all companies - show all active companies
@@ -145,7 +150,7 @@ class HandleInertiaRequests extends Middleware
 
         // Check if parent share already has auth data
         $parentAuth = $parentShare['auth'] ?? null;
-        
+
         return [
             ...$parentShare,
             'name' => config('app.name'),
@@ -161,6 +166,17 @@ class HandleInertiaRequests extends Middleware
                 'enable_pos' => (bool) $currentCompany->enable_pos,
                 'visible_modules' => $currentCompany->visible_modules,
             ] : null,
+            'numberFormat' => $currentCompany ? [
+                'decimal_separator' => ($currentCompany->locale_decimal_separator !== null && $currentCompany->locale_decimal_separator !== '')
+                    ? $currentCompany->locale_decimal_separator
+                    : '.',
+                'thousands_separator' => ($currentCompany->locale_thousands_separator !== null && $currentCompany->locale_thousands_separator !== '')
+                    ? $currentCompany->locale_thousands_separator
+                    : ',',
+            ] : [
+                'decimal_separator' => '.',
+                'thousands_separator' => ',',
+            ],
             'companies' => $companies,
             'flash' => $sharedFlash,
             'auth' => [
@@ -177,7 +193,7 @@ class HandleInertiaRequests extends Middleware
      */
     private function getUserAbilities(bool $isInstalled, $user, bool $isInstallerRoute = false): ?array
     {
-        if (!$isInstalled || !$user || $isInstallerRoute) {
+        if (! $isInstalled || ! $user || $isInstallerRoute) {
             return null;
         }
 
@@ -273,6 +289,13 @@ class HandleInertiaRequests extends Middleware
                     'create' => $user->hasModulePermission('reports', 'create'),
                     'edit' => $user->hasModulePermission('reports', 'edit'),
                     'delete' => $user->hasModulePermission('reports', 'delete'),
+                ],
+                'timesheet' => [
+                    'list' => $user->hasModulePermission('timesheet', 'list'),
+                    'view' => $user->hasModulePermission('timesheet', 'view'),
+                    'create' => $user->hasModulePermission('timesheet', 'create'),
+                    'edit' => $user->hasModulePermission('timesheet', 'edit'),
+                    'delete' => $user->hasModulePermission('timesheet', 'delete'),
                 ],
             ];
         } catch (\Exception $e) {

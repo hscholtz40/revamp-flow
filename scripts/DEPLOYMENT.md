@@ -101,6 +101,16 @@ If you see "No application encryption key has been specified":
 4. **Check permissions**: Ensure `.env` has 664 permissions and is readable/writable by PHP
 5. **Clear config cache**: Run `php artisan config:clear`
 
+### Seeding the admin user (CLI)
+
+Do not store `ADMIN_PASSWORD` in `.env` long term. For a one-off seed on an already configured app, set variables only for that command, for example:
+
+```bash
+ADMIN_EMAIL=you@example.com ADMIN_PASSWORD='your-strong-password' php artisan db:seed --class=AdminUserSeeder
+```
+
+The web installer never writes admin credentials to `.env`.
+
 ### Database Migration Errors
 
 If you encounter migration errors like "Duplicate column name" or "Column already exists":
@@ -126,8 +136,9 @@ If you encounter migration errors like "Duplicate column name" or "Column alread
 
 3. **Reset and re-run migrations (WARNING: This will delete all data):**
    ```bash
-   php artisan migrate:fresh --seed
+   ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD='choose-a-strong-password' php artisan migrate:fresh --seed
    ```
+   (`AdminUserSeeder` requires these env vars for that process unless you use the web installer.)
 
 4. **For specific duplicate column errors:**
    - The migration has been updated to check if columns exist before adding them
