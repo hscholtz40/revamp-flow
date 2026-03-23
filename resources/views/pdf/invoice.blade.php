@@ -280,12 +280,16 @@
             margin-top: 40px;
             padding-top: 20px;
             border-top: 1px solid #000;
+            page-break-inside: avoid;
         }
         
         .signature-row {
             display: table;
             width: 100%;
             margin-bottom: 15px;
+            page-break-inside: avoid;
+            break-inside: avoid;
+            table-layout: fixed;
         }
         
         .signature-item {
@@ -293,15 +297,16 @@
             width: 33.33%;
             text-align: left;
             font-size: 11px;
+            vertical-align: top;
+            padding: 0 6px;
         }
 
         .signature-card {
-            display: inline-block;
-            width: 48%;
-            margin: 0 1% 12px 1%;
+            display: block;
+            width: 100%;
+            margin: 0;
             border: 1px solid #ddd;
             padding: 8px;
-            vertical-align: top;
             box-sizing: border-box;
         }
 
@@ -653,18 +658,27 @@
     @if(($invoice->signatures ?? collect())->count() > 0)
         <div class="signature-section">
             <div style="font-weight: bold; margin-bottom: 10px;">Signatures</div>
-            @foreach($invoice->signatures as $signature)
-                <div class="signature-card">
-                    <div style="font-size: 10px; margin-bottom: 6px;">
-                        <strong>{{ $signature->signer_name }}</strong>
-                        @if($signature->signed_at)
-                            - {{ $signature->signed_at->format('Y/m/d H:i') }}
-                        @endif
-                    </div>
-                    @php($signatureDataUri = $signature->getSignaturePathForPdf())
-                    @if($signatureDataUri)
-                        <img src="{{ $signatureDataUri }}" alt="Signature" class="signature-image">
-                    @endif
+            @foreach(($invoice->signatures ?? collect())->chunk(3) as $signatureRow)
+                <div class="signature-row">
+                    @foreach($signatureRow as $signature)
+                        <div class="signature-item">
+                            <div class="signature-card">
+                                <div style="font-size: 10px; margin-bottom: 6px;">
+                                    <strong>{{ $signature->signer_name }}</strong>
+                                    @if($signature->signed_at)
+                                        - {{ $signature->signed_at->format('Y/m/d H:i') }}
+                                    @endif
+                                </div>
+                                @php($signatureDataUri = $signature->getSignaturePathForPdf())
+                                @if($signatureDataUri)
+                                    <img src="{{ $signatureDataUri }}" alt="Signature" class="signature-image">
+                                @endif
+                            </div>
+                        </div>
+                    @endforeach
+                    @for($i = $signatureRow->count(); $i < 3; $i++)
+                        <div class="signature-item">&nbsp;</div>
+                    @endfor
                 </div>
             @endforeach
         </div>

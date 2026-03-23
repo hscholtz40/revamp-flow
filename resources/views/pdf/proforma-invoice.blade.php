@@ -280,12 +280,16 @@
             margin-top: 40px;
             padding-top: 20px;
             border-top: 1px solid #000;
+            page-break-inside: avoid;
         }
         
         .signature-row {
             display: table;
             width: 100%;
             margin-bottom: 15px;
+            page-break-inside: avoid;
+            break-inside: avoid;
+            table-layout: fixed;
         }
         
         .signature-item {
@@ -293,6 +297,8 @@
             width: 33.33%;
             text-align: left;
             font-size: 11px;
+            vertical-align: top;
+            padding: 0 6px;
         }
         
         .signature-line {
