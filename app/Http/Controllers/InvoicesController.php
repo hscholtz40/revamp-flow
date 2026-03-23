@@ -9,6 +9,7 @@ use App\Models\Invoice;
 use App\Models\InvoiceLineItem;
 use App\Models\Jobcard;
 use App\Models\LineGroup;
+use App\Models\Note;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\Quote;
@@ -24,6 +25,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -143,7 +145,7 @@ class InvoicesController extends Controller
             $sortBy = 'created_at';
         }
 
-        $invoicesQuery = $query->with(['customer', 'salesperson', 'source']);
+        $invoicesQuery = $query->with(['customer', 'salesperson', 'source', 'source.source']);
         if ($sortBy === 'customer_name') {
             $invoicesQuery->orderBy(
                 Customer::select('name')->whereColumn('customers.id', 'invoices.customer_id')->limit(1),
@@ -753,6 +755,15 @@ class InvoicesController extends Controller
                     'status' => 'accepted',
                     'invoice_id' => $invoice->id,
                 ]);
+
+                if ($sourceQuote->source_type === 'jobcard' && ! empty($sourceQuote->source_id)) {
+                    $sourceJobcard = Jobcard::where('company_id', $currentCompany->id)->find($sourceQuote->source_id);
+                    if ($sourceJobcard) {
+                        $sourceJobcard->update([
+                            'invoice_id' => $invoice->id,
+                        ]);
+                    }
+                }
             }
         } elseif (($validated['source_type'] ?? null) === 'jobcard' && ! empty($validated['source_id'])) {
             $sourceJobcard = Jobcard::where('company_id', $currentCompany->id)->find($validated['source_id']);
@@ -790,7 +801,7 @@ class InvoicesController extends Controller
 
         $currentCompany = auth()->user()->getCurrentCompany();
 
-        $invoice->load(['customer', 'contact', 'salesperson', 'lineItems.product', 'lineItems.taxRate', 'lineItems.lineGroup', 'lineGroups', 'company', 'source', 'payments', 'creditNotes']);
+        $invoice->load(['customer', 'contact', 'salesperson', 'lineItems.product', 'lineItems.taxRate', 'lineItems.lineGroup', 'lineGroups', 'company', 'source', 'source.source', 'payments', 'creditNotes', 'signatures.user']);
 
         // Load serial numbers for line items that have serial_number_ids
         $invoice->load('lineItems');
@@ -827,12 +838,22 @@ class InvoicesController extends Controller
 
         $defaultTemplateId = $pdfTemplates->where('is_default', true)->first()?->id ?? null;
 
+        $signatures = $invoice->signatures->map(fn ($signature) => [
+            'id' => $signature->id,
+            'signer_name' => $signature->signer_name,
+            'signature_url' => $signature->signature_url,
+            'signed_at' => $signature->signed_at?->toIso8601String(),
+            'user_name' => $signature->user?->name,
+        ])->toArray();
+
         return Inertia::render('invoices/Show', [
             'invoice' => $invoiceData,
             'canEditInvoices' => auth()->user()->hasModulePermission('invoices', 'edit'),
             'canEditCompleted' => auth()->user()->hasModulePermission('invoices', 'edit_completed'),
             'pdfTemplates' => $pdfTemplates,
             'defaultTemplateId' => $defaultTemplateId,
+            'signatures' => $signatures,
+            'documentSigningEnabled' => (bool) ($currentCompany->enable_document_signing ?? false),
         ]);
     }
 
@@ -1332,7 +1353,7 @@ class InvoicesController extends Controller
     {
         $this->authorize('view', $invoice);
 
-        $invoice->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company', 'source']);
+        $invoice->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company', 'source', 'source.source', 'signatures']);
 
         // Load serial numbers for line items that have serial_number_ids
         foreach ($invoice->lineItems as $lineItem) {
@@ -1353,13 +1374,20 @@ class InvoicesController extends Controller
 
         $pdfService = new \App\Services\PdfGenerationService;
         $pdf = $pdfService->generatePdf('invoice', compact('invoice', 'company'), $company, $templateId);
+        $pdfContent = $pdf->output();
+        $filename = "invoice-{$invoice->invoice_number}.pdf";
+
+        $this->storePrintedDocumentNote($invoice, $filename, $pdfContent, "Invoice {$invoice->invoice_number} printed");
 
         // Update status to sent if it was draft
         if ($invoice->status === 'draft') {
             $invoice->update(['status' => 'sent']);
         }
 
-        return $pdf->download("invoice-{$invoice->invoice_number}.pdf");
+        return response($pdfContent, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ]);
     }
 
     /**
@@ -1369,7 +1397,7 @@ class InvoicesController extends Controller
     {
         $this->authorize('view', $invoice);
 
-        $invoice->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company', 'source']);
+        $invoice->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company', 'source', 'source.source', 'signatures']);
 
         foreach ($invoice->lineItems as $lineItem) {
             if (! empty($lineItem->serial_number_ids)) {
@@ -1391,8 +1419,11 @@ class InvoicesController extends Controller
         $pdf = $pdfService->generatePdf('invoice', compact('invoice', 'company'), $company, $templateId);
 
         $filename = "invoice-{$invoice->invoice_number}.pdf";
+        $pdfContent = $pdf->output();
 
-        return response($pdf->output(), 200, [
+        $this->storePrintedDocumentNote($invoice, $filename, $pdfContent, "Invoice {$invoice->invoice_number} printed");
+
+        return response($pdfContent, 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => "inline; filename=\"{$filename}\"",
         ]);
@@ -1420,7 +1451,7 @@ class InvoicesController extends Controller
             return redirect()->back()->withErrors(['email' => 'At least one valid email is required.']);
         }
 
-        $invoice->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'company']);
+        $invoice->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'company', 'signatures']);
         $company = $invoice->company;
 
         // Load serial numbers for line items that have serial_number_ids
@@ -1513,6 +1544,50 @@ class InvoicesController extends Controller
 
             return redirect()->back()->withErrors(['message' => 'Failed to send email: '.$e->getMessage()]);
         }
+    }
+
+    public function sign(Request $request, Invoice $invoice): RedirectResponse
+    {
+        $this->authorize('update', $invoice);
+
+        $currentCompany = auth()->user()->getCurrentCompany();
+        if (! $currentCompany || ! $currentCompany->enable_document_signing) {
+            return redirect()->back()->withErrors(['signature' => 'Document signing is disabled for this company.']);
+        }
+
+        $validated = $request->validate([
+            'signer_name' => ['required', 'string', 'max:255'],
+            'signature_data' => ['required', 'string'],
+        ]);
+
+        if (! preg_match('/^data:image\/png;base64,/', $validated['signature_data'])) {
+            return redirect()->back()->withErrors(['signature_data' => 'Invalid signature format.']);
+        }
+
+        $raw = substr($validated['signature_data'], strpos($validated['signature_data'], ',') + 1);
+        $binary = base64_decode($raw, true);
+        if ($binary === false) {
+            return redirect()->back()->withErrors(['signature_data' => 'Invalid signature data.']);
+        }
+
+        $path = sprintf(
+            'signatures/%d/invoices/%d/%s-%s.png',
+            $invoice->company_id,
+            $invoice->id,
+            now()->format('YmdHis'),
+            bin2hex(random_bytes(4))
+        );
+        Storage::disk('public')->put($path, $binary);
+
+        $invoice->signatures()->create([
+            'company_id' => $invoice->company_id,
+            'user_id' => auth()->id(),
+            'signer_name' => trim($validated['signer_name']),
+            'signature_path' => $path,
+            'signed_at' => now(),
+        ]);
+
+        return redirect()->back()->with('success', 'Signature captured successfully.');
     }
 
     /**
@@ -1662,5 +1737,32 @@ class InvoicesController extends Controller
     private function resolveInvoiceFallbackAccountId(int $companyId): ?int
     {
         return $this->resolveInvoiceFallbackAccount($companyId)?->id;
+    }
+
+    private function storePrintedDocumentNote(Invoice $invoice, string $filename, string $pdfContent, string $subject): void
+    {
+        $companyId = (int) $invoice->company_id;
+        $path = sprintf(
+            'notes/%d/printed/%s-%s',
+            $companyId,
+            now()->format('YmdHis'),
+            $filename
+        );
+
+        Storage::disk('public')->put($path, $pdfContent);
+
+        $note = new Note([
+            'company_id' => $companyId,
+            'user_id' => auth()->id(),
+            'subject' => $subject,
+            'description' => null,
+            'attachment_path' => $path,
+            'attachment_original_name' => $filename,
+            'attachment_mime' => 'application/pdf',
+            'attachment_size' => strlen($pdfContent),
+        ]);
+
+        $note->noteable()->associate($invoice);
+        $note->save();
     }
 }

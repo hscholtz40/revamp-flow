@@ -85,6 +85,13 @@
                             Email
                         </button>
                         <button
+                            v-if="canSignDocument"
+                            @click="openSignModal"
+                            class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                        >
+                            Sign
+                        </button>
+                        <button
                             v-if="canEditInvoice && (props.invoice.remaining_balance || props.invoice.total) > 0"
                             @click="showPaymentModal = true"
                             class="rounded-md bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
@@ -277,6 +284,28 @@
                             </div>
                         </div>
                     </div>
+
+                    <div v-if="props.signatures && props.signatures.length > 0" class="rounded-lg bg-white border border-gray-200 shadow-sm">
+                        <div class="border-b border-gray-200 bg-gray-50 px-6 py-4">
+                            <h2 class="text-lg font-semibold text-gray-900">Signatures</h2>
+                            <p class="text-sm text-gray-600">Captured signatures for this invoice</p>
+                        </div>
+                        <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div v-for="signature in props.signatures" :key="signature.id" class="rounded border border-gray-200 p-3">
+                                <div class="flex items-center justify-between text-xs text-gray-500 mb-2">
+                                    <span class="font-medium text-gray-700">{{ signature.signer_name }}</span>
+                                    <span>{{ signature.signed_at ? formatDateTime(signature.signed_at) : '-' }}</span>
+                                </div>
+                                <img
+                                    v-if="signature.signature_url"
+                                    :src="signature.signature_url"
+                                    alt="Signature"
+                                    class="h-24 w-full object-contain bg-white border border-gray-100 rounded"
+                                />
+                                <p v-if="signature.user_name" class="mt-2 text-xs text-gray-500">Captured by {{ signature.user_name }}</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Sidebar -->
@@ -457,6 +486,20 @@
                                     >
                                         View Original Quote
                                     </Link>
+                                    <div
+                                        v-if="props.invoice.source?.source_type === 'jobcard' && props.invoice.source?.source_id"
+                                        class="mt-2"
+                                    >
+                                        <Link
+                                            :href="jobcards.show(props.invoice.source.source_id).url"
+                                            class="text-blue-600 hover:text-blue-800"
+                                        >
+                                            View Origin Jobcard
+                                        </Link>
+                                        <span v-if="props.invoice.source?.source?.job_number" class="ml-2 text-gray-500">
+                                            ({{ props.invoice.source.source.job_number }})
+                                        </span>
+                                    </div>
                                 </div>
                                 <div v-else-if="props.invoice.source_type === 'jobcard'">
                                     <Link
@@ -697,6 +740,43 @@
                 </div>
             </div>
         </div>
+
+        <div v-if="showSignModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+            <div class="relative top-20 mx-auto p-5 border w-[720px] max-w-[95vw] shadow-lg rounded-md bg-white">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Capture Signature</h3>
+                <form @submit.prevent="saveSignature">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                        <input v-model="signForm.signer_name" type="text" class="w-full rounded border px-3 py-2" required />
+                        <div v-if="signForm.errors.signer_name" class="mt-1 text-sm text-red-600">{{ signForm.errors.signer_name }}</div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Signature</label>
+                        <canvas
+                            ref="signatureCanvas"
+                            class="w-full border rounded bg-white touch-none"
+                            @mousedown="startDraw"
+                            @mousemove="draw"
+                            @mouseup="stopDraw"
+                            @mouseleave="stopDraw"
+                            @touchstart.prevent="startDraw"
+                            @touchmove.prevent="draw"
+                            @touchend.prevent="stopDraw"
+                        />
+                        <div v-if="signForm.errors.signature_data" class="mt-1 text-sm text-red-600">{{ signForm.errors.signature_data }}</div>
+                    </div>
+                    <div class="mt-4 flex items-center justify-between">
+                        <button type="button" @click="clearSignature" class="rounded border px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">Clear</button>
+                        <div class="flex items-center gap-2">
+                            <button type="button" @click="showSignModal = false" class="rounded border px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+                            <button type="submit" :disabled="signForm.processing" class="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50">
+                                {{ signForm.processing ? 'Saving...' : 'Save Signature' }}
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
     </AppLayout>
 </template>
 
@@ -805,12 +885,22 @@ interface PdfTemplate {
     name: string;
 }
 
+interface DocumentSignature {
+    id: number;
+    signer_name: string;
+    signature_url: string | null;
+    signed_at: string | null;
+    user_name?: string | null;
+}
+
 interface Props {
     invoice: Invoice;
     canEditInvoices: boolean;
     canEditCompleted: boolean;
     pdfTemplates?: PdfTemplate[];
     defaultTemplateId?: number | null;
+    signatures?: DocumentSignature[];
+    documentSigningEnabled?: boolean;
 }
 
 const props = defineProps<Props>();
@@ -836,12 +926,20 @@ watch(showEmailModal, (open) => {
 const showResultDialog = ref(false);
 const showPaymentModal = ref(false);
 const showTemplateModal = ref(false);
+const showSignModal = ref(false);
 const selectedTemplateId = ref<number | null>(props.defaultTemplateId ?? null);
 const emailResult = ref({
     success: false,
     email: '',
     message: ''
 });
+
+const signForm = useForm({
+    signer_name: '',
+    signature_data: '',
+});
+const signatureCanvas = ref<HTMLCanvasElement | null>(null);
+const isSigning = ref(false);
 
 // Computed property to check if user can edit the invoice
 const canEditInvoice = computed(() => {
@@ -853,6 +951,7 @@ const canEditInvoice = computed(() => {
     }
     return props.canEditCompleted;
 });
+const canSignDocument = computed(() => !!props.documentSigningEnabled && canEditInvoice.value);
 
 const emailForm = useForm({
     email: initialEmailStr,
@@ -1028,5 +1127,78 @@ const removePayment = (paymentId: number) => {
             }
         });
     }
+};
+
+const openSignModal = () => {
+    signForm.reset();
+    signForm.clearErrors();
+    showSignModal.value = true;
+
+    requestAnimationFrame(() => {
+        const canvas = signatureCanvas.value;
+        if (!canvas) return;
+        const width = canvas.clientWidth || 600;
+        canvas.width = width;
+        canvas.height = 180;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = '#111827';
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+    });
+};
+
+const startDraw = (event: MouseEvent | TouchEvent) => {
+    const canvas = signatureCanvas.value;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    isSigning.value = true;
+    const rect = canvas.getBoundingClientRect();
+    const point = 'touches' in event ? event.touches[0] : event;
+    ctx.beginPath();
+    ctx.moveTo(point.clientX - rect.left, point.clientY - rect.top);
+};
+
+const draw = (event: MouseEvent | TouchEvent) => {
+    if (!isSigning.value) return;
+    const canvas = signatureCanvas.value;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const point = 'touches' in event ? event.touches[0] : event;
+    ctx.lineTo(point.clientX - rect.left, point.clientY - rect.top);
+    ctx.stroke();
+};
+
+const stopDraw = () => {
+    isSigning.value = false;
+};
+
+const clearSignature = () => {
+    const canvas = signatureCanvas.value;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+};
+
+const saveSignature = () => {
+    const canvas = signatureCanvas.value;
+    if (!canvas) return;
+    signForm.signature_data = canvas.toDataURL('image/png');
+    signForm.post(`/invoices/${props.invoice.id}/sign`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            showSignModal.value = false;
+            router.reload({ only: ['signatures'] });
+        },
+    });
 };
 </script>

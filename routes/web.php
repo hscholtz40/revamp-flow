@@ -43,6 +43,7 @@ require __DIR__.'/reports.php';
 require __DIR__.'/teams.php';
 require __DIR__.'/licenses.php';
 require __DIR__.'/list-view-preferences.php';
+require __DIR__.'/notes.php';
 
 // Installer routes (available only before first install)
 Route::middleware([EnsureNotInstalled::class])->group(function () {

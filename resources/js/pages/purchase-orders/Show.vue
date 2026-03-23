@@ -7,6 +7,8 @@ import { ref, computed } from 'vue';
 import purchaseOrders from '@/routes/purchase-orders';
 import products from '@/routes/products';
 import suppliers from '@/routes/suppliers';
+import quotes from '@/routes/quotes';
+import jobcards from '@/routes/jobcards';
 
 interface Product {
     id: number;
@@ -84,6 +86,11 @@ interface Props {
     purchaseOrder: PurchaseOrder;
     pdfTemplates?: PdfTemplate[];
     defaultTemplateId?: number | null;
+    sourceSummary?: {
+        type?: 'quote' | 'jobcard' | null;
+        id?: number | null;
+        number?: string | null;
+    } | null;
 }
 
 const props = defineProps<Props>();
@@ -374,6 +381,26 @@ const sendEmail = () => {
             <div class="grid gap-6 md:grid-cols-3">
                 <!-- Main Content -->
                 <div class="md:col-span-2 space-y-6">
+                    <div v-if="props.sourceSummary?.type && props.sourceSummary?.id" class="rounded-lg border border-gray-200 bg-white p-6">
+                        <h2 class="mb-4 text-lg font-semibold text-gray-900">Related Source</h2>
+                        <div class="text-sm text-gray-700">
+                            <span class="mr-2 font-medium capitalize">{{ props.sourceSummary.type }}</span>
+                            <Link
+                                v-if="props.sourceSummary.type === 'quote'"
+                                :href="quotes.show(props.sourceSummary.id).url"
+                                class="text-blue-600 hover:text-blue-800 hover:underline"
+                            >
+                                {{ props.sourceSummary.number || `Quote #${props.sourceSummary.id}` }}
+                            </Link>
+                            <Link
+                                v-else-if="props.sourceSummary.type === 'jobcard'"
+                                :href="jobcards.show(props.sourceSummary.id).url"
+                                class="text-blue-600 hover:text-blue-800 hover:underline"
+                            >
+                                {{ props.sourceSummary.number || `Jobcard #${props.sourceSummary.id}` }}
+                            </Link>
+                        </div>
+                    </div>
                     <!-- Supplier Information -->
                     <div class="rounded-lg border border-gray-200 bg-white p-6">
                         <h2 class="mb-4 text-lg font-semibold text-gray-900">Supplier Information</h2>

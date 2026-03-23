@@ -3,15 +3,19 @@
 namespace App\Http\Controllers;
 
 use App\Models\Product;
+use App\Models\Note;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
+use App\Models\Quote;
 use App\Models\Supplier;
 use App\Models\TaxRate;
+use App\Models\Jobcard;
 use App\Services\StockService;
 use App\Support\CompanyScopedRules;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -144,6 +148,8 @@ class PurchaseOrdersController extends Controller
         $defaultPurchasingTaxRate = TaxRate::getDefaultPurchasingForCompany($currentCompany->id);
 
         $initialSupplier = null;
+        $prefill = null;
+        $sourceSummary = null;
         if ($request->filled('supplier_id')) {
             $row = Supplier::where('company_id', $currentCompany->id)
                 ->where('is_active', true)
@@ -160,8 +166,91 @@ class PurchaseOrdersController extends Controller
             }
         }
 
+        if (in_array($request->input('source_type'), ['quote', 'jobcard'], true) && $request->filled('source_id')) {
+            $sourceType = $request->input('source_type');
+            $sourceId = $request->integer('source_id');
+
+            if ($sourceType === 'quote') {
+                $source = Quote::where('company_id', $currentCompany->id)
+                    ->with(['lineItems', 'lineGroups'])
+                    ->find($sourceId);
+
+                if ($source) {
+                    $groups = $source->lineGroups->sortBy('sort_order')->values();
+                    $groupMap = [];
+                    foreach ($groups as $idx => $group) {
+                        $groupMap[$group->id] = $idx + 1;
+                    }
+
+                    $prefill = [
+                        'source_type' => 'quote',
+                        'source_id' => $source->id,
+                        'line_groups' => ($groups->isNotEmpty()
+                            ? $groups->map(fn ($group, $idx) => ['name' => $group->name ?: 'Items', 'sort_order' => $idx])->values()->toArray()
+                            : [['name' => 'Items', 'sort_order' => 0]]
+                        ),
+                        'items' => $source->lineItems->sortBy('sort_order')->values()->map(function ($item) use ($groupMap) {
+                            return [
+                                'product_id' => $item->product_id,
+                                'line_group_id' => $groupMap[$item->line_group_id] ?? 1,
+                                'quantity' => (int) ($item->quantity ?? 1),
+                                'unit_cost' => (float) ($item->unit_price ?? 0),
+                                'description' => $item->description,
+                                'tax_rate_id' => $item->tax_rate_id,
+                            ];
+                        })->toArray(),
+                    ];
+                    $sourceSummary = [
+                        'type' => 'quote',
+                        'id' => $source->id,
+                        'number' => $source->quote_number,
+                    ];
+                }
+            }
+
+            if ($sourceType === 'jobcard') {
+                $source = Jobcard::where('company_id', $currentCompany->id)
+                    ->with(['lineItems', 'lineGroups'])
+                    ->find($sourceId);
+
+                if ($source) {
+                    $groups = $source->lineGroups->sortBy('sort_order')->values();
+                    $groupMap = [];
+                    foreach ($groups as $idx => $group) {
+                        $groupMap[$group->id] = $idx + 1;
+                    }
+
+                    $prefill = [
+                        'source_type' => 'jobcard',
+                        'source_id' => $source->id,
+                        'line_groups' => ($groups->isNotEmpty()
+                            ? $groups->map(fn ($group, $idx) => ['name' => $group->name ?: 'Items', 'sort_order' => $idx])->values()->toArray()
+                            : [['name' => 'Items', 'sort_order' => 0]]
+                        ),
+                        'items' => $source->lineItems->sortBy('sort_order')->values()->map(function ($item) use ($groupMap) {
+                            return [
+                                'product_id' => $item->product_id,
+                                'line_group_id' => $groupMap[$item->line_group_id] ?? 1,
+                                'quantity' => (int) ($item->quantity ?? 1),
+                                'unit_cost' => (float) ($item->unit_price ?? 0),
+                                'description' => $item->description,
+                                'tax_rate_id' => $item->tax_rate_id,
+                            ];
+                        })->toArray(),
+                    ];
+                    $sourceSummary = [
+                        'type' => 'jobcard',
+                        'id' => $source->id,
+                        'number' => $source->job_number,
+                    ];
+                }
+            }
+        }
+
         return Inertia::render('purchase-orders/Create', [
             'initialSupplier' => $initialSupplier,
+            'prefill' => $prefill,
+            'sourceSummary' => $sourceSummary,
             'taxRates' => $taxRates,
             'defaultPurchasingTaxRateId' => $defaultPurchasingTaxRate?->id,
             'products' => Product::where('company_id', $currentCompany->id)
@@ -191,6 +280,8 @@ class PurchaseOrdersController extends Controller
 
         $validated = $request->validate([
             'supplier_id' => ['required', CompanyScopedRules::supplier($cid)],
+            'source_type' => ['nullable', 'in:quote,jobcard'],
+            'source_id' => ['nullable', 'integer', 'required_with:source_type'],
             'order_date' => ['required', 'date'],
             'expected_delivery_date' => ['nullable', 'date'],
             'notes' => ['nullable', 'string'],
@@ -199,7 +290,7 @@ class PurchaseOrdersController extends Controller
             'line_groups.*.id' => ['nullable', 'integer'],
             'line_groups.*.name' => ['required_with:line_groups', 'string', 'max:255'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.product_id' => ['required', CompanyScopedRules::product($cid)],
+            'items.*.product_id' => ['nullable', CompanyScopedRules::product($cid)],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
             'items.*.unit_cost' => ['required', 'numeric'],
             'items.*.description' => ['nullable', 'string'],
@@ -207,11 +298,27 @@ class PurchaseOrdersController extends Controller
             'items.*.line_group_id' => ['nullable', 'integer'],
         ]);
 
+        if (($validated['source_type'] ?? null) === 'quote' && ! empty($validated['source_id'])) {
+            $sourceQuote = Quote::where('company_id', $cid)->find($validated['source_id']);
+            if (! $sourceQuote) {
+                return back()->withInput()->withErrors(['source_id' => 'Selected source quote is invalid.']);
+            }
+        }
+
+        if (($validated['source_type'] ?? null) === 'jobcard' && ! empty($validated['source_id'])) {
+            $sourceJobcard = Jobcard::where('company_id', $cid)->find($validated['source_id']);
+            if (! $sourceJobcard) {
+                return back()->withInput()->withErrors(['source_id' => 'Selected source jobcard is invalid.']);
+            }
+        }
+
         $supplier = Supplier::findOrFail($validated['supplier_id']);
 
         $po = PurchaseOrder::create([
             'company_id' => $currentCompany->id,
             'supplier_id' => $validated['supplier_id'],
+            'source_type' => $validated['source_type'] ?? null,
+            'source_id' => $validated['source_id'] ?? null,
             'po_number' => PurchaseOrder::generatePONumber($currentCompany->id),
             'order_date' => $validated['order_date'],
             'expected_delivery_date' => $validated['expected_delivery_date'] ?? null,
@@ -361,7 +468,7 @@ class PurchaseOrdersController extends Controller
             'line_groups.*.id' => ['nullable', 'integer'],
             'line_groups.*.name' => ['required_with:line_groups', 'string', 'max:255'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.product_id' => ['required', CompanyScopedRules::product($cid)],
+            'items.*.product_id' => ['nullable', CompanyScopedRules::product($cid)],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
             'items.*.unit_cost' => ['required', 'numeric'],
             'items.*.description' => ['nullable', 'string'],
@@ -434,6 +541,7 @@ class PurchaseOrdersController extends Controller
         // Load purchase order with all necessary relationships
         $purchaseOrder->load([
             'supplier',
+            'source',
             'items.product.batches',
             'items.product.serialNumbers',
             'items.taxRate',
@@ -458,6 +566,13 @@ class PurchaseOrdersController extends Controller
 
         return Inertia::render('purchase-orders/Show', [
             'purchaseOrder' => $purchaseOrderData,
+            'sourceSummary' => [
+                'type' => $purchaseOrder->source_type,
+                'id' => $purchaseOrder->source_id,
+                'number' => $purchaseOrder->source_type === 'quote'
+                    ? ($purchaseOrder->source?->quote_number ?? null)
+                    : ($purchaseOrder->source?->job_number ?? null),
+            ],
             'pdfTemplates' => $pdfTemplates,
             'defaultTemplateId' => $defaultTemplateId,
         ]);
@@ -656,13 +771,20 @@ class PurchaseOrdersController extends Controller
 
         $pdfService = new \App\Services\PdfGenerationService;
         $pdf = $pdfService->generatePdf('purchase-order', compact('purchaseOrder', 'company'), $company, $templateId);
+        $filename = "purchase-order-{$purchaseOrder->po_number}.pdf";
+        $pdfContent = $pdf->output();
+
+        $this->storePrintedDocumentNote($purchaseOrder, $filename, $pdfContent, "Purchase Order {$purchaseOrder->po_number} printed");
 
         // Update status to sent if it was draft
         if ($purchaseOrder->status === 'draft') {
             $purchaseOrder->update(['status' => 'sent']);
         }
 
-        return $pdf->download("purchase-order-{$purchaseOrder->po_number}.pdf");
+        return response($pdfContent, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ]);
     }
 
     /**
@@ -717,5 +839,32 @@ class PurchaseOrdersController extends Controller
         } catch (\Exception $e) {
             return redirect()->back()->withErrors(['message' => 'Failed to send email: '.$e->getMessage()]);
         }
+    }
+
+    private function storePrintedDocumentNote(PurchaseOrder $purchaseOrder, string $filename, string $pdfContent, string $subject): void
+    {
+        $companyId = (int) $purchaseOrder->company_id;
+        $path = sprintf(
+            'notes/%d/printed/%s-%s',
+            $companyId,
+            now()->format('YmdHis'),
+            $filename
+        );
+
+        Storage::disk('public')->put($path, $pdfContent);
+
+        $note = new Note([
+            'company_id' => $companyId,
+            'user_id' => auth()->id(),
+            'subject' => $subject,
+            'description' => null,
+            'attachment_path' => $path,
+            'attachment_original_name' => $filename,
+            'attachment_mime' => 'application/pdf',
+            'attachment_size' => strlen($pdfContent),
+        ]);
+
+        $note->noteable()->associate($purchaseOrder);
+        $note->save();
     }
 }

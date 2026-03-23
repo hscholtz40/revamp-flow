@@ -4,10 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\XeroSettings;
 use App\Services\XeroService;
+use App\Support\SafeLog;
 use App\Support\XeroWebhookSignature;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 
 class XeroWebhookController extends Controller
 {
@@ -18,13 +18,13 @@ class XeroWebhookController extends Controller
         $signature = $request->header('x-xero-signature');
 
         if (! is_string($webhookKey) || $webhookKey === '') {
-            Log::warning('Xero webhook rejected: XERO_WEBHOOK_KEY is not configured');
+            SafeLog::integration('warning', 'xero', 'Webhook rejected: XERO_WEBHOOK_KEY is not configured');
 
             return response()->json(['error' => 'Webhook not configured'], 503);
         }
 
         if (! XeroWebhookSignature::isValid($rawBody, $signature, $webhookKey)) {
-            Log::warning('Xero webhook rejected: invalid or missing signature');
+            SafeLog::integration('warning', 'xero', 'Webhook rejected: invalid or missing signature');
 
             return response()->json(['error' => 'Unauthorized'], 401);
         }
@@ -53,7 +53,7 @@ class XeroWebhookController extends Controller
         }
 
         if (! $settings) {
-            Log::info('Xero webhook: no local settings for tenant, skipping sync handlers', [
+            SafeLog::integration('info', 'xero', 'Webhook ignored: no local settings for tenant', [
                 'tenant_id' => $tenantId,
             ]);
 

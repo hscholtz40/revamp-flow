@@ -2257,7 +2257,7 @@ class XeroService
             'DueDate' => $invoice->due_date->format('Y-m-d'),
             'LineItems' => $lineItems,
             'Status' => $this->mapInvoiceStatus($invoice->status),
-            'Reference' => $invoice->invoice_number,
+            'Reference' => $this->buildInvoiceReferenceForXero($invoice),
         ];
 
         // Add invoice number as InvoiceNumber if available
@@ -2424,6 +2424,25 @@ class XeroService
             'cancelled' => 'VOIDED',
             default => 'AUTHORISED',
         };
+    }
+
+    private function buildInvoiceReferenceForXero(Invoice $invoice): string
+    {
+        $invoiceNumber = trim((string) ($invoice->invoice_number ?? ''));
+        $notes = trim((string) ($invoice->notes ?? ''));
+
+        if ($invoiceNumber !== '' && $notes !== '') {
+            $prefix = $invoiceNumber.' | ';
+            $remaining = max(0, 255 - mb_strlen($prefix));
+
+            return $prefix.mb_substr($notes, 0, $remaining);
+        }
+
+        if ($notes !== '') {
+            return mb_substr($notes, 0, 255);
+        }
+
+        return mb_substr($invoiceNumber, 0, 255);
     }
 
     /**

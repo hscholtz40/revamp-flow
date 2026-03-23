@@ -38,7 +38,7 @@ class XeroSettingsController extends Controller
                 ->get(['companies.id', 'companies.name', 'companies.is_default']);
         }
 
-        \Log::info('Xero settings loaded', [
+        SafeLog::integration('info', 'xero', 'Settings loaded', [
             'settings_id' => $settings->id,
             'company_id' => $settings->company_id,
             'company_name' => $currentCompany->name,
@@ -205,7 +205,7 @@ class XeroSettingsController extends Controller
                 $updateData['tenant_name'] = $tenants[0]['tenantName'];
                 $settings->update($updateData);
 
-                \Log::info('Xero authorization successful (single tenant)', [
+                SafeLog::integration('info', 'xero', 'Authorization successful (single tenant)', [
                     'tenant_id' => $tenants[0]['tenantId'],
                     'tenant_name' => $tenants[0]['tenantName'],
                 ]);
@@ -216,7 +216,7 @@ class XeroSettingsController extends Controller
 
             $settings->update($updateData);
 
-            \Log::info('Xero authorization successful - awaiting tenant selection', [
+            SafeLog::integration('info', 'xero', 'Authorization successful - awaiting tenant selection', [
                 'available_tenants' => count($tenants),
             ]);
 
@@ -225,7 +225,7 @@ class XeroSettingsController extends Controller
                 ->with('xero_tenants', $tenants);
 
         } catch (\Exception $e) {
-            \Log::error('Xero authorization failed', [
+            SafeLog::integration('error', 'xero', 'Authorization failed', [
                 'error' => $e->getMessage(),
             ]);
 
@@ -252,7 +252,7 @@ class XeroSettingsController extends Controller
             'tenant_name' => $request->tenant_name,
         ]);
 
-        \Log::info('Xero tenant selected', [
+        SafeLog::integration('info', 'xero', 'Tenant selected', [
             'tenant_id' => $request->tenant_id,
             'tenant_name' => $request->tenant_name,
         ]);
@@ -360,13 +360,18 @@ class XeroSettingsController extends Controller
         ]);
 
         if (! $response->successful()) {
-            \Log::error('Xero token exchange failed', SafeLog::httpResponseContext($response->status(), $response->body()));
+            SafeLog::integration(
+                'error',
+                'xero',
+                'Token exchange failed',
+                SafeLog::httpResponseContext($response->status(), $response->body())
+            );
             throw new \Exception('Failed to exchange code for tokens (HTTP '.$response->status().').');
         }
 
         $tokens = $response->json();
 
-        \Log::info('Xero token exchange response', [
+        SafeLog::integration('info', 'xero', 'Token exchange response metadata', [
             'response_keys' => array_keys($tokens),
             'has_access_token' => isset($tokens['access_token']),
             'has_refresh_token' => isset($tokens['refresh_token']),

@@ -86,6 +86,11 @@ class Quote extends Model
         return $this->morphMany(LineGroup::class, 'line_groupable')->orderBy('sort_order');
     }
 
+    public function signatures(): MorphMany
+    {
+        return $this->morphMany(DocumentSignature::class, 'signable')->orderByDesc('signed_at');
+    }
+
     public function invoice(): BelongsTo
     {
         return $this->belongsTo(Invoice::class);
@@ -94,6 +99,11 @@ class Quote extends Model
     public function source(): MorphTo
     {
         return $this->morphTo('source', 'source_type', 'source_id');
+    }
+
+    public function purchaseOrders(): HasMany
+    {
+        return $this->hasMany(PurchaseOrder::class, 'source_id')->where('source_type', 'quote');
     }
 
     /**

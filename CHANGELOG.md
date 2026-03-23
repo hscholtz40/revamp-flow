@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-03-23
+
+- Security remediation completion: tightened `TimeEntryController::convertToLineItems` to require jobcard update permission (not view), moved additional Xero controller/webhook logs to `SafeLog` integration logging, added early OAuth callback regression coverage for missing/invalid `state`, and added webhook signature feature tests plus PDF template output sanitization tests/hardening for script/event-handler stripping before PDF render.
+- Quotes: added the same document-signing flow as invoices/jobcards (Sign button, name + canvas capture modal, signature list on Show, and quote PDF signature rendering when signatures exist), controlled by Company Settings `enable_document_signing`.
+- Documents: added company-level **Enable document signing** setting and end-to-end signature capture for jobcards/invoices (`Sign` action with name + drawn signature), including signature display on both Show pages and automatic inclusion in generated PDFs when signatures exist.
+- Jobcards: aligned Status Time Tracker transition datetime rendering with the Show page’s existing `Last updated` format by sending ISO timestamps from the backend and formatting them via the same client-side `formatDateTime()` helper.
+- Jobcards: refined Show-page status transition timestamp formatting to use the Laravel app timezone (`config('app.timezone')`) explicitly for Status Time Tracker history rows.
+- Jobcards: adjusted Show-page status transition timestamps to render in the server timezone instead of GMT for the Status Time Tracker history table.
+- Jobcards: added a **Status Time Tracker** panel to the jobcard Show page, showing time spent per status (stacked bar + legend) and the status transition history table, using the same duration logic as the detailed jobcard report.
+- Quotes: fixed a Show-page runtime error for users without quote edit permission where a missing `convertedJobcardId`/`invoice_id` still rendered `View` links and called Wayfinder routes with `null`. The page now only renders those links when valid IDs exist.
+- Reports: fixed report totals formatting on the Show page to use company localization separators (decimal and thousands) via the shared `useNumberFormat()` currency formatter instead of hard-coded `toFixed(2)`.
+- Added a new Notes module with polymorphic related-record support across current show-page modules, including subject/description capture, optional file attachments, record-scoped searchable + paginated note feeds, and a shared show-page subpanel that auto-loads notes for the active record.
+- Updated the notes subpanel UX to use a `Create Note` modal (instead of an inline form), and added automatic print-note logging for quote/invoice/jobcard/purchase-order print actions with the generated PDF attached (e.g. `Quote 123 printed`).
+- Fixed notes retrieval to use Eloquent morph type values (e.g. `quote`, `jobcard`) instead of class names, so manually created notes and auto-generated print notes now appear correctly in subpanels and lists.
+- Refined Notes UI styling so create modal fields, search input, action buttons, and modal layout now match the system’s existing form/dialog visual patterns used across other modules.
+
 ## 2026-03-21
 
 - Administration: added **Status Editor** (`/administration/status-editor`) for company-specific Jobcard and Quote status labels, including per-section **Reset to Default**. Jobcard/Quote show pages now consume server-provided status options so the customized labels appear in status controls without changing underlying status codes.
@@ -178,6 +194,12 @@
 - Fixed Xero payment sync: treat AmountDue ≤ 0.01 as fully paid (rounding), use AmountOwing fallback, invalidate invoice cache after each successful payment so batch syncs get fresh AmountDue, and always fetch fresh invoice per payment instead of reusing stale cached data.
 - Capped Xero payment creation to the amount due on the invoice (min of JCO remaining balance and Xero AmountDue) to avoid "Payment amount exceeds the amount outstanding" validation errors.
 - Fixed contact_id not persisting on document save by explicitly including it in the form payload via transform on quote, jobcard, and invoice create/edit submits.
+- Added one-to-many purchase-order linking from quotes and jobcards: create PO directly from quote/jobcard show pages, carry source linkage onto the PO, show related source on the PO, and surface `Purchasing Total` plus `Total vs Purchasing` with linked related POs on quote/jobcard show pages.
+- Fixed PO creation for custom/source line items by allowing `purchase_order_items.product_id` to be nullable, preventing SQL integrity errors when saving non-product lines.
+- Fixed quote→invoice conversion lineage so invoices can still resolve the originating jobcard number when the quote came from a jobcard, and linked that originating jobcard to the created invoice while exposing both source quote and origin jobcard on invoice details.
+- Fixed invoice list `Job No.` links to also show and open the originating jobcard for invoices created from quotes that themselves originated from jobcards.
+- Fixed outbound Xero invoice sync to push invoice notes into Xero `Reference` (with invoice number fallback), so notes are included during invoice export.
+- Updated outbound Xero invoice `Reference` formatting to include both invoice number and notes (`<invoice_number> | <notes>`) with safe truncation to Xero limits.
 
 ## 2026-03-13 - version 1.7.5
 

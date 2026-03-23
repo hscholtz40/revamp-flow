@@ -185,8 +185,8 @@
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <Link
-                                        v-if="invoice.job_number && invoice.source_type === 'jobcard' && invoice.source_id"
-                                        :href="`/jobcards/${invoice.source_id}`"
+                                        v-if="invoice.job_number && ((invoice.source_type === 'jobcard' && invoice.source_id) || (invoice.source_type === 'quote' && invoice.source?.source_type === 'jobcard' && invoice.source?.source_id))"
+                                        :href="`/jobcards/${invoice.source_type === 'jobcard' ? invoice.source_id : invoice.source?.source_id}`"
                                         class="text-sm text-blue-600 hover:text-blue-800 hover:underline"
                                         @click.stop
                                     >
@@ -351,6 +351,10 @@ interface Invoice {
     job_number?: string | null;
     source_type?: string | null;
     source_id?: number | null;
+    source?: {
+        source_type?: string | null;
+        source_id?: number | null;
+    } | null;
     invoice_date: string;
     due_date: string;
     created_at: string;

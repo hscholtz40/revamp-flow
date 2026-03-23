@@ -7,7 +7,9 @@ use App\Models\Customer;
 use App\Models\EmailActivity;
 use App\Models\Jobcard;
 use App\Models\JobcardLineItem;
+use App\Models\Note;
 use App\Models\Product;
+use App\Models\PurchaseOrder;
 use App\Models\Quote;
 use App\Models\TaxRate;
 use App\Models\Team;
@@ -21,6 +23,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -455,7 +458,21 @@ class JobcardController extends Controller
     {
         $this->authorize('view', $jobcard);
 
-        $jobcard->load(['customer', 'contact', 'assignedUser', 'assignedTeam', 'lineItems.product', 'lineItems.taxRate', 'lineItems.lineGroup', 'lineGroups', 'invoice', 'source', 'timeEntries.user']);
+        $jobcard->load([
+            'customer',
+            'contact',
+            'assignedUser',
+            'assignedTeam',
+            'lineItems.product',
+            'lineItems.taxRate',
+            'lineItems.lineGroup',
+            'lineGroups',
+            'invoice',
+            'source',
+            'timeEntries.user',
+            'statusTransitions.user',
+            'signatures.user',
+        ]);
 
         $currentCompany = auth()->user()->getCurrentCompany();
 
@@ -471,6 +488,11 @@ class JobcardController extends Controller
             ->where('source_type', 'jobcard')
             ->where('source_id', $jobcard->id)
             ->value('id');
+        $relatedPurchaseOrders = PurchaseOrder::where('company_id', $currentCompany->id)
+            ->where('source_type', 'jobcard')
+            ->where('source_id', $jobcard->id)
+            ->latest()
+            ->get(['id', 'po_number', 'status', 'total', 'created_at']);
 
         // Get running timer for current user and this jobcard
         $runningTimer = \App\Models\TimeEntry::getRunningEntry(auth()->id(), $jobcard->id);
@@ -482,6 +504,27 @@ class JobcardController extends Controller
             'total_amount' => $jobcard->timeEntries->where('is_billable', true)->sum('total_amount'),
         ];
 
+        $statusDurations = collect($jobcard->getStatusDurations())
+            ->map(fn ($minutes) => [
+                'minutes' => $minutes,
+                'formatted' => $this->formatDuration((int) $minutes),
+            ])->toArray();
+
+        $statusTransitions = $jobcard->statusTransitions->map(fn ($transition) => [
+            'from_status' => $transition->from_status,
+            'to_status' => $transition->to_status,
+            'transitioned_at' => $transition->transitioned_at?->toIso8601String(),
+            'user_name' => $transition->user?->name ?? 'System',
+        ])->toArray();
+
+        $signatures = $jobcard->signatures->map(fn ($signature) => [
+            'id' => $signature->id,
+            'signer_name' => $signature->signer_name,
+            'signature_url' => $signature->signature_url,
+            'signed_at' => $signature->signed_at?->toIso8601String(),
+            'user_name' => $signature->user?->name,
+        ])->toArray();
+
         return Inertia::render('jobcards/Show', [
             'jobcard' => $jobcard,
             'canEditCompleted' => auth()->user()->canEditCompletedJobcards(),
@@ -489,9 +532,48 @@ class JobcardController extends Controller
             'pdfTemplates' => $pdfTemplates,
             'defaultTemplateId' => $defaultTemplateId,
             'convertedQuoteId' => $convertedQuoteId,
+            'relatedPurchaseOrders' => $relatedPurchaseOrders->map(fn ($po) => [
+                'id' => $po->id,
+                'po_number' => $po->po_number,
+                'status' => $po->status,
+                'total' => (float) $po->total,
+                'created_at' => $po->created_at?->toIso8601String(),
+            ])->toArray(),
+            'purchaseOrdersTotal' => (float) $relatedPurchaseOrders->sum('total'),
             'runningTimer' => $runningTimer,
             'timeSummary' => $timeSummary,
+            'statusDurations' => $statusDurations,
+            'statusTransitions' => $statusTransitions,
+            'signatures' => $signatures,
+            'documentSigningEnabled' => (bool) ($currentCompany->enable_document_signing ?? false),
         ]);
+    }
+
+    /**
+     * Format minutes into a human-readable duration with days, hours, minutes.
+     */
+    private function formatDuration(int $minutes): string
+    {
+        if ($minutes <= 0) {
+            return '0m';
+        }
+
+        $days = floor($minutes / 1440);
+        $hours = floor(($minutes % 1440) / 60);
+        $mins = $minutes % 60;
+
+        $parts = [];
+        if ($days > 0) {
+            $parts[] = "{$days}d";
+        }
+        if ($hours > 0) {
+            $parts[] = "{$hours}h";
+        }
+        if ($mins > 0) {
+            $parts[] = "{$mins}m";
+        }
+
+        return implode(' ', $parts);
     }
 
     /**
@@ -724,7 +806,7 @@ class JobcardController extends Controller
 
         $currentCompany = auth()->user()->getCurrentCompany();
 
-        $jobcard->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company']);
+        $jobcard->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company', 'signatures']);
         $templateId = $request->get('template_id');
 
         $pdfService = new \App\Services\PdfGenerationService;
@@ -734,8 +816,59 @@ class JobcardController extends Controller
         ], $currentCompany, $templateId);
 
         $filename = 'jobcard-'.$jobcard->job_number.'.pdf';
+        $pdfContent = $pdf->output();
 
-        return $pdf->download($filename);
+        $this->storePrintedDocumentNote($jobcard, $filename, $pdfContent, "Jobcard {$jobcard->job_number} printed");
+
+        return response($pdfContent, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ]);
+    }
+
+    public function sign(Request $request, Jobcard $jobcard): RedirectResponse
+    {
+        $this->authorize('update', $jobcard);
+
+        $currentCompany = auth()->user()->getCurrentCompany();
+        if (! $currentCompany || ! $currentCompany->enable_document_signing) {
+            return redirect()->back()->withErrors(['signature' => 'Document signing is disabled for this company.']);
+        }
+
+        $validated = $request->validate([
+            'signer_name' => ['required', 'string', 'max:255'],
+            'signature_data' => ['required', 'string'],
+        ]);
+
+        if (! preg_match('/^data:image\/png;base64,/', $validated['signature_data'])) {
+            return redirect()->back()->withErrors(['signature_data' => 'Invalid signature format.']);
+        }
+
+        $raw = substr($validated['signature_data'], strpos($validated['signature_data'], ',') + 1);
+        $binary = base64_decode($raw, true);
+        if ($binary === false) {
+            return redirect()->back()->withErrors(['signature_data' => 'Invalid signature data.']);
+        }
+
+        $path = sprintf(
+            'signatures/%d/jobcards/%d/%s-%s.png',
+            $jobcard->company_id,
+            $jobcard->id,
+            now()->format('YmdHis'),
+            bin2hex(random_bytes(4))
+        );
+
+        Storage::disk('public')->put($path, $binary);
+
+        $jobcard->signatures()->create([
+            'company_id' => $jobcard->company_id,
+            'user_id' => auth()->id(),
+            'signer_name' => trim($validated['signer_name']),
+            'signature_path' => $path,
+            'signed_at' => now(),
+        ]);
+
+        return redirect()->back()->with('success', 'Signature captured successfully.');
     }
 
     /**
@@ -764,7 +897,7 @@ class JobcardController extends Controller
         }
 
         try {
-            $jobcard->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company']);
+            $jobcard->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company', 'signatures']);
 
             $subject = $validated['subject'] ?? "Jobcard #{$jobcard->job_number} - {$jobcard->title}";
             $fromName = $currentCompany->name ?: config('mail.from.name');
@@ -896,5 +1029,32 @@ class JobcardController extends Controller
             'source_type' => 'jobcard',
             'source_id' => $jobcard->id,
         ]);
+    }
+
+    private function storePrintedDocumentNote(Jobcard $jobcard, string $filename, string $pdfContent, string $subject): void
+    {
+        $companyId = (int) $jobcard->company_id;
+        $path = sprintf(
+            'notes/%d/printed/%s-%s',
+            $companyId,
+            now()->format('YmdHis'),
+            $filename
+        );
+
+        Storage::disk('public')->put($path, $pdfContent);
+
+        $note = new Note([
+            'company_id' => $companyId,
+            'user_id' => auth()->id(),
+            'subject' => $subject,
+            'description' => null,
+            'attachment_path' => $path,
+            'attachment_original_name' => $filename,
+            'attachment_mime' => 'application/pdf',
+            'attachment_size' => strlen($pdfContent),
+        ]);
+
+        $note->noteable()->associate($jobcard);
+        $note->save();
     }
 }

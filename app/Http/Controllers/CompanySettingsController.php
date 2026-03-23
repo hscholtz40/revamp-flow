@@ -66,6 +66,7 @@ class CompanySettingsController extends Controller
             'is_active' => ['boolean'],
             'is_default' => ['boolean'],
             'enable_pos' => ['boolean'],
+            'enable_document_signing' => ['boolean'],
             'logo' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg', 'max:2048'],
             'whatsapp_business_number' => ['nullable', 'string', 'max:20'],
             'bank_name' => ['nullable', 'string', 'max:255'],
@@ -154,6 +155,7 @@ class CompanySettingsController extends Controller
                 'is_active' => $company->is_active,
                 'is_default' => $company->is_default,
                 'enable_pos' => $company->enable_pos,
+                'enable_document_signing' => $company->enable_document_signing,
             ];
 
             if ($request->hasFile('logo')) {
@@ -186,6 +188,7 @@ class CompanySettingsController extends Controller
             'is_active' => ['boolean'],
             'is_default' => ['boolean'],
             'enable_pos' => ['boolean'],
+            'enable_document_signing' => ['boolean'],
             'logo' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg', 'max:2048'],
             'whatsapp_business_number' => ['nullable', 'string', 'max:20'],
             'bank_name' => ['nullable', 'string', 'max:255'],

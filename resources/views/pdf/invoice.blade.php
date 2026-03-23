@@ -294,6 +294,24 @@
             text-align: left;
             font-size: 11px;
         }
+
+        .signature-card {
+            display: inline-block;
+            width: 48%;
+            margin: 0 1% 12px 1%;
+            border: 1px solid #ddd;
+            padding: 8px;
+            vertical-align: top;
+            box-sizing: border-box;
+        }
+
+        .signature-image {
+            height: 70px;
+            width: 100%;
+            object-fit: contain;
+            border: 1px solid #eee;
+            background: #fff;
+        }
         
         .signature-line {
             border-bottom: 1px dashed #000;
@@ -632,22 +650,25 @@
     </div>
     @endif
     
-    <div class="signature-section">
-        <div class="signature-row">
-            <div class="signature-item">
-                <div>Received by</div>
-                <div class="signature-line"></div>
-            </div>
-            <div class="signature-item">
-                <div>Date</div>
-                <div class="signature-line"></div>
-            </div>
-            <div class="signature-item">
-                <div>Signed</div>
-                <div class="signature-line"></div>
-            </div>
+    @if(($invoice->signatures ?? collect())->count() > 0)
+        <div class="signature-section">
+            <div style="font-weight: bold; margin-bottom: 10px;">Signatures</div>
+            @foreach($invoice->signatures as $signature)
+                <div class="signature-card">
+                    <div style="font-size: 10px; margin-bottom: 6px;">
+                        <strong>{{ $signature->signer_name }}</strong>
+                        @if($signature->signed_at)
+                            - {{ $signature->signed_at->format('Y/m/d H:i') }}
+                        @endif
+                    </div>
+                    @php($signatureDataUri = $signature->getSignaturePathForPdf())
+                    @if($signatureDataUri)
+                        <img src="{{ $signatureDataUri }}" alt="Signature" class="signature-image">
+                    @endif
+                </div>
+            @endforeach
         </div>
-    </div>
+    @endif
     
     
     <div class="footer">

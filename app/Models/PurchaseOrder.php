@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Facades\DB;
 
 class PurchaseOrder extends Model
@@ -17,6 +18,8 @@ class PurchaseOrder extends Model
     protected $fillable = [
         'company_id',
         'supplier_id',
+        'source_type',
+        'source_id',
         'xero_purchase_order_id',
         'po_number',
         'order_date',
@@ -79,6 +82,11 @@ class PurchaseOrder extends Model
     public function lineGroups(): MorphMany
     {
         return $this->morphMany(LineGroup::class, 'line_groupable')->orderBy('sort_order');
+    }
+
+    public function source(): MorphTo
+    {
+        return $this->morphTo('source', 'source_type', 'source_id');
     }
 
     /**

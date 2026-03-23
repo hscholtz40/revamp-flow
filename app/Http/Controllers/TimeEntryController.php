@@ -338,7 +338,7 @@ class TimeEntryController extends Controller
      */
     public function convertToLineItems(Request $request, Jobcard $jobcard): RedirectResponse
     {
-        $this->authorize('view', $jobcard);
+        $this->authorize('update', $jobcard);
 
         $cid = $jobcard->company_id;
 

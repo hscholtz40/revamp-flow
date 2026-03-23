@@ -6,7 +6,9 @@ use App\Models\ChartOfAccount;
 use App\Models\Customer;
 use App\Models\EmailActivity;
 use App\Models\Jobcard;
+use App\Models\Note;
 use App\Models\Product;
+use App\Models\PurchaseOrder;
 use App\Models\Quote;
 use App\Models\QuoteLineItem;
 use App\Models\TaxRate;
@@ -16,6 +18,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -393,7 +396,7 @@ class QuotesController extends Controller
     {
         $this->authorize('view', $quote);
 
-        $quote->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineItems.lineGroup', 'lineGroups', 'company', 'invoice', 'source']);
+        $quote->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineItems.lineGroup', 'lineGroups', 'company', 'invoice', 'source', 'signatures.user']);
 
         $currentCompany = auth()->user()->getCurrentCompany();
 
@@ -412,6 +415,18 @@ class QuotesController extends Controller
             ->where('source_type', 'quote')
             ->where('source_id', $quote->id)
             ->value('id');
+        $relatedPurchaseOrders = PurchaseOrder::where('company_id', $currentCompany->id)
+            ->where('source_type', 'quote')
+            ->where('source_id', $quote->id)
+            ->latest()
+            ->get(['id', 'po_number', 'status', 'total', 'created_at']);
+        $signatures = $quote->signatures->map(fn ($signature) => [
+            'id' => $signature->id,
+            'signer_name' => $signature->signer_name,
+            'signature_url' => $signature->signature_url,
+            'signed_at' => $signature->signed_at?->toIso8601String(),
+            'user_name' => $signature->user?->name,
+        ])->toArray();
 
         return Inertia::render('quotes/Show', [
             'quote' => $quote,
@@ -421,6 +436,16 @@ class QuotesController extends Controller
             'defaultQuoteTemplateId' => $defaultQuoteTemplateId,
             'defaultProformaTemplateId' => $defaultProformaTemplateId,
             'convertedJobcardId' => $convertedJobcardId,
+            'relatedPurchaseOrders' => $relatedPurchaseOrders->map(fn ($po) => [
+                'id' => $po->id,
+                'po_number' => $po->po_number,
+                'status' => $po->status,
+                'total' => (float) $po->total,
+                'created_at' => $po->created_at?->toIso8601String(),
+            ])->toArray(),
+            'purchaseOrdersTotal' => (float) $relatedPurchaseOrders->sum('total'),
+            'signatures' => $signatures,
+            'documentSigningEnabled' => (bool) ($currentCompany->enable_document_signing ?? false),
         ]);
     }
 
@@ -634,7 +659,7 @@ class QuotesController extends Controller
     {
         $this->authorize('view', $quote);
 
-        $quote->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company']);
+        $quote->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company', 'signatures']);
         $company = $quote->company;
 
         // Update status to sent when PDF is downloaded
@@ -653,8 +678,19 @@ class QuotesController extends Controller
 
         $pdfService = new \App\Services\PdfGenerationService;
         $pdf = $pdfService->generatePdf($module, compact('quote', 'company'), $company, $templateId);
+        $pdfContent = $pdf->output();
 
-        return $pdf->download($filename);
+        $this->storePrintedDocumentNote(
+            $quote,
+            $filename,
+            $pdfContent,
+            $type === 'proforma-invoice' ? "Proforma Invoice {$quote->quote_number} printed" : "Quote {$quote->quote_number} printed"
+        );
+
+        return response($pdfContent, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ]);
     }
 
     /**
@@ -682,7 +718,7 @@ class QuotesController extends Controller
             return redirect()->back()->withErrors(['email' => 'At least one valid email is required.']);
         }
 
-        $quote->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company']);
+        $quote->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company', 'signatures']);
         $company = $quote->company;
 
         try {
@@ -771,5 +807,76 @@ class QuotesController extends Controller
 
             return redirect()->back()->withErrors(['message' => 'Failed to send email: '.$e->getMessage()]);
         }
+    }
+
+    public function sign(Request $request, Quote $quote): RedirectResponse
+    {
+        $this->authorize('update', $quote);
+
+        $currentCompany = auth()->user()->getCurrentCompany();
+        if (! $currentCompany || ! $currentCompany->enable_document_signing) {
+            return redirect()->back()->withErrors(['signature' => 'Document signing is disabled for this company.']);
+        }
+
+        $validated = $request->validate([
+            'signer_name' => ['required', 'string', 'max:255'],
+            'signature_data' => ['required', 'string'],
+        ]);
+
+        if (! preg_match('/^data:image\/png;base64,/', $validated['signature_data'])) {
+            return redirect()->back()->withErrors(['signature_data' => 'Invalid signature format.']);
+        }
+
+        $raw = substr($validated['signature_data'], strpos($validated['signature_data'], ',') + 1);
+        $binary = base64_decode($raw, true);
+        if ($binary === false) {
+            return redirect()->back()->withErrors(['signature_data' => 'Invalid signature data.']);
+        }
+
+        $path = sprintf(
+            'signatures/%d/quotes/%d/%s-%s.png',
+            $quote->company_id,
+            $quote->id,
+            now()->format('YmdHis'),
+            bin2hex(random_bytes(4))
+        );
+        Storage::disk('public')->put($path, $binary);
+
+        $quote->signatures()->create([
+            'company_id' => $quote->company_id,
+            'user_id' => auth()->id(),
+            'signer_name' => trim($validated['signer_name']),
+            'signature_path' => $path,
+            'signed_at' => now(),
+        ]);
+
+        return redirect()->back()->with('success', 'Signature captured successfully.');
+    }
+
+    private function storePrintedDocumentNote(Quote $quote, string $filename, string $pdfContent, string $subject): void
+    {
+        $companyId = (int) $quote->company_id;
+        $path = sprintf(
+            'notes/%d/printed/%s-%s',
+            $companyId,
+            now()->format('YmdHis'),
+            $filename
+        );
+
+        Storage::disk('public')->put($path, $pdfContent);
+
+        $note = new Note([
+            'company_id' => $companyId,
+            'user_id' => auth()->id(),
+            'subject' => $subject,
+            'description' => null,
+            'attachment_path' => $path,
+            'attachment_original_name' => $filename,
+            'attachment_mime' => 'application/pdf',
+            'attachment_size' => strlen($pdfContent),
+        ]);
+
+        $note->noteable()->associate($quote);
+        $note->save();
     }
 }

@@ -20,6 +20,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/invoices/{invoice}/download-pdf', [InvoicesController::class, 'downloadPdf'])->middleware('module.permission:invoices,view')->name('invoices.download-pdf');
     Route::get('/invoices/{invoice}/print-pdf', [InvoicesController::class, 'printPdf'])->middleware('module.permission:invoices,view')->name('invoices.print-pdf');
     Route::post('/invoices/{invoice}/email', [InvoicesController::class, 'email'])->middleware('module.permission:invoices,edit')->name('invoices.email');
+    Route::post('/invoices/{invoice}/sign', [InvoicesController::class, 'sign'])->middleware('module.permission:invoices,edit')->name('invoices.sign');
 
     // Payment routes
     Route::post('/payments', [PaymentsController::class, 'store'])->middleware('module.permission:invoices,edit')->name('payments.store');

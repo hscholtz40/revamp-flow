@@ -110,6 +110,11 @@ class Invoice extends Model
         return $this->morphMany(LineGroup::class, 'line_groupable')->orderBy('sort_order');
     }
 
+    public function signatures(): MorphMany
+    {
+        return $this->morphMany(DocumentSignature::class, 'signable')->orderByDesc('signed_at');
+    }
+
     /**
      * Get the payments for this invoice.
      */
@@ -267,18 +272,38 @@ class Invoice extends Model
 
     public function getJobNumberAttribute(): ?string
     {
-        if ($this->source_type !== 'jobcard') {
+        if ($this->source_type === 'jobcard') {
+            if ($this->relationLoaded('source')) {
+                return $this->source?->job_number;
+            }
+
+            /** @var \App\Models\Jobcard|null $jobcard */
+            $jobcard = $this->source()->first();
+
+            return $jobcard?->job_number;
+        }
+
+        if ($this->source_type !== 'quote') {
             return null;
         }
 
-        if ($this->relationLoaded('source')) {
-            return $this->source?->job_number;
+        /** @var \App\Models\Quote|null $quote */
+        $quote = null;
+        if ($this->relationLoaded('source') && $this->source instanceof Quote) {
+            $quote = $this->source;
+        } elseif (! empty($this->source_id)) {
+            $quote = Quote::with('source')->find($this->source_id);
         }
 
-        /** @var \App\Models\Jobcard|null $jobcard */
-        $jobcard = $this->source()->first();
+        if (! $quote || $quote->source_type !== 'jobcard') {
+            return null;
+        }
 
-        return $jobcard?->job_number;
+        if ($quote->relationLoaded('source')) {
+            return $quote->source?->job_number;
+        }
+
+        return Jobcard::find($quote->source_id)?->job_number;
     }
 
     public function getRecipientEmailAttribute(): ?string

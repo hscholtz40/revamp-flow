@@ -7,6 +7,26 @@ use PHPUnit\Framework\TestCase;
 
 class PdfGenerationServiceHandlebarsTest extends TestCase
 {
+    public function test_rendered_html_sanitizer_removes_scripts_and_inline_handlers(): void
+    {
+        $service = new class extends PdfGenerationService
+        {
+            public function sanitize(string $html): string
+            {
+                return $this->sanitizeRenderedTemplateHtml($html);
+            }
+        };
+
+        $out = $service->sanitize(
+            '<div onclick="alert(1)">Ok</div><script>alert(2)</script><img src="javascript:alert(3)" onerror="alert(4)" />'
+        );
+
+        $this->assertStringNotContainsString('<script>', $out);
+        $this->assertStringNotContainsString('onclick=', $out);
+        $this->assertStringNotContainsString('onerror=', $out);
+        $this->assertStringNotContainsString('javascript:', $out);
+    }
+
     public function test_double_brace_escapes_html_entities(): void
     {
         $service = new class extends PdfGenerationService

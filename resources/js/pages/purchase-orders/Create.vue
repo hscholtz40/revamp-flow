@@ -30,6 +30,24 @@ interface Props {
     defaultPurchasingTaxRateId?: number | null;
     chartOfAccounts: { id: number; account_code: string; account_name: string; account_type: string }[];
     defaultPurchasingAccountId: number | null;
+    prefill?: {
+        source_type?: 'quote' | 'jobcard' | null;
+        source_id?: number | null;
+        line_groups?: LineGroup[];
+        items?: Array<{
+            product_id: number | null;
+            line_group_id?: number | null;
+            quantity: number;
+            unit_cost: number;
+            description?: string | null;
+            tax_rate_id?: number | null;
+        }>;
+    } | null;
+    sourceSummary?: {
+        type: 'quote' | 'jobcard';
+        id: number;
+        number: string;
+    } | null;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -37,7 +55,11 @@ const props = withDefaults(defineProps<Props>(), {
     products: () => [],
     chartOfAccounts: () => [],
     defaultPurchasingAccountId: null,
+    prefill: null,
+    sourceSummary: null,
 });
+
+const { formatCurrency } = useNumberFormat();
 
 const createLineItemUid = () =>
     `line-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -69,14 +91,26 @@ interface LineGroup {
 
 const form = useForm({
     supplier_id: props.initialSupplier?.id ?? '',
+    source_type: props.prefill?.source_type ?? null,
+    source_id: props.prefill?.source_id ?? null,
     order_date: new Date().toISOString().split('T')[0],
     expected_delivery_date: '',
     notes: '',
     terms: '',
-    line_groups: [
-        { name: 'Items', sort_order: 0 },
-    ] as LineGroup[],
-    items: [] as LineItem[],
+    line_groups: (props.prefill?.line_groups && props.prefill.line_groups.length > 0
+        ? props.prefill.line_groups
+        : [{ name: 'Items', sort_order: 0 }]) as LineGroup[],
+    items: ((props.prefill?.items || []).map((item, index) => ({
+        _uid: createLineItemUid(),
+        product_id: item.product_id ?? '',
+        line_group_id: item.line_group_id ?? 1,
+        quantity: Number(item.quantity) || 1,
+        unit_cost: Number(item.unit_cost) || 0,
+        description: item.description || '',
+        total: (Number(item.quantity) || 0) * (Number(item.unit_cost) || 0),
+        tax_rate_id: item.tax_rate_id ?? (props.defaultPurchasingTaxRateId || null),
+        account_id: props.defaultPurchasingAccountId || null,
+    })) as LineItem[]),
 });
 
 const supplierSearchQuery = ref(props.initialSupplier?.name ?? '');
@@ -443,6 +477,7 @@ function submit() {
     form.transform((data) => ({
         ...data,
         supplier_id: data.supplier_id === '' || data.supplier_id === null ? null : Number(data.supplier_id),
+        source_id: data.source_id ? Number(data.source_id) : null,
         line_groups: data.line_groups.map((group, index) => ({
             name: group.name,
             sort_order: index,
@@ -477,6 +512,13 @@ function submit() {
             </div>
 
             <form @submit.prevent="submit" class="space-y-6">
+                <div v-if="props.sourceSummary" class="rounded-lg border border-teal-200 bg-teal-50 p-4">
+                    <p class="text-sm text-teal-900">
+                        Creating this purchase order from
+                        <span class="font-semibold">{{ props.sourceSummary.type.toUpperCase() }}</span>
+                        <span class="font-semibold">{{ props.sourceSummary.number }}</span>.
+                    </p>
+                </div>
                 <!-- Basic Information -->
                 <div class="rounded-lg border border-gray-200 bg-white p-6">
                     <h2 class="mb-4 text-lg font-semibold text-gray-900">Basic Information</h2>

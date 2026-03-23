@@ -57,6 +57,7 @@ class PdfGenerationService
     {
         // Process Handlebars syntax in template
         $html = $this->processHandlebarsTemplate($template->html_template, $data);
+        $html = $this->sanitizeRenderedTemplateHtml($html);
         $css = $template->css_styles ?? '';
 
         // Convert relative image paths to absolute URLs for dompdf
@@ -79,6 +80,23 @@ class PdfGenerationService
 
         // Generate PDF directly from HTML
         return Pdf::loadHTML($fullHtml);
+    }
+
+    /**
+     * Remove obvious executable HTML from rendered template output.
+     */
+    protected function sanitizeRenderedTemplateHtml(string $html): string
+    {
+        // Script tags are never needed for static PDF output.
+        $html = preg_replace('/<script\b[^>]*>[\s\S]*?<\/script>/i', '', $html) ?? $html;
+
+        // Remove inline JS event handlers (onclick, onerror, etc.).
+        $html = preg_replace('/\s+on[a-z]+\s*=\s*(".*?"|\'.*?\'|[^\s>]+)/i', '', $html) ?? $html;
+
+        // Remove javascript: URLs from href/src attributes.
+        $html = preg_replace('/\s+(href|src)\s*=\s*("|\')\s*javascript:[\s\S]*?\2/i', '', $html) ?? $html;
+
+        return $html;
     }
 
     /**

@@ -3,6 +3,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import { Edit, Download, Printer, Filter, X } from 'lucide-vue-next';
+import { useNumberFormat } from '@/composables/useNumberFormat';
 
 interface Report {
     id: number;
@@ -87,6 +88,15 @@ const props = withDefaults(defineProps<Props>(), {
     products: () => [],
     filters: () => ({}),
 });
+
+const { formatCurrency } = useNumberFormat();
+
+const toNumericAmount = (value: unknown): number => {
+    const parsed = typeof value === 'number' ? value : Number(value ?? 0);
+    return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const formatMoney = (value: unknown): string => formatCurrency(toNumericAmount(value));
 
 // Filter state - initialize from template filters, then override with request filters
 const templateFilters = (props as any).templateFilters || {};
@@ -421,19 +431,19 @@ const printReport = () => {
                     </div>
                     <div v-if="props.data.grand_totals.subtotal !== undefined && props.data.grand_totals.subtotal !== null">
                         <span class="text-sm text-gray-600">Subtotal:</span>
-                        <div class="text-xl font-bold text-gray-900">R{{ (typeof props.data.grand_totals.subtotal === 'number' ? props.data.grand_totals.subtotal : Number(props.data.grand_totals.subtotal || 0)).toFixed(2) }}</div>
+                        <div class="text-xl font-bold text-gray-900">{{ formatMoney(props.data.grand_totals.subtotal) }}</div>
                     </div>
                     <div v-if="props.data.grand_totals.discount_amount !== undefined && props.data.grand_totals.discount_amount !== null">
                         <span class="text-sm text-gray-600">Discount:</span>
-                        <div class="text-xl font-bold text-red-600">-R{{ (typeof props.data.grand_totals.discount_amount === 'number' ? props.data.grand_totals.discount_amount : Number(props.data.grand_totals.discount_amount || 0)).toFixed(2) }}</div>
+                        <div class="text-xl font-bold text-red-600">-{{ formatMoney(props.data.grand_totals.discount_amount) }}</div>
                     </div>
                     <div v-if="props.data.grand_totals.tax_amount !== undefined && props.data.grand_totals.tax_amount !== null">
                         <span class="text-sm text-gray-600">Tax:</span>
-                        <div class="text-xl font-bold text-gray-900">R{{ (typeof props.data.grand_totals.tax_amount === 'number' ? props.data.grand_totals.tax_amount : Number(props.data.grand_totals.tax_amount || 0)).toFixed(2) }}</div>
+                        <div class="text-xl font-bold text-gray-900">{{ formatMoney(props.data.grand_totals.tax_amount) }}</div>
                     </div>
                     <div v-if="props.data.grand_totals.total !== undefined && props.data.grand_totals.total !== null">
                         <span class="text-sm text-gray-600">Total:</span>
-                        <div class="text-xl font-bold text-blue-600">R{{ (typeof props.data.grand_totals.total === 'number' ? props.data.grand_totals.total : Number(props.data.grand_totals.total || 0)).toFixed(2) }}</div>
+                        <div class="text-xl font-bold text-blue-600">{{ formatMoney(props.data.grand_totals.total) }}</div>
                     </div>
                 </div>
             </div>
@@ -608,7 +618,7 @@ const printReport = () => {
                                 <div class="text-sm text-gray-600">Group Totals:</div>
                                 <div class="font-semibold text-gray-900">
                                     <span v-if="group.group_totals.total !== undefined && group.group_totals.total !== null" class="ml-2">
-                                        Total: R{{ typeof group.group_totals.total === 'number' ? group.group_totals.total.toFixed(2) : Number(group.group_totals.total || 0).toFixed(2) }}
+                                        Total: {{ formatMoney(group.group_totals.total) }}
                                     </span>
                                 </div>
                             </div>
@@ -664,7 +674,7 @@ const printReport = () => {
                                         >
                                             {{ key.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) }}: 
                                             <span v-if="typeof value === 'number' || (typeof value === 'string' && !isNaN(parseFloat(value)))">
-                                                R{{ (typeof value === 'number' ? value : parseFloat(value)).toFixed(2) }}
+                                                {{ formatMoney(value) }}
                                             </span>
                                             <span v-else>{{ value }}</span>
                                         </span>
@@ -724,7 +734,7 @@ const printReport = () => {
                                         :key="key"
                                         class="ml-4"
                                     >
-                                        {{ key.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) }}: R{{ value.toFixed(2) }}
+                                        {{ key.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) }}: {{ formatMoney(value) }}
                                     </span>
                                 </td>
                             </tr>

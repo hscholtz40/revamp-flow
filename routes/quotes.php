@@ -27,6 +27,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/quotes/{quote}/email', [QuotesController::class, 'emailQuote'])
         ->middleware('module.permission:quotes,edit')
         ->name('quotes.email');
+    Route::post('/quotes/{quote}/sign', [QuotesController::class, 'sign'])
+        ->middleware('module.permission:quotes,edit')
+        ->name('quotes.sign');
 
     Route::patch('/quotes/{quote}/status', [QuotesController::class, 'updateStatus'])
         ->middleware('module.permission:quotes,edit')
