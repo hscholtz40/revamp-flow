@@ -921,7 +921,7 @@ if (props.prefill) {
         selectedCustomer.value = prefillCustomer;
         customerSearchQuery.value = prefillCustomer.name;
         form.terms = (prefillCustomer.terms || 'COD').trim() || 'COD';
-    } elseif (source.terms) {
+    } else if (source.terms) {
         form.terms = source.terms;
     }
 

@@ -2,6 +2,7 @@
 
 ## 2026-03-23
 
+- Invoices Create (Vue): fixed CI/build failure by using JavaScript `else if` instead of PHP-style `elseif` in invoice prefill logic.
 - Invoice PDFs: default Blade invoice PDF and the built-in HTML PDF template starter no longer print **payment terms** (`terms`); only **notes** and **terms & conditions** appear in that section. `{{invoice.terms}}` remains available in the template picker for custom layouts.
 - Invoices: added `terms_conditions` on invoices so **Terms &amp; Conditions** (long body text) is separate from **payment terms** (`terms`: COD, Net 30, etc.). Quote/jobcard conversion and “create invoice from quote/jobcard” prefill no longer copy quote/jobcard `terms_conditions` into payment `terms`. Default company “invoice terms” setting maps to the new field. Updated invoice PDF, customer email, Show/Create/Edit UI, POS payload, and PDF template picker placeholders (`{{invoice.terms}}` = payment terms, `{{invoice.terms_conditions}}` = T&amp;C). **Note:** Custom HTML PDF templates that used `{{invoice.terms}}` for long legal text should switch to `{{invoice.terms_conditions}}`; existing rows only populate the new column for new/edited invoices unless you migrate old data manually.
 - Stock movements index: fixed a crash when a movement referenced a missing/deleted product (`Cannot read properties of null (reading 'name')`) by treating `product` as optional and showing a safe label.
