@@ -103,9 +103,9 @@ test('limited user timesheet summary and list are scoped to own entries', functi
 
     $response->assertOk();
     $response->assertInertia(fn (Assert $page) => $page
-        ->where('summary.total_hours', 1.0)
-        ->where('summary.billable_hours', 1.0)
-        ->where('summary.total_amount', 100.0)
+        ->where('summary.total_hours', fn ($value) => (float) $value === 1.0)
+        ->where('summary.billable_hours', fn ($value) => (float) $value === 1.0)
+        ->where('summary.total_amount', fn ($value) => (float) $value === 100.0)
         ->where('filters.user_id', $limitedUser->id)
         ->has('timeEntries.data', 1)
         ->where('timeEntries.data.0.user_id', $limitedUser->id)
