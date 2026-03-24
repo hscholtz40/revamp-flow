@@ -127,10 +127,13 @@
                                 </td>
                                 <td v-if="showTimesheetActions" class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                     <button
+                                        type="button"
                                         @click="deleteEntry(entry.id)"
-                                        class="text-red-600 hover:text-red-900"
+                                        class="inline-flex items-center justify-center rounded-md p-2 text-sm font-medium text-red-600 hover:bg-red-50 md:p-0 md:hover:bg-transparent hover:text-red-900"
                                     >
-                                        Delete
+                                        <ListTableActionLabel label="Delete">
+                                            <Trash2 class="h-4 w-4" />
+                                        </ListTableActionLabel>
                                     </button>
                                 </td>
                             </tr>
@@ -171,9 +174,11 @@
 </template>
 
 <script setup lang="ts">
+import ListTableActionLabel from '@/components/ListTableActionLabel.vue';
 import { useAuthAbility } from '@/composables/useAuthAbilities';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { Trash2 } from 'lucide-vue-next';
 import { ref, computed, watch } from 'vue';
 
 interface Props {

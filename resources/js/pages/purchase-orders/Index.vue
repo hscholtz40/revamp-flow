@@ -162,19 +162,23 @@
                                         <Link
                                             v-if="canPurchaseOrdersEdit && canEditPoRow(po)"
                                             :href="purchaseOrders.edit(po.id).url"
-                                            class="text-indigo-600 hover:text-indigo-900"
+                                            class="inline-flex items-center justify-center px-2 py-1.5 md:px-3 md:py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                                             title="Edit"
                                         >
-                                            <Edit class="h-4 w-4" />
+                                            <ListTableActionLabel label="Edit">
+                                                <Edit class="h-4 w-4" />
+                                            </ListTableActionLabel>
                                         </Link>
                                         <button
                                             v-if="canPurchaseOrdersDelete && canDeletePoRow(po)"
                                             type="button"
                                             title="Delete"
-                                            class="text-red-600 hover:text-red-900"
+                                            class="inline-flex items-center justify-center px-2 py-1.5 md:px-3 md:py-1 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                                             @click="deletePurchaseOrder(po)"
                                         >
-                                            <Trash2 class="h-4 w-4" />
+                                            <ListTableActionLabel label="Delete">
+                                                <Trash2 class="h-4 w-4" />
+                                            </ListTableActionLabel>
                                         </button>
                                     </div>
                                 </td>
@@ -244,6 +248,7 @@
 </template>
 
 <script setup lang="ts">
+import ListTableActionLabel from '@/components/ListTableActionLabel.vue';
 import { useNumberFormat } from '@/composables/useNumberFormat';
 import { useAuthAbility } from '@/composables/useAuthAbilities';
 import AppLayout from '@/layouts/AppLayout.vue';

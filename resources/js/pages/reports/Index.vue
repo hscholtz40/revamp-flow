@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import ListTableActionLabel from '@/components/ListTableActionLabel.vue';
 import { useAuthAbility } from '@/composables/useAuthAbilities';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
-import { Plus, FileText, FileBarChart, Trash2, Eye, Edit, Copy, ClipboardList } from 'lucide-vue-next';
+import { Plus, FileText, FileBarChart, Trash2, Edit, ClipboardList } from 'lucide-vue-next';
 
 interface Report {
     id: number;
@@ -144,18 +145,23 @@ const deleteTemplate = (templateId: number, event: Event) => {
                                     v-if="canReportsEdit"
                                     :href="`/reports/templates/${template.id}/edit`"
                                     @click="editTemplate(template.id, $event)"
-                                    class="text-gray-600 hover:text-gray-900"
-                                    title="Edit Template"
+                                    class="inline-flex items-center justify-center px-2 py-1.5 md:px-3 md:py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                    title="Edit template"
                                 >
-                                    <Edit class="w-4 h-4" />
+                                    <ListTableActionLabel label="Edit">
+                                        <Edit class="w-4 h-4" />
+                                    </ListTableActionLabel>
                                 </Link>
                                 <button
                                     v-if="canReportsDelete"
+                                    type="button"
                                     @click="deleteTemplate(template.id, $event)"
-                                    class="text-red-600 hover:text-red-900"
-                                    title="Delete Template"
+                                    class="inline-flex items-center justify-center px-2 py-1.5 md:px-3 md:py-1 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                                    title="Delete template"
                                 >
-                                    <Trash2 class="w-4 h-4" />
+                                    <ListTableActionLabel label="Delete">
+                                        <Trash2 class="w-4 h-4" />
+                                    </ListTableActionLabel>
                                 </button>
                             </div>
                         </div>
@@ -249,16 +255,21 @@ const deleteTemplate = (templateId: number, event: Event) => {
                                         <Link
                                             v-if="canReportsEdit"
                                             :href="`/reports/${report.id}/edit`"
-                                            class="text-gray-600 hover:text-gray-900"
+                                            class="inline-flex items-center justify-center px-2 py-1.5 md:px-3 md:py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                                         >
-                                            <Edit class="w-4 h-4" />
+                                            <ListTableActionLabel label="Edit">
+                                                <Edit class="w-4 h-4" />
+                                            </ListTableActionLabel>
                                         </Link>
                                         <button
                                             v-if="canReportsDelete"
+                                            type="button"
                                             @click="deleteReport(report.id)"
-                                            class="text-red-600 hover:text-red-900"
+                                            class="inline-flex items-center justify-center px-2 py-1.5 md:px-3 md:py-1 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                                         >
-                                            <Trash2 class="w-4 h-4" />
+                                            <ListTableActionLabel label="Delete">
+                                                <Trash2 class="w-4 h-4" />
+                                            </ListTableActionLabel>
                                         </button>
                                     </div>
                                 </td>

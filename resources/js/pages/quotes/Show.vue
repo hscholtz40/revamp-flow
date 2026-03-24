@@ -933,8 +933,11 @@ const getStatusBadgeClass = (status: string) => {
     return classes[status as keyof typeof classes] || 'bg-gray-100 text-gray-800';
 };
 
-const formatStatus = (status: string) => {
-    return status.replace('_', ' ').toUpperCase();
+const formatStatus = (code: string) => {
+    if (!code) return '';
+    const opt = props.statusOptions?.find((o) => o.value === code);
+    if (opt) return opt.label;
+    return code.replace(/_/g, ' ').toUpperCase();
 };
 
 const formatDate = (dateString: string) => {

@@ -39,11 +39,9 @@
                         <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
                         <select v-model="status" class="w-full rounded border px-3 py-2">
                             <option value="">All Statuses</option>
-                            <option value="draft">Draft</option>
-                            <option value="sent">Sent</option>
-                            <option value="accepted">Accepted</option>
-                            <option value="rejected">Rejected</option>
-                            <option value="expired">Expired</option>
+                            <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">
+                                {{ opt.label }}
+                            </option>
                         </select>
                     </div>
                     <div>
@@ -154,7 +152,7 @@
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <span :class="getStatusBadgeClass(quote.status)" class="inline-flex px-2 py-1 text-xs font-semibold rounded-full">
-                                        {{ quote.status.replace('_', ' ').toUpperCase() }}
+                                        {{ formatQuoteStatus(quote.status) }}
                                     </span>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
@@ -197,16 +195,20 @@
                                         <Link
                                             v-if="canEditQuote(quote)"
                                             :href="quotes.edit(quote.id).url"
-                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                            class="inline-flex items-center justify-center px-2 py-1.5 md:px-3 md:py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                                         >
-                                            Edit
+                                            <ListTableActionLabel label="Edit">
+                                                <Edit class="h-4 w-4" />
+                                            </ListTableActionLabel>
                                         </Link>
                                         <button
                                             v-if="canDeleteQuote(quote)"
                                             @click="deleteQuote(quote)"
-                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                                            class="inline-flex items-center justify-center px-2 py-1.5 md:px-3 md:py-1 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                                         >
-                                            Delete
+                                            <ListTableActionLabel label="Delete">
+                                                <Trash2 class="h-4 w-4" />
+                                            </ListTableActionLabel>
                                         </button>
                                     </div>
                                 </td>
@@ -271,11 +273,13 @@
 </template>
 
 <script setup lang="ts">
+import ListTableActionLabel from '@/components/ListTableActionLabel.vue';
 import { useAuthAbility } from '@/composables/useAuthAbilities';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
+import { Edit, Trash2 } from 'lucide-vue-next';
 import quotes from '@/routes/quotes';
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 interface Quote {
     id: number;
@@ -328,7 +332,10 @@ const props = defineProps<{
     };
     currentCompany: Company;
     canEditCompleted: boolean;
+    statusOptions?: Array<{ value: string; label: string }>;
 }>();
+
+const statusOptions = computed(() => props.statusOptions ?? []);
 
 const search = ref(props.filters.search);
 const status = ref(props.filters.status);
@@ -384,6 +391,13 @@ const getStatusBadgeClass = (status: string) => {
         expired: 'bg-yellow-100 text-yellow-800',
     };
     return classes[status as keyof typeof classes] || 'bg-gray-100 text-gray-800';
+};
+
+const formatQuoteStatus = (code: string) => {
+    if (!code) return '';
+    const opt = statusOptions.value.find((o) => o.value === code);
+    if (opt) return opt.label;
+    return code.replace(/_/g, ' ').toUpperCase();
 };
 
 const formatDate = (dateString: string) => {

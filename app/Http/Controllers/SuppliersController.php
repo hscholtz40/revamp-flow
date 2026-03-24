@@ -155,9 +155,15 @@ class SuppliersController extends Controller
 
         $supplier->load(['products']);
 
-        $purchaseOrders = $supplier->purchaseOrders()
-            ->orderByDesc('created_at')
-            ->paginate($purchaseOrdersPerPage, ['id', 'po_number', 'status', 'total', 'created_at'], 'po_page');
+        $user = $request->user();
+        $purchaseOrders = $user->hasModulePermission('purchase-orders', 'list')
+            ? $supplier->purchaseOrders()
+                ->orderByDesc('created_at')
+                ->paginate($purchaseOrdersPerPage, ['id', 'po_number', 'status', 'total', 'created_at'], 'po_page')
+            : new \Illuminate\Pagination\LengthAwarePaginator([], 0, $purchaseOrdersPerPage, 1, [
+                'path' => $request->url(),
+                'pageName' => 'po_page',
+            ]);
 
         return Inertia::render('suppliers/Show', [
             'supplier' => $supplier,

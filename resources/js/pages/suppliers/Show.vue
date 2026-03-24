@@ -39,6 +39,7 @@ interface Props {
 const props = defineProps<Props>();
 
 const canSuppliersEdit = useAuthAbility('suppliers', 'edit');
+const canPurchaseOrdersList = useAuthAbility('purchase-orders', 'list');
 const { formatCurrency } = useNumberFormat();
 </script>
 
@@ -131,7 +132,7 @@ const { formatCurrency } = useNumberFormat();
                     </div>
 
                     <!-- Purchase Orders -->
-                    <div class="rounded-lg border border-gray-200 bg-white p-6">
+                    <div v-if="canPurchaseOrdersList" class="rounded-lg border border-gray-200 bg-white p-6">
                         <h2 class="mb-4 text-lg font-semibold text-gray-900">Purchase Orders</h2>
                         <p class="mb-4 text-sm text-gray-600">Complete purchase order history for this supplier.</p>
                         <div v-if="(props.purchaseOrders?.data || []).length === 0" class="py-4 text-sm text-gray-500">

@@ -59,9 +59,21 @@ interface AccountHistoryItem {
 
 const canCustomersEdit = useAuthAbility('customers', 'edit');
 const canCustomersDelete = useAuthAbility('customers', 'delete');
+const canContactsList = useAuthAbility('contacts', 'list');
 const canContactsCreate = useAuthAbility('contacts', 'create');
 const canContactsEdit = useAuthAbility('contacts', 'edit');
 const canContactsDelete = useAuthAbility('contacts', 'delete');
+const canJobcardsList = useAuthAbility('jobcards', 'list');
+const canQuotesView = useAuthAbility('quotes', 'view');
+const canInvoicesView = useAuthAbility('invoices', 'view');
+const canCreditNotesList = useAuthAbility('credit-notes', 'list');
+const showAccountHistoryPanel = computed(
+    () =>
+        canJobcardsList.value ||
+        canQuotesView.value ||
+        canInvoicesView.value ||
+        canCreditNotesList.value,
+);
 const { formatCurrency } = useNumberFormat();
 
 const props = defineProps<{
@@ -413,7 +425,7 @@ watch([contactSearch, contactsPerPage, smsSearch, smsStatus, smsPerPage, emailPe
             </div>
 
             <!-- Account History Sub-Panel -->
-            <div class="rounded-lg bg-white border border-gray-200 shadow-sm">
+            <div v-if="showAccountHistoryPanel" class="rounded-lg bg-white border border-gray-200 shadow-sm">
                 <div class="border-b border-gray-200 bg-indigo-50 px-6 py-4">
                     <div class="flex items-center justify-between">
                         <div>
@@ -497,7 +509,7 @@ watch([contactSearch, contactsPerPage, smsSearch, smsStatus, smsPerPage, emailPe
             </div>
 
             <!-- Contacts Sub-Panel -->
-            <div class="rounded-lg bg-white border border-gray-200 shadow-sm">
+            <div v-if="canContactsList" class="rounded-lg bg-white border border-gray-200 shadow-sm">
                 <div class="border-b border-gray-200 bg-blue-50 px-6 py-4">
                     <div class="flex items-center justify-between">
                         <div>

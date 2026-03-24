@@ -222,11 +222,9 @@
                                 :class="{ 'border-red-500': form.errors.status }"
                                 required
                             >
-                                <option value="draft">Draft</option>
-                                <option value="pending">Pending</option>
-                                <option value="in_progress">In Progress</option>
-                                <option value="completed">Completed</option>
-                                <option value="cancelled">Cancelled</option>
+                                <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">
+                                    {{ opt.label }}
+                                </option>
                             </select>
                             <div v-if="form.errors.status" class="text-red-500 text-sm mt-1">
                                 {{ form.errors.status }}
@@ -790,9 +788,11 @@ interface Props {
             account_id?: number | null;
         }[];
     } | null;
+    statusOptions?: Array<{ value: string; label: string }>;
 }
 
 const props = defineProps<Props>();
+const statusOptions = computed(() => props.statusOptions ?? []);
 const ROUNDING_LINE_DESCRIPTION = 'Rounding Adjustment';
 const createLineItemUid = () =>
     `line-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;

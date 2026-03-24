@@ -187,6 +187,7 @@ class JobcardController extends Controller
             'customers' => $customers,
             'users' => $users,
             'teams' => $teams,
+            'statusOptions' => $currentCompany->getJobcardStatusOptions(),
             'filters' => [
                 'status' => $request->input('status', ''),
                 'customer_id' => $request->input('customer_id', ''),
@@ -303,6 +304,7 @@ class JobcardController extends Controller
             'products' => $products,
             'users' => $users,
             'teams' => $teams,
+            'statusOptions' => $currentCompany->getJobcardStatusOptions(),
             'taxRates' => $taxRates,
             'defaultSalesTaxRateId' => $defaultSalesTaxRate?->id,
             'chartOfAccounts' => $chartOfAccounts,
@@ -488,11 +490,15 @@ class JobcardController extends Controller
             ->where('source_type', 'jobcard')
             ->where('source_id', $jobcard->id)
             ->value('id');
-        $relatedPurchaseOrders = PurchaseOrder::where('company_id', $currentCompany->id)
-            ->where('source_type', 'jobcard')
-            ->where('source_id', $jobcard->id)
-            ->latest()
-            ->get(['id', 'po_number', 'status', 'total', 'created_at']);
+
+        $authUser = auth()->user();
+        $relatedPurchaseOrders = $authUser->hasModulePermission('purchase-orders', 'list')
+            ? PurchaseOrder::where('company_id', $currentCompany->id)
+                ->where('source_type', 'jobcard')
+                ->where('source_id', $jobcard->id)
+                ->latest()
+                ->get(['id', 'po_number', 'status', 'total', 'created_at'])
+            : collect();
 
         // Get running timer for current user and this jobcard
         $runningTimer = \App\Models\TimeEntry::getRunningEntry(auth()->id(), $jobcard->id);
@@ -610,6 +616,7 @@ class JobcardController extends Controller
             'products' => $products,
             'users' => $users,
             'teams' => $teams,
+            'statusOptions' => $currentCompany->getJobcardStatusOptions(),
             'taxRates' => $taxRates,
             'defaultSalesTaxRateId' => $defaultSalesTaxRate?->id,
             'chartOfAccounts' => $chartOfAccounts,

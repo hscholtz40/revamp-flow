@@ -146,6 +146,7 @@ class QuotesController extends Controller
         return Inertia::render('quotes/Index', [
             'quotes' => $quotes,
             'customers' => $customers,
+            'statusOptions' => $currentCompany->getQuoteStatusOptions(),
             'filters' => [
                 'status' => $request->input('status', ''),
                 'customer_id' => $request->input('customer_id', ''),
@@ -261,6 +262,7 @@ class QuotesController extends Controller
             'products' => $products,
             'currentCompany' => $currentCompany,
             'defaultTerms' => $currentCompany->default_quote_terms,
+            'statusOptions' => $currentCompany->getQuoteStatusOptions(),
             'taxRates' => $taxRates,
             'defaultSalesTaxRateId' => $defaultSalesTaxRate?->id,
             'chartOfAccounts' => $chartOfAccounts,
@@ -478,6 +480,7 @@ class QuotesController extends Controller
             'customers' => $customers,
             'products' => $products,
             'currentCompany' => $currentCompany,
+            'statusOptions' => $currentCompany->getQuoteStatusOptions(),
             'taxRates' => $taxRates,
             'defaultSalesTaxRateId' => $defaultSalesTaxRate?->id,
             'chartOfAccounts' => $chartOfAccounts,

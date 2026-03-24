@@ -527,21 +527,23 @@
                                     <span class="text-base font-semibold">Total:</span>
                                     <span class="text-base font-semibold">{{ props.jobcard.formatted_total }}</span>
                                 </div>
-                                <div class="flex justify-between">
-                                    <span class="text-sm text-gray-600">Purchasing Total:</span>
-                                    <span class="text-sm font-medium">R{{ purchaseOrdersTotal.toFixed(2) }}</span>
-                                </div>
-                                <div class="flex justify-between">
-                                    <span class="text-sm text-gray-600">Total vs Purchasing:</span>
-                                    <span class="text-sm font-medium" :class="purchaseVariance >= 0 ? 'text-green-700' : 'text-red-700'">
-                                        R{{ purchaseVariance.toFixed(2) }}
-                                    </span>
-                                </div>
+                                <template v-if="hasPurchaseOrdersList">
+                                    <div class="flex justify-between">
+                                        <span class="text-sm text-gray-600">Purchasing Total:</span>
+                                        <span class="text-sm font-medium">R{{ purchaseOrdersTotal.toFixed(2) }}</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-sm text-gray-600">Total vs Purchasing:</span>
+                                        <span class="text-sm font-medium" :class="purchaseVariance >= 0 ? 'text-green-700' : 'text-red-700'">
+                                            R{{ purchaseVariance.toFixed(2) }}
+                                        </span>
+                                    </div>
+                                </template>
                             </div>
                         </div>
                     </div>
 
-                    <div v-if="!isLimitedUser && props.relatedPurchaseOrders && props.relatedPurchaseOrders.length > 0" class="rounded-lg bg-white border border-gray-200 shadow-sm">
+                    <div v-if="!isLimitedUser && hasPurchaseOrdersList && props.relatedPurchaseOrders && props.relatedPurchaseOrders.length > 0" class="rounded-lg bg-white border border-gray-200 shadow-sm">
                         <div class="border-b border-gray-200 bg-gray-50 px-6 py-4">
                             <h2 class="text-lg font-semibold text-gray-900">Related Purchase Orders</h2>
                             <p class="text-sm text-gray-600">Purchase orders linked to this jobcard</p>
@@ -781,6 +783,7 @@ const isLimitedUser = computed(() => (page.props.auth as any)?.user?.user_type =
 const hasJobcardEdit = useAuthAbility('jobcards', 'edit');
 const hasJobcardDelete = useAuthAbility('jobcards', 'delete');
 const hasPurchaseOrdersCreate = useAuthAbility('purchase-orders', 'create');
+const hasPurchaseOrdersList = useAuthAbility('purchase-orders', 'list');
 
 interface Product {
     id: number;
@@ -1055,9 +1058,11 @@ const getStatusBadgeClass = (status: string) => {
     return classes[status as keyof typeof classes] || classes.draft;
 };
 
-const formatStatus = (status: string) => {
-    if (!status) return '';
-    return status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+const formatStatus = (code: string) => {
+    if (!code) return '';
+    const opt = props.statusOptions?.find((o) => o.value === code);
+    if (opt) return opt.label;
+    return code.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase());
 };
 
 const formatDate = (date: string) => {

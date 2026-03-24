@@ -45,15 +45,31 @@
                             </span>
                         </div>
                     </div>
-                    <div class="border-t px-6 py-3 flex items-center gap-2">
-                        <Link :href="`/administration/teams/${team.id}`" class="text-sm font-medium text-blue-600 hover:text-blue-800">
-                            View
+                    <div class="border-t px-6 py-3 flex flex-wrap items-center gap-2">
+                        <Link
+                            :href="`/administration/teams/${team.id}`"
+                            class="inline-flex items-center justify-center rounded-md p-2 text-sm font-medium text-blue-600 hover:bg-blue-50 md:p-0 md:hover:bg-transparent hover:text-blue-800"
+                        >
+                            <ListTableActionLabel label="View">
+                                <Eye class="h-4 w-4" />
+                            </ListTableActionLabel>
                         </Link>
-                        <Link :href="`/administration/teams/${team.id}/edit`" class="text-sm font-medium text-indigo-600 hover:text-indigo-800">
-                            Edit
+                        <Link
+                            :href="`/administration/teams/${team.id}/edit`"
+                            class="inline-flex items-center justify-center rounded-md p-2 text-sm font-medium text-indigo-600 hover:bg-indigo-50 md:p-0 md:hover:bg-transparent hover:text-indigo-800"
+                        >
+                            <ListTableActionLabel label="Edit">
+                                <Edit class="h-4 w-4" />
+                            </ListTableActionLabel>
                         </Link>
-                        <button @click="deleteTeam(team)" class="text-sm font-medium text-red-600 hover:text-red-800">
-                            Delete
+                        <button
+                            type="button"
+                            @click="deleteTeam(team)"
+                            class="inline-flex items-center justify-center rounded-md p-2 text-sm font-medium text-red-600 hover:bg-red-50 md:p-0 md:hover:bg-transparent hover:text-red-800"
+                        >
+                            <ListTableActionLabel label="Delete">
+                                <Trash2 class="h-4 w-4" />
+                            </ListTableActionLabel>
                         </button>
                     </div>
                 </div>
@@ -63,9 +79,10 @@
 </template>
 
 <script setup lang="ts">
+import ListTableActionLabel from '@/components/ListTableActionLabel.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { UsersRound, User as UserIcon, ClipboardList } from 'lucide-vue-next';
+import { UsersRound, User as UserIcon, ClipboardList, Eye, Edit, Trash2 } from 'lucide-vue-next';
 
 interface Team {
     id: number;

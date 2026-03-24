@@ -2,8 +2,10 @@
 import { useAuthAbility } from '@/composables/useAuthAbilities';
 import AppLayout from '@/layouts/AppLayout.vue';
 import EmailComposerModal from '@/components/EmailComposerModal.vue';
+import ListTableActionLabel from '@/components/ListTableActionLabel.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import customers from '@/routes/customers';
+import { Edit, Mail, MessageSquare, Star, Trash2 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
 interface Customer {
@@ -268,38 +270,48 @@ const deleteCustomer = (customer: Customer) => {
                                         <Link
                                             v-if="canCustomersEdit"
                                             :href="customers.edit(c.id).url"
-                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                            class="inline-flex items-center justify-center px-2 py-1.5 md:px-3 md:py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                                         >
-                                            Edit
+                                            <ListTableActionLabel label="Edit">
+                                                <Edit class="h-4 w-4" />
+                                            </ListTableActionLabel>
                                         </Link>
                                         <button
                                             v-if="c.email"
                                             @click="openEmailModal(c)"
-                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                            class="inline-flex items-center justify-center px-2 py-1.5 md:px-3 md:py-1 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                                         >
-                                            Email
+                                            <ListTableActionLabel label="Email">
+                                                <Mail class="h-4 w-4" />
+                                            </ListTableActionLabel>
                                         </button>
                                         <button
                                             v-if="c.phone"
                                             @click="openSMSModal(c)"
-                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-green-700 bg-green-100 hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                                            class="inline-flex items-center justify-center px-2 py-1.5 md:px-3 md:py-1 border border-transparent text-xs font-medium rounded-md text-green-700 bg-green-100 hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                                         >
-                                            SMS
+                                            <ListTableActionLabel label="SMS">
+                                                <MessageSquare class="h-4 w-4" />
+                                            </ListTableActionLabel>
                                         </button>
                                         <button
                                             v-if="canCustomersEdit && !c.is_default_sales"
                                             @click="setDefaultSales(c)"
-                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                            class="inline-flex items-center justify-center px-2 py-1.5 md:px-3 md:py-1 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                                         >
-                                            Set Default
+                                            <ListTableActionLabel label="Set default">
+                                                <Star class="h-4 w-4" />
+                                            </ListTableActionLabel>
                                         </button>
                                         <button
                                             v-if="canCustomersDelete"
                                             type="button"
                                             @click="deleteCustomer(c)"
-                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                                            class="inline-flex items-center justify-center px-2 py-1.5 md:px-3 md:py-1 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                                         >
-                                            Delete
+                                            <ListTableActionLabel label="Delete">
+                                                <Trash2 class="h-4 w-4" />
+                                            </ListTableActionLabel>
                                         </button>
                                     </div>
                                 </td>

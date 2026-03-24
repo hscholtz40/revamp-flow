@@ -189,23 +189,31 @@ class CustomersController extends Controller
     {
         $this->authorize('view', $customer);
 
-        $currentCompany = auth()->user()->getCurrentCompany();
+        $user = $request->user();
+        $currentCompany = $user->getCurrentCompany();
 
-        // Load contacts with pagination
-        $contactsPerPage = $request->get('contacts_per_page', 5);
-        $contacts = $customer->contacts()
-            ->when($request->filled('contact_search'), function ($query) use ($request) {
-                $search = $request->get('contact_search');
-                $query->where(function ($q) use ($search) {
-                    $q->where('name', 'like', "%{$search}%")
-                        ->orWhere('email', 'like', "%{$search}%")
-                        ->orWhere('phone', 'like', "%{$search}%")
-                        ->orWhere('position', 'like', "%{$search}%");
-                });
-            })
-            ->orderBy('is_primary', 'desc')
-            ->orderBy('name', 'asc')
-            ->paginate($contactsPerPage, ['*'], 'contacts_page');
+        // Load contacts with pagination (same gate as contacts index: list)
+        $contactsPerPage = max(1, (int) $request->get('contacts_per_page', 5));
+        if ($user->hasModulePermission('contacts', 'list')) {
+            $contacts = $customer->contacts()
+                ->when($request->filled('contact_search'), function ($query) use ($request) {
+                    $search = $request->get('contact_search');
+                    $query->where(function ($q) use ($search) {
+                        $q->where('name', 'like', "%{$search}%")
+                            ->orWhere('email', 'like', "%{$search}%")
+                            ->orWhere('phone', 'like', "%{$search}%")
+                            ->orWhere('position', 'like', "%{$search}%");
+                    });
+                })
+                ->orderBy('is_primary', 'desc')
+                ->orderBy('name', 'asc')
+                ->paginate($contactsPerPage, ['*'], 'contacts_page');
+        } else {
+            $contacts = new \Illuminate\Pagination\LengthAwarePaginator([], 0, $contactsPerPage, 1, [
+                'path' => $request->url(),
+                'pageName' => 'contacts_page',
+            ]);
+        }
 
         // Load SMS activities with pagination
         $smsPerPage = $request->get('sms_per_page', 5);
@@ -258,16 +266,35 @@ class CustomersController extends Controller
             ->where('customer_id', $customer->id)
             ->selectRaw("'credit_note' AS document_type, id AS document_id, credit_note_number AS document_number, status, total, created_at AS document_date");
 
-        $accountHistory = DB::query()
-            ->fromSub(
-                $jobcardHistory
-                    ->unionAll($quoteHistory)
-                    ->unionAll($invoiceHistory)
-                    ->unionAll($creditNoteHistory),
-                'account_history'
-            )
-            ->orderByDesc('document_date')
-            ->paginate($accountHistoryPerPage, ['*'], 'account_history_page');
+        $accountUnionParts = [];
+        if ($user->hasModulePermission('jobcards', 'list')) {
+            $accountUnionParts[] = $jobcardHistory;
+        }
+        if ($user->hasModulePermission('quotes', 'view')) {
+            $accountUnionParts[] = $quoteHistory;
+        }
+        if ($user->hasModulePermission('invoices', 'view')) {
+            $accountUnionParts[] = $invoiceHistory;
+        }
+        if ($user->hasModulePermission('credit-notes', 'list')) {
+            $accountUnionParts[] = $creditNoteHistory;
+        }
+
+        if ($accountUnionParts === []) {
+            $accountHistory = new \Illuminate\Pagination\LengthAwarePaginator([], 0, $accountHistoryPerPage, 1, [
+                'path' => $request->url(),
+                'pageName' => 'account_history_page',
+            ]);
+        } else {
+            $accountUnionQuery = array_shift($accountUnionParts);
+            foreach ($accountUnionParts as $part) {
+                $accountUnionQuery = $accountUnionQuery->unionAll($part);
+            }
+            $accountHistory = DB::query()
+                ->fromSub($accountUnionQuery, 'account_history')
+                ->orderByDesc('document_date')
+                ->paginate($accountHistoryPerPage, ['*'], 'account_history_page');
+        }
 
         return Inertia::render('customers/Show', [
             'customer' => $customer,

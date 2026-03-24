@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import ListTableActionLabel from '@/components/ListTableActionLabel.vue';
 import { useAuthAbility } from '@/composables/useAuthAbilities';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
-import { Plus, Search, Building2, Eye, Edit, Trash2, Phone, Mail } from 'lucide-vue-next';
+import { Plus, Search, Building2, Edit, Trash2, Phone, Mail } from 'lucide-vue-next';
 import suppliers from '@/routes/suppliers';
 
 interface Supplier {
@@ -246,16 +247,21 @@ function deleteSupplier(supplier: Supplier) {
                                         <Link
                                             v-if="canSuppliersEdit"
                                             :href="suppliers.edit(supplier.id).url"
-                                            class="text-indigo-600 hover:text-indigo-900"
+                                            class="inline-flex items-center justify-center px-2 py-1.5 md:px-3 md:py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                                         >
-                                            <Edit class="h-4 w-4" />
+                                            <ListTableActionLabel label="Edit">
+                                                <Edit class="h-4 w-4" />
+                                            </ListTableActionLabel>
                                         </Link>
                                         <button
                                             v-if="canSuppliersDelete"
+                                            type="button"
                                             @click="deleteSupplier(supplier)"
-                                            class="text-red-600 hover:text-red-900"
+                                            class="inline-flex items-center justify-center px-2 py-1.5 md:px-3 md:py-1 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                                         >
-                                            <Trash2 class="h-4 w-4" />
+                                            <ListTableActionLabel label="Delete">
+                                                <Trash2 class="h-4 w-4" />
+                                            </ListTableActionLabel>
                                         </button>
                                     </div>
                                 </td>

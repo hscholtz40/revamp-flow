@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import ListTableActionLabel from '@/components/ListTableActionLabel.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, ref, onMounted, watch } from 'vue';
-import { Plus, Search, Filter, Package, Wrench, Eye, Edit, Trash2, Grid3x3, List } from 'lucide-vue-next';
+import { Plus, Search, Filter, Package, Wrench, Edit, Trash2, Grid3x3, List } from 'lucide-vue-next';
 import products from '@/routes/products';
 
 interface Product {
@@ -406,18 +407,20 @@ function getStockStatus(product: Product) {
                         <Link
                             v-if="$page.props.auth?.abilities?.products?.edit"
                             :href="products.edit(product.id).url"
-                            class="flex items-center gap-1 rounded border px-3 py-1 text-sm text-gray-700 hover:bg-gray-50"
+                            class="inline-flex items-center justify-center rounded border px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-50 md:px-3 md:py-1"
                         >
-                            <Edit class="h-3 w-3" />
-                            Edit
+                            <ListTableActionLabel label="Edit">
+                                <Edit class="h-4 w-4" />
+                            </ListTableActionLabel>
                         </Link>
                         <button
                             v-if="$page.props.auth?.abilities?.products?.delete"
                             @click="deleteProduct(product)"
-                            class="flex items-center gap-1 rounded border border-red-300 px-3 py-1 text-sm text-red-700 hover:bg-red-50"
+                            class="inline-flex items-center justify-center rounded border border-red-300 px-2 py-1.5 text-sm text-red-700 hover:bg-red-50 md:px-3 md:py-1"
                         >
-                            <Trash2 class="h-3 w-3" />
-                            Delete
+                            <ListTableActionLabel label="Delete">
+                                <Trash2 class="h-4 w-4" />
+                            </ListTableActionLabel>
                         </button>
                     </div>
                 </div>
@@ -525,18 +528,20 @@ function getStockStatus(product: Product) {
                                         <Link
                                             v-if="$page.props.auth?.abilities?.products?.edit"
                                             :href="products.edit(product.id).url"
-                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200"
+                                            class="inline-flex items-center justify-center px-2 py-1.5 md:px-3 md:py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200"
                                         >
-                                            <Edit class="h-3 w-3 mr-1" />
-                                            Edit
+                                            <ListTableActionLabel label="Edit">
+                                                <Edit class="h-4 w-4" />
+                                            </ListTableActionLabel>
                                         </Link>
                                         <button
                                             v-if="$page.props.auth?.abilities?.products?.delete"
                                             @click="deleteProduct(product)"
-                                            class="inline-flex items-center px-3 py-1 border border-red-300 text-xs font-medium rounded-md text-red-700 hover:bg-red-50"
+                                            class="inline-flex items-center justify-center px-2 py-1.5 md:px-3 md:py-1 border border-red-300 text-xs font-medium rounded-md text-red-700 hover:bg-red-50"
                                         >
-                                            <Trash2 class="h-3 w-3 mr-1" />
-                                            Delete
+                                            <ListTableActionLabel label="Delete">
+                                                <Trash2 class="h-4 w-4" />
+                                            </ListTableActionLabel>
                                         </button>
                                     </div>
                                 </td>

@@ -232,11 +232,9 @@
                             <label class="block text-sm font-medium text-gray-700 mb-1">Status *</label>
                             <select v-model="form.status" class="w-full rounded border px-3 py-2"
                                 :class="{ 'border-red-500': form.errors.status }" required>
-                                <option value="draft">Draft</option>
-                                <option value="sent">Sent</option>
-                                <option value="accepted">Accepted</option>
-                                <option value="rejected">Rejected</option>
-                                <option value="expired">Expired</option>
+                                <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">
+                                    {{ opt.label }}
+                                </option>
                             </select>
                             <div v-if="form.errors.status" class="text-red-500 text-sm mt-1">
                                 {{ form.errors.status }}
@@ -701,12 +699,15 @@ const props = defineProps<{
     products: Product[];
     currentCompany: Company;
     canEditCompleted: boolean;
+    statusOptions?: Array<{ value: string; label: string }>;
     taxRates: { id: number; name: string; rate: number; is_default_sales: boolean }[];
     defaultSalesTaxRateId: number | null;
     chartOfAccounts: { id: number; account_code: string; account_name: string; account_type: string; is_default_sales: boolean }[];
     defaultSalesAccountId: number | null;
     defaultRoundingAccountId?: number | null;
 }>();
+
+const statusOptions = computed(() => props.statusOptions ?? []);
 
 const ROUNDING_LINE_DESCRIPTION = 'Rounding Adjustment';
 const createLineItemUid = () =>

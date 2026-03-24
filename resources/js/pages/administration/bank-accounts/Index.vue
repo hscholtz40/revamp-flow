@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import ListTableActionLabel from '@/components/ListTableActionLabel.vue';
 import { useNumberFormat } from '@/composables/useNumberFormat';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { Plus, Edit, Trash2, Eye, Building2 } from 'lucide-vue-next';
+import { Plus, Edit, Trash2, Building2 } from 'lucide-vue-next';
 import administration from '@/routes/administration';
 
 interface BankAccount {
@@ -144,15 +145,20 @@ function deleteBankAccount(bankAccount: BankAccount) {
                                 <div class="flex items-center justify-end gap-2">
                                     <Link
                                         :href="administration.bankAccounts.edit(bankAccount.id).url"
-                                        class="text-indigo-600 hover:text-indigo-900"
+                                        class="inline-flex items-center justify-center rounded-md p-2 text-sm font-medium text-indigo-600 hover:bg-indigo-50 md:p-0 md:hover:bg-transparent hover:text-indigo-900"
                                     >
-                                        <Edit class="h-4 w-4" />
+                                        <ListTableActionLabel label="Edit">
+                                            <Edit class="h-4 w-4" />
+                                        </ListTableActionLabel>
                                     </Link>
                                     <button
+                                        type="button"
                                         @click="deleteBankAccount(bankAccount)"
-                                        class="text-red-600 hover:text-red-900"
+                                        class="inline-flex items-center justify-center rounded-md p-2 text-sm font-medium text-red-600 hover:bg-red-50 md:p-0 md:hover:bg-transparent hover:text-red-900"
                                     >
-                                        <Trash2 class="h-4 w-4" />
+                                        <ListTableActionLabel label="Delete">
+                                            <Trash2 class="h-4 w-4" />
+                                        </ListTableActionLabel>
                                     </button>
                                 </div>
                             </td>

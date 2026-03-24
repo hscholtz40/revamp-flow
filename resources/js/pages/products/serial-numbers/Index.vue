@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import ListTableActionLabel from '@/components/ListTableActionLabel.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
-import { ArrowLeft, Plus, Hash, Package } from 'lucide-vue-next';
+import { ArrowLeft, Plus, Hash, Package, Eye } from 'lucide-vue-next';
 import products from '@/routes/products';
 
 interface Product {
@@ -153,9 +154,11 @@ function getStatusColor(status: string): string {
                                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                     <Link
                                         :href="`/products/${props.product.id}/serial-numbers/${serial.id}`"
-                                        class="text-blue-600 hover:text-blue-900"
+                                        class="inline-flex items-center justify-center rounded-md p-2 text-blue-600 hover:bg-blue-50 md:p-0 md:hover:bg-transparent hover:text-blue-900"
                                     >
-                                        View
+                                        <ListTableActionLabel label="View">
+                                            <Eye class="h-4 w-4" />
+                                        </ListTableActionLabel>
                                     </Link>
                                 </td>
                             </tr>

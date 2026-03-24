@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import ListTableActionLabel from '@/components/ListTableActionLabel.vue';
 import { useAuthAbility } from '@/composables/useAuthAbilities';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
+import { Edit } from 'lucide-vue-next';
 import users from '@/routes/users';
 import { ref, watch } from 'vue';
 
@@ -77,7 +79,15 @@ watch(search, (value) => {
                                 </span>
                             </td>
                             <td class="p-2 text-right" @click.stop>
-                                <Link v-if="canUsersEdit" :href="users.edit(u.id).url" class="rounded bg-gray-200 px-2 py-1">Edit</Link>
+                                <Link
+                                    v-if="canUsersEdit"
+                                    :href="users.edit(u.id).url"
+                                    class="inline-flex items-center justify-center rounded bg-gray-200 px-2 py-1.5 md:px-3 md:py-1 text-sm font-medium text-gray-800 hover:bg-gray-300"
+                                >
+                                    <ListTableActionLabel label="Edit">
+                                        <Edit class="h-4 w-4" />
+                                    </ListTableActionLabel>
+                                </Link>
                             </td>
                         </tr>
                     </tbody>

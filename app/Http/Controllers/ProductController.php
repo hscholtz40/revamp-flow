@@ -200,35 +200,43 @@ class ProductController extends Controller
             $sortBy = 'date';
         }
 
-        $invoiceLineItemsQuery = InvoiceLineItem::where('invoice_line_items.product_id', $product->id)
-            ->whereHas('invoice', fn ($q) => $q->where('company_id', $product->company_id))
-            ->with(['invoice:id,invoice_number,customer_id,invoice_date', 'invoice.customer:id,name']);
+        $user = $request->user();
+        if ($user->hasModulePermission('invoices', 'view')) {
+            $invoiceLineItemsQuery = InvoiceLineItem::where('invoice_line_items.product_id', $product->id)
+                ->whereHas('invoice', fn ($q) => $q->where('company_id', $product->company_id))
+                ->with(['invoice:id,invoice_number,customer_id,invoice_date', 'invoice.customer:id,name']);
 
-        match ($sortBy) {
-            'date' => $invoiceLineItemsQuery->orderBy(
-                Invoice::select('invoice_date')->whereColumn('invoices.id', 'invoice_line_items.invoice_id')->limit(1),
-                $sortDir
-            )->orderBy('invoice_line_items.id', $sortDir),
-            'invoice_number' => $invoiceLineItemsQuery->orderBy(
-                Invoice::select('invoice_number')->whereColumn('invoices.id', 'invoice_line_items.invoice_id')->limit(1),
-                $sortDir
-            )->orderBy('invoice_line_items.id', $sortDir),
-            'customer' => $invoiceLineItemsQuery
-                ->join('invoices', 'invoice_line_items.invoice_id', '=', 'invoices.id')
-                ->leftJoin('customers', 'invoices.customer_id', '=', 'customers.id')
-                ->orderBy('customers.name', $sortDir)
-                ->orderBy('invoice_line_items.id', $sortDir),
-            'unit_price' => $invoiceLineItemsQuery->orderBy('invoice_line_items.unit_price', $sortDir)->orderBy('invoice_line_items.id', $sortDir),
-            default => $invoiceLineItemsQuery->orderBy('invoice_line_items.id', 'desc'),
-        };
+            match ($sortBy) {
+                'date' => $invoiceLineItemsQuery->orderBy(
+                    Invoice::select('invoice_date')->whereColumn('invoices.id', 'invoice_line_items.invoice_id')->limit(1),
+                    $sortDir
+                )->orderBy('invoice_line_items.id', $sortDir),
+                'invoice_number' => $invoiceLineItemsQuery->orderBy(
+                    Invoice::select('invoice_number')->whereColumn('invoices.id', 'invoice_line_items.invoice_id')->limit(1),
+                    $sortDir
+                )->orderBy('invoice_line_items.id', $sortDir),
+                'customer' => $invoiceLineItemsQuery
+                    ->join('invoices', 'invoice_line_items.invoice_id', '=', 'invoices.id')
+                    ->leftJoin('customers', 'invoices.customer_id', '=', 'customers.id')
+                    ->orderBy('customers.name', $sortDir)
+                    ->orderBy('invoice_line_items.id', $sortDir),
+                'unit_price' => $invoiceLineItemsQuery->orderBy('invoice_line_items.unit_price', $sortDir)->orderBy('invoice_line_items.id', $sortDir),
+                default => $invoiceLineItemsQuery->orderBy('invoice_line_items.id', 'desc'),
+            };
 
-        $recentInvoiceLineItems = $invoiceLineItemsQuery
-            ->paginate(10, ['invoice_line_items.id', 'invoice_line_items.invoice_id', 'invoice_line_items.product_id', 'invoice_line_items.description', 'invoice_line_items.quantity', 'invoice_line_items.unit_price', 'invoice_line_items.total'], 'invoice_usage_page')
-            ->withQueryString()
-            ->appends([
-                'invoice_usage_sort' => $sortBy,
-                'invoice_usage_dir' => $sortDir,
+            $recentInvoiceLineItems = $invoiceLineItemsQuery
+                ->paginate(10, ['invoice_line_items.id', 'invoice_line_items.invoice_id', 'invoice_line_items.product_id', 'invoice_line_items.description', 'invoice_line_items.quantity', 'invoice_line_items.unit_price', 'invoice_line_items.total'], 'invoice_usage_page')
+                ->withQueryString()
+                ->appends([
+                    'invoice_usage_sort' => $sortBy,
+                    'invoice_usage_dir' => $sortDir,
+                ]);
+        } else {
+            $recentInvoiceLineItems = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 10, 1, [
+                'path' => $request->url(),
+                'pageName' => 'invoice_usage_page',
             ]);
+        }
 
         return Inertia::render('products/Show', [
             'product' => $product,

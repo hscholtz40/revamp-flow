@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ListTableActionLabel from '@/components/ListTableActionLabel.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
@@ -434,9 +435,12 @@ function formatDateTimeInTimezone(dateString: string, timezone: string): string 
                         <Button
                             variant="ghost"
                             size="sm"
+                            class="inline-flex items-center justify-center"
                             @click="deleteSchedule(schedule.id)"
                         >
-                            <Trash2 class="h-4 w-4" />
+                            <ListTableActionLabel label="Delete">
+                                <Trash2 class="h-4 w-4" />
+                            </ListTableActionLabel>
                         </Button>
                     </div>
                 </div>
@@ -526,13 +530,15 @@ function formatDateTimeInTimezone(dateString: string, timezone: string): string 
                                         v-if="backup.status === 'completed'"
                                         variant="ghost"
                                         size="sm"
+                                        class="inline-flex items-center justify-center"
                                         @click="restoreBackup(backup.id)"
                                         :disabled="isRestoring === backup.id"
                                     >
-                                        <RotateCcw
-                                            v-if="isRestoring !== backup.id"
-                                            class="h-4 w-4"
-                                        />
+                                        <template v-if="isRestoring !== backup.id">
+                                            <ListTableActionLabel label="Restore">
+                                                <RotateCcw class="h-4 w-4" />
+                                            </ListTableActionLabel>
+                                        </template>
                                         <Loader2
                                             v-else
                                             class="h-4 w-4 animate-spin"
@@ -540,22 +546,26 @@ function formatDateTimeInTimezone(dateString: string, timezone: string): string 
                                     </Button>
                                     <button
                                         v-if="backup.status === 'completed'"
-                                        @click="downloadBackup(backup.id)"
-                                        class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 px-2"
                                         type="button"
+                                        @click="downloadBackup(backup.id)"
+                                        class="inline-flex h-8 items-center justify-center whitespace-nowrap rounded-md px-2 text-sm font-medium transition-all hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
                                     >
-                                        <Download class="h-4 w-4" />
+                                        <ListTableActionLabel label="Download">
+                                            <Download class="h-4 w-4" />
+                                        </ListTableActionLabel>
                                     </button>
                                     <Button
                                         variant="ghost"
                                         size="sm"
+                                        class="inline-flex items-center justify-center"
                                         @click="deleteBackup(backup.id)"
                                         :disabled="isDeleting === backup.id"
                                     >
-                                        <Trash2
-                                            v-if="isDeleting !== backup.id"
-                                            class="h-4 w-4 text-red-500"
-                                        />
+                                        <template v-if="isDeleting !== backup.id">
+                                            <ListTableActionLabel label="Delete">
+                                                <Trash2 class="h-4 w-4 text-red-500" />
+                                            </ListTableActionLabel>
+                                        </template>
                                         <Loader2
                                             v-else
                                             class="h-4 w-4 animate-spin"
