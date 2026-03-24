@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Traits\ScopedToCurrentCompanyRouteBinding;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 class AuditLog extends Model
 {
+    use ScopedToCurrentCompanyRouteBinding;
+
     protected $fillable = [
         'user_id',
         'company_id',
@@ -88,11 +91,11 @@ class AuditLog extends Model
     public function scopeForModel($query, string $modelType, ?int $modelId = null)
     {
         $query->where('auditable_type', $modelType);
-        
+
         if ($modelId !== null) {
             $query->where('auditable_id', $modelId);
         }
-        
+
         return $query;
     }
 
@@ -115,8 +118,8 @@ class AuditLog extends Model
 
         $modelName = class_basename($this->auditable_type);
         $userName = $this->user ? $this->user->name : 'System';
-        
-        return match($this->event) {
+
+        return match ($this->event) {
             'created' => "{$userName} created {$modelName} #{$this->auditable_id}",
             'updated' => "{$userName} updated {$modelName} #{$this->auditable_id}",
             'deleted' => "{$userName} deleted {$modelName} #{$this->auditable_id}",

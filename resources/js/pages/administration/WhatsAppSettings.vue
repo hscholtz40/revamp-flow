@@ -8,11 +8,11 @@ import administration from '@/routes/administration';
 interface WhatsAppSettings {
     id?: number;
     provider: string;
-    api_key: string;
-    api_secret: string;
     account_sid: string;
     from_number: string;
     is_active: boolean;
+    has_api_key?: boolean;
+    has_api_secret?: boolean;
 }
 
 const props = defineProps<{
@@ -21,8 +21,8 @@ const props = defineProps<{
 
 const form = useForm({
     provider: props.settings?.provider || 'twilio',
-    api_key: props.settings?.api_key || '',
-    api_secret: props.settings?.api_secret || '',
+    api_key: '',
+    api_secret: '',
     account_sid: props.settings?.account_sid || '',
     from_number: props.settings?.from_number || '',
     is_active: props.settings?.is_active ?? true,
@@ -121,9 +121,13 @@ const isMeta = () => form.provider === 'meta';
                                         class="w-full rounded border px-3 py-2 pr-10 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                         :class="{ 'opacity-50 cursor-not-allowed': !form.is_active }"
                                         :disabled="!form.is_active"
-                                        placeholder="Your Twilio Auth Token"
-                                        :required="form.is_active"
+                                        :placeholder="settings?.has_api_secret ? 'Leave blank to keep current token' : 'Your Twilio Auth Token'"
+                                        :required="form.is_active && (!settings?.id || !settings?.has_api_secret)"
+                                        autocomplete="new-password"
                                     />
+                                    <p v-if="form.is_active && settings?.has_api_secret" class="text-xs text-gray-500 mt-1">
+                                        Leave blank to keep your current auth token.
+                                    </p>
                                     <button
                                         type="button"
                                         @click="toggleSecretVisibility"
@@ -154,9 +158,13 @@ const isMeta = () => form.provider === 'meta';
                                     class="w-full rounded border px-3 py-2 pr-10 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     :class="{ 'opacity-50 cursor-not-allowed': !form.is_active }"
                                     :disabled="!form.is_active"
-                                    placeholder="Your Meta WhatsApp Business API Access Token"
-                                    :required="form.is_active"
+                                    :placeholder="settings?.has_api_key ? 'Leave blank to keep current access token' : 'Your Meta WhatsApp Business API Access Token'"
+                                    :required="form.is_active && (!settings?.id || !settings?.has_api_key)"
+                                    autocomplete="off"
                                 />
+                                <p v-if="form.is_active && settings?.has_api_key" class="text-xs text-gray-500 mt-1">
+                                    Leave blank to keep your current access token.
+                                </p>
                                 <button
                                     type="button"
                                     @click="toggleSecretVisibility"

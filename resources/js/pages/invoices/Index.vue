@@ -185,8 +185,8 @@
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <Link
-                                        v-if="invoice.job_number && invoice.source_type === 'jobcard' && invoice.source_id"
-                                        :href="`/jobcards/${invoice.source_id}`"
+                                        v-if="invoice.job_number && ((invoice.source_type === 'jobcard' && invoice.source_id) || (invoice.source_type === 'quote' && invoice.source?.source_type === 'jobcard' && invoice.source?.source_id))"
+                                        :href="`/jobcards/${invoice.source_type === 'jobcard' ? invoice.source_id : invoice.source?.source_id}`"
                                         class="text-sm text-blue-600 hover:text-blue-800 hover:underline"
                                         @click.stop
                                     >
@@ -243,31 +243,21 @@
                                         <Link
                                             v-if="canEditInvoice(invoice)"
                                             :href="invoices.edit(invoice.id).url"
-                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                            class="inline-flex items-center justify-center px-2 py-1.5 md:px-3 md:py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                                         >
-                                            Edit
+                                            <ListTableActionLabel label="Edit">
+                                                <Edit class="h-4 w-4" />
+                                            </ListTableActionLabel>
                                         </Link>
-                                        <span
-                                            v-else
-                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-gray-500 bg-gray-100 cursor-not-allowed"
-                                            title="Cannot edit paid invoices without permission"
-                                        >
-                                            Edit
-                                        </span>
                                         <button
                                             v-if="canDeleteInvoice(invoice)"
                                             @click="deleteInvoice(invoice.id)"
-                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                                            class="inline-flex items-center justify-center px-2 py-1.5 md:px-3 md:py-1 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                                         >
-                                            Delete
+                                            <ListTableActionLabel label="Delete">
+                                                <Trash2 class="h-4 w-4" />
+                                            </ListTableActionLabel>
                                         </button>
-                                        <span
-                                            v-else
-                                            class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-gray-500 bg-gray-100 cursor-not-allowed"
-                                            title="Cannot delete paid invoices without permission"
-                                        >
-                                            Delete
-                                        </span>
                                     </div>
                                 </td>
                             </tr>
@@ -337,7 +327,11 @@
 </template>
 
 <script setup lang="ts">
+import ListTableActionLabel from '@/components/ListTableActionLabel.vue';
+import { useNumberFormat } from '@/composables/useNumberFormat';
+import { useAuthAbility } from '@/composables/useAuthAbilities';
 import { Head, Link, router } from '@inertiajs/vue3';
+import { Edit, Trash2 } from 'lucide-vue-next';
 import { ref, watch } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import invoices from '@/routes/invoices';
@@ -363,6 +357,10 @@ interface Invoice {
     job_number?: string | null;
     source_type?: string | null;
     source_id?: number | null;
+    source?: {
+        source_type?: string | null;
+        source_id?: number | null;
+    } | null;
     invoice_date: string;
     due_date: string;
     created_at: string;
@@ -406,13 +404,16 @@ interface Props {
         sort_by?: string;
         sort_dir?: 'asc' | 'desc';
     };
-    canEditInvoices: boolean;
     canEditCompleted: boolean;
     canCreateInvoices: boolean;
     isPosEnabled: boolean;
 }
 
 const props = defineProps<Props>();
+const { formatCurrency } = useNumberFormat();
+
+const canInvoicesEdit = useAuthAbility('invoices', 'edit');
+const canInvoicesDelete = useAuthAbility('invoices', 'delete');
 
 const search = ref(props.filters.search || '');
 const status = ref(props.filters.status || '');
@@ -423,7 +424,7 @@ const sortDir = ref<'asc' | 'desc'>(props.filters.sort_dir || 'desc');
 
 // Helper functions for edit/delete permissions
 const canEditInvoice = (invoice: Invoice) => {
-    if (!props.canEditInvoices) {
+    if (!canInvoicesEdit.value) {
         return false;
     }
     if (invoice.status !== 'paid') {
@@ -433,7 +434,7 @@ const canEditInvoice = (invoice: Invoice) => {
 };
 
 const canDeleteInvoice = (invoice: Invoice) => {
-    if (!props.canEditInvoices) {
+    if (!canInvoicesDelete.value) {
         return false;
     }
     if (invoice.status !== 'paid') {
@@ -492,13 +493,6 @@ const sortIndicator = (field: string) => {
 
 const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString();
-};
-
-const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-ZA', {
-        style: 'currency',
-        currency: 'ZAR',
-    }).format(amount);
 };
 
 const getStatusBadgeClass = (status: string) => {

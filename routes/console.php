@@ -11,17 +11,39 @@ Artisan::command('inspire', function () {
 // Schedule Xero token refresh to run every 20 minutes to prevent expiration
 Schedule::command('xero:refresh-tokens')->cron('*/20 * * * *');
 
-// Stagger Xero sync commands to reduce burst traffic and daily API pressure.
-// Keep invoice + payment export responsive; run lower-churn datasets less frequently.
-Schedule::command('xero:sync-invoices')->everyTwoMinutes()->withoutOverlapping();
-Schedule::command('xero:sync-invoices-from-xero')->everyFiveMinutes()->withoutOverlapping();
-Schedule::command('xero:sync-customers')->everyTenMinutes()->withoutOverlapping();
-Schedule::command('xero:sync-products')->everyTenMinutes()->withoutOverlapping();
-Schedule::command('xero:sync-suppliers')->everyTenMinutes()->withoutOverlapping();
-Schedule::command('xero:sync-quotes')->everyFiveMinutes()->withoutOverlapping();
-Schedule::command('xero:sync-credit-notes')->everyFiveMinutes()->withoutOverlapping();
-Schedule::command('xero:sync-purchase-orders')->everyFiveMinutes()->withoutOverlapping();
-Schedule::command('xero:sync-payments')->everyTwoMinutes()->withoutOverlapping();
+/*
+ * Xero sync: run on a 15-minute cadence by default, with each job offset by 1 minute so
+ * nine Artisan commands do not fire HTTP bursts in the same second.
+ *
+ * Important: server cron often runs `schedule:run` *every minute* — that only means Laravel
+ * checks what is due. Each command below has its own minute list (e.g. credit notes at
+ * :06, :21, :36, :51), not every minute. Use `php artisan schedule:list` to verify.
+ *
+ * Tune cadence via XERO_SYNC_BASE_MINUTES in .env (see config/services.php).
+ */
+$xeroSyncBaseMinutes = config('services.xero.sync_schedule_base_minutes', [0, 15, 30, 45]);
+
+$xeroSyncCommands = [
+    'xero:sync-invoices',
+    'xero:sync-invoices-from-xero',
+    'xero:sync-customers',
+    'xero:sync-products',
+    'xero:sync-suppliers',
+    'xero:sync-quotes',
+    'xero:sync-credit-notes',
+    'xero:sync-purchase-orders',
+    'xero:sync-payments',
+];
+
+foreach ($xeroSyncCommands as $index => $signature) {
+    $minutes = array_map(
+        static fn (int $m): int => ($m + $index) % 60,
+        $xeroSyncBaseMinutes
+    );
+    sort($minutes);
+    $minuteList = implode(',', $minutes);
+    Schedule::command($signature)->cron("{$minuteList} * * * *")->withoutOverlapping(90);
+}
 
 // Schedule automated reminders to run daily at 9 AM
 Schedule::command('reminders:send')->dailyAt('09:00');

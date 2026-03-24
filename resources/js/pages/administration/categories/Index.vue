@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import ListTableActionLabel from '@/components/ListTableActionLabel.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { Plus, Edit, Trash2, Eye, Tag } from 'lucide-vue-next';
+import { Plus, Edit, Trash2, Tag } from 'lucide-vue-next';
 import administration from '@/routes/administration';
 
 interface Category {
@@ -120,17 +121,20 @@ function deleteCategory(category: Category) {
                     <div class="flex items-center gap-2" @click.stop>
                         <Link
                             :href="administration.categories.edit(category.id).url"
-                            class="flex items-center gap-1 rounded border px-3 py-1 text-sm text-gray-700 hover:bg-gray-50"
+                            class="inline-flex items-center justify-center rounded border px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-50 md:px-3 md:py-1"
                         >
-                            <Edit class="h-3 w-3" />
-                            Edit
+                            <ListTableActionLabel label="Edit">
+                                <Edit class="h-4 w-4" />
+                            </ListTableActionLabel>
                         </Link>
                         <button
+                            type="button"
                             @click="deleteCategory(category)"
-                            class="flex items-center gap-1 rounded border border-red-300 px-3 py-1 text-sm text-red-700 hover:bg-red-50"
+                            class="inline-flex items-center justify-center rounded border border-red-300 px-2 py-1.5 text-sm text-red-700 hover:bg-red-50 md:px-3 md:py-1"
                         >
-                            <Trash2 class="h-3 w-3" />
-                            Delete
+                            <ListTableActionLabel label="Delete">
+                                <Trash2 class="h-4 w-4" />
+                            </ListTableActionLabel>
                         </button>
                     </div>
                 </div>

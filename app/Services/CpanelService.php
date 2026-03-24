@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\SafeLog;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -9,10 +10,15 @@ use Illuminate\Support\Str;
 class CpanelService
 {
     private string $host;
+
     private int $port;
+
     private string $username;
+
     private string $apiToken;
+
     private string $domain;
+
     private string $homeDir;
 
     public function __construct()
@@ -32,16 +38,16 @@ class CpanelService
      */
     public function isConfigured(): bool
     {
-        return !empty($this->host)
-            && !empty($this->username)
-            && !empty($this->apiToken)
-            && !empty($this->domain);
+        return ! empty($this->host)
+            && ! empty($this->username)
+            && ! empty($this->apiToken)
+            && ! empty($this->domain);
     }
 
     /**
      * Request AutoSSL and enable force HTTPS redirect for a domain.
      *
-     * @param string $domain The full domain (e.g. "client1.domain.com")
+     * @param  string  $domain  The full domain (e.g. "client1.domain.com")
      * @return array{success: bool, message: string}
      */
     public function forceSSL(string $domain): array
@@ -53,14 +59,14 @@ class CpanelService
             if ($autoSSLResult['success']) {
                 $messages[] = 'AutoSSL certificate requested';
             } else {
-                $messages[] = 'AutoSSL request failed: ' . ($autoSSLResult['error'] ?? 'Unknown error');
+                $messages[] = 'AutoSSL request failed: '.($autoSSLResult['error'] ?? 'Unknown error');
             }
 
             $redirectResult = $this->enableForceHttpsRedirect($domain);
             if ($redirectResult['success']) {
                 $messages[] = 'HTTPS redirect enabled';
             } else {
-                $messages[] = 'HTTPS redirect failed: ' . ($redirectResult['error'] ?? 'Unknown error');
+                $messages[] = 'HTTPS redirect failed: '.($redirectResult['error'] ?? 'Unknown error');
             }
 
             $allSuccess = $autoSSLResult['success'] && $redirectResult['success'];
@@ -78,7 +84,7 @@ class CpanelService
 
             return [
                 'success' => false,
-                'message' => 'Force SSL failed: ' . $e->getMessage(),
+                'message' => 'Force SSL failed: '.$e->getMessage(),
             ];
         }
     }
@@ -86,9 +92,9 @@ class CpanelService
     /**
      * Deploy a new instance to cPanel.
      *
-     * @param string $subdomain The subdomain to create (e.g. "client1" for client1.domain.com)
-     * @param string $zipPath The local path to the uploaded zip file
-     * @param string $appUrl The full URL for the instance
+     * @param  string  $subdomain  The subdomain to create (e.g. "client1" for client1.domain.com)
+     * @param  string  $zipPath  The local path to the uploaded zip file
+     * @param  string  $appUrl  The full URL for the instance
      * @return array{success: bool, message: string, details?: array}
      */
     public function deploy(string $subdomain, string $zipPath, string $appUrl): array
@@ -103,10 +109,10 @@ class CpanelService
             $result = $this->createSubdomain($subdomain, $documentRoot);
             $steps[] = ['step' => 'Create subdomain', 'result' => $result];
 
-            if (!$result['success']) {
+            if (! $result['success']) {
                 return [
                     'success' => false,
-                    'message' => 'Failed to create subdomain: ' . ($result['error'] ?? 'Unknown error'),
+                    'message' => 'Failed to create subdomain: '.($result['error'] ?? 'Unknown error'),
                     'details' => $steps,
                 ];
             }
@@ -117,7 +123,7 @@ class CpanelService
             $result = $this->requestAutoSSL($fullSubdomain);
             $steps[] = ['step' => 'Request AutoSSL', 'result' => $result];
 
-            if (!$result['success']) {
+            if (! $result['success']) {
                 // AutoSSL failure is non-fatal — log and continue
                 Log::warning('AutoSSL request failed, continuing deployment', [
                     'domain' => $fullSubdomain,
@@ -129,7 +135,7 @@ class CpanelService
             $result = $this->enableForceHttpsRedirect($fullSubdomain);
             $steps[] = ['step' => 'Enable force HTTPS redirect', 'result' => $result];
 
-            if (!$result['success']) {
+            if (! $result['success']) {
                 // HTTPS redirect failure is non-fatal — log and continue
                 Log::warning('Force HTTPS redirect failed, continuing deployment', [
                     'domain' => $fullSubdomain,
@@ -148,10 +154,10 @@ class CpanelService
             $result = $this->createDatabase($fullDbName);
             $steps[] = ['step' => 'Create database', 'result' => $result];
 
-            if (!$result['success']) {
+            if (! $result['success']) {
                 return [
                     'success' => false,
-                    'message' => 'Failed to create database: ' . ($result['error'] ?? 'Unknown error'),
+                    'message' => 'Failed to create database: '.($result['error'] ?? 'Unknown error'),
                     'details' => $steps,
                 ];
             }
@@ -159,10 +165,10 @@ class CpanelService
             $result = $this->createDatabaseUser($fullDbUser, $dbPassword);
             $steps[] = ['step' => 'Create database user', 'result' => $result];
 
-            if (!$result['success']) {
+            if (! $result['success']) {
                 return [
                     'success' => false,
-                    'message' => 'Failed to create database user: ' . ($result['error'] ?? 'Unknown error'),
+                    'message' => 'Failed to create database user: '.($result['error'] ?? 'Unknown error'),
                     'details' => $steps,
                 ];
             }
@@ -170,10 +176,10 @@ class CpanelService
             $result = $this->assignUserToDatabase($fullDbUser, $fullDbName);
             $steps[] = ['step' => 'Assign user to database', 'result' => $result];
 
-            if (!$result['success']) {
+            if (! $result['success']) {
                 return [
                     'success' => false,
-                    'message' => 'Failed to assign user to database: ' . ($result['error'] ?? 'Unknown error'),
+                    'message' => 'Failed to assign user to database: '.($result['error'] ?? 'Unknown error'),
                     'details' => $steps,
                 ];
             }
@@ -183,10 +189,10 @@ class CpanelService
             $result = $this->uploadFile($zipPath, $uploadRoot);
             $steps[] = ['step' => 'Upload zip file', 'result' => $result];
 
-            if (!$result['success']) {
+            if (! $result['success']) {
                 return [
                     'success' => false,
-                    'message' => 'Failed to upload zip file: ' . ($result['error'] ?? 'Unknown error'),
+                    'message' => 'Failed to upload zip file: '.($result['error'] ?? 'Unknown error'),
                     'details' => $steps,
                 ];
             }
@@ -196,10 +202,10 @@ class CpanelService
             $result = $this->extractZip($subdomainRoot, $zipFilename);
             $steps[] = ['step' => 'Extract zip file', 'result' => $result];
 
-            if (!$result['success']) {
+            if (! $result['success']) {
                 return [
                     'success' => false,
-                    'message' => 'Failed to extract zip file: ' . ($result['error'] ?? 'Unknown error'),
+                    'message' => 'Failed to extract zip file: '.($result['error'] ?? 'Unknown error'),
                     'details' => $steps,
                 ];
             }
@@ -208,10 +214,10 @@ class CpanelService
             $result = $this->moveExtractedContents($subdomainRoot);
             $steps[] = ['step' => 'Move extracted contents', 'result' => $result];
 
-            if (!$result['success']) {
+            if (! $result['success']) {
                 return [
                     'success' => false,
-                    'message' => 'Failed to move extracted contents: ' . ($result['error'] ?? 'Unknown error'),
+                    'message' => 'Failed to move extracted contents: '.($result['error'] ?? 'Unknown error'),
                     'details' => $steps,
                 ];
             }
@@ -225,10 +231,10 @@ class CpanelService
             ]);
             $steps[] = ['step' => 'Update .env file', 'result' => $result];
 
-            if (!$result['success']) {
+            if (! $result['success']) {
                 return [
                     'success' => false,
-                    'message' => 'Failed to update .env file: ' . ($result['error'] ?? 'Unknown error'),
+                    'message' => 'Failed to update .env file: '.($result['error'] ?? 'Unknown error'),
                     'details' => $steps,
                 ];
             }
@@ -244,10 +250,10 @@ class CpanelService
                 $result = $this->runCommand($subdomainRoot, $command);
                 $steps[] = ['step' => "Run: {$command}", 'result' => $result];
 
-                if (!$result['success']) {
+                if (! $result['success']) {
                     return [
                         'success' => false,
-                        'message' => "Failed to run '{$command}': " . ($result['error'] ?? 'Unknown error'),
+                        'message' => "Failed to run '{$command}': ".($result['error'] ?? 'Unknown error'),
                         'details' => $steps,
                     ];
                 }
@@ -272,7 +278,7 @@ class CpanelService
 
             return [
                 'success' => false,
-                'message' => 'Deployment failed: ' . $e->getMessage(),
+                'message' => 'Deployment failed: '.$e->getMessage(),
                 'details' => $steps,
             ];
         }
@@ -281,8 +287,8 @@ class CpanelService
     /**
      * Upgrade an existing instance on cPanel.
      *
-     * @param string $subdomain The subdomain to upgrade
-     * @param string $zipPath The local path to the uploaded zip file
+     * @param  string  $subdomain  The subdomain to upgrade
+     * @param  string  $zipPath  The local path to the uploaded zip file
      * @return array{success: bool, message: string, details?: array}
      */
     public function upgrade(string $subdomain, string $zipPath): array
@@ -296,10 +302,10 @@ class CpanelService
             $result = $this->uploadFile($zipPath, $subdomainRoot);
             $steps[] = ['step' => 'Upload zip file', 'result' => $result];
 
-            if (!$result['success']) {
+            if (! $result['success']) {
                 return [
                     'success' => false,
-                    'message' => 'Failed to upload zip file: ' . ($result['error'] ?? 'Unknown error'),
+                    'message' => 'Failed to upload zip file: '.($result['error'] ?? 'Unknown error'),
                     'details' => $steps,
                 ];
             }
@@ -309,23 +315,23 @@ class CpanelService
             $result = $this->extractZip($subdomainRoot, $zipFilename);
             $steps[] = ['step' => 'Extract zip file', 'result' => $result];
 
-            if (!$result['success']) {
+            if (! $result['success']) {
                 return [
                     'success' => false,
-                    'message' => 'Failed to extract zip file: ' . ($result['error'] ?? 'Unknown error'),
+                    'message' => 'Failed to extract zip file: '.($result['error'] ?? 'Unknown error'),
                     'details' => $steps,
                 ];
             }
 
-            $command = "cd {$subdomainRoot} && " .
-            "EXTRACTED_DIR=\$(find . -maxdepth 1 -mindepth 1 -type d -name 'jobcardonline-v*' | head -1) && " .
-            "if [ -n \"\$EXTRACTED_DIR\" ]; then " .
-            "echo \"Found: \$EXTRACTED_DIR\" && " .
-            "rm \"\$EXTRACTED_DIR\"/.env . && " .
-            "echo 'env file removed'; " .
-            "else " .
-            "echo 'No extracted directory found. Contents:' && ls -la {$subdomainRoot}; " .
-            "fi";
+            $command = "cd {$subdomainRoot} && ".
+            "EXTRACTED_DIR=\$(find . -maxdepth 1 -mindepth 1 -type d -name 'jobcardonline-v*' | head -1) && ".
+            'if [ -n "$EXTRACTED_DIR" ]; then '.
+            'echo "Found: $EXTRACTED_DIR" && '.
+            'rm "$EXTRACTED_DIR"/.env . && '.
+            "echo 'env file removed'; ".
+            'else '.
+            "echo 'No extracted directory found. Contents:' && ls -la {$subdomainRoot}; ".
+            'fi';
 
             $this->runShellCommand($command);
 
@@ -333,10 +339,10 @@ class CpanelService
             $result = $this->moveExtractedContents($subdomainRoot);
             $steps[] = ['step' => 'Move extracted contents', 'result' => $result];
 
-            if (!$result['success']) {
+            if (! $result['success']) {
                 return [
                     'success' => false,
-                    'message' => 'Failed to move extracted contents: ' . ($result['error'] ?? 'Unknown error'),
+                    'message' => 'Failed to move extracted contents: '.($result['error'] ?? 'Unknown error'),
                     'details' => $steps,
                 ];
             }
@@ -351,10 +357,10 @@ class CpanelService
                 $result = $this->runCommand($subdomainRoot, $command);
                 $steps[] = ['step' => "Run: {$command}", 'result' => $result];
 
-                if (!$result['success']) {
+                if (! $result['success']) {
                     return [
                         'success' => false,
-                        'message' => "Failed to run '{$command}': " . ($result['error'] ?? 'Unknown error'),
+                        'message' => "Failed to run '{$command}': ".($result['error'] ?? 'Unknown error'),
                         'details' => $steps,
                     ];
                 }
@@ -374,7 +380,7 @@ class CpanelService
 
             return [
                 'success' => false,
-                'message' => 'Upgrade failed: ' . $e->getMessage(),
+                'message' => 'Upgrade failed: '.$e->getMessage(),
                 'details' => $steps,
             ];
         }
@@ -458,17 +464,18 @@ class CpanelService
             $response = Http::withHeaders([
                 'Authorization' => "cpanel {$this->username}:{$this->apiToken}",
             ])
-            ->timeout(300)
-            ->attach('file-0', file_get_contents($localPath), $filename)
-            ->post($url, [
-                'dir' => $remoteDir,
-            ]);
+                ->timeout(300)
+                ->attach('file-0', file_get_contents($localPath), $filename)
+                ->post($url, [
+                    'dir' => $remoteDir,
+                ]);
 
             if ($response->successful()) {
                 $data = $response->json();
                 if (isset($data['status']) && $data['status'] === 1) {
                     return ['success' => true];
                 }
+
                 return [
                     'success' => false,
                     'error' => $data['errors'][0] ?? 'Upload returned non-success status',
@@ -477,7 +484,7 @@ class CpanelService
 
             return [
                 'success' => false,
-                'error' => 'HTTP ' . $response->status() . ': ' . $response->body(),
+                'error' => 'HTTP '.$response->status().': '.$response->body(),
             ];
 
         } catch (\Exception $e) {
@@ -511,16 +518,16 @@ class CpanelService
         ]);
 
         // Find the extracted directory matching jobcardonline-v*, then move its contents up and remove it
-        $command = "cd {$subdomainRoot} && " .
-            "EXTRACTED_DIR=\$(find . -maxdepth 1 -mindepth 1 -type d -name 'jobcardonline-v*' | head -1) && " .
-            "if [ -n \"\$EXTRACTED_DIR\" ]; then " .
-            "echo \"Found: \$EXTRACTED_DIR\" && " .
-            "cp -rf \"\$EXTRACTED_DIR\"/. . && " .
-            "rm -rf \"\$EXTRACTED_DIR\" && " .
-            "echo 'Contents moved successfully'; " .
-            "else " .
-            "echo 'No jobcardonline-v* directory found. Contents:' && ls -la {$subdomainRoot}; " .
-            "fi";
+        $command = "cd {$subdomainRoot} && ".
+            "EXTRACTED_DIR=\$(find . -maxdepth 1 -mindepth 1 -type d -name 'jobcardonline-v*' | head -1) && ".
+            'if [ -n "$EXTRACTED_DIR" ]; then '.
+            'echo "Found: $EXTRACTED_DIR" && '.
+            'cp -rf "$EXTRACTED_DIR"/. . && '.
+            'rm -rf "$EXTRACTED_DIR" && '.
+            "echo 'Contents moved successfully'; ".
+            'else '.
+            "echo 'No jobcardonline-v* directory found. Contents:' && ls -la {$subdomainRoot}; ".
+            'fi';
 
         return $this->runShellCommand($command);
     }
@@ -564,10 +571,10 @@ class CpanelService
             $response = Http::withHeaders([
                 'Authorization' => "cpanel {$this->username}:{$this->apiToken}",
             ])
-            ->timeout(120)
-            ->post($url, [
-                'command' => $command,
-            ]);
+                ->timeout(120)
+                ->post($url, [
+                    'command' => $command,
+                ]);
 
             if ($response->successful()) {
                 $data = $response->json();
@@ -595,13 +602,13 @@ class CpanelService
      */
     private function runShellViaWebExec(string $command): array
     {
-        $scriptName = '_cpanel_exec_' . Str::random(32) . '.php';
+        $scriptName = '_cpanel_exec_'.Str::random(32).'.php';
         $publicHtml = "{$this->homeDir}/{$this->username}/public_html";
 
         try {
             // Base64-encode the command to avoid any PHP/shell escaping issues
             // (shell commands with $(), $VAR etc. would be mangled inside PHP strings)
-            $encodedCommand = base64_encode($command . ' 2>&1');
+            $encodedCommand = base64_encode($command.' 2>&1');
             $phpScript = <<<'PHPSCRIPT'
 <?php
 error_reporting(E_ALL);
@@ -720,10 +727,10 @@ PHPSCRIPT;
                 'content' => $phpScript,
             ]);
 
-            if (!$writeResult['success']) {
+            if (! $writeResult['success']) {
                 return [
                     'success' => false,
-                    'error' => 'Failed to create exec script: ' . ($writeResult['error'] ?? 'Unknown error'),
+                    'error' => 'Failed to create exec script: '.($writeResult['error'] ?? 'Unknown error'),
                 ];
             }
 
@@ -748,11 +755,12 @@ PHPSCRIPT;
                         'url' => $execUrl,
                         'error' => $e->getMessage(),
                     ]);
+
                     continue;
                 }
             }
 
-            if (!$execResponse || !$execResponse->successful()) {
+            if (! $execResponse || ! $execResponse->successful()) {
                 // Clean up the script since it wasn't executed
                 $this->cpanelApiCall('Fileman', 'save_file_content', [
                     'dir' => $publicHtml,
@@ -786,8 +794,8 @@ PHPSCRIPT;
                     'success' => $success,
                     'output' => $result['output'] ?? '',
                     'method' => $result['method'] ?? 'unknown',
-                    'error' => !$success
-                        ? ($result['output'] ?: 'Command exited with code ' . $result['exit_code'])
+                    'error' => ! $success
+                        ? ($result['output'] ?: 'Command exited with code '.$result['exit_code'])
                         : null,
                 ];
             }
@@ -796,7 +804,7 @@ PHPSCRIPT;
             return [
                 'success' => false,
                 'output' => $body,
-                'error' => 'Unexpected response from exec script: ' . Str::limit($body, 300),
+                'error' => 'Unexpected response from exec script: '.Str::limit($body, 300),
             ];
 
         } catch (\Exception $e) {
@@ -807,7 +815,7 @@ PHPSCRIPT;
 
             return [
                 'success' => false,
-                'error' => 'Shell execution failed: ' . $e->getMessage(),
+                'error' => 'Shell execution failed: '.$e->getMessage(),
             ];
         }
     }
@@ -823,16 +831,16 @@ PHPSCRIPT;
             $response = Http::withHeaders([
                 'Authorization' => "cpanel {$this->username}:{$this->apiToken}",
             ])
-            ->timeout(60)
-            ->post($url, $params);
+                ->timeout(60)
+                ->post($url, $params);
 
             if ($response->successful()) {
                 $data = $response->json();
 
-                Log::info("cPanel API call: {$module}/{$function}", [
+                Log::info("cPanel API call: {$module}/{$function}", SafeLog::redactContext([
                     'params' => $params,
                     'response_status' => $data['status'] ?? null,
-                ]);
+                ]));
 
                 if (isset($data['status']) && $data['status'] === 1) {
                     return [
@@ -848,14 +856,11 @@ PHPSCRIPT;
                 ];
             }
 
-            Log::error("cPanel API HTTP error: {$module}/{$function}", [
-                'status' => $response->status(),
-                'body' => $response->body(),
-            ]);
+            Log::error("cPanel API HTTP error: {$module}/{$function}", SafeLog::httpResponseContext($response->status(), $response->body()));
 
             return [
                 'success' => false,
-                'error' => 'HTTP ' . $response->status() . ': ' . $response->body(),
+                'error' => 'HTTP '.$response->status().': '.SafeLog::excerpt($response->body(), 200),
             ];
 
         } catch (\Exception $e) {
@@ -881,6 +886,7 @@ PHPSCRIPT;
         // cPanel db name max length is 64, but username_prefix takes some
         // Username prefix + underscore can be up to ~16 chars
         $maxLength = 64 - strlen($this->username) - 1;
+
         return substr($sanitized, 0, $maxLength);
     }
 }

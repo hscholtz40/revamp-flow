@@ -440,6 +440,7 @@
 </template>
 
 <script setup lang="ts">
+import { useNumberFormat } from '@/composables/useNumberFormat';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, ref, watch, onMounted } from 'vue';
@@ -505,6 +506,7 @@ interface ProductOption {
 }
 
 const props = defineProps<Props>();
+const { formatCurrency } = useNumberFormat();
 const createLineItemUid = () =>
     `line-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -1076,10 +1078,6 @@ const roundingAdjustment = computed(() =>
         return sum + calculateLineTotalValue(item);
     }, 0)
 );
-
-function formatCurrency(amount: number) {
-    return new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' }).format(amount ?? 0);
-}
 
 function submit() {
     form.transform((data: any) => ({

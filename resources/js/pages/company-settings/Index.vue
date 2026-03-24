@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import ListTableActionLabel from '@/components/ListTableActionLabel.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import companySettings from '@/routes/company-settings';
-import { Plus, Edit, Trash2, Eye, Building2, Star } from 'lucide-vue-next';
+import { Plus, Edit, Trash2, Building2, Star } from 'lucide-vue-next';
 
 interface Company {
     id: number;
@@ -154,33 +155,40 @@ function switchToCompany(company: Company) {
                     <div class="flex items-center gap-2" @click.stop>
                         <button
                             v-if="props.currentCompany && props.currentCompany.id !== company.id"
+                            type="button"
                             @click="switchToCompany(company)"
-                            class="flex items-center gap-1 rounded border border-blue-300 px-3 py-1 text-sm text-blue-700 hover:bg-blue-50"
+                            class="inline-flex items-center justify-center rounded border border-blue-300 px-2 py-1.5 text-sm text-blue-700 hover:bg-blue-50 md:px-3 md:py-1"
                         >
-                            <Building2 class="h-3 w-3" />
-                            Switch To
+                            <ListTableActionLabel label="Switch to">
+                                <Building2 class="h-4 w-4" />
+                            </ListTableActionLabel>
                         </button>
                         <Link
                             :href="companySettings.edit(company.id).url"
-                            class="flex items-center gap-1 rounded border px-3 py-1 text-sm text-gray-700 hover:bg-gray-50"
+                            class="inline-flex items-center justify-center rounded border px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-50 md:px-3 md:py-1"
                         >
-                            <Edit class="h-3 w-3" />
-                            Edit
+                            <ListTableActionLabel label="Edit">
+                                <Edit class="h-4 w-4" />
+                            </ListTableActionLabel>
                         </Link>
                         <button
                             v-if="!company.is_default"
+                            type="button"
                             @click="setAsDefault(company)"
-                            class="flex items-center gap-1 rounded border border-yellow-300 px-3 py-1 text-sm text-yellow-700 hover:bg-yellow-50"
+                            class="inline-flex items-center justify-center rounded border border-yellow-300 px-2 py-1.5 text-sm text-yellow-700 hover:bg-yellow-50 md:px-3 md:py-1"
                         >
-                            <Star class="h-3 w-3" />
-                            Set Default
+                            <ListTableActionLabel label="Set default">
+                                <Star class="h-4 w-4" />
+                            </ListTableActionLabel>
                         </button>
                         <button
+                            type="button"
                             @click="deleteCompany(company)"
-                            class="flex items-center gap-1 rounded border border-red-300 px-3 py-1 text-sm text-red-700 hover:bg-red-50"
+                            class="inline-flex items-center justify-center rounded border border-red-300 px-2 py-1.5 text-sm text-red-700 hover:bg-red-50 md:px-3 md:py-1"
                         >
-                            <Trash2 class="h-3 w-3" />
-                            Delete
+                            <ListTableActionLabel label="Delete">
+                                <Trash2 class="h-4 w-4" />
+                            </ListTableActionLabel>
                         </button>
                     </div>
                 </div>

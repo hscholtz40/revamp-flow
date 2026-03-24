@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ListTableActionLabel from '@/components/ListTableActionLabel.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
@@ -33,11 +34,13 @@ interface Props {
         search?: string;
         status?: string;
     };
+    canViewFullLicenseKey?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
     licenses: () => ({ data: [], links: [], meta: {} }),
     filters: () => ({}),
+    canViewFullLicenseKey: false,
 });
 
 const search = ref(props.filters?.search || '');
@@ -86,7 +89,10 @@ function clearFilters() {
 }
 
 function deleteLicense(license: License) {
-    if (confirm(`Are you sure you want to delete this license (${license.license_key})?`)) {
+    const label = props.canViewFullLicenseKey
+        ? license.license_key
+        : license.customer?.name ?? `license #${license.id}`;
+    if (confirm(`Are you sure you want to delete this license (${label})?`)) {
         router.delete(licenses.destroy(license.id).url);
     }
 }
@@ -148,7 +154,7 @@ function formatDate(dateString: string | null): string {
                             <input
                                 v-model="search"
                                 type="text"
-                                placeholder="Search by key or customer..."
+                                :placeholder="canViewFullLicenseKey ? 'Search by key or customer...' : 'Search by customer...'"
                                 class="w-full rounded border border-gray-300 pl-10 pr-4 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                                 @keyup.enter="applyFilters"
                             />
@@ -217,7 +223,9 @@ function formatDate(dateString: string | null): string {
                                         <Key class="h-4 w-4 text-gray-400" />
                                         <code class="text-sm font-mono text-gray-900">{{ license.license_key }}</code>
                                         <button
-                                            @click="copyLicenseKey(license)"
+                                            v-if="canViewFullLicenseKey"
+                                            type="button"
+                                            @click.stop="copyLicenseKey(license)"
                                             class="text-gray-400 hover:text-gray-600"
                                             title="Copy license key"
                                         >
@@ -256,15 +264,20 @@ function formatDate(dateString: string | null): string {
                                     <div class="flex items-center justify-end gap-2">
                                         <Link
                                             :href="licenses.edit(license.id).url"
-                                            class="text-indigo-600 hover:text-indigo-900"
+                                            class="inline-flex items-center justify-center rounded-md p-2 text-sm font-medium text-indigo-600 hover:bg-indigo-50 md:p-0 md:hover:bg-transparent hover:text-indigo-900"
                                         >
-                                            <Edit class="h-4 w-4" />
+                                            <ListTableActionLabel label="Edit">
+                                                <Edit class="h-4 w-4" />
+                                            </ListTableActionLabel>
                                         </Link>
                                         <button
+                                            type="button"
                                             @click="deleteLicense(license)"
-                                            class="text-red-600 hover:text-red-900"
+                                            class="inline-flex items-center justify-center rounded-md p-2 text-sm font-medium text-red-600 hover:bg-red-50 md:p-0 md:hover:bg-transparent hover:text-red-900"
                                         >
-                                            <Trash2 class="h-4 w-4" />
+                                            <ListTableActionLabel label="Delete">
+                                                <Trash2 class="h-4 w-4" />
+                                            </ListTableActionLabel>
                                         </button>
                                     </div>
                                 </td>

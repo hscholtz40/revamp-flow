@@ -279,12 +279,16 @@
             margin-top: 20px;
             padding-top: 20px;
             border-top: 1px solid #000;
+            page-break-inside: avoid;
         }
         
         .signature-row {
             display: table;
             width: 100%;
             margin-bottom: 15px;
+            page-break-inside: avoid;
+            break-inside: avoid;
+            table-layout: fixed;
         }
         
         .signature-item {
@@ -292,6 +296,25 @@
             width: 33.33%;
             text-align: left;
             font-size: 11px;
+            vertical-align: top;
+            padding: 0 6px;
+        }
+
+        .signature-card {
+            display: block;
+            width: 100%;
+            margin: 0;
+            border: 1px solid #ddd;
+            padding: 8px;
+            box-sizing: border-box;
+        }
+
+        .signature-image {
+            height: 70px;
+            width: 100%;
+            object-fit: contain;
+            border: 1px solid #eee;
+            background: #fff;
         }
         
         .signature-line {
@@ -533,25 +556,25 @@
                     @foreach($group->items->sortBy('sort_order') as $item)
                 <tr>
                     <td>{{ $item->description ?? 'Work Description' }}{{ ($item->product && ($item->product->sku ?? $item->product->barcode)) ? ' (' . ($item->product->sku ?? $item->product->barcode) . ')' : '' }}</td>
-                    <td class="text-right">{{ number_format($item->quantity ?? 0, 2) }}</td>
-                    <td class="text-right">R{{ number_format($item->unit_price ?? 0, 2) }}</td>
+                    <td class="text-right">{{ $company->formatNumber($item->quantity ?? 0, 2) }}</td>
+                    <td class="text-right">{{ $company->formatCurrencyZar($item->unit_price ?? 0) }}</td>
                     <td class="text-right">
                         @if(($item->discount_percentage ?? 0) > 0)
-                            {{ number_format($item->discount_percentage, 2) }}%
+                            {{ $company->formatNumber($item->discount_percentage, 2) }}%
                         @elseif(($item->discount_amount ?? 0) > 0)
-                            R{{ number_format($item->discount_amount, 2) }}
+                            {{ $company->formatCurrencyZar($item->discount_amount) }}
                         @else
                             —
                         @endif
                     </td>
                     <td class="text-right">
                         @if($item->taxRate)
-                            R{{ number_format($item->tax_amount ?? 0, 2) }}
+                            {{ $company->formatCurrencyZar($item->tax_amount ?? 0) }}
                         @else
                             —
                         @endif
                     </td>
-                    <td class="text-right">R{{ number_format($item->total ?? 0, 2) }}</td>
+                    <td class="text-right">{{ $company->formatCurrencyZar($item->total ?? 0) }}</td>
                 </tr>
                     @endforeach
             @endforeach
@@ -571,29 +594,29 @@
     <div class="totals-section">
         <div class="total-row">
             <span>Subtotal:</span>
-            <span>R{{ number_format($jobcard->subtotal ?? 0, 2) }}</span>
+            <span>{{ $company->formatCurrencyZar($jobcard->subtotal ?? 0) }}</span>
         </div>
         @if(($jobcard->tax_amount ?? 0) > 0)
         <div class="total-row">
             <span>Tax:</span>
-            <span>R{{ number_format($jobcard->tax_amount, 2) }}</span>
+            <span>{{ $company->formatCurrencyZar($jobcard->tax_amount) }}</span>
         </div>
         @endif
         @if(($jobcard->discount_amount ?? 0) > 0)
         <div class="total-row">
             <span>Discount:</span>
-            <span>-R{{ number_format($jobcard->discount_amount, 2) }}</span>
+            <span>-{{ $company->formatCurrencyZar($jobcard->discount_amount) }}</span>
         </div>
         @endif
         @if(abs($roundingAdjustment) > 0.0001)
         <div class="total-row">
             <span>Rounding Adjustment:</span>
-            <span>R{{ number_format($roundingAdjustment, 2) }}</span>
+            <span>{{ $company->formatCurrencyZar($roundingAdjustment) }}</span>
         </div>
         @endif
         <div class="total-row final">
             <span>Total:</span>
-            <span>R{{ number_format($jobcard->total ?? 0, 2) }}</span>
+            <span>{{ $company->formatCurrencyZar($jobcard->total ?? 0) }}</span>
         </div>
     </div>
     
@@ -607,22 +630,34 @@
         @endif
     </div>
     
-    <div class="signature-section">
-        <div class="signature-row">
-            <div class="signature-item">
-                <div>Technician</div>
-                <div class="signature-line"></div>
-            </div>
-            <div class="signature-item">
-                <div>Date Completed</div>
-                <div class="signature-line"></div>
-            </div>
-            <div class="signature-item">
-                <div>Customer Signature</div>
-                <div class="signature-line"></div>
-            </div>
+    @if(($jobcard->signatures ?? collect())->count() > 0)
+        <div class="signature-section">
+            <div style="font-weight: bold; margin-bottom: 10px;">Signatures</div>
+            @foreach(($jobcard->signatures ?? collect())->chunk(3) as $signatureRow)
+                <div class="signature-row">
+                    @foreach($signatureRow as $signature)
+                        <div class="signature-item">
+                            <div class="signature-card">
+                                <div style="font-size: 10px; margin-bottom: 6px;">
+                                    <strong>{{ $signature->signer_name }}</strong>
+                                    @if($signature->signed_at)
+                                        - {{ $signature->signed_at->format('Y/m/d H:i') }}
+                                    @endif
+                                </div>
+                                @php($signatureDataUri = $signature->getSignaturePathForPdf())
+                                @if($signatureDataUri)
+                                    <img src="{{ $signatureDataUri }}" alt="Signature" class="signature-image">
+                                @endif
+                            </div>
+                        </div>
+                    @endforeach
+                    @for($i = $signatureRow->count(); $i < 3; $i++)
+                        <div class="signature-item">&nbsp;</div>
+                    @endfor
+                </div>
+            @endforeach
         </div>
-    </div>
+    @endif
     
     <div class="footer">
         <div class="footer-left">

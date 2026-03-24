@@ -16,19 +16,28 @@
                         <div class="flex items-center gap-4">
                             <span class="text-sm font-medium text-gray-700">Current Status:</span>
                             <div class="flex items-center gap-2">
-                                <button
-                                    v-for="status in statusOptions"
-                                    :key="status.value"
-                                    @click="updateStatus(status.value)"
-                                    :class="[
-                                        'px-3 py-1 text-sm font-medium rounded-md transition-colors',
-                                        creditNote.status === status.value
-                                            ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
-                                    ]"
+                                <template v-if="canCreditNotesEdit">
+                                    <button
+                                        v-for="status in statusOptions"
+                                        :key="status.value"
+                                        @click="updateStatus(status.value)"
+                                        :class="[
+                                            'px-3 py-1 text-sm font-medium rounded-md transition-colors',
+                                            creditNote.status === status.value
+                                                ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
+                                        ]"
+                                    >
+                                        {{ status.label }}
+                                    </button>
+                                </template>
+                                <span
+                                    v-else
+                                    :class="statusBadgeClass"
+                                    class="inline-flex px-3 py-1 text-sm font-semibold rounded-full"
                                 >
-                                    {{ status.label }}
-                                </button>
+                                    {{ formatStatus(creditNote.status) }}
+                                </span>
                             </div>
                         </div>
                     </div>
@@ -46,7 +55,7 @@
                             {{ formatStatus(creditNote.status) }}
                         </span>
                         <button
-                            v-if="canAddRefund"
+                            v-if="canAddRefund && canCreditNotesEdit"
                             type="button"
                             @click="showRefundModal = true"
                             class="inline-flex items-center gap-2 rounded-md bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700"
@@ -55,6 +64,7 @@
                             Add Refund
                         </button>
                         <Link
+                            v-if="canCreditNotesEdit"
                             :href="`/credit-notes/${creditNote.id}/edit`"
                             class="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
                         >
@@ -62,6 +72,7 @@
                             Edit
                         </Link>
                         <button
+                            v-if="canCreditNotesDelete"
                             type="button"
                             @click="confirmDelete"
                             class="inline-flex items-center gap-2 rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
@@ -244,7 +255,12 @@
                                         <p class="text-xs text-gray-500">{{ payment.payment_method.toUpperCase() }} - {{ formatDate(payment.payment_date) }}</p>
                                         <p v-if="payment.notes" class="text-xs text-gray-500">{{ payment.notes }}</p>
                                     </div>
-                                    <button type="button" @click="removeRefundPayment(payment.id)" class="text-xs text-red-600 hover:text-red-800">
+                                    <button
+                                        v-if="canCreditNotesEdit"
+                                        type="button"
+                                        @click="removeRefundPayment(payment.id)"
+                                        class="text-xs text-red-600 hover:text-red-800"
+                                    >
                                         Remove
                                     </button>
                                 </div>
@@ -320,6 +336,8 @@
 </template>
 
 <script setup lang="ts">
+import { useNumberFormat } from '@/composables/useNumberFormat';
+import { useAuthAbility } from '@/composables/useAuthAbilities';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -372,7 +390,11 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+const { formatCurrency } = useNumberFormat();
 const creditNote = computed(() => props.creditNote);
+
+const canCreditNotesEdit = useAuthAbility('credit-notes', 'edit');
+const canCreditNotesDelete = useAuthAbility('credit-notes', 'delete');
 const isRoundingAdjustmentLine = (item: { description?: string | null }) => {
     return (item.description || '').trim().toLowerCase() === 'rounding adjustment';
 };
@@ -472,10 +494,6 @@ function addRefundPayment() {
 function removeRefundPayment(paymentId: number) {
     if (!confirm('Remove this refund payment?')) return;
     router.delete(`/credit-notes/${creditNote.value.id}/payments/${paymentId}`);
-}
-
-function formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' }).format(amount ?? 0);
 }
 
 function formatDate(date: string): string {

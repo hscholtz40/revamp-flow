@@ -302,8 +302,8 @@
                             <tr>
                                 <td>{{ $item->description }}</td>
                                 <td class="text-right">{{ $item->quantity }}</td>
-                                <td class="text-right">R {{ number_format($item->unit_price, 2) }}</td>
-                                <td class="text-right">R {{ number_format($item->total, 2) }}</td>
+                                <td class="text-right">{{ $jobcard->company->formatCurrencyZar($item->unit_price) }}</td>
+                                <td class="text-right">{{ $jobcard->company->formatCurrencyZar($item->total) }}</td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -313,21 +313,21 @@
             <div class="totals">
                 <div class="totals-row">
                     <span>Subtotal:</span>
-                    <span>R {{ number_format($jobcard->subtotal, 2) }}</span>
+                    <span>{{ $jobcard->company->formatCurrencyZar($jobcard->subtotal) }}</span>
                 </div>
                 @if($jobcard->discount_amount > 0)
                     <div class="totals-row">
                         <span>Discount:</span>
-                        <span>-R {{ number_format($jobcard->discount_amount, 2) }}</span>
+                        <span>-{{ $jobcard->company->formatCurrencyZar($jobcard->discount_amount) }}</span>
                     </div>
                 @endif
                 <div class="totals-row">
                     <span>Tax ({{ $jobcard->tax_rate }}%):</span>
-                    <span>R {{ number_format($jobcard->tax_amount, 2) }}</span>
+                    <span>{{ $jobcard->company->formatCurrencyZar($jobcard->tax_amount) }}</span>
                 </div>
                 <div class="totals-row total">
                     <span>Total:</span>
-                    <span>R {{ number_format($jobcard->total, 2) }}</span>
+                    <span>{{ $jobcard->company->formatCurrencyZar($jobcard->total) }}</span>
                 </div>
             </div>
 

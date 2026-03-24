@@ -1,9 +1,15 @@
 <script setup lang="ts">
+import ListTableActionLabel from '@/components/ListTableActionLabel.vue';
+import { useAuthAbility } from '@/composables/useAuthAbilities';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
+import { Edit } from 'lucide-vue-next';
 import groups from '@/routes/groups';
 
 const props = defineProps<{ groups: any[] }>();
+
+const canGroupsCreate = useAuthAbility('groups', 'create');
+const canGroupsEdit = useAuthAbility('groups', 'edit');
 </script>
 
 <template>
@@ -11,7 +17,7 @@ const props = defineProps<{ groups: any[] }>();
     <AppLayout :breadcrumbs="[{ title: 'Groups', href: groups.index().url }]">
         <div class="flex items-center justify-between gap-3 p-4">
             <div />
-            <Link :href="groups.create().url" class="rounded bg-blue-600 px-3 py-2 text-white">New Group</Link>
+            <Link v-if="canGroupsCreate" :href="groups.create().url" class="rounded bg-blue-600 px-3 py-2 text-white">New Group</Link>
         </div>
         <div class="p-4">
             <table class="min-w-full border">
@@ -38,7 +44,15 @@ const props = defineProps<{ groups: any[] }>();
                         </td>
                         <td class="p-2">{{ g.users_count }}</td>
                         <td class="p-2 text-right">
-                            <Link :href="groups.edit(g.id).url" class="rounded border px-2 py-1">Edit</Link>
+                            <Link
+                                v-if="canGroupsEdit"
+                                :href="groups.edit(g.id).url"
+                                class="inline-flex items-center justify-center rounded border px-2 py-1.5 md:px-3 md:py-1 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                            >
+                                <ListTableActionLabel label="Edit">
+                                    <Edit class="h-4 w-4" />
+                                </ListTableActionLabel>
+                            </Link>
                         </td>
                     </tr>
                 </tbody>

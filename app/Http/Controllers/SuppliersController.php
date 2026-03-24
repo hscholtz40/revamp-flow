@@ -11,6 +11,38 @@ use Inertia\Response;
 class SuppliersController extends Controller
 {
     /**
+     * JSON search for supplier pickers (e.g. purchase orders), scoped to the current company.
+     */
+    public function search(Request $request)
+    {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        if (! $currentCompany) {
+            return response()->json([]);
+        }
+
+        $search = $request->string('q', '')->toString();
+        if ($search === '') {
+            return response()->json([]);
+        }
+
+        $suppliers = Supplier::where('company_id', $currentCompany->id)
+            ->where('is_active', true)
+            ->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%")
+                    ->orWhere('vat_number', 'like', "%{$search}%")
+                    ->orWhere('city', 'like', "%{$search}%")
+                    ->orWhere('country', 'like', "%{$search}%");
+            })
+            ->orderBy('name')
+            ->limit(20)
+            ->get(['id', 'name', 'email', 'phone', 'vat_number']);
+
+        return response()->json($suppliers);
+    }
+
+    /**
      * Display a listing of suppliers.
      */
     public function index(Request $request): Response
@@ -19,14 +51,15 @@ class SuppliersController extends Controller
         $sortBy = $request->input('sort_by', 'name');
         $sortDir = $request->input('sort_dir', 'asc') === 'desc' ? 'desc' : 'asc';
         $sortableFields = ['name', 'email', 'phone', 'city', 'country', 'vat_number', 'is_active', 'created_at'];
-        if (!in_array($sortBy, $sortableFields, true)) {
+        if (! in_array($sortBy, $sortableFields, true)) {
             $sortBy = 'name';
         }
-        
-        if (!$currentCompany) {
+
+        if (! $currentCompany) {
             \Log::warning('SuppliersController::index - No current company found for user', [
                 'user_id' => auth()->id(),
             ]);
+
             return Inertia::render('suppliers/Index', [
                 'suppliers' => new \Illuminate\Pagination\LengthAwarePaginator([], 0, 15),
                 'filters' => [
@@ -35,19 +68,7 @@ class SuppliersController extends Controller
                 ],
             ]);
         }
-        
-        \Log::info('SuppliersController::index - Fetching suppliers', [
-            'company_id' => $currentCompany->id,
-            'company_name' => $currentCompany->name,
-        ]);
-        
-        // Debug: Check all suppliers in database
-        $allSuppliers = Supplier::all(['id', 'name', 'company_id']);
-        \Log::info('SuppliersController::index - All suppliers in database', [
-            'total_suppliers' => $allSuppliers->count(),
-            'suppliers' => $allSuppliers->map(fn($s) => ['id' => $s->id, 'name' => $s->name, 'company_id' => $s->company_id])->toArray(),
-        ]);
-        
+
         $suppliers = Supplier::where('company_id', $currentCompany->id)
             ->when($request->string('search'), function ($query, $search) {
                 $query->where(function ($q) use ($search) {
@@ -62,18 +83,6 @@ class SuppliersController extends Controller
             ->orderBy($sortBy, $sortDir)
             ->paginate(15)
             ->withQueryString();
-        
-        \Log::info('SuppliersController::index - Filtered suppliers', [
-            'company_id' => $currentCompany->id,
-            'suppliers_count' => $suppliers->count(),
-            'total' => $suppliers->total(),
-            'from' => $suppliers->firstItem(),
-            'to' => $suppliers->lastItem(),
-            'current_page' => $suppliers->currentPage(),
-            'last_page' => $suppliers->lastPage(),
-            'per_page' => $suppliers->perPage(),
-            'suppliers' => $suppliers->map(fn($s) => ['id' => $s->id, 'name' => $s->name])->toArray(),
-        ]);
 
         return Inertia::render('suppliers/Index', [
             'suppliers' => $suppliers,
@@ -100,12 +109,12 @@ class SuppliersController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if (!$currentCompany) {
+
+        if (! $currentCompany) {
             return redirect()->back()
                 ->withErrors(['message' => 'No company selected. Please select a company first.']);
         }
-        
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['nullable', 'email', 'max:255'],
@@ -121,15 +130,9 @@ class SuppliersController extends Controller
         ]);
 
         $validated['company_id'] = $currentCompany->id;
-        
-        \Log::info('SuppliersController::store - Creating supplier', [
-            'company_id' => $currentCompany->id,
-            'company_name' => $currentCompany->name,
-            'supplier_name' => $validated['name'],
-        ]);
-        
+
         $supplier = Supplier::create($validated);
-        
+
         \Log::info('SuppliersController::store - Supplier created', [
             'supplier_id' => $supplier->id,
             'company_id' => $supplier->company_id,
@@ -141,20 +144,30 @@ class SuppliersController extends Controller
     /**
      * Display the specified supplier.
      */
-    public function show(Supplier $supplier): Response
+    public function show(Supplier $supplier, Request $request): Response
     {
-        $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($supplier->company_id !== $currentCompany->id) {
-            abort(403, 'Unauthorized access to supplier.');
+        $this->authorize('view', $supplier);
+
+        $purchaseOrdersPerPage = (int) $request->get('po_per_page', 10);
+        if ($purchaseOrdersPerPage <= 0) {
+            $purchaseOrdersPerPage = 10;
         }
 
-        $supplier->load(['products', 'purchaseOrders' => function ($query) {
-            $query->orderBy('created_at', 'desc')->limit(10);
-        }]);
+        $supplier->load(['products']);
+
+        $user = $request->user();
+        $purchaseOrders = $user->hasModulePermission('purchase-orders', 'list')
+            ? $supplier->purchaseOrders()
+                ->orderByDesc('created_at')
+                ->paginate($purchaseOrdersPerPage, ['id', 'po_number', 'status', 'total', 'created_at'], 'po_page')
+            : new \Illuminate\Pagination\LengthAwarePaginator([], 0, $purchaseOrdersPerPage, 1, [
+                'path' => $request->url(),
+                'pageName' => 'po_page',
+            ]);
 
         return Inertia::render('suppliers/Show', [
             'supplier' => $supplier,
+            'purchaseOrders' => $purchaseOrders,
         ]);
     }
 
@@ -163,11 +176,9 @@ class SuppliersController extends Controller
      */
     public function edit(Supplier $supplier): Response
     {
+        $this->authorize('update', $supplier);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($supplier->company_id !== $currentCompany->id) {
-            abort(403, 'Unauthorized access to supplier.');
-        }
 
         return Inertia::render('suppliers/Edit', [
             'supplier' => $supplier,
@@ -179,11 +190,9 @@ class SuppliersController extends Controller
      */
     public function update(Request $request, Supplier $supplier): RedirectResponse
     {
+        $this->authorize('update', $supplier);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($supplier->company_id !== $currentCompany->id) {
-            abort(403, 'Unauthorized access to supplier.');
-        }
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -209,11 +218,9 @@ class SuppliersController extends Controller
      */
     public function destroy(Supplier $supplier): RedirectResponse
     {
+        $this->authorize('delete', $supplier);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($supplier->company_id !== $currentCompany->id) {
-            abort(403, 'Unauthorized access to supplier.');
-        }
 
         // Check if supplier has products or purchase orders
         if ($supplier->products()->count() > 0) {

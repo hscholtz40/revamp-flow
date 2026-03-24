@@ -60,6 +60,7 @@
             </div>
 
             <h3>Administrator</h3>
+            <p class="muted" style="margin-top: 0;">These credentials are used only for this install step. They are not written to your <code>.env</code> file.</p>
             <div class="grid">
                 <div>
                     <label>Admin Email</label>

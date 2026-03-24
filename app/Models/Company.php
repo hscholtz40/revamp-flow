@@ -4,12 +4,51 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Company extends Model
 {
     use HasFactory;
+
+    public const DEFAULT_JOBCARD_STATUS_LABELS = [
+        'draft' => 'Draft',
+        'pending' => 'Pending',
+        'in_progress' => 'In Progress',
+        'completed' => 'Completed',
+        'cancelled' => 'Cancelled',
+    ];
+
+    public const DEFAULT_QUOTE_STATUS_LABELS = [
+        'draft' => 'Draft',
+        'sent' => 'Sent',
+        'accepted' => 'Accepted',
+        'rejected' => 'Rejected',
+        'expired' => 'Expired',
+    ];
+
+    /**
+     * Restrict route binding to companies the authenticated user may access.
+     *
+     * @param  mixed  $value
+     * @param  string|null  $field
+     * @return static|null
+     */
+    public function resolveRouteBinding($value, $field = null)
+    {
+        $field ??= $this->getRouteKeyName();
+        $company = static::query()->where($field, $value)->first();
+        if ($company === null) {
+            return null;
+        }
+
+        $user = auth()->user();
+        if ($user === null || ! $user->hasAccessToCompany($company->id)) {
+            return null;
+        }
+
+        return $company;
+    }
 
     protected $fillable = [
         'name',
@@ -33,6 +72,7 @@ class Company extends Model
         'is_active',
         'is_default',
         'enable_pos',
+        'enable_document_signing',
         'whatsapp_business_number',
         'visible_modules',
         'bank_name',
@@ -49,19 +89,100 @@ class Company extends Model
         'credit_note_number_next',
         'purchase_order_number_prefix',
         'purchase_order_number_next',
+        'locale_decimal_separator',
+        'locale_thousands_separator',
+        'jobcard_status_labels',
+        'quote_status_labels',
+    ];
+
+    /**
+     * @var list<string>
+     */
+    protected $hidden = [
+        'smtp_password',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
         'is_default' => 'boolean',
         'enable_pos' => 'boolean',
+        'enable_document_signing' => 'boolean',
         'visible_modules' => 'array',
         'invoice_number_next' => 'integer',
         'quote_number_next' => 'integer',
         'jobcard_number_next' => 'integer',
         'credit_note_number_next' => 'integer',
         'purchase_order_number_next' => 'integer',
+        'smtp_password' => 'encrypted',
+        'jobcard_status_labels' => 'array',
+        'quote_status_labels' => 'array',
     ];
+
+    /**
+     * Format a numeric amount using this company's decimal and thousands separators (no currency symbol).
+     */
+    public function formatNumber(float|int|string|null $amount, int $decimals = 2): string
+    {
+        $num = (float) $amount;
+        $dec = ($this->locale_decimal_separator !== null && $this->locale_decimal_separator !== '')
+            ? $this->locale_decimal_separator
+            : '.';
+        $thou = ($this->locale_thousands_separator !== null && $this->locale_thousands_separator !== '')
+            ? $this->locale_thousands_separator
+            : ',';
+
+        return number_format($num, $decimals, $dec, $thou);
+    }
+
+    /**
+     * Format a ZAR amount with the R prefix and company number separators.
+     */
+    public function formatCurrencyZar(float|int|string|null $amount, int $decimals = 2): string
+    {
+        return 'R'.$this->formatNumber($amount, $decimals);
+    }
+
+    /**
+     * @return array<int, array{value: string, label: string}>
+     */
+    public function getJobcardStatusOptions(): array
+    {
+        return $this->buildStatusOptions(
+            self::DEFAULT_JOBCARD_STATUS_LABELS,
+            is_array($this->jobcard_status_labels) ? $this->jobcard_status_labels : []
+        );
+    }
+
+    /**
+     * @return array<int, array{value: string, label: string}>
+     */
+    public function getQuoteStatusOptions(): array
+    {
+        return $this->buildStatusOptions(
+            self::DEFAULT_QUOTE_STATUS_LABELS,
+            is_array($this->quote_status_labels) ? $this->quote_status_labels : []
+        );
+    }
+
+    /**
+     * @param  array<string, string>  $defaults
+     * @param  array<string, mixed>  $overrides
+     * @return array<int, array{value: string, label: string}>
+     */
+    private function buildStatusOptions(array $defaults, array $overrides): array
+    {
+        $options = [];
+        foreach ($defaults as $value => $label) {
+            $override = $overrides[$value] ?? null;
+            $resolved = is_string($override) && trim($override) !== '' ? trim($override) : $label;
+            $options[] = [
+                'value' => $value,
+                'label' => $resolved,
+            ];
+        }
+
+        return $options;
+    }
 
     /**
      * Get the logo URL
@@ -69,8 +190,9 @@ class Company extends Model
     public function getLogoAttribute()
     {
         if ($this->logo_path) {
-            return asset('storage/' . $this->logo_path);
+            return asset('storage/'.$this->logo_path);
         }
+
         return null;
     }
 
@@ -80,13 +202,13 @@ class Company extends Model
      */
     public function getLogoPathForPdf()
     {
-        if (!$this->logo_path) {
+        if (! $this->logo_path) {
             return null;
         }
 
-        $fullPath = storage_path('app/public/' . $this->logo_path);
+        $fullPath = storage_path('app/public/'.$this->logo_path);
 
-        if (!file_exists($fullPath)) {
+        if (! file_exists($fullPath)) {
             return null;
         }
 
@@ -94,7 +216,7 @@ class Company extends Model
         $imageInfo = getimagesize($fullPath);
         $mimeType = $imageInfo['mime'] ?? 'image/png';
 
-        return 'data:' . $mimeType . ';base64,' . base64_encode($imageData);
+        return 'data:'.$mimeType.';base64,'.base64_encode($imageData);
     }
 
     /**
@@ -160,7 +282,7 @@ class Company extends Model
     {
         // Remove default from all other companies
         static::where('is_default', true)->update(['is_default' => false]);
-        
+
         // Set this company as default
         $this->update(['is_default' => true]);
     }
@@ -190,7 +312,7 @@ class Company extends Model
         if ($this->visible_modules === null) {
             return true; // All modules visible by default
         }
-        
+
         return in_array($moduleKey, $this->visible_modules ?? []);
     }
 

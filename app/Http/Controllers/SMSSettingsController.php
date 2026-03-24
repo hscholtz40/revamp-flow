@@ -16,9 +16,13 @@ class SMSSettingsController extends Controller
     public function index(): Response
     {
         $settings = SMSSettings::getActive();
-        
+
         return Inertia::render('administration/SMSSettings', [
-            'settings' => $settings,
+            'settings' => $settings
+                ? array_merge($settings->toArray(), [
+                    'has_bulksms_password' => filled($settings->bulksms_password),
+                ])
+                : null,
         ]);
     }
 
@@ -28,7 +32,7 @@ class SMSSettingsController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $isActive = $request->boolean('is_active');
-        
+
         $validated = $request->validate([
             'bulksms_username' => [$isActive ? 'required' : 'nullable', 'string', 'max:255'],
             'bulksms_password' => [$isActive ? 'required' : 'nullable', 'string', 'max:255'],
@@ -40,7 +44,7 @@ class SMSSettingsController extends Controller
         SMSSettings::query()->update(['is_active' => false]);
 
         // Create new settings (only if active or if we have credentials)
-        if ($isActive || !empty($validated['bulksms_username']) || !empty($validated['bulksms_password'])) {
+        if ($isActive || ! empty($validated['bulksms_username']) || ! empty($validated['bulksms_password'])) {
             SMSSettings::create([
                 'bulksms_username' => $validated['bulksms_username'] ?? '',
                 'bulksms_password' => $validated['bulksms_password'] ?? '',
@@ -58,19 +62,22 @@ class SMSSettingsController extends Controller
     public function update(Request $request, SMSSettings $smsSettings): RedirectResponse
     {
         $isActive = $request->boolean('is_active');
-        
+        $passwordRequired = $isActive && ! filled($smsSettings->bulksms_password);
+
         $validated = $request->validate([
             'bulksms_username' => [$isActive ? 'required' : 'nullable', 'string', 'max:255'],
-            'bulksms_password' => [$isActive ? 'required' : 'nullable', 'string', 'max:255'],
+            'bulksms_password' => [$passwordRequired ? 'required' : 'nullable', 'string', 'max:255'],
             'bulksms_sender_name' => ['nullable', 'string', 'max:11'],
             'is_active' => ['boolean'],
         ]);
 
         // If disabling SMS, clear the credentials
-        if (!$isActive) {
+        if (! $isActive) {
             $validated['bulksms_username'] = '';
             $validated['bulksms_password'] = '';
             $validated['bulksms_sender_name'] = '';
+        } elseif (empty($validated['bulksms_password'])) {
+            unset($validated['bulksms_password']);
         }
 
         $smsSettings->update($validated);

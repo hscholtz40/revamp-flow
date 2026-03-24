@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Traits\ScopedToCurrentCompanyRouteBinding;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -9,7 +10,7 @@ use Illuminate\Support\Str;
 
 class License extends Model
 {
-    use HasFactory;
+    use HasFactory, ScopedToCurrentCompanyRouteBinding;
 
     protected $fillable = [
         'company_id',
@@ -45,6 +46,24 @@ class License extends Model
         } while (static::where('license_key', $key)->exists());
 
         return $key;
+    }
+
+    /**
+     * Mask a license key for display to non-administrators (first and last segment only).
+     */
+    public static function maskLicenseKey(string $key): string
+    {
+        $segments = explode('-', $key);
+        if (count($segments) >= 5) {
+            return $segments[0].'-****-****-****-'.$segments[4];
+        }
+
+        $len = strlen($key);
+        if ($len > 10) {
+            return substr($key, 0, 4).'••••••••'.substr($key, -4);
+        }
+
+        return '••••••••';
     }
 
     /**

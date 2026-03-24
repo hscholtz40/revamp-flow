@@ -60,6 +60,48 @@ export interface Auth {
                     edit?: boolean;
                     delete?: boolean;
                 };
+                jobcards?: {
+                    list?: boolean;
+                    view?: boolean;
+                    create?: boolean;
+                    edit?: boolean;
+                    delete?: boolean;
+                };
+                quotes?: {
+                    list?: boolean;
+                    view?: boolean;
+                    create?: boolean;
+                    edit?: boolean;
+                    delete?: boolean;
+                };
+                invoices?: {
+                    list?: boolean;
+                    view?: boolean;
+                    create?: boolean;
+                    edit?: boolean;
+                    delete?: boolean;
+                };
+                'credit-notes'?: {
+                    list?: boolean;
+                    view?: boolean;
+                    create?: boolean;
+                    edit?: boolean;
+                    delete?: boolean;
+                };
+                reports?: {
+                    list?: boolean;
+                    view?: boolean;
+                    create?: boolean;
+                    edit?: boolean;
+                    delete?: boolean;
+                };
+                timesheet?: {
+                    list?: boolean;
+                    view?: boolean;
+                    create?: boolean;
+                    edit?: boolean;
+                    delete?: boolean;
+                };
     };
 }
 

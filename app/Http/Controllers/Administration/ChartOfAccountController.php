@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Administration;
 
 use App\Http\Controllers\Controller;
 use App\Models\ChartOfAccount;
+use App\Support\CompanyScopedRules;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -51,7 +52,7 @@ class ChartOfAccountController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $currentCompany = auth()->user()->getCurrentCompany();
-        
+
         $validated = $request->validate([
             'account_code' => [
                 'required',
@@ -62,7 +63,7 @@ class ChartOfAccountController extends Controller
             ],
             'account_name' => ['required', 'string', 'max:255'],
             'account_type' => ['required', 'in:Asset,Liability,Equity,Revenue,Expense'],
-            'parent_account_id' => ['nullable', 'exists:chart_of_accounts,id'],
+            'parent_account_id' => ['nullable', CompanyScopedRules::chartOfAccountParent($currentCompany->id)],
             'description' => ['nullable', 'string'],
             'is_active' => ['boolean'],
             'is_default_sales' => ['boolean'],
@@ -102,11 +103,7 @@ class ChartOfAccountController extends Controller
      */
     public function show(ChartOfAccount $chartOfAccount): Response
     {
-        $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($chartOfAccount->company_id !== $currentCompany->id) {
-            abort(403, 'Unauthorized access to chart of account.');
-        }
+        $this->authorize('view', $chartOfAccount);
 
         $chartOfAccount->load(['parentAccount', 'childAccounts']);
 
@@ -120,11 +117,9 @@ class ChartOfAccountController extends Controller
      */
     public function edit(ChartOfAccount $chartOfAccount): Response
     {
+        $this->authorize('update', $chartOfAccount);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($chartOfAccount->company_id !== $currentCompany->id) {
-            abort(403, 'Unauthorized access to chart of account.');
-        }
 
         $parentAccounts = ChartOfAccount::where('company_id', $currentCompany->id)
             ->whereNull('parent_account_id')
@@ -144,11 +139,9 @@ class ChartOfAccountController extends Controller
      */
     public function update(Request $request, ChartOfAccount $chartOfAccount): RedirectResponse
     {
+        $this->authorize('update', $chartOfAccount);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($chartOfAccount->company_id !== $currentCompany->id) {
-            abort(403, 'Unauthorized access to chart of account.');
-        }
 
         $validated = $request->validate([
             'account_code' => [
@@ -161,7 +154,7 @@ class ChartOfAccountController extends Controller
             ],
             'account_name' => ['required', 'string', 'max:255'],
             'account_type' => ['required', 'in:Asset,Liability,Equity,Revenue,Expense'],
-            'parent_account_id' => ['nullable', 'exists:chart_of_accounts,id'],
+            'parent_account_id' => ['nullable', CompanyScopedRules::chartOfAccountParent($currentCompany->id, $chartOfAccount->id)],
             'description' => ['nullable', 'string'],
             'is_active' => ['boolean'],
             'is_default_sales' => ['boolean'],
@@ -208,11 +201,9 @@ class ChartOfAccountController extends Controller
      */
     public function destroy(ChartOfAccount $chartOfAccount): RedirectResponse
     {
+        $this->authorize('delete', $chartOfAccount);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($chartOfAccount->company_id !== $currentCompany->id) {
-            abort(403, 'Unauthorized access to chart of account.');
-        }
 
         // Check if account has child accounts
         if ($chartOfAccount->childAccounts()->count() > 0) {

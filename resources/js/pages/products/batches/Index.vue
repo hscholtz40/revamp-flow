@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import ListTableActionLabel from '@/components/ListTableActionLabel.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ArrowLeft, Plus, Calendar, Package, AlertTriangle } from 'lucide-vue-next';
+import { ArrowLeft, Plus, Calendar, Package, AlertTriangle, Eye, Edit } from 'lucide-vue-next';
 import products from '@/routes/products';
 
 interface Product {
@@ -172,15 +173,19 @@ function isExpiringSoon(expiryDate: string | null, days: number = 30): boolean {
                                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                     <Link
                                         :href="`/products/${props.product.id}/batches/${batch.id}`"
-                                        class="text-blue-600 hover:text-blue-900 mr-4"
+                                        class="mr-2 inline-flex items-center justify-center rounded-md p-2 text-blue-600 hover:bg-blue-50 md:mr-4 md:p-0 md:hover:bg-transparent hover:text-blue-900"
                                     >
-                                        View
+                                        <ListTableActionLabel label="View">
+                                            <Eye class="h-4 w-4" />
+                                        </ListTableActionLabel>
                                     </Link>
                                     <Link
                                         :href="`/products/${props.product.id}/batches/${batch.id}/edit`"
-                                        class="text-gray-600 hover:text-gray-900"
+                                        class="inline-flex items-center justify-center rounded-md p-2 text-gray-600 hover:bg-gray-100 md:p-0 md:hover:bg-transparent hover:text-gray-900"
                                     >
-                                        Edit
+                                        <ListTableActionLabel label="Edit">
+                                            <Edit class="h-4 w-4" />
+                                        </ListTableActionLabel>
                                     </Link>
                                 </td>
                             </tr>

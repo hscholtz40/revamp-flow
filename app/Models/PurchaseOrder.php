@@ -2,20 +2,24 @@
 
 namespace App\Models;
 
+use App\Traits\ScopedToCurrentCompanyRouteBinding;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Facades\DB;
 
 class PurchaseOrder extends Model
 {
-    use HasFactory;
+    use HasFactory, ScopedToCurrentCompanyRouteBinding;
 
     protected $fillable = [
         'company_id',
         'supplier_id',
+        'source_type',
+        'source_id',
         'xero_purchase_order_id',
         'po_number',
         'order_date',
@@ -80,6 +84,11 @@ class PurchaseOrder extends Model
         return $this->morphMany(LineGroup::class, 'line_groupable')->orderBy('sort_order');
     }
 
+    public function source(): MorphTo
+    {
+        return $this->morphTo('source', 'source_type', 'source_id');
+    }
+
     /**
      * Generate a unique PO number.
      */
@@ -89,7 +98,7 @@ class PurchaseOrder extends Model
             $company = Company::whereKey($companyId)->lockForUpdate()->first();
             if ($company && $company->purchase_order_number_prefix !== null && $company->purchase_order_number_next !== null) {
                 $next = max(1, (int) $company->purchase_order_number_next);
-                $number = $company->purchase_order_number_prefix . str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+                $number = $company->purchase_order_number_prefix.str_pad((string) $next, 4, '0', STR_PAD_LEFT);
                 $company->purchase_order_number_next = $next + 1;
                 $company->save();
 
@@ -111,7 +120,7 @@ class PurchaseOrder extends Model
 
         $sequence = $lastPO ? ((int) substr($lastPO->po_number, -4)) + 1 : 1;
 
-        return 'PO-' . $year . str_pad($sequence, 4, '0', STR_PAD_LEFT);
+        return 'PO-'.$year.str_pad($sequence, 4, '0', STR_PAD_LEFT);
     }
 
     /**
@@ -132,7 +141,7 @@ class PurchaseOrder extends Model
         $items = $this->items()->get();
         $subtotal = $items->sum('total');
         $taxAmount = $items->sum('tax_amount') ?? 0;
-        
+
         $this->subtotal = $subtotal;
         $this->tax_amount = $taxAmount;
         $this->total = $subtotal + $taxAmount;

@@ -8,7 +8,7 @@ import groups from '@/routes/groups';
 import companySettings from '@/routes/company-settings';
 import smsSettings from '@/routes/sms-settings';
 import whatsappSettings from '@/routes/whatsapp-settings';
-import { Users, UsersRound, Shield, Building2, UserCheck, Package, Tag, MessageSquare, Zap, FileText, ClipboardList, Database, Percent, BookOpen, CreditCard, ArrowUpCircle, Eye, KeyRound, Hash, Mail } from 'lucide-vue-next';
+import { Users, UsersRound, Shield, Building2, UserCheck, Package, Tag, MessageSquare, Zap, FileText, ClipboardList, Database, Percent, BookOpen, CreditCard, ArrowUpCircle, Eye, KeyRound, Hash, Mail, Globe2, ListChecks } from 'lucide-vue-next';
 import auditLogs from '@/routes/audit-logs';
 import backups from '@/routes/backups/index';
 import { ref } from 'vue';
@@ -409,6 +409,48 @@ const props = defineProps<{
                             class="rounded bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
                         >
                             Manage Numbering
+                        </Link>
+                    </div>
+                </div>
+
+                <!-- Localization Card -->
+                <div class="flex flex-col rounded-lg border bg-white p-6 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold">Localization</h2>
+                            <p class="text-sm text-gray-600">Decimal and thousands separators for amounts in the app, PDFs, and emails</p>
+                        </div>
+                        <div class="rounded-full bg-primary/10 p-3">
+                            <Globe2 class="h-6 w-6 text-primary" />
+                        </div>
+                    </div>
+                    <div class="mt-auto pt-4">
+                        <Link
+                            href="/administration/localization"
+                            class="rounded bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
+                        >
+                            Configure Localization
+                        </Link>
+                    </div>
+                </div>
+
+                <!-- Status Editor Card -->
+                <div class="flex flex-col rounded-lg border bg-white p-6 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold">Status Editor</h2>
+                            <p class="text-sm text-gray-600">Edit Jobcard and Quote status labels and reset to defaults</p>
+                        </div>
+                        <div class="rounded-full bg-primary/10 p-3">
+                            <ListChecks class="h-6 w-6 text-primary" />
+                        </div>
+                    </div>
+                    <div class="mt-auto pt-4">
+                        <Link
+                            href="/administration/status-editor"
+                            class="rounded bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
+                        >
+                            Open Status Editor
                         </Link>
                     </div>
                 </div>

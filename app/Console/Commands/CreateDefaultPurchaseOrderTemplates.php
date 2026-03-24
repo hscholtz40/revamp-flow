@@ -28,33 +28,34 @@ class CreateDefaultPurchaseOrderTemplates extends Command
     public function handle()
     {
         $companies = Company::where('is_active', true)->get();
-        
+
         $this->info("Creating default purchase order templates for {$companies->count()} companies...");
-        
+
         $htmlTemplate = $this->getDefaultHtmlTemplate();
         $cssStyles = $this->getDefaultCssStyles();
-        
+
         $created = 0;
         $skipped = 0;
-        
+
         foreach ($companies as $company) {
             // Check if default template already exists
             $existing = PdfTemplate::where('company_id', $company->id)
                 ->where('module', 'purchase-order')
                 ->where('is_default', true)
                 ->first();
-            
+
             if ($existing) {
                 $this->warn("Company '{$company->name}' already has a default purchase order template. Skipping...");
                 $skipped++;
+
                 continue;
             }
-            
+
             // Unset any existing defaults for this module
             PdfTemplate::where('company_id', $company->id)
                 ->where('module', 'purchase-order')
                 ->update(['is_default' => false]);
-            
+
             // Create default template
             PdfTemplate::create([
                 'company_id' => $company->id,
@@ -65,16 +66,16 @@ class CreateDefaultPurchaseOrderTemplates extends Command
                 'is_active' => true,
                 'is_default' => true,
             ]);
-            
+
             $created++;
             $this->info("Created default template for company '{$company->name}'");
         }
-        
+
         $this->info("\nCompleted! Created {$created} templates, skipped {$skipped}.");
-        
+
         return Command::SUCCESS;
     }
-    
+
     /**
      * Get the default HTML template for purchase orders
      */
@@ -213,14 +214,14 @@ class CreateDefaultPurchaseOrderTemplates extends Command
 {{#if purchaseOrder.notes}}
 <div class="terms-section">
     <h4>Notes:</h4>
-    <p>{{purchaseOrder.notes}}</p>
+    <p>{{{purchaseOrder.notes}}}</p>
 </div>
 {{/if}}
 
 {{#if purchaseOrder.terms}}
 <div class="terms-section">
     <h4>Terms & Conditions:</h4>
-    <p>{{purchaseOrder.terms}}</p>
+    <p>{{{purchaseOrder.terms}}}</p>
 </div>
 {{/if}}
 
@@ -234,7 +235,7 @@ class CreateDefaultPurchaseOrderTemplates extends Command
 </div>
 HTML;
     }
-    
+
     /**
      * Get the default CSS styles for purchase orders
      */
@@ -471,4 +472,3 @@ body {
 CSS;
     }
 }
-

@@ -214,11 +214,9 @@
                             <label class="block text-sm font-medium text-gray-700 mb-1">Status *</label>
                             <select v-model="form.status" class="w-full rounded border px-3 py-2"
                                 :class="{ 'border-red-500': form.errors.status }" required>
-                                <option value="draft">Draft</option>
-                                <option value="sent">Sent</option>
-                                <option value="accepted">Accepted</option>
-                                <option value="rejected">Rejected</option>
-                                <option value="expired">Expired</option>
+                                <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">
+                                    {{ opt.label }}
+                                </option>
                             </select>
                             <div v-if="form.errors.status" class="text-red-500 text-sm mt-1">
                                 {{ form.errors.status }}
@@ -692,7 +690,10 @@ const props = defineProps<{
             total?: number | null;
         }[];
     } | null;
+    statusOptions?: Array<{ value: string; label: string }>;
 }>();
+
+const statusOptions = computed(() => props.statusOptions ?? []);
 
 const ROUNDING_LINE_DESCRIPTION = 'Rounding Adjustment';
 const createLineItemUid = () =>
@@ -838,6 +839,11 @@ if (props.prefill) {
         selectedCustomer.value = prefillCustomer;
         customerSearchQuery.value = prefillCustomer.name;
     }
+
+    form.line_items.forEach((item, index) => {
+        discountTypes.value[index] =
+            (Number(item.discount_percentage) || 0) > 0 ? 'percentage' : 'amount';
+    });
 }
 
 const normalizeLineItemOrder = () => {

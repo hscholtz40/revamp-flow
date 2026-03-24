@@ -28,6 +28,7 @@ interface Company {
     is_active: boolean;
     is_default: boolean;
     enable_pos: boolean;
+    enable_document_signing: boolean;
     whatsapp_business_number: string | null;
     bank_name: string | null;
     bank_account_name: string | null;
@@ -130,6 +131,7 @@ const form = useForm({
     is_active: true,
     is_default: false,
     enable_pos: false,
+    enable_document_signing: false,
     logo: null as File | null,
     whatsapp_business_number: '',
     bank_name: '',
@@ -160,6 +162,7 @@ onMounted(() => {
     form.is_active = props.company.is_active ?? true;
     form.is_default = props.company.is_default ?? false;
     form.enable_pos = props.company.enable_pos ?? false;
+    form.enable_document_signing = props.company.enable_document_signing ?? false;
     form.whatsapp_business_number = props.company.whatsapp_business_number || '';
     form.bank_name = props.company.bank_name || '';
     form.bank_account_name = props.company.bank_account_name || '';
@@ -214,6 +217,7 @@ function submit() {
         is_active: form.is_active,
         is_default: form.is_default,
         enable_pos: form.enable_pos,
+        enable_document_signing: form.enable_document_signing,
         whatsapp_business_number: form.whatsapp_business_number,
         bank_name: form.bank_name,
         bank_account_name: form.bank_account_name,
@@ -678,15 +682,15 @@ function submitReminderSettings() {
                         <div class="space-y-6">
                             <!-- Invoice Terms -->
                             <div>
-                                <label class="mb-1 block text-sm font-medium">Default Invoice Terms</label>
+                                <label class="mb-1 block text-sm font-medium">Default Invoice Terms &amp; Conditions</label>
                                 <textarea
                                     v-model="form.default_invoice_terms"
                                     rows="4"
                                     class="w-full rounded border px-3 py-2"
-                                    placeholder="Enter default terms and conditions for invoices (e.g., payment terms, late fees, etc.)"
+                                    placeholder="Default legal / commercial terms shown on new invoices (not payment terms like COD — those come from the customer record)"
                                 ></textarea>
                                 <div v-if="form.errors.default_invoice_terms" class="mt-1 text-sm text-red-600">{{ form.errors.default_invoice_terms }}</div>
-                                <p class="mt-1 text-xs text-gray-500">These terms will be pre-filled when creating new invoices.</p>
+                                <p class="mt-1 text-xs text-gray-500">Pre-fills the invoice Terms &amp; Conditions field. Payment terms (COD, Net 30, etc.) use each customer’s payment terms.</p>
                             </div>
 
                             <!-- Quote Terms -->
@@ -751,6 +755,17 @@ function submitReminderSettings() {
                                         class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                     />
                                     <span class="text-sm font-medium text-gray-700">Enable Point of Sale (POS)</span>
+                                </label>
+                            </div>
+
+                            <div>
+                                <label class="flex items-center gap-2">
+                                    <input
+                                        v-model="form.enable_document_signing"
+                                        type="checkbox"
+                                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <span class="text-sm font-medium text-gray-700">Enable document signing (jobcards and invoices)</span>
                                 </label>
                             </div>
                         </div>

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useAuthAbility } from '@/composables/useAuthAbilities';
+import { useNumberFormat } from '@/composables/useNumberFormat';
 import AppLayout from '@/layouts/AppLayout.vue';
 import EmailComposerModal from '@/components/EmailComposerModal.vue';
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
@@ -46,6 +48,34 @@ interface EmailActivity {
     } | null;
 }
 
+interface AccountHistoryItem {
+    document_type: 'jobcard' | 'quote' | 'invoice' | 'credit_note';
+    document_id: number;
+    document_number: string;
+    status: string;
+    total: number;
+    document_date: string;
+}
+
+const canCustomersEdit = useAuthAbility('customers', 'edit');
+const canCustomersDelete = useAuthAbility('customers', 'delete');
+const canContactsList = useAuthAbility('contacts', 'list');
+const canContactsCreate = useAuthAbility('contacts', 'create');
+const canContactsEdit = useAuthAbility('contacts', 'edit');
+const canContactsDelete = useAuthAbility('contacts', 'delete');
+const canJobcardsList = useAuthAbility('jobcards', 'list');
+const canQuotesView = useAuthAbility('quotes', 'view');
+const canInvoicesView = useAuthAbility('invoices', 'view');
+const canCreditNotesList = useAuthAbility('credit-notes', 'list');
+const showAccountHistoryPanel = computed(
+    () =>
+        canJobcardsList.value ||
+        canQuotesView.value ||
+        canInvoicesView.value ||
+        canCreditNotesList.value,
+);
+const { formatCurrency } = useNumberFormat();
+
 const props = defineProps<{
     customer: {
         id: number
@@ -86,6 +116,14 @@ const props = defineProps<{
         per_page: number
         total: number
     }
+    accountHistory: {
+        data: AccountHistoryItem[]
+        links: { url: string | null; label: string; active: boolean }[]
+        current_page: number
+        last_page: number
+        per_page: number
+        total: number
+    }
     filters: {
         contact_search?: string
         contacts_per_page?: number
@@ -93,6 +131,7 @@ const props = defineProps<{
         sms_status?: string
         sms_per_page?: number
         email_per_page?: number
+        account_history_per_page?: number
     }
     emailTemplates: {
         id: number
@@ -103,6 +142,20 @@ const props = defineProps<{
         is_default?: boolean
     }[]
 }>()
+
+const deleteCustomer = () => {
+    if (!confirm(`Are you sure you want to delete customer "${props.customer.name}"?`)) {
+        return;
+    }
+    router.delete(customers.destroy(props.customer.id).url);
+};
+
+const deleteContact = (contact: Contact) => {
+    if (!confirm(`Are you sure you want to delete contact "${contact.name}"?`)) {
+        return;
+    }
+    router.delete(contacts.destroy(contact.id).url);
+};
 
 // SMS functionality
 const showSMSModal = ref(false);
@@ -168,6 +221,21 @@ const smsSearch = ref(String(props.filters?.sms_search ?? ''));
 const smsStatus = ref(String(props.filters?.sms_status ?? ''));
 const smsPerPage = ref(Number(props.filters?.sms_per_page ?? 5));
 const emailPerPage = ref(Number(props.filters?.email_per_page ?? 10));
+const accountHistoryPerPage = ref(Number(props.filters?.account_history_per_page ?? 10));
+
+const accountHistoryTypeLabel = (type: AccountHistoryItem['document_type']) => {
+    if (type === 'jobcard') return 'Jobcard';
+    if (type === 'quote') return 'Quote';
+    if (type === 'invoice') return 'Invoice';
+    return 'Credit Note';
+};
+
+const accountHistoryDocumentUrl = (item: AccountHistoryItem) => {
+    if (item.document_type === 'jobcard') return `/jobcards/${item.document_id}`;
+    if (item.document_type === 'quote') return `/quotes/${item.document_id}`;
+    if (item.document_type === 'invoice') return `/invoices/${item.document_id}`;
+    return `/credit-notes/${item.document_id}`;
+};
 
 const updateFilters = () => {
     // Ensure customer ID is valid
@@ -201,6 +269,10 @@ const updateFilters = () => {
     if (emailPerPage.value && emailPerPage.value !== 10) {
         params.email_per_page = emailPerPage.value.toString();
     }
+
+    if (accountHistoryPerPage.value && accountHistoryPerPage.value !== 10) {
+        params.account_history_per_page = accountHistoryPerPage.value.toString();
+    }
     
     router.get(customers.show(props.customer.id).url, params, {
         preserveState: true,
@@ -209,7 +281,7 @@ const updateFilters = () => {
 };
 
 // Watch for filter changes
-watch([contactSearch, contactsPerPage, smsSearch, smsStatus, smsPerPage, emailPerPage], () => {
+watch([contactSearch, contactsPerPage, smsSearch, smsStatus, smsPerPage, emailPerPage, accountHistoryPerPage], () => {
     // Only update filters if customer is available
     if (props.customer?.id) {
         updateFilters();
@@ -247,12 +319,21 @@ watch([contactSearch, contactsPerPage, smsSearch, smsStatus, smsPerPage, emailPe
                         >
                             Send SMS
                         </button>
-                        <Link 
-                            :href="customers.edit(props.customer.id).url" 
+                        <Link
+                            v-if="canCustomersEdit"
+                            :href="customers.edit(props.customer.id).url"
                             class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                         >
                             Edit
                         </Link>
+                        <button
+                            v-if="canCustomersDelete"
+                            type="button"
+                            @click="deleteCustomer"
+                            class="rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                        >
+                            Delete
+                        </button>
                         <Link 
                             :href="customers.index().url" 
                             class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
@@ -343,8 +424,92 @@ watch([contactSearch, contactsPerPage, smsSearch, smsStatus, smsPerPage, emailPe
                 </div>
             </div>
 
+            <!-- Account History Sub-Panel -->
+            <div v-if="showAccountHistoryPanel" class="rounded-lg bg-white border border-gray-200 shadow-sm">
+                <div class="border-b border-gray-200 bg-indigo-50 px-6 py-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold text-gray-900">Account History</h2>
+                            <p class="text-sm text-gray-600">Jobcards, quotes, invoices, and credit notes</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="p-6">
+                    <div class="mb-4 flex justify-end">
+                        <div class="w-full md:w-56">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Results per page</label>
+                            <select
+                                v-model="accountHistoryPerPage"
+                                class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                            >
+                                <option value="10">10 per page</option>
+                                <option value="25">25 per page</option>
+                                <option value="50">50 per page</option>
+                                <option value="100">100 per page</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div v-if="(props.accountHistory?.data || []).length === 0" class="text-center py-8">
+                        <h3 class="mt-2 text-sm font-medium text-gray-900">No account history</h3>
+                        <p class="mt-1 text-sm text-gray-500">No jobcards, quotes, invoices, or credit notes found for this customer.</p>
+                    </div>
+
+                    <div v-else class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Type</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Document</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Status</th>
+                                    <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">Total</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Date</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100 bg-white">
+                                <tr v-for="item in props.accountHistory?.data || []" :key="`${item.document_type}-${item.document_id}`" class="hover:bg-gray-50">
+                                    <td class="px-4 py-3 text-sm text-gray-700">{{ accountHistoryTypeLabel(item.document_type) }}</td>
+                                    <td class="px-4 py-3 text-sm">
+                                        <Link :href="accountHistoryDocumentUrl(item)" class="font-medium text-blue-700 hover:text-blue-900 hover:underline">
+                                            {{ item.document_number }}
+                                        </Link>
+                                    </td>
+                                    <td class="px-4 py-3 text-sm">
+                                        <span class="inline-flex rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold capitalize text-gray-700">
+                                            {{ item.status }}
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3 text-right text-sm font-medium text-gray-900">{{ formatCurrency(Number(item.total || 0)) }}</td>
+                                    <td class="px-4 py-3 text-sm text-gray-600">{{ new Date(item.document_date).toLocaleDateString() }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div v-if="props.accountHistory?.last_page > 1" class="mt-6 border-t border-gray-200 pt-6">
+                        <div class="flex items-center justify-end gap-1">
+                            <Link
+                                v-for="link in props.accountHistory?.links || []"
+                                :key="link.label"
+                                :href="link.url || '#'"
+                                :preserve-scroll="true"
+                                :class="[
+                                    'px-3 py-1 text-sm rounded-md',
+                                    link.active
+                                        ? 'bg-indigo-600 text-white'
+                                        : link.url
+                                            ? 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                                            : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                ]"
+                                v-html="link.label"
+                            />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Contacts Sub-Panel -->
-            <div class="rounded-lg bg-white border border-gray-200 shadow-sm">
+            <div v-if="canContactsList" class="rounded-lg bg-white border border-gray-200 shadow-sm">
                 <div class="border-b border-gray-200 bg-blue-50 px-6 py-4">
                     <div class="flex items-center justify-between">
                         <div>
@@ -357,8 +522,9 @@ watch([contactSearch, contactsPerPage, smsSearch, smsStatus, smsPerPage, emailPe
                             <p class="text-sm text-gray-600">Manage customer contacts and relationships</p>
                         </div>
                         <div class="flex items-center gap-2">
-                            <Link 
-                                :href="contacts.create().url + '?customer_id=' + props.customer.id" 
+                            <Link
+                                v-if="canContactsCreate"
+                                :href="contacts.create().url + '?customer_id=' + props.customer.id"
                                 class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                             >
                                 Add Contact
@@ -445,12 +611,21 @@ watch([contactSearch, contactsPerPage, smsSearch, smsStatus, smsPerPage, emailPe
                                 >
                                     View
                                 </Link>
-                                <Link 
-                                    :href="contacts.edit(contact.id).url" 
+                                <Link
+                                    v-if="canContactsEdit"
+                                    :href="contacts.edit(contact.id).url"
                                     class="rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700"
                                 >
                                     Edit
                                 </Link>
+                                <button
+                                    v-if="canContactsDelete"
+                                    type="button"
+                                    @click="deleteContact(contact)"
+                                    class="rounded-md border border-red-300 bg-white px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+                                >
+                                    Delete
+                                </button>
                             </div>
                         </div>
                     </div>

@@ -2,16 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ChartOfAccount;
 use App\Models\CreditNote;
 use App\Models\CreditNoteLineItem;
-use App\Models\LineGroup;
 use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Product;
-use App\Models\ChartOfAccount;
 use App\Models\TaxRate;
 use App\Services\XeroService;
+use App\Support\CompanyScopedRules;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -42,11 +42,11 @@ class CreditNotesController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('credit_note_number', 'like', "%{$search}%")
-                  ->orWhere('title', 'like', "%{$search}%")
-                  ->orWhere('reference', 'like', "%{$search}%")
-                  ->orWhereHas('customer', function ($cq) use ($search) {
-                      $cq->where('name', 'like', "%{$search}%");
-                  });
+                    ->orWhere('title', 'like', "%{$search}%")
+                    ->orWhere('reference', 'like', "%{$search}%")
+                    ->orWhereHas('customer', function ($cq) use ($search) {
+                        $cq->where('name', 'like', "%{$search}%");
+                    });
             });
         }
 
@@ -54,6 +54,7 @@ class CreditNotesController extends Controller
             ->filter(fn ($value, $key) => str_starts_with((string) $key, 'colf_'))
             ->mapWithKeys(function ($value, $key) {
                 $trimmed = trim((string) $value);
+
                 return [substr((string) $key, 5) => $trimmed];
             })
             ->filter(fn ($value) => $value !== '');
@@ -107,7 +108,7 @@ class CreditNotesController extends Controller
         }
 
         $sortableFields = ['credit_note_number', 'customer_name', 'invoice_number', 'credit_note_date', 'status', 'total', 'remaining_credit', 'created_at'];
-        if (!in_array($sortBy, $sortableFields, true)) {
+        if (! in_array($sortBy, $sortableFields, true)) {
             $sortBy = 'created_at';
         }
 
@@ -179,10 +180,11 @@ class CreditNotesController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $currentCompany = auth()->user()->getCurrentCompany();
+        $cid = $currentCompany->id;
 
         $validated = $request->validate([
-            'customer_id' => 'required|exists:customers,id',
-            'invoice_id' => 'nullable|exists:invoices,id',
+            'customer_id' => ['required', CompanyScopedRules::customer($cid)],
+            'invoice_id' => ['nullable', CompanyScopedRules::invoice($cid, true)],
             'title' => 'nullable|string|max:255',
             'description' => 'nullable|string',
             'credit_note_date' => 'required|date',
@@ -192,14 +194,14 @@ class CreditNotesController extends Controller
             'line_groups.*.id' => 'nullable|integer',
             'line_groups.*.name' => 'required_with:line_groups|string|max:255',
             'line_items' => 'required|array|min:1',
-            'line_items.*.product_id' => 'nullable|exists:products,id',
+            'line_items.*.product_id' => ['nullable', CompanyScopedRules::product($cid)],
             'line_items.*.description' => 'required|string',
             'line_items.*.quantity' => 'required|integer|min:1',
             'line_items.*.unit_price' => 'required|numeric',
             'line_items.*.discount_amount' => 'nullable|numeric|min:0',
             'line_items.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
-            'line_items.*.tax_rate_id' => 'nullable|exists:tax_rates,id',
-            'line_items.*.account_id' => 'nullable|exists:chart_of_accounts,id',
+            'line_items.*.tax_rate_id' => ['nullable', CompanyScopedRules::taxRate($cid)],
+            'line_items.*.account_id' => ['nullable', CompanyScopedRules::chartOfAccount($cid)],
             'line_items.*.account_code' => 'nullable|string',
             'line_items.*.line_group_id' => 'nullable|integer',
         ]);
@@ -243,7 +245,7 @@ class CreditNotesController extends Controller
             $total = $subtotal - $discountAmount;
 
             $lineTaxAmount = 0;
-            if (!empty($itemData['tax_rate_id'])) {
+            if (! empty($itemData['tax_rate_id'])) {
                 $taxRateModel = TaxRate::find($itemData['tax_rate_id']);
                 if ($taxRateModel) {
                     $lineTaxAmount = round($total * ($taxRateModel->rate / 100), 2);
@@ -377,9 +379,11 @@ class CreditNotesController extends Controller
 
     public function update(Request $request, CreditNote $creditNote): RedirectResponse
     {
+        $cid = $creditNote->company_id;
+
         $validated = $request->validate([
-            'customer_id' => 'required|exists:customers,id',
-            'invoice_id' => 'nullable|exists:invoices,id',
+            'customer_id' => ['required', CompanyScopedRules::customer($cid)],
+            'invoice_id' => ['nullable', CompanyScopedRules::invoice($cid, true)],
             'title' => 'nullable|string|max:255',
             'description' => 'nullable|string',
             'credit_note_date' => 'required|date',
@@ -389,14 +393,14 @@ class CreditNotesController extends Controller
             'line_groups.*.id' => 'nullable|integer',
             'line_groups.*.name' => 'required_with:line_groups|string|max:255',
             'line_items' => 'required|array|min:1',
-            'line_items.*.product_id' => 'nullable|exists:products,id',
+            'line_items.*.product_id' => ['nullable', CompanyScopedRules::product($cid)],
             'line_items.*.description' => 'required|string',
             'line_items.*.quantity' => 'required|integer|min:1',
             'line_items.*.unit_price' => 'required|numeric',
             'line_items.*.discount_amount' => 'nullable|numeric|min:0',
             'line_items.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
-            'line_items.*.tax_rate_id' => 'nullable|exists:tax_rates,id',
-            'line_items.*.account_id' => 'nullable|exists:chart_of_accounts,id',
+            'line_items.*.tax_rate_id' => ['nullable', CompanyScopedRules::taxRate($cid)],
+            'line_items.*.account_id' => ['nullable', CompanyScopedRules::chartOfAccount($cid)],
             'line_items.*.account_code' => 'nullable|string',
             'line_items.*.line_group_id' => 'nullable|integer',
         ]);
@@ -439,7 +443,7 @@ class CreditNotesController extends Controller
             $total = $subtotal - $discountAmount;
 
             $lineTaxAmount = 0;
-            if (!empty($itemData['tax_rate_id'])) {
+            if (! empty($itemData['tax_rate_id'])) {
                 $taxRateModel = TaxRate::find($itemData['tax_rate_id']);
                 if ($taxRateModel) {
                     $lineTaxAmount = round($total * ($taxRateModel->rate / 100), 2);
@@ -496,10 +500,9 @@ class CreditNotesController extends Controller
 
     public function storePayment(Request $request, CreditNote $creditNote): RedirectResponse
     {
+        $this->authorize('view', $creditNote);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        if ($creditNote->company_id !== $currentCompany->id) {
-            return redirect()->back()->with('error', 'You do not have access to this credit note.');
-        }
 
         $validated = $request->validate([
             'amount' => 'required|numeric|min:0.01',
@@ -511,7 +514,7 @@ class CreditNotesController extends Controller
         $creditNote->refresh();
         $remainingCredit = max(0, round((float) $creditNote->total - (float) $creditNote->payments()->sum('amount'), 2));
         if ((float) $validated['amount'] > $remainingCredit) {
-            return redirect()->back()->with('error', 'Refund amount cannot exceed remaining credit of ' . number_format($remainingCredit, 2));
+            return redirect()->back()->with('error', 'Refund amount cannot exceed remaining credit of '.number_format($remainingCredit, 2));
         }
 
         $payment = Payment::create([
@@ -548,10 +551,9 @@ class CreditNotesController extends Controller
 
     public function destroyPayment(CreditNote $creditNote, Payment $payment): RedirectResponse
     {
+        $this->authorize('detachRefundPayment', [$creditNote, $payment]);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        if ($creditNote->company_id !== $currentCompany->id || $payment->company_id !== $currentCompany->id) {
-            return redirect()->back()->with('error', 'You do not have access to this refund payment.');
-        }
 
         if ((int) $payment->credit_note_id !== (int) $creditNote->id) {
             return redirect()->back()->with('error', 'This payment does not belong to the selected credit note.');
@@ -585,12 +587,12 @@ class CreditNotesController extends Controller
 
     private function syncInvoiceStatusAfterCreditNoteChange(CreditNote $creditNote): void
     {
-        if (!$creditNote->invoice_id) {
+        if (! $creditNote->invoice_id) {
             return;
         }
 
         $invoice = Invoice::find($creditNote->invoice_id);
-        if (!$invoice) {
+        if (! $invoice) {
             return;
         }
 
@@ -618,7 +620,7 @@ class CreditNotesController extends Controller
 
             // Invoice-linked notes can legitimately stay paid when the credit has been allocated
             // to settle the invoice, even if no refund payments exist on the note itself.
-            if (!$creditNote->invoice_id && $remaining > 0.01 && $creditNote->status === 'paid') {
+            if (! $creditNote->invoice_id && $remaining > 0.01 && $creditNote->status === 'paid') {
                 $creditNote->update(['status' => 'authorised']);
             }
         }

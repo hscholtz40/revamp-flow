@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Traits\ScopedToCurrentCompanyRouteBinding;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class XeroSettings extends Model
 {
+    use ScopedToCurrentCompanyRouteBinding;
+
     protected $fillable = [
         'company_id',
         'is_enabled',
@@ -39,7 +42,21 @@ class XeroSettings extends Model
         'sync_purchase_orders_from_xero',
     ];
 
+    /**
+     * Never serialize OAuth secrets to JSON / Inertia.
+     *
+     * @var list<string>
+     */
+    protected $hidden = [
+        'client_secret',
+        'access_token',
+        'refresh_token',
+    ];
+
     protected $casts = [
+        'client_secret' => 'encrypted',
+        'access_token' => 'encrypted',
+        'refresh_token' => 'encrypted',
         'is_enabled' => 'boolean',
         'token_expires_at' => 'datetime',
         'sync_customers' => 'boolean',
@@ -70,18 +87,18 @@ class XeroSettings extends Model
     public static function getCurrent(): self
     {
         $user = auth()->user();
-        if (!$user) {
+        if (! $user) {
             throw new \Exception('No authenticated user found');
         }
-        
+
         $currentCompany = $user->getCurrentCompany();
-        if (!$currentCompany) {
+        if (! $currentCompany) {
             throw new \Exception('No current company found for user');
         }
-        
+
         $settings = static::where('company_id', $currentCompany->id)->first();
-        
-        if (!$settings) {
+
+        if (! $settings) {
             $settings = static::create([
                 'company_id' => $currentCompany->id,
                 'is_enabled' => false,
@@ -90,7 +107,7 @@ class XeroSettings extends Model
                 'sync_invoices' => false,
             ]);
         }
-        
+
         return $settings;
     }
 
@@ -100,8 +117,8 @@ class XeroSettings extends Model
     public static function getForCompany(int $companyId): self
     {
         $settings = static::where('company_id', $companyId)->first();
-        
-        if (!$settings) {
+
+        if (! $settings) {
             $settings = static::create([
                 'company_id' => $companyId,
                 'is_enabled' => false,
@@ -110,7 +127,7 @@ class XeroSettings extends Model
                 'sync_invoices' => false,
             ]);
         }
-        
+
         return $settings;
     }
 
@@ -127,10 +144,10 @@ class XeroSettings extends Model
      */
     public function isConfigured(): bool
     {
-        return $this->is_enabled && 
-               $this->client_id && 
-               $this->client_secret && 
-               $this->access_token && 
+        return $this->is_enabled &&
+               $this->client_id &&
+               $this->client_secret &&
+               $this->access_token &&
                $this->tenant_id;
     }
 
@@ -151,9 +168,9 @@ class XeroSettings extends Model
         // 1. No access token
         // 2. No refresh token (can't refresh expired tokens)
         // 3. Token is expired and no refresh token
-        return !$this->access_token || 
-               (!$this->refresh_token && $this->isTokenExpired()) ||
-               (!$this->access_token && !$this->refresh_token);
+        return ! $this->access_token ||
+               (! $this->refresh_token && $this->isTokenExpired()) ||
+               (! $this->access_token && ! $this->refresh_token);
     }
 
     /**

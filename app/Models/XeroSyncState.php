@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Traits\ScopedToCurrentCompanyRouteBinding;
 use Illuminate\Database\Eloquent\Model;
 
 class XeroSyncState extends Model
 {
+    use ScopedToCurrentCompanyRouteBinding;
+
     protected $fillable = [
         'company_id',
         'module',

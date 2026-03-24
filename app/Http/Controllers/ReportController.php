@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Company;
 use App\Models\Invoice;
-use App\Models\Quote;
 use App\Models\Jobcard;
+use App\Models\Quote;
 use App\Models\Report;
 use App\Models\ReportTemplate;
+use App\Support\CompanyScopedRules;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -22,7 +22,7 @@ class ReportController extends Controller
     public function index(Request $request): Response
     {
         $currentCompany = auth()->user()->getCurrentCompany();
-        
+
         $reports = Report::where('company_id', $currentCompany->id)
             ->with(['template', 'creator'])
             ->orderBy('created_at', 'desc')
@@ -31,7 +31,7 @@ class ReportController extends Controller
 
         $templates = ReportTemplate::where(function ($query) use ($currentCompany) {
             $query->where('company_id', $currentCompany->id)
-                  ->orWhere('is_default', true);
+                ->orWhere('is_default', true);
         })
             ->with(['creator'])
             ->orderBy('is_default', 'desc')
@@ -51,14 +51,14 @@ class ReportController extends Controller
     public function create(Request $request): Response
     {
         $currentCompany = auth()->user()->getCurrentCompany();
-        
+
         $templates = ReportTemplate::where(function ($query) use ($currentCompany) {
             $query->where('company_id', $currentCompany->id)
-                  ->orWhere('is_default', true);
+                ->orWhere('is_default', true);
         })
-        ->orderBy('is_default', 'desc')
-        ->orderBy('name')
-        ->get();
+            ->orderBy('is_default', 'desc')
+            ->orderBy('name')
+            ->get();
 
         $entityType = $request->input('entity_type', 'invoice');
         $templateId = $request->input('template_id');
@@ -72,7 +72,7 @@ class ReportController extends Controller
         $customers = \App\Models\Customer::where('company_id', $currentCompany->id)
             ->orderBy('name')
             ->get(['id', 'name', 'account_code']);
-        
+
         $products = \App\Models\Product::where('company_id', $currentCompany->id)
             ->orderBy('name')
             ->get(['id', 'name', 'sku']);
@@ -98,7 +98,7 @@ class ReportController extends Controller
             'name' => 'required|string|max:255',
             'entity_type' => 'required|in:invoice,quote,jobcard',
             'config' => 'required|array',
-            'report_template_id' => 'nullable|exists:report_templates,id',
+            'report_template_id' => ['nullable', CompanyScopedRules::reportTemplateSelectableForCompany($currentCompany->id)],
         ]);
 
         $report = Report::create([
@@ -119,44 +119,42 @@ class ReportController extends Controller
      */
     public function show(Request $request, Report $report): Response
     {
+        $this->authorize('view', $report);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($report->company_id !== $currentCompany->id) {
-            abort(403);
-        }
 
         // Load template with filters
         $report->load(['template', 'creator']);
-        
+
         // Start with template filters (if template exists)
         $templateFilters = $report->template?->filters ?? [];
         $mergedFilters = [];
-        
+
         // Copy template filters, filtering out empty values
-        if (!empty($templateFilters)) {
-            if (!empty($templateFilters['customer_id'])) {
-                $mergedFilters['customer_id'] = (array)$templateFilters['customer_id'];
+        if (! empty($templateFilters)) {
+            if (! empty($templateFilters['customer_id'])) {
+                $mergedFilters['customer_id'] = (array) $templateFilters['customer_id'];
             }
-            if (!empty($templateFilters['product_id'])) {
-                $mergedFilters['product_id'] = (array)$templateFilters['product_id'];
+            if (! empty($templateFilters['product_id'])) {
+                $mergedFilters['product_id'] = (array) $templateFilters['product_id'];
             }
-            if (!empty($templateFilters['date_from'])) {
+            if (! empty($templateFilters['date_from'])) {
                 $mergedFilters['date_from'] = $templateFilters['date_from'];
             }
-            if (!empty($templateFilters['date_to'])) {
+            if (! empty($templateFilters['date_to'])) {
                 $mergedFilters['date_to'] = $templateFilters['date_to'];
             }
-            if (!empty($templateFilters['status'])) {
-                $mergedFilters['status'] = (array)$templateFilters['status'];
+            if (! empty($templateFilters['status'])) {
+                $mergedFilters['status'] = (array) $templateFilters['status'];
             }
         }
-        
+
         // Override with request filters (runtime filters can override template filters)
         if ($request->has('customer_id') && $request->input('customer_id') !== null) {
-            $mergedFilters['customer_id'] = (array)$request->input('customer_id');
+            $mergedFilters['customer_id'] = (array) $request->input('customer_id');
         }
         if ($request->has('product_id') && $request->input('product_id') !== null) {
-            $mergedFilters['product_id'] = (array)$request->input('product_id');
+            $mergedFilters['product_id'] = (array) $request->input('product_id');
         }
         if ($request->has('date_from') && $request->input('date_from') !== null && $request->input('date_from') !== '') {
             $mergedFilters['date_from'] = $request->input('date_from');
@@ -165,7 +163,7 @@ class ReportController extends Controller
             $mergedFilters['date_to'] = $request->input('date_to');
         }
         if ($request->has('status') && $request->input('status') !== null) {
-            $mergedFilters['status'] = (array)$request->input('status');
+            $mergedFilters['status'] = (array) $request->input('status');
         }
 
         $data = $this->getReportData($report, $mergedFilters, $request->input('page', 1));
@@ -174,7 +172,7 @@ class ReportController extends Controller
         $customers = \App\Models\Customer::where('company_id', $currentCompany->id)
             ->orderBy('name')
             ->get(['id', 'name']);
-        
+
         $products = \App\Models\Product::where('company_id', $currentCompany->id)
             ->orderBy('name')
             ->get(['id', 'name', 'sku']);
@@ -201,19 +199,17 @@ class ReportController extends Controller
      */
     public function edit(Report $report): Response
     {
+        $this->authorize('update', $report);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($report->company_id !== $currentCompany->id) {
-            abort(403);
-        }
 
         $templates = ReportTemplate::where(function ($query) use ($currentCompany) {
             $query->where('company_id', $currentCompany->id)
-                  ->orWhere('is_default', true);
+                ->orWhere('is_default', true);
         })
-        ->orderBy('is_default', 'desc')
-        ->orderBy('name')
-        ->get();
+            ->orderBy('is_default', 'desc')
+            ->orderBy('name')
+            ->get();
 
         return Inertia::render('reports/Edit', [
             'report' => $report->load('template'),
@@ -227,17 +223,15 @@ class ReportController extends Controller
      */
     public function update(Request $request, Report $report): RedirectResponse
     {
+        $this->authorize('update', $report);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($report->company_id !== $currentCompany->id) {
-            abort(403);
-        }
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'entity_type' => 'required|in:invoice,quote,jobcard',
             'config' => 'required|array',
-            'report_template_id' => 'nullable|exists:report_templates,id',
+            'report_template_id' => ['nullable', CompanyScopedRules::reportTemplateSelectableForCompany($currentCompany->id)],
         ]);
 
         $report->update([
@@ -256,11 +250,7 @@ class ReportController extends Controller
      */
     public function destroy(Report $report): RedirectResponse
     {
-        $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($report->company_id !== $currentCompany->id) {
-            abort(403);
-        }
+        $this->authorize('delete', $report);
 
         $report->delete();
 
@@ -273,44 +263,42 @@ class ReportController extends Controller
      */
     public function getData(Request $request, Report $report)
     {
+        $this->authorize('view', $report);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($report->company_id !== $currentCompany->id) {
-            abort(403);
-        }
 
         // Load template
         $report->load('template');
-        
+
         // Start with template filters (if template exists)
         $templateFilters = $report->template?->filters ?? [];
         $mergedFilters = [];
-        
+
         // Copy template filters, filtering out empty values
-        if (!empty($templateFilters)) {
-            if (!empty($templateFilters['customer_id'])) {
-                $mergedFilters['customer_id'] = (array)$templateFilters['customer_id'];
+        if (! empty($templateFilters)) {
+            if (! empty($templateFilters['customer_id'])) {
+                $mergedFilters['customer_id'] = (array) $templateFilters['customer_id'];
             }
-            if (!empty($templateFilters['product_id'])) {
-                $mergedFilters['product_id'] = (array)$templateFilters['product_id'];
+            if (! empty($templateFilters['product_id'])) {
+                $mergedFilters['product_id'] = (array) $templateFilters['product_id'];
             }
-            if (!empty($templateFilters['date_from'])) {
+            if (! empty($templateFilters['date_from'])) {
                 $mergedFilters['date_from'] = $templateFilters['date_from'];
             }
-            if (!empty($templateFilters['date_to'])) {
+            if (! empty($templateFilters['date_to'])) {
                 $mergedFilters['date_to'] = $templateFilters['date_to'];
             }
-            if (!empty($templateFilters['status'])) {
-                $mergedFilters['status'] = (array)$templateFilters['status'];
+            if (! empty($templateFilters['status'])) {
+                $mergedFilters['status'] = (array) $templateFilters['status'];
             }
         }
-        
+
         // Override with request filters
         if ($request->has('customer_id') && $request->input('customer_id') !== null) {
-            $mergedFilters['customer_id'] = (array)$request->input('customer_id');
+            $mergedFilters['customer_id'] = (array) $request->input('customer_id');
         }
         if ($request->has('product_id') && $request->input('product_id') !== null) {
-            $mergedFilters['product_id'] = (array)$request->input('product_id');
+            $mergedFilters['product_id'] = (array) $request->input('product_id');
         }
         if ($request->has('date_from') && $request->input('date_from') !== null && $request->input('date_from') !== '') {
             $mergedFilters['date_from'] = $request->input('date_from');
@@ -319,7 +307,7 @@ class ReportController extends Controller
             $mergedFilters['date_to'] = $request->input('date_to');
         }
         if ($request->has('status') && $request->input('status') !== null) {
-            $mergedFilters['status'] = (array)$request->input('status');
+            $mergedFilters['status'] = (array) $request->input('status');
         }
 
         $data = $this->getReportData($report, $mergedFilters, $request->input('page', 1));
@@ -370,17 +358,15 @@ class ReportController extends Controller
      */
     public function editTemplate(ReportTemplate $template): Response
     {
+        $this->authorize('update', $template);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($template->company_id !== null && $template->company_id !== $currentCompany->id) {
-            abort(403);
-        }
 
         // Get customers and products for filters
         $customers = \App\Models\Customer::where('company_id', $currentCompany->id)
             ->orderBy('name')
             ->get(['id', 'name', 'account_code']);
-        
+
         $products = \App\Models\Product::where('company_id', $currentCompany->id)
             ->orderBy('name')
             ->get(['id', 'name', 'sku']);
@@ -398,11 +384,9 @@ class ReportController extends Controller
      */
     public function updateTemplate(Request $request, ReportTemplate $template): RedirectResponse
     {
+        $this->authorize('update', $template);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($template->company_id !== null && $template->company_id !== $currentCompany->id) {
-            abort(403);
-        }
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -439,11 +423,9 @@ class ReportController extends Controller
      */
     public function destroyTemplate(ReportTemplate $template): RedirectResponse
     {
+        $this->authorize('delete', $template);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($template->company_id !== null && $template->company_id !== $currentCompany->id) {
-            abort(403);
-        }
 
         // Check if template is being used by any reports
         $reportCount = $template->reports()->count();
@@ -461,7 +443,7 @@ class ReportController extends Controller
     /**
      * Get report data based on entity type, filters, and config
      */
-    private function getReportData(Report $report, array $filters = null, int $page = 1, int $perPage = 50): array
+    private function getReportData(Report $report, ?array $filters = null, int $page = 1, int $perPage = 50): array
     {
         $entityType = $report->entity_type;
         // Filters come from template or passed parameter, not from report
@@ -478,42 +460,42 @@ class ReportController extends Controller
         if ($groupBy) {
             // Determine the actual column to group by
             $groupByColumn = $this->getGroupByColumn($entityType, $groupBy);
-            
+
             if ($groupByColumn) {
                 // When grouping, select only the grouping column and aggregated values
-                $tableName = match($entityType) {
+                $tableName = match ($entityType) {
                     'invoice' => 'invoices',
                     'quote' => 'quotes',
                     'jobcard' => 'jobcards',
                     default => null,
                 };
-                
+
                 if ($tableName) {
                     // Select grouping column and aggregates only
                     // Use DB::raw to ensure proper column references
                     $query->select([
-                        DB::raw($groupByColumn . ' as group_value'),
+                        DB::raw($groupByColumn.' as group_value'),
                         DB::raw('COUNT(*) as count'),
-                        DB::raw('SUM(' . $tableName . '.subtotal) as subtotal'),
-                        DB::raw('SUM(' . $tableName . '.tax_amount) as tax_amount'),
-                        DB::raw('SUM(' . $tableName . '.discount_amount) as discount_amount'),
-                        DB::raw('SUM(' . $tableName . '.total) as total'),
+                        DB::raw('SUM('.$tableName.'.subtotal) as subtotal'),
+                        DB::raw('SUM('.$tableName.'.tax_amount) as tax_amount'),
+                        DB::raw('SUM('.$tableName.'.discount_amount) as discount_amount'),
+                        DB::raw('SUM('.$tableName.'.total) as total'),
                     ]);
-                    
+
                     $query->groupBy(DB::raw($groupByColumn));
                 }
             }
         } else {
             // When not grouping, select all columns but use table prefix to avoid ambiguity
-            $tableName = match($entityType) {
+            $tableName = match ($entityType) {
                 'invoice' => 'invoices',
                 'quote' => 'quotes',
                 'jobcard' => 'jobcards',
                 default => null,
             };
-            
+
             if ($tableName) {
-                $query->select($tableName . '.*');
+                $query->select($tableName.'.*');
             }
         }
 
@@ -522,7 +504,7 @@ class ReportController extends Controller
             // When grouping, we can only sort by:
             // 1. The grouping column (group_value)
             // 2. Aggregate functions (count, total, subtotal, etc.)
-            
+
             if ($sortBy) {
                 // Check if sorting by the grouping column
                 if ($sortBy === $groupBy) {
@@ -548,49 +530,49 @@ class ReportController extends Controller
                 // Handle relationship columns in sorting
                 if (str_contains($sortBy, '.')) {
                     [$relation, $field] = explode('.', $sortBy, 2);
-                    
+
                     // Check if join already exists, if not add it
                     $joins = $query->getQuery()->joins ?? [];
                     $hasJoin = false;
-                    
+
                     if ($entityType === 'invoice') {
                         if ($relation === 'salesperson') {
-                            $hasJoin = collect($joins)->contains(fn($join) => str_contains($join->table ?? '', 'salesperson_users'));
-                            if (!$hasJoin) {
+                            $hasJoin = collect($joins)->contains(fn ($join) => str_contains($join->table ?? '', 'salesperson_users'));
+                            if (! $hasJoin) {
                                 $query->leftJoin('users as salesperson_users', 'invoices.salesperson_id', '=', 'salesperson_users.id');
                             }
-                            $query->orderBy('salesperson_users.' . $field, $sortDirection);
+                            $query->orderBy('salesperson_users.'.$field, $sortDirection);
                         } elseif ($relation === 'customer') {
-                            $hasJoin = collect($joins)->contains(fn($join) => $join->table === 'customers');
-                            if (!$hasJoin) {
+                            $hasJoin = collect($joins)->contains(fn ($join) => $join->table === 'customers');
+                            if (! $hasJoin) {
                                 $query->leftJoin('customers', 'invoices.customer_id', '=', 'customers.id');
                             }
-                            $query->orderBy('customers.' . $field, $sortDirection);
+                            $query->orderBy('customers.'.$field, $sortDirection);
                         } else {
                             $tableName = 'invoices';
-                            $query->orderBy($tableName . '.' . $sortBy, $sortDirection);
+                            $query->orderBy($tableName.'.'.$sortBy, $sortDirection);
                         }
                     } elseif ($entityType === 'quote') {
                         if ($relation === 'customer') {
-                            $hasJoin = collect($joins)->contains(fn($join) => $join->table === 'customers');
-                            if (!$hasJoin) {
+                            $hasJoin = collect($joins)->contains(fn ($join) => $join->table === 'customers');
+                            if (! $hasJoin) {
                                 $query->leftJoin('customers', 'quotes.customer_id', '=', 'customers.id');
                             }
-                            $query->orderBy('customers.' . $field, $sortDirection);
+                            $query->orderBy('customers.'.$field, $sortDirection);
                         } else {
                             $tableName = 'quotes';
-                            $query->orderBy($tableName . '.' . $sortBy, $sortDirection);
+                            $query->orderBy($tableName.'.'.$sortBy, $sortDirection);
                         }
                     } elseif ($entityType === 'jobcard') {
                         if ($relation === 'customer') {
-                            $hasJoin = collect($joins)->contains(fn($join) => $join->table === 'customers');
-                            if (!$hasJoin) {
+                            $hasJoin = collect($joins)->contains(fn ($join) => $join->table === 'customers');
+                            if (! $hasJoin) {
                                 $query->leftJoin('customers', 'jobcards.customer_id', '=', 'customers.id');
                             }
-                            $query->orderBy('customers.' . $field, $sortDirection);
+                            $query->orderBy('customers.'.$field, $sortDirection);
                         } else {
                             $tableName = 'jobcards';
-                            $query->orderBy($tableName . '.' . $sortBy, $sortDirection);
+                            $query->orderBy($tableName.'.'.$sortBy, $sortDirection);
                         }
                     } else {
                         // Fallback to direct column
@@ -599,27 +581,27 @@ class ReportController extends Controller
                 } else {
                     // Direct column sorting - use table prefix
                     $sortByColumn = $this->mapReportColumnToDatabaseColumn($entityType, $sortBy);
-                    $tableName = match($entityType) {
+                    $tableName = match ($entityType) {
                         'invoice' => 'invoices',
                         'quote' => 'quotes',
                         'jobcard' => 'jobcards',
                         default => null,
                     };
                     if ($tableName) {
-                        $query->orderBy($tableName . '.' . $sortByColumn, $sortDirection);
+                        $query->orderBy($tableName.'.'.$sortByColumn, $sortDirection);
                     } else {
                         $query->orderBy($sortByColumn, $sortDirection);
                     }
                 }
             } else {
-                $tableName = match($entityType) {
+                $tableName = match ($entityType) {
                     'invoice' => 'invoices',
                     'quote' => 'quotes',
                     'jobcard' => 'jobcards',
                     default => null,
                 };
                 if ($tableName) {
-                    $query->orderBy($tableName . '.created_at', 'desc');
+                    $query->orderBy($tableName.'.created_at', 'desc');
                 } else {
                     $query->orderBy('created_at', 'desc');
                 }
@@ -635,11 +617,11 @@ class ReportController extends Controller
             // This avoids one query per group and significantly reduces timeouts.
             $tableName = $this->getTableName($entityType);
             $columnsForGroupedRecords = $columns;
-            if (!in_array($groupBy, $columnsForGroupedRecords, true)) {
+            if (! in_array($groupBy, $columnsForGroupedRecords, true)) {
                 $columnsForGroupedRecords[] = $groupBy;
             }
             $allGroupedRecords = $this->getBaseQuery($entityType, $filters, null, null, $columnsForGroupedRecords)
-                ->select($tableName . '.*')
+                ->select($tableName.'.*')
                 ->get();
 
             $recordsByGroupKey = [];
@@ -648,7 +630,7 @@ class ReportController extends Controller
                 $recordGroupKey = $this->normalizeGroupKey($recordGroupValue);
                 $recordsByGroupKey[$recordGroupKey][] = $record;
             }
-            
+
             // Get individual records for each group
             $groupedRecords = [];
             $grandTotals = [
@@ -658,17 +640,17 @@ class ReportController extends Controller
                 'total' => 0.0,
                 'count' => 0,
             ];
-            
+
             foreach ($groupedData as $group) {
                 $groupValue = $group->group_value;
                 $groupKey = $this->normalizeGroupKey($groupValue);
                 $individualRecords = collect($recordsByGroupKey[$groupKey] ?? []);
-                
+
                 // Transform individual records
                 $transformedRecords = $individualRecords->map(function ($item) use ($columns, $entityType) {
                     return $this->transformRow($item, $columns, $entityType, null);
                 });
-                
+
                 // Calculate group totals - ensure numeric values
                 $groupTotals = [
                     'subtotal' => (float) ($group->subtotal ?? 0),
@@ -677,26 +659,26 @@ class ReportController extends Controller
                     'total' => (float) ($group->total ?? 0),
                     'count' => (int) ($group->count ?? 0),
                 ];
-                
+
                 // Add to grand totals - ensure numeric values
                 $grandTotals['subtotal'] += (float) $groupTotals['subtotal'];
                 $grandTotals['tax_amount'] += (float) $groupTotals['tax_amount'];
                 $grandTotals['discount_amount'] += (float) $groupTotals['discount_amount'];
                 $grandTotals['total'] += (float) $groupTotals['total'];
                 $grandTotals['count'] += (int) $groupTotals['count'];
-                
+
                 $groupedRecords[] = [
                     'group_value' => $groupValue,
                     'group_totals' => $groupTotals,
                     'records' => $transformedRecords,
                 ];
             }
-            
+
             // Transform grouped summaries
             $transformedGroupedData = $groupedData->map(function ($item) use ($columns, $entityType, $groupBy) {
                 return $this->transformRow($item, $columns, $entityType, $groupBy);
             });
-            
+
             return [
                 'data' => $transformedGroupedData,
                 'grouped_records' => $groupedRecords,
@@ -708,7 +690,7 @@ class ReportController extends Controller
         } else {
             // Not grouped - paginate normally
             $paginatedData = $query->paginate($perPage, ['*'], 'page', $page);
-            
+
             // Transform data based on selected columns
             $transformedData = $paginatedData->map(function ($item) use ($columns, $entityType) {
                 return $this->transformRow($item, $columns, $entityType, null);
@@ -738,20 +720,20 @@ class ReportController extends Controller
             ];
         }
     }
-    
+
     /**
      * Get table name for entity type
      */
     private function getTableName(string $entityType): string
     {
-        return match($entityType) {
+        return match ($entityType) {
             'invoice' => 'invoices',
             'quote' => 'quotes',
             'jobcard' => 'jobcards',
             default => throw new \InvalidArgumentException("Invalid entity type: {$entityType}"),
         };
     }
-    
+
     /**
      * Get group by column name
      */
@@ -759,23 +741,24 @@ class ReportController extends Controller
     {
         if (str_contains($groupBy, '.')) {
             [$relation, $field] = explode('.', $groupBy, 2);
-            
+
             if ($entityType === 'invoice') {
                 if ($relation === 'salesperson') {
-                    return 'salesperson_users.' . $field;
+                    return 'salesperson_users.'.$field;
                 } elseif ($relation === 'customer') {
-                    return 'customers.' . $field;
+                    return 'customers.'.$field;
                 }
             } elseif ($entityType === 'quote' || $entityType === 'jobcard') {
                 if ($relation === 'customer') {
-                    return 'customers.' . $field;
+                    return 'customers.'.$field;
                 }
             }
         } else {
             $groupByColumn = $this->mapReportColumnToDatabaseColumn($entityType, $groupBy);
-            return $this->getTableName($entityType) . '.' . $groupByColumn;
+
+            return $this->getTableName($entityType).'.'.$groupByColumn;
         }
-        
+
         return null;
     }
 
@@ -789,7 +772,7 @@ class ReportController extends Controller
         // Determine which relations need joins
         $needsSalespersonJoin = false;
         $needsCustomerJoin = false;
-        
+
         foreach ([$groupBy, $sortBy] as $field) {
             if ($field && str_contains($field, '.')) {
                 [$relation] = explode('.', $field, 2);
@@ -809,7 +792,7 @@ class ReportController extends Controller
         $needsCreditNotesRelation = false;
 
         foreach ($columns as $column) {
-            if (!is_string($column) || $column === '') {
+            if (! is_string($column) || $column === '') {
                 continue;
             }
 
@@ -831,12 +814,12 @@ class ReportController extends Controller
         }
 
         // Only eager load relationships if not grouping (grouping uses custom SELECT)
-        $shouldEagerLoad = !$groupBy;
-        
+        $shouldEagerLoad = ! $groupBy;
+
         switch ($entityType) {
             case 'invoice':
                 $query = Invoice::where('invoices.company_id', $currentCompany->id);
-                
+
                 // Join related tables if needed for grouping/sorting
                 if ($needsSalespersonJoin) {
                     $query->leftJoin('users as salesperson_users', 'invoices.salesperson_id', '=', 'salesperson_users.id');
@@ -844,7 +827,7 @@ class ReportController extends Controller
                 if ($needsCustomerJoin) {
                     $query->leftJoin('customers', 'invoices.customer_id', '=', 'customers.id');
                 }
-                
+
                 // Eager load relationships for data transformation (only if not grouping)
                 if ($shouldEagerLoad) {
                     $relations = [];
@@ -861,19 +844,19 @@ class ReportController extends Controller
                         $relations[] = 'creditNotes';
                     }
 
-                    if (!empty($relations)) {
+                    if (! empty($relations)) {
                         $query->with($relations);
                     }
                 }
                 break;
             case 'quote':
                 $query = Quote::where('quotes.company_id', $currentCompany->id);
-                
+
                 // Join related tables if needed for grouping/sorting
                 if ($needsCustomerJoin) {
                     $query->leftJoin('customers', 'quotes.customer_id', '=', 'customers.id');
                 }
-                
+
                 if ($shouldEagerLoad) {
                     if ($needsCustomerRelation) {
                         $query->with(['customer']);
@@ -882,12 +865,12 @@ class ReportController extends Controller
                 break;
             case 'jobcard':
                 $query = Jobcard::where('jobcards.company_id', $currentCompany->id);
-                
+
                 // Join related tables if needed for grouping/sorting
                 if ($needsCustomerJoin) {
                     $query->leftJoin('customers', 'jobcards.customer_id', '=', 'customers.id');
                 }
-                
+
                 if ($shouldEagerLoad) {
                     if ($needsCustomerRelation) {
                         $query->with(['customer']);
@@ -909,51 +892,51 @@ class ReportController extends Controller
             $query->whereDate($dateField, '<=', $filters['date_to']);
         }
 
-        if (isset($filters['status']) && !empty($filters['status'])) {
-            $query->whereIn('status', (array)$filters['status']);
+        if (isset($filters['status']) && ! empty($filters['status'])) {
+            $query->whereIn('status', (array) $filters['status']);
         }
 
-        if (isset($filters['customer_id']) && !empty($filters['customer_id'])) {
-            $customerIds = (array)$filters['customer_id'];
+        if (isset($filters['customer_id']) && ! empty($filters['customer_id'])) {
+            $customerIds = (array) $filters['customer_id'];
             // Filter out null/empty values
-            $customerIds = array_filter($customerIds, fn($id) => !empty($id));
-            if (!empty($customerIds)) {
+            $customerIds = array_filter($customerIds, fn ($id) => ! empty($id));
+            if (! empty($customerIds)) {
                 $query->whereIn('customer_id', $customerIds);
             }
         }
 
         // Add product filter - filter by line items
-        if (isset($filters['product_id']) && !empty($filters['product_id'])) {
-            $productIds = (array)$filters['product_id'];
+        if (isset($filters['product_id']) && ! empty($filters['product_id'])) {
+            $productIds = (array) $filters['product_id'];
             // Filter out null/empty values
-            $productIds = array_filter($productIds, fn($id) => !empty($id));
-            
-            if (!empty($productIds)) {
+            $productIds = array_filter($productIds, fn ($id) => ! empty($id));
+
+            if (! empty($productIds)) {
                 $tableName = $this->getTableName($entityType);
-                
+
                 // Use whereExists with subquery to avoid GROUP BY issues
-                $lineItemsTable = match($entityType) {
+                $lineItemsTable = match ($entityType) {
                     'invoice' => 'invoice_line_items',
                     'quote' => 'quote_line_items',
                     'jobcard' => 'jobcard_line_items',
                     default => null,
                 };
-                
+
                 if ($lineItemsTable) {
                     // Map entity type to correct foreign key column name
-                    $foreignKeyColumn = match($entityType) {
+                    $foreignKeyColumn = match ($entityType) {
                         'invoice' => 'invoice_id',
                         'quote' => 'quote_id',
                         'jobcard' => 'jobcard_id',
-                        default => $entityType . '_id',
+                        default => $entityType.'_id',
                     };
-                    
+
                     $query->whereExists(function ($subquery) use ($lineItemsTable, $tableName, $productIds, $foreignKeyColumn) {
                         $subquery->select(DB::raw(1))
                             ->from($lineItemsTable)
-                            ->whereColumn($lineItemsTable . '.' . $foreignKeyColumn, $tableName . '.id')
-                            ->whereIn($lineItemsTable . '.product_id', $productIds)
-                            ->whereNotNull($lineItemsTable . '.product_id'); // Exclude custom items without products
+                            ->whereColumn($lineItemsTable.'.'.$foreignKeyColumn, $tableName.'.id')
+                            ->whereIn($lineItemsTable.'.product_id', $productIds)
+                            ->whereNotNull($lineItemsTable.'.product_id'); // Exclude custom items without products
                     });
                 }
             }
@@ -968,13 +951,13 @@ class ReportController extends Controller
     private function transformRow($item, array $columns, string $entityType, ?string $groupBy = null): array
     {
         $row = [];
-        
+
         // Always include IDs for linking purposes
-        if (!$groupBy) {
+        if (! $groupBy) {
             $row['_id'] = $item->id ?? null;
             $row['_customer_id'] = $item->customer_id ?? null;
         }
-        
+
         // If grouping is enabled, the data structure is different (aggregated)
         if ($groupBy) {
             // For grouped data, map the group_value to the grouping column
@@ -1012,16 +995,18 @@ class ReportController extends Controller
         // Handle nested relationships
         if (str_contains($column, '.')) {
             [$relation, $field] = explode('.', $column, 2);
+
             return data_get($item, "{$relation}.{$field}");
         }
 
         // Handle formatted fields
         if ($column === 'formatted_total') {
-            return 'R' . number_format($item->total ?? 0, 2);
+            return 'R'.number_format($item->total ?? 0, 2);
         }
 
         if ($column === 'formatted_date') {
             $dateField = $this->getDocumentDateField($entityType);
+
             return $item->{$dateField}?->format('Y-m-d') ?? '';
         }
 
@@ -1030,6 +1015,7 @@ class ReportController extends Controller
             if ($item->relationLoaded('payments')) {
                 return $item->payments->count();
             }
+
             return $item->payments()->count();
         }
 
@@ -1038,8 +1024,10 @@ class ReportController extends Controller
                 $latest = $item->payments
                     ->sortByDesc(fn ($payment) => $payment->payment_date?->timestamp ?? 0)
                     ->first();
+
                 return $latest?->payment_date?->format('Y-m-d');
             }
+
             return $item->payments()
                 ->latest('payment_date')
                 ->first()
@@ -1060,7 +1048,8 @@ class ReportController extends Controller
                 ->map(function ($payment) {
                     $method = ucfirst((string) ($payment->payment_method ?? 'unknown'));
                     $amount = (float) ($payment->amount ?? 0);
-                    return $method . ': R' . number_format($amount, 2);
+
+                    return $method.': R'.number_format($amount, 2);
                 })
                 ->implode(', ');
         }
@@ -1081,7 +1070,7 @@ class ReportController extends Controller
         $totals = [];
 
         $numericColumns = ['subtotal', 'tax_amount', 'total', 'discount_amount', 'total_paid', 'total_credited', 'remaining_balance'];
-        
+
         foreach ($numericColumns as $column) {
             if (in_array($column, $columns)) {
                 // If grouped, the data already has aggregated values
@@ -1101,44 +1090,42 @@ class ReportController extends Controller
      */
     public function export(Request $request, Report $report)
     {
+        $this->authorize('export', $report);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($report->company_id !== $currentCompany->id) {
-            abort(403);
-        }
 
         // Load template with filters
         $report->load(['template']);
-        
+
         // Merge filters (template + request)
         $templateFilters = $report->template?->filters ?? [];
         $mergedFilters = [];
-        
+
         // Copy template filters, filtering out empty values
-        if (!empty($templateFilters)) {
-            if (!empty($templateFilters['customer_id'])) {
-                $mergedFilters['customer_id'] = (array)$templateFilters['customer_id'];
+        if (! empty($templateFilters)) {
+            if (! empty($templateFilters['customer_id'])) {
+                $mergedFilters['customer_id'] = (array) $templateFilters['customer_id'];
             }
-            if (!empty($templateFilters['product_id'])) {
-                $mergedFilters['product_id'] = (array)$templateFilters['product_id'];
+            if (! empty($templateFilters['product_id'])) {
+                $mergedFilters['product_id'] = (array) $templateFilters['product_id'];
             }
-            if (!empty($templateFilters['date_from'])) {
+            if (! empty($templateFilters['date_from'])) {
                 $mergedFilters['date_from'] = $templateFilters['date_from'];
             }
-            if (!empty($templateFilters['date_to'])) {
+            if (! empty($templateFilters['date_to'])) {
                 $mergedFilters['date_to'] = $templateFilters['date_to'];
             }
-            if (!empty($templateFilters['status'])) {
-                $mergedFilters['status'] = (array)$templateFilters['status'];
+            if (! empty($templateFilters['status'])) {
+                $mergedFilters['status'] = (array) $templateFilters['status'];
             }
         }
-        
+
         // Override with request filters if provided
         if ($request->filled('customer_id')) {
-            $mergedFilters['customer_id'] = (array)$request->customer_id;
+            $mergedFilters['customer_id'] = (array) $request->customer_id;
         }
         if ($request->filled('product_id')) {
-            $mergedFilters['product_id'] = (array)$request->product_id;
+            $mergedFilters['product_id'] = (array) $request->product_id;
         }
         if ($request->filled('date_from')) {
             $mergedFilters['date_from'] = $request->date_from;
@@ -1147,7 +1134,7 @@ class ReportController extends Controller
             $mergedFilters['date_to'] = $request->date_to;
         }
         if ($request->filled('status')) {
-            $mergedFilters['status'] = (array)$request->status;
+            $mergedFilters['status'] = (array) $request->status;
         }
 
         // Get all report data for export (not paginated)
@@ -1156,7 +1143,7 @@ class ReportController extends Controller
         $entityType = $report->entity_type;
         $config = $report->config ?? [];
         $groupBy = $config['group_by'] ?? null;
-        
+
         if ($groupBy) {
             // Grouped reports already return all data
             $reportData = $this->getReportData($report, $mergedFilters, 1, 100000);
@@ -1164,100 +1151,100 @@ class ReportController extends Controller
             // For non-grouped, get all data without pagination
             $columns = $config['columns'] ?? [];
             $query = $this->getBaseQuery($entityType, $mergedFilters, null, $config['sort_by'] ?? null, $columns);
-            
+
             // Apply sorting
             if ($config['sort_by'] ?? null) {
                 $sortBy = $config['sort_by'];
                 $sortDirection = $config['sort_direction'] ?? 'asc';
-                
+
                 if (str_contains($sortBy, '.')) {
                     [$relation, $field] = explode('.', $sortBy, 2);
                     $tableName = $this->getTableName($entityType);
                     if ($entityType === 'invoice' && $relation === 'salesperson') {
-                        $query->orderBy('salesperson_users.' . $field, $sortDirection);
+                        $query->orderBy('salesperson_users.'.$field, $sortDirection);
                     } elseif ($relation === 'customer') {
-                        $query->orderBy('customers.' . $field, $sortDirection);
+                        $query->orderBy('customers.'.$field, $sortDirection);
                     }
                 } else {
                     $sortByColumn = $this->mapReportColumnToDatabaseColumn($entityType, $sortBy);
                     $tableName = $this->getTableName($entityType);
-                    $query->orderBy($tableName . '.' . $sortByColumn, $sortDirection);
+                    $query->orderBy($tableName.'.'.$sortByColumn, $sortDirection);
                 }
             } else {
                 $tableName = $this->getTableName($entityType);
                 if ($tableName) {
-                    $query->orderBy($tableName . '.created_at', 'desc');
+                    $query->orderBy($tableName.'.created_at', 'desc');
                 } else {
                     $query->orderBy('created_at', 'desc');
                 }
             }
-            
+
             $tableName = $this->getTableName($entityType);
-            $query->select($tableName . '.*');
-            
+            $query->select($tableName.'.*');
+
             // Get all records
             $allData = $query->get();
-            
+
             // Transform data
             $transformedData = $allData->map(function ($item) use ($columns, $entityType) {
                 return $this->transformRow($item, $columns, $entityType, null);
             });
-            
+
             // Calculate totals
             $grandTotals = [];
             if ($config['show_totals'] ?? false) {
                 $grandTotals = $this->calculateTotals($allData, $columns, $entityType, null);
             }
-            
+
             $reportData = [
                 'data' => $transformedData,
                 'grand_totals' => $grandTotals,
                 'count' => $allData->count(),
             ];
         }
-        
+
         $config = $report->config ?? [];
         $columns = $config['columns'] ?? [];
         $groupBy = $config['group_by'] ?? null;
         $entityType = $report->entity_type;
-        
+
         // Generate filename
-        $filename = str_replace(' ', '_', $report->name) . '_' . date('Y-m-d_His') . '.csv';
-        
+        $filename = str_replace(' ', '_', $report->name).'_'.date('Y-m-d_His').'.csv';
+
         $headers = [
             'Content-Type' => 'text/csv; charset=UTF-8',
             'Content-Disposition' => "attachment; filename=\"{$filename}\"",
         ];
 
-        $callback = function () use ($reportData, $columns, $groupBy, $entityType) {
+        $callback = function () use ($reportData, $columns, $groupBy) {
             $file = fopen('php://output', 'w');
-            
+
             // Add BOM for UTF-8 Excel compatibility
             fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
-            
+
             // Format column headers
             $headers = array_map(function ($col) {
                 return ucwords(str_replace(['_', '.'], ' ', $col));
             }, $columns);
-            
+
             // Write headers
             fputcsv($file, $headers);
-            
+
             if ($groupBy && isset($reportData['grouped_records'])) {
                 // Export grouped data
                 foreach ($reportData['grouped_records'] as $group) {
                     // Write group header row
                     $groupHeader = array_fill(0, count($columns), '');
-                    $groupHeader[0] = 'GROUP: ' . $this->formatGroupValue($group['group_value']);
+                    $groupHeader[0] = 'GROUP: '.$this->formatGroupValue($group['group_value']);
                     fputcsv($file, $groupHeader);
-                    
+
                     // Write group totals row
                     $totalsRow = array_fill(0, count($columns), '');
                     foreach ($columns as $index => $column) {
                         if (isset($group['group_totals'][$column])) {
                             $value = $group['group_totals'][$column];
                             if (is_numeric($value)) {
-                                $totalsRow[$index] = 'R' . number_format((float)$value, 2);
+                                $totalsRow[$index] = 'R'.number_format((float) $value, 2);
                             } else {
                                 $totalsRow[$index] = $value;
                             }
@@ -1266,9 +1253,9 @@ class ReportController extends Controller
                         }
                     }
                     // Mark as totals row
-                    $totalsRow[0] = 'TOTALS: ' . ($totalsRow[0] ?: '');
+                    $totalsRow[0] = 'TOTALS: '.($totalsRow[0] ?: '');
                     fputcsv($file, $totalsRow);
-                    
+
                     // Write individual records
                     foreach ($group['records'] as $record) {
                         $row = [];
@@ -1276,20 +1263,20 @@ class ReportController extends Controller
                             $value = $record[$column] ?? '';
                             // Format numeric values
                             if (is_numeric($value) && in_array($column, ['subtotal', 'tax_amount', 'total', 'discount_amount', 'unit_price', 'quantity', 'total_paid', 'total_credited', 'remaining_balance'])) {
-                                $row[] = 'R' . number_format((float)$value, 2);
+                                $row[] = 'R'.number_format((float) $value, 2);
                             } else {
                                 $row[] = $this->formatCellValue($value);
                             }
                         }
                         fputcsv($file, $row);
                     }
-                    
+
                     // Add empty row between groups
                     fputcsv($file, []);
                 }
-                
+
                 // Write grand totals if available
-                if (isset($reportData['grand_totals']) && !empty($reportData['grand_totals'])) {
+                if (isset($reportData['grand_totals']) && ! empty($reportData['grand_totals'])) {
                     fputcsv($file, []);
                     $grandTotalsRow = array_fill(0, count($columns), '');
                     $grandTotalsRow[0] = 'GRAND TOTALS';
@@ -1297,7 +1284,7 @@ class ReportController extends Controller
                         if (isset($reportData['grand_totals'][$column])) {
                             $value = $reportData['grand_totals'][$column];
                             if (is_numeric($value)) {
-                                $grandTotalsRow[$index] = 'R' . number_format((float)$value, 2);
+                                $grandTotalsRow[$index] = 'R'.number_format((float) $value, 2);
                             } else {
                                 $grandTotalsRow[$index] = $value;
                             }
@@ -1315,16 +1302,16 @@ class ReportController extends Controller
                         $value = $record[$column] ?? '';
                         // Format numeric values
                         if (is_numeric($value) && in_array($column, ['subtotal', 'tax_amount', 'total', 'discount_amount', 'unit_price', 'quantity', 'total_paid', 'total_credited', 'remaining_balance'])) {
-                            $row[] = 'R' . number_format((float)$value, 2);
+                            $row[] = 'R'.number_format((float) $value, 2);
                         } else {
                             $row[] = $this->formatCellValue($value);
                         }
                     }
                     fputcsv($file, $row);
                 }
-                
+
                 // Write totals if available
-                if (isset($reportData['grand_totals']) && !empty($reportData['grand_totals'])) {
+                if (isset($reportData['grand_totals']) && ! empty($reportData['grand_totals'])) {
                     fputcsv($file, []);
                     $totalsRow = array_fill(0, count($columns), '');
                     $totalsRow[0] = 'TOTALS';
@@ -1332,7 +1319,7 @@ class ReportController extends Controller
                         if (isset($reportData['grand_totals'][$column])) {
                             $value = $reportData['grand_totals'][$column];
                             if (is_numeric($value)) {
-                                $totalsRow[$index] = 'R' . number_format((float)$value, 2);
+                                $totalsRow[$index] = 'R'.number_format((float) $value, 2);
                             } else {
                                 $totalsRow[$index] = $value;
                             }
@@ -1358,19 +1345,20 @@ class ReportController extends Controller
         if ($value === null) {
             return '';
         }
-        
+
         if (is_array($value)) {
             return json_encode($value);
         }
-        
+
         if (is_object($value)) {
             if (method_exists($value, '__toString')) {
-                return (string)$value;
+                return (string) $value;
             }
+
             return json_encode($value);
         }
-        
-        return (string)$value;
+
+        return (string) $value;
     }
 
     /**
@@ -1381,19 +1369,20 @@ class ReportController extends Controller
         if ($value === null) {
             return 'N/A';
         }
-        
+
         if (is_array($value)) {
             return implode(', ', $value);
         }
-        
+
         if (is_object($value)) {
             if (method_exists($value, '__toString')) {
-                return (string)$value;
+                return (string) $value;
             }
+
             return json_encode($value);
         }
-        
-        return (string)$value;
+
+        return (string) $value;
     }
 
     /**

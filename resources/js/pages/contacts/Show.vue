@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useAuthAbility } from '@/composables/useAuthAbilities';
 import AppLayout from '@/layouts/AppLayout.vue';
 import EmailComposerModal from '@/components/EmailComposerModal.vue';
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
@@ -20,6 +21,9 @@ interface EmailActivity {
         name: string;
     } | null;
 }
+
+const canContactsEdit = useAuthAbility('contacts', 'edit');
+const canContactsDelete = useAuthAbility('contacts', 'delete');
 
 const props = defineProps<{
     contact: {
@@ -57,6 +61,13 @@ const props = defineProps<{
         email_per_page?: number;
     };
 }>();
+
+const deleteContact = () => {
+    if (!confirm(`Are you sure you want to delete contact "${props.contact.name}"?`)) {
+        return;
+    }
+    router.delete(contacts.destroy(props.contact.id).url);
+};
 
 // SMS functionality
 const showSMSModal = ref(false);
@@ -155,12 +166,21 @@ watch(emailPerPage, () => {
                         >
                             Send SMS
                         </button>
-                        <Link 
-                            :href="contacts.edit(props.contact.id).url" 
+                        <Link
+                            v-if="canContactsEdit"
+                            :href="contacts.edit(props.contact.id).url"
                             class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                         >
                             Edit
                         </Link>
+                        <button
+                            v-if="canContactsDelete"
+                            type="button"
+                            @click="deleteContact"
+                            class="rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                        >
+                            Delete
+                        </button>
                         <Link 
                             :href="contacts.index().url" 
                             class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"

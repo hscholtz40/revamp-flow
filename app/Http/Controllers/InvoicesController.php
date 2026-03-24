@@ -2,27 +2,31 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ChartOfAccount;
 use App\Models\Customer;
 use App\Models\EmailActivity;
 use App\Models\Invoice;
 use App\Models\InvoiceLineItem;
+use App\Models\Jobcard;
 use App\Models\LineGroup;
+use App\Models\Note;
+use App\Models\Payment;
 use App\Models\Product;
 use App\Models\Quote;
-use App\Models\Jobcard;
-use App\Models\ChartOfAccount;
 use App\Models\TaxRate;
 use App\Models\User;
-use App\Models\Payment;
 use App\Services\ReminderService;
 use App\Services\StockService;
-use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\DB;
+use App\Support\CompanyScopedRules;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -33,15 +37,17 @@ class InvoicesController extends Controller
      */
     public function index(Request $request): Response
     {
+        $this->authorize('viewAny', Invoice::class);
+
         $currentCompany = auth()->user()->getCurrentCompany();
         $sortBy = $request->input('sort_by', 'created_at');
         $sortDir = $request->input('sort_dir', 'desc') === 'asc' ? 'asc' : 'desc';
-        
+
         $query = Invoice::with(['customer', 'payments', 'creditNotes'])
             ->where('company_id', $currentCompany->id);
 
         // Hide paid invoices by default unless explicitly requested
-        if (!$request->boolean('show_paid')) {
+        if (! $request->boolean('show_paid')) {
             $query->where('status', '!=', 'paid');
         }
 
@@ -58,10 +64,10 @@ class InvoicesController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('invoice_number', 'like', "%{$search}%")
-                  ->orWhere('title', 'like', "%{$search}%")
-                  ->orWhereHas('customer', function ($customerQuery) use ($search) {
-                      $customerQuery->where('name', 'like', "%{$search}%");
-                  });
+                    ->orWhere('title', 'like', "%{$search}%")
+                    ->orWhereHas('customer', function ($customerQuery) use ($search) {
+                        $customerQuery->where('name', 'like', "%{$search}%");
+                    });
             });
         }
 
@@ -69,6 +75,7 @@ class InvoicesController extends Controller
             ->filter(fn ($value, $key) => str_starts_with((string) $key, 'colf_'))
             ->mapWithKeys(function ($value, $key) {
                 $trimmed = trim((string) $value);
+
                 return [substr((string) $key, 5) => $trimmed];
             })
             ->filter(fn ($value) => $value !== '');
@@ -78,7 +85,7 @@ class InvoicesController extends Controller
                 case 'invoice':
                     $query->where(function ($q) use ($filterValue) {
                         $q->where('invoice_number', 'like', "%{$filterValue}%")
-                          ->orWhere('title', 'like', "%{$filterValue}%");
+                            ->orWhere('title', 'like', "%{$filterValue}%");
                     });
                     break;
                 case 'customer':
@@ -134,11 +141,11 @@ class InvoicesController extends Controller
         }
 
         $sortableFields = ['invoice_number', 'customer_name', 'salesperson_name', 'invoice_date', 'due_date', 'status', 'total', 'created_at'];
-        if (!in_array($sortBy, $sortableFields, true)) {
+        if (! in_array($sortBy, $sortableFields, true)) {
             $sortBy = 'created_at';
         }
 
-        $invoicesQuery = $query->with(['customer', 'salesperson', 'source']);
+        $invoicesQuery = $query->with(['customer', 'salesperson', 'source', 'source.source']);
         if ($sortBy === 'customer_name') {
             $invoicesQuery->orderBy(
                 Customer::select('name')->whereColumn('customers.id', 'invoices.customer_id')->limit(1),
@@ -172,7 +179,6 @@ class InvoicesController extends Controller
                 'sort_dir' => $sortDir,
                 'column_filters' => $columnFilters->all(),
             ],
-            'canEditInvoices' => auth()->user()->hasModulePermission('invoices', 'edit'),
             'canEditCompleted' => auth()->user()->hasModulePermission('invoices', 'edit_completed'),
             'canCreateInvoices' => auth()->user()->hasModulePermission('invoices', 'create'),
             'isPosEnabled' => (bool) ($currentCompany?->enable_pos ?? false),
@@ -184,14 +190,16 @@ class InvoicesController extends Controller
      */
     public function create(Request $request): Response
     {
+        $this->authorize('create', Invoice::class);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        
+
         $customers = Customer::where('company_id', $currentCompany->id)
             ->orderBy('name')
             ->get();
 
         $products = Product::where('company_id', $currentCompany->id)
-            ->with(['serialNumbers' => function($query) {
+            ->with(['serialNumbers' => function ($query) {
                 $query->where('status', 'available');
             }])
             ->orderBy('name')
@@ -296,6 +304,9 @@ class InvoicesController extends Controller
                     ]];
                 }
 
+                $source->loadMissing('customer');
+                $prefillPaymentTerms = trim((string) ($source->customer?->terms ?? 'COD')) ?: 'COD';
+
                 $prefill = [
                     'source_type' => $sourceType,
                     'source_id' => $source->id,
@@ -310,7 +321,8 @@ class InvoicesController extends Controller
                     'discount_amount' => (float) ($source->discount_amount ?? 0),
                     'discount_percentage' => (float) ($source->discount_percentage ?? 0),
                     'notes' => $source->notes,
-                    'terms' => $source->terms ?? $source->terms_conditions,
+                    'terms' => $prefillPaymentTerms,
+                    'terms_conditions' => $source->terms_conditions,
                     'line_groups' => $lineGroups,
                     'line_items' => $lineItems,
                 ];
@@ -322,7 +334,7 @@ class InvoicesController extends Controller
             'products' => $products,
             'users' => $users,
             'selectedCustomer' => $selectedCustomer,
-            'defaultTerms' => $currentCompany->default_invoice_terms,
+            'defaultTermsConditions' => $currentCompany->default_invoice_terms,
             'currentUser' => auth()->user(),
             'currentCompany' => $currentCompany,
             'taxRates' => $taxRates,
@@ -336,8 +348,10 @@ class InvoicesController extends Controller
 
     public function pos(Request $request): Response
     {
+        $this->authorize('create', Invoice::class);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        if (!$currentCompany || !$currentCompany->enable_pos) {
+        if (! $currentCompany || ! $currentCompany->enable_pos) {
             abort(403, 'POS is not enabled for this company.');
         }
 
@@ -367,7 +381,7 @@ class InvoicesController extends Controller
             'products' => $products,
             'selectedCustomer' => $selectedCustomer,
             'currentCompany' => $currentCompany,
-            'defaultTerms' => $currentCompany->default_invoice_terms,
+            'defaultTermsConditions' => $currentCompany->default_invoice_terms,
             'printPdfUrl' => $printPdfUrl,
             'defaultSalesTaxRate' => $defaultSalesTaxRate ? [
                 'id' => $defaultSalesTaxRate->id,
@@ -375,26 +389,30 @@ class InvoicesController extends Controller
                 'rate' => (float) $defaultSalesTaxRate->rate,
             ] : null,
             'defaultSalesAccountLabel' => $defaultSalesAccount
-                ? trim(($defaultSalesAccount->account_code ? $defaultSalesAccount->account_code . ' - ' : '') . $defaultSalesAccount->account_name)
+                ? trim(($defaultSalesAccount->account_code ? $defaultSalesAccount->account_code.' - ' : '').$defaultSalesAccount->account_name)
                 : null,
         ]);
     }
 
     public function storePos(Request $request): RedirectResponse
     {
+        $this->authorize('create', Invoice::class);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        if (!$currentCompany || !$currentCompany->enable_pos) {
+        if (! $currentCompany || ! $currentCompany->enable_pos) {
             abort(403, 'POS is not enabled for this company.');
         }
 
+        $cid = $currentCompany->id;
         $validated = $request->validate([
-            'customer_id' => 'required|exists:customers,id',
+            'customer_id' => ['required', CompanyScopedRules::customer($cid)],
             'order_number' => 'nullable|string|max:255',
             'invoice_date' => 'required|date',
             'notes' => 'nullable|string',
             'terms' => 'nullable|string|max:255',
+            'terms_conditions' => 'nullable|string',
             'line_items' => 'required|array|min:1',
-            'line_items.*.product_id' => 'nullable|exists:products,id',
+            'line_items.*.product_id' => ['nullable', CompanyScopedRules::product($cid)],
             'line_items.*.description' => 'required|string',
             'line_items.*.quantity' => 'required|integer|min:1',
             'line_items.*.unit_price' => 'required|numeric',
@@ -413,7 +431,7 @@ class InvoicesController extends Controller
         $defaultTaxRateId = $defaultTaxRate?->id;
         $defaultTaxRateRate = (float) ($defaultTaxRate?->rate ?? 0);
         $defaultAccountId = $this->resolveInvoiceFallbackAccountId($currentCompany->id);
-        $terms = !empty(trim((string) ($validated['terms'] ?? '')))
+        $terms = ! empty(trim((string) ($validated['terms'] ?? '')))
             ? trim((string) $validated['terms'])
             : ((string) ($customer->terms ?: 'COD'));
 
@@ -434,16 +452,17 @@ class InvoicesController extends Controller
                 'tax_rate' => 0,
                 'notes' => $validated['notes'] ?? null,
                 'terms' => $terms,
+                'terms_conditions' => $validated['terms_conditions'] ?? null,
             ]);
 
             // POS invoices should always retain the currently logged-in user as salesperson.
-            if (!$invoice->salesperson_id && $salespersonId) {
+            if (! $invoice->salesperson_id && $salespersonId) {
                 $invoice->update(['salesperson_id' => $salespersonId]);
             }
 
             $defaultGroup = LineGroup::createDefaultFor($invoice);
 
-            $stockService = new StockService();
+            $stockService = new StockService;
             foreach ($validated['line_items'] as $index => $lineItemData) {
                 $quantity = (int) ($lineItemData['quantity'] ?? 0);
                 $unitPrice = (float) ($lineItemData['unit_price'] ?? 0);
@@ -477,7 +496,7 @@ class InvoicesController extends Controller
                     'sort_order' => $index,
                 ]);
 
-                if (!empty($lineItemData['product_id'])) {
+                if (! empty($lineItemData['product_id'])) {
                     $product = Product::find($lineItemData['product_id']);
                     if ($product && $product->track_stock) {
                         try {
@@ -550,13 +569,16 @@ class InvoicesController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
+        $this->authorize('create', Invoice::class);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        
-        $validated = $request->validate([
+        $cid = $currentCompany->id;
+
+        $validator = Validator::make($request->all(), [
             'title' => 'nullable|string|max:255',
             'description' => 'nullable|string',
-            'customer_id' => 'required|exists:customers,id',
-            'contact_id' => 'nullable|exists:contacts,id',
+            'customer_id' => ['required', CompanyScopedRules::customer($cid)],
+            'contact_id' => ['nullable', CompanyScopedRules::contactForRequest($cid)],
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:255',
             'order_number' => 'nullable|string|max:255',
@@ -567,25 +589,28 @@ class InvoicesController extends Controller
             'discount_amount' => 'nullable|numeric|min:0',
             'discount_percentage' => 'nullable|numeric|min:0|max:100',
             'notes' => 'nullable|string',
-            'terms' => 'nullable|string',
+            'terms' => 'nullable|string|max:255',
+            'terms_conditions' => 'nullable|string',
             'source_type' => 'nullable|in:quote,jobcard',
             'source_id' => 'nullable|integer',
             'line_groups' => 'nullable|array|min:1',
             'line_groups.*.id' => 'nullable|integer',
             'line_groups.*.name' => 'required_with:line_groups|string|max:255',
             'line_items' => 'required|array|min:1',
-            'line_items.*.product_id' => 'nullable|exists:products,id',
+            'line_items.*.product_id' => ['nullable', CompanyScopedRules::product($cid)],
             'line_items.*.description' => 'required|string',
             'line_items.*.quantity' => 'required|integer|min:1',
             'line_items.*.unit_price' => 'required|numeric',
             'line_items.*.discount_amount' => 'nullable|numeric|min:0',
             'line_items.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
-            'line_items.*.tax_rate_id' => 'nullable|exists:tax_rates,id',
-            'line_items.*.account_id' => 'nullable|exists:chart_of_accounts,id',
+            'line_items.*.tax_rate_id' => ['nullable', CompanyScopedRules::taxRate($cid)],
+            'line_items.*.account_id' => ['nullable', CompanyScopedRules::chartOfAccount($cid)],
             'line_items.*.line_group_id' => 'nullable|integer',
             'line_items.*.serial_number_ids' => 'nullable|array',
-            'line_items.*.serial_number_ids.*' => 'exists:product_serial_numbers,id',
+            'line_items.*.serial_number_ids.*' => ['nullable', CompanyScopedRules::productSerialNumberForCompany($cid)],
         ]);
+        $validator->after(CompanyScopedRules::afterValidateLineItemSerialsMatchProduct($cid));
+        $validated = $validator->validate();
 
         // Generate invoice number
         $invoiceNumber = Invoice::generateInvoiceNumber($currentCompany->id);
@@ -601,7 +626,7 @@ class InvoicesController extends Controller
         $invoice = Invoice::create([
             'invoice_number' => $invoiceNumber,
             'order_number' => $validated['order_number'] ?? null,
-            'title' => !empty(trim((string) ($validated['title'] ?? ''))) ? trim((string) $validated['title']) : $invoiceNumber,
+            'title' => ! empty(trim((string) ($validated['title'] ?? ''))) ? trim((string) $validated['title']) : $invoiceNumber,
             'description' => $validated['description'],
             'customer_id' => $validated['customer_id'],
             'contact_id' => $validated['contact_id'] ?? null,
@@ -612,8 +637,11 @@ class InvoicesController extends Controller
             'invoice_date' => $validated['invoice_date'],
             'due_date' => $dueDate->toDateString(),
             'tax_rate' => $validated['tax_rate'],
+            'discount_amount' => $validated['discount_amount'] ?? 0,
+            'discount_percentage' => $validated['discount_percentage'] ?? 0,
             'notes' => $validated['notes'],
             'terms' => $validated['terms'],
+            'terms_conditions' => $validated['terms_conditions'] ?? null,
             'source_type' => $validated['source_type'] ?? null,
             'source_id' => $validated['source_id'] ?? null,
         ]);
@@ -630,23 +658,23 @@ class InvoicesController extends Controller
         $defaultGroupId = reset($groupMap);
 
         // Create line items and deduct stock
-        $stockService = new StockService();
+        $stockService = new StockService;
         foreach ($validated['line_items'] as $index => $lineItemData) {
             // Calculate total before creating
             $quantity = $lineItemData['quantity'] ?? 0;
             $unitPrice = $lineItemData['unit_price'] ?? 0;
             $discountAmount = $lineItemData['discount_amount'] ?? 0;
             $discountPercentage = $lineItemData['discount_percentage'] ?? 0;
-            
+
             $subtotal = $quantity * $unitPrice;
-            
+
             // Apply discount: percentage takes precedence over amount
             if ($discountPercentage > 0) {
                 $discountAmount = $subtotal * ($discountPercentage / 100);
             }
-            
+
             $total = $subtotal - $discountAmount;
-            
+
             // Calculate per-line-item tax
             $taxRateId = $lineItemData['tax_rate_id'] ?? null;
             $lineTaxAmount = 0;
@@ -675,7 +703,7 @@ class InvoicesController extends Controller
             ]);
 
             // Update serial numbers to sold status and link to invoice
-            if (!empty($lineItemData['serial_number_ids'])) {
+            if (! empty($lineItemData['serial_number_ids'])) {
                 try {
                     \App\Models\ProductSerialNumber::whereIn('id', $lineItemData['serial_number_ids'])
                         ->update([
@@ -728,15 +756,24 @@ class InvoicesController extends Controller
         $invoice->refresh();
         $invoice->load('customer', 'company');
 
-        if (($validated['source_type'] ?? null) === 'quote' && !empty($validated['source_id'])) {
+        if (($validated['source_type'] ?? null) === 'quote' && ! empty($validated['source_id'])) {
             $sourceQuote = Quote::where('company_id', $currentCompany->id)->find($validated['source_id']);
             if ($sourceQuote) {
                 $sourceQuote->update([
                     'status' => 'accepted',
                     'invoice_id' => $invoice->id,
                 ]);
+
+                if ($sourceQuote->source_type === 'jobcard' && ! empty($sourceQuote->source_id)) {
+                    $sourceJobcard = Jobcard::where('company_id', $currentCompany->id)->find($sourceQuote->source_id);
+                    if ($sourceJobcard) {
+                        $sourceJobcard->update([
+                            'invoice_id' => $invoice->id,
+                        ]);
+                    }
+                }
             }
-        } elseif (($validated['source_type'] ?? null) === 'jobcard' && !empty($validated['source_id'])) {
+        } elseif (($validated['source_type'] ?? null) === 'jobcard' && ! empty($validated['source_id'])) {
             $sourceJobcard = Jobcard::where('company_id', $currentCompany->id)->find($validated['source_id']);
             if ($sourceJobcard) {
                 $sourceJobcard->update([
@@ -749,7 +786,7 @@ class InvoicesController extends Controller
 
         // Send automated reminder if enabled
         try {
-            $reminderService = new ReminderService();
+            $reminderService = new ReminderService;
             $reminderService->sendInvoiceCreatedConfirmation($invoice);
         } catch (\Exception $e) {
             \Log::error('Failed to send invoice created confirmation', [
@@ -768,26 +805,23 @@ class InvoicesController extends Controller
      */
     public function show(Invoice $invoice): Response
     {
-        $currentCompany = auth()->user()->getCurrentCompany();
-        
-        // Check if user has access to this invoice
-        if ($invoice->company_id !== $currentCompany->id) {
-            abort(403, 'You do not have access to this invoice.');
-        }
+        $this->authorize('view', $invoice);
 
-        $invoice->load(['customer', 'contact', 'salesperson', 'lineItems.product', 'lineItems.taxRate', 'lineItems.lineGroup', 'lineGroups', 'company', 'source', 'payments', 'creditNotes']);
-        
+        $currentCompany = auth()->user()->getCurrentCompany();
+
+        $invoice->load(['customer', 'contact', 'salesperson', 'lineItems.product', 'lineItems.taxRate', 'lineItems.lineGroup', 'lineGroups', 'company', 'source', 'source.source', 'payments', 'creditNotes', 'signatures.user']);
+
         // Load serial numbers for line items that have serial_number_ids
         $invoice->load('lineItems');
-        
+
         // Ensure payments are loaded for accurate total_paid and remaining_balance calculations
-        if (!$invoice->relationLoaded('payments')) {
+        if (! $invoice->relationLoaded('payments')) {
             $invoice->load('payments');
         }
-        
+
         // Convert invoice to array first
         $invoiceData = $invoice->toArray();
-        
+
         // Then manually add serial numbers to each line item in the array
         if (isset($invoiceData['line_items']) && is_array($invoiceData['line_items'])) {
             foreach ($invoiceData['line_items'] as $key => $lineItemData) {
@@ -809,15 +843,25 @@ class InvoicesController extends Controller
             ->where('is_active', true)
             ->orderBy('name')
             ->get(['id', 'name', 'is_default']);
-        
+
         $defaultTemplateId = $pdfTemplates->where('is_default', true)->first()?->id ?? null;
-        
+
+        $signatures = $invoice->signatures->map(fn ($signature) => [
+            'id' => $signature->id,
+            'signer_name' => $signature->signer_name,
+            'signature_url' => $signature->signature_url,
+            'signed_at' => $signature->signed_at?->toIso8601String(),
+            'user_name' => $signature->user?->name,
+        ])->toArray();
+
         return Inertia::render('invoices/Show', [
             'invoice' => $invoiceData,
             'canEditInvoices' => auth()->user()->hasModulePermission('invoices', 'edit'),
             'canEditCompleted' => auth()->user()->hasModulePermission('invoices', 'edit_completed'),
             'pdfTemplates' => $pdfTemplates,
             'defaultTemplateId' => $defaultTemplateId,
+            'signatures' => $signatures,
+            'documentSigningEnabled' => (bool) ($currentCompany->enable_document_signing ?? false),
         ]);
     }
 
@@ -826,8 +870,10 @@ class InvoicesController extends Controller
      */
     public function edit(Invoice $invoice): Response
     {
+        $this->authorize('update', $invoice);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        
+
         $invoice->load(['customer', 'contact', 'lineItems.product', 'lineItems.lineGroup', 'lineGroups']);
 
         $customers = Customer::where('company_id', $currentCompany->id)
@@ -838,14 +884,14 @@ class InvoicesController extends Controller
         $invoiceSerialNumberIds = $invoice->lineItems->pluck('serial_number_ids')->flatten()->filter()->unique()->toArray();
 
         $products = Product::where('company_id', $currentCompany->id)
-            ->with(['serialNumbers' => function($query) use ($invoiceSerialNumberIds) {
+            ->with(['serialNumbers' => function ($query) use ($invoiceSerialNumberIds) {
                 // Include available serial numbers OR sold ones that are on this invoice
-                $query->where(function($q) use ($invoiceSerialNumberIds) {
+                $query->where(function ($q) use ($invoiceSerialNumberIds) {
                     $q->where('status', 'available')
-                      ->orWhere(function($subQ) use ($invoiceSerialNumberIds) {
-                          $subQ->where('status', 'sold')
-                               ->whereIn('id', $invoiceSerialNumberIds);
-                      });
+                        ->orWhere(function ($subQ) use ($invoiceSerialNumberIds) {
+                            $subQ->where('status', 'sold')
+                                ->whereIn('id', $invoiceSerialNumberIds);
+                        });
                 });
             }])
             ->orderBy('name')
@@ -873,12 +919,12 @@ class InvoicesController extends Controller
 
         // Convert invoice to array and ensure serial_number_ids are included in line items
         $invoiceData = $invoice->toArray();
-        
+
         // Ensure line items have serial_number_ids properly set
         if (isset($invoiceData['line_items']) && is_array($invoiceData['line_items'])) {
             foreach ($invoiceData['line_items'] as $key => $lineItemData) {
                 // Make sure serial_number_ids is an array (it might be null or not set)
-                if (!isset($lineItemData['serial_number_ids']) || !is_array($lineItemData['serial_number_ids'])) {
+                if (! isset($lineItemData['serial_number_ids']) || ! is_array($lineItemData['serial_number_ids'])) {
                     $invoiceData['line_items'][$key]['serial_number_ids'] = [];
                 }
             }
@@ -911,11 +957,15 @@ class InvoicesController extends Controller
      */
     public function update(Request $request, Invoice $invoice): RedirectResponse
     {
-        $validated = $request->validate([
+        $this->authorize('update', $invoice);
+
+        $cid = $invoice->company_id;
+
+        $validator = Validator::make($request->all(), [
             'title' => 'nullable|string|max:255',
             'description' => 'nullable|string',
-            'customer_id' => 'required|exists:customers,id',
-            'contact_id' => 'nullable|exists:contacts,id',
+            'customer_id' => ['required', CompanyScopedRules::customer($cid)],
+            'contact_id' => ['nullable', CompanyScopedRules::contactForRequest($cid)],
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:255',
             'order_number' => 'nullable|string|max:255',
@@ -926,40 +976,33 @@ class InvoicesController extends Controller
             'discount_amount' => 'nullable|numeric|min:0',
             'discount_percentage' => 'nullable|numeric|min:0|max:100',
             'notes' => 'nullable|string',
-            'terms' => 'nullable|string',
+            'terms' => 'nullable|string|max:255',
+            'terms_conditions' => 'nullable|string',
             'line_groups' => 'nullable|array|min:1',
             'line_groups.*.id' => 'nullable|integer',
             'line_groups.*.name' => 'required_with:line_groups|string|max:255',
             'line_items' => 'required|array|min:1',
-            'line_items.*.product_id' => 'nullable|exists:products,id',
+            'line_items.*.product_id' => ['nullable', CompanyScopedRules::product($cid)],
             'line_items.*.description' => 'required|string',
             'line_items.*.quantity' => 'required|integer|min:1',
             'line_items.*.unit_price' => 'required|numeric',
             'line_items.*.discount_amount' => 'nullable|numeric|min:0',
             'line_items.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
-            'line_items.*.tax_rate_id' => 'nullable|exists:tax_rates,id',
-            'line_items.*.account_id' => 'nullable|exists:chart_of_accounts,id',
+            'line_items.*.tax_rate_id' => ['nullable', CompanyScopedRules::taxRate($cid)],
+            'line_items.*.account_id' => ['nullable', CompanyScopedRules::chartOfAccount($cid)],
             'line_items.*.line_group_id' => 'nullable|integer',
             'line_items.*.serial_number_ids' => 'nullable|array',
-            'line_items.*.serial_number_ids.*' => 'exists:product_serial_numbers,id',
+            'line_items.*.serial_number_ids.*' => ['nullable', CompanyScopedRules::productSerialNumberForCompany($cid)],
         ]);
+        $validator->after(CompanyScopedRules::afterValidateLineItemSerialsMatchProduct($cid));
+        $validated = $validator->validate();
 
         // Check if user can edit salesperson
         $canEditSalesperson = auth()->user()->canEditSalesperson('invoices');
-        
-        // Check if user can edit completed invoices (paid status)
-        $canEditCompleted = auth()->user()->hasModulePermission('invoices', 'edit_completed');
-        $isCompleted = $invoice->status === 'paid';
-        
-        // If invoice is completed (paid) and user can't edit completed, prevent update
-        if ($isCompleted && !$canEditCompleted) {
-            return redirect()->back()
-                ->with('error', 'You cannot edit a paid invoice.');
-        }
-        
+
         // Prepare update data
         $updateData = [
-            'title' => !empty(trim((string) ($validated['title'] ?? ''))) ? trim((string) $validated['title']) : $invoice->invoice_number,
+            'title' => ! empty(trim((string) ($validated['title'] ?? ''))) ? trim((string) $validated['title']) : $invoice->invoice_number,
             'description' => $validated['description'],
             'customer_id' => $validated['customer_id'],
             'contact_id' => $validated['contact_id'] ?? null,
@@ -971,6 +1014,7 @@ class InvoicesController extends Controller
             'tax_rate' => $validated['tax_rate'],
             'notes' => $validated['notes'],
             'terms' => $validated['terms'],
+            'terms_conditions' => $validated['terms_conditions'] ?? null,
         ];
 
         // Only update salesperson if user has permission
@@ -984,16 +1028,16 @@ class InvoicesController extends Controller
 
         // Handle stock adjustments for invoice updates
         // Only adjust stock if invoice is not cancelled (cancelled invoices don't affect stock)
-        $stockService = new StockService();
+        $stockService = new StockService;
         $invoice->load('lineItems.product');
         $wasCancelled = $invoice->status === 'cancelled';
-        
+
         // Restore stock and serial numbers for old line items (if invoice was not cancelled)
         // Stock was already restored when invoice was cancelled, so skip if it was cancelled
-        if (!$wasCancelled) {
+        if (! $wasCancelled) {
             foreach ($invoice->lineItems as $oldLineItem) {
                 // Restore serial numbers to available status
-                if (!empty($oldLineItem->serial_number_ids)) {
+                if (! empty($oldLineItem->serial_number_ids)) {
                     try {
                         \App\Models\ProductSerialNumber::whereIn('id', $oldLineItem->serial_number_ids)
                             ->where('invoice_id', $invoice->id)
@@ -1020,7 +1064,7 @@ class InvoicesController extends Controller
                             "Invoice Updated: {$invoice->invoice_number}",
                             'invoice',
                             $invoice->id,
-                            "Stock restored due to invoice line item update"
+                            'Stock restored due to invoice line item update'
                         );
                     } catch (\Exception $e) {
                         Log::error('Failed to restore stock for updated invoice line item', [
@@ -1056,16 +1100,16 @@ class InvoicesController extends Controller
             $unitPrice = $lineItemData['unit_price'] ?? 0;
             $discountAmount = $lineItemData['discount_amount'] ?? 0;
             $discountPercentage = $lineItemData['discount_percentage'] ?? 0;
-            
+
             $subtotal = $quantity * $unitPrice;
-            
+
             // Apply discount: percentage takes precedence over amount
             if ($discountPercentage > 0) {
                 $discountAmount = $subtotal * ($discountPercentage / 100);
             }
-            
+
             $total = $subtotal - $discountAmount;
-            
+
             // Calculate per-line-item tax
             $taxRateId = $lineItemData['tax_rate_id'] ?? null;
             $lineTaxAmount = 0;
@@ -1094,7 +1138,7 @@ class InvoicesController extends Controller
             ]);
 
             // Update serial numbers to sold status and link to invoice
-            if (!empty($lineItemData['serial_number_ids']) && !$wasCancelled) {
+            if (! empty($lineItemData['serial_number_ids']) && ! $wasCancelled) {
                 try {
                     \App\Models\ProductSerialNumber::whereIn('id', $lineItemData['serial_number_ids'])
                         ->update([
@@ -1114,7 +1158,7 @@ class InvoicesController extends Controller
             }
 
             // Deduct stock if product is tracked and invoice is not cancelled
-            if ($lineItemData['product_id'] && !$wasCancelled) {
+            if ($lineItemData['product_id'] && ! $wasCancelled) {
                 try {
                     $product = Product::find($lineItemData['product_id']);
                     if ($product && $product->track_stock) {
@@ -1124,7 +1168,7 @@ class InvoicesController extends Controller
                             "Invoice Updated: {$invoice->invoice_number}",
                             'invoice',
                             $invoice->id,
-                            "Stock deducted for invoice line item update",
+                            'Stock deducted for invoice line item update',
                             $lineItemData['serial_number_ids'] ?? null
                         );
                     }
@@ -1149,27 +1193,24 @@ class InvoicesController extends Controller
             ->with('success', 'Invoice updated successfully.');
     }
 
-
     /**
      * Remove the specified resource from storage.
      */
     public function destroy(Invoice $invoice): RedirectResponse
     {
+        $this->authorize('delete', $invoice);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($invoice->company_id !== $currentCompany->id) {
-            abort(403, 'You do not have access to this invoice.');
-        }
 
         // Restore stock and serial numbers for all line items before deleting
         // Skip if invoice is cancelled (stock was already restored when cancelled)
         if ($invoice->status !== 'cancelled') {
-            $stockService = new StockService();
+            $stockService = new StockService;
             $invoice->load('lineItems.product');
-            
+
             foreach ($invoice->lineItems as $lineItem) {
                 // Restore serial numbers to available status
-                if (!empty($lineItem->serial_number_ids)) {
+                if (! empty($lineItem->serial_number_ids)) {
                     try {
                         \App\Models\ProductSerialNumber::whereIn('id', $lineItem->serial_number_ids)
                             ->where('invoice_id', $invoice->id)
@@ -1196,7 +1237,7 @@ class InvoicesController extends Controller
                             "Invoice Deleted: {$invoice->invoice_number}",
                             'invoice',
                             $invoice->id,
-                            "Stock restored due to invoice deletion"
+                            'Stock restored due to invoice deletion'
                         );
                     } catch (\Exception $e) {
                         Log::error('Failed to restore stock for deleted invoice line item', [
@@ -1222,11 +1263,9 @@ class InvoicesController extends Controller
      */
     public function updateStatus(Request $request, Invoice $invoice): RedirectResponse
     {
+        $this->authorize('update', $invoice);
+
         $currentCompany = auth()->user()->getCurrentCompany();
-        
-        if ($invoice->company_id !== $currentCompany->id) {
-            abort(403, 'You do not have access to this invoice.');
-        }
 
         $validated = $request->validate([
             'status' => 'required|in:draft,sent,paid,overdue,cancelled',
@@ -1236,14 +1275,14 @@ class InvoicesController extends Controller
         $newStatus = $validated['status'];
 
         // Handle stock adjustments based on status changes
-        $stockService = new StockService();
+        $stockService = new StockService;
         $invoice->load('lineItems.product');
-        
+
         // If changing TO cancelled, restore stock and serial numbers
         if ($oldStatus !== 'cancelled' && $newStatus === 'cancelled') {
             foreach ($invoice->lineItems as $lineItem) {
                 // Restore serial numbers to available status
-                if (!empty($lineItem->serial_number_ids)) {
+                if (! empty($lineItem->serial_number_ids)) {
                     try {
                         \App\Models\ProductSerialNumber::whereIn('id', $lineItem->serial_number_ids)
                             ->where('invoice_id', $invoice->id)
@@ -1270,7 +1309,7 @@ class InvoicesController extends Controller
                             "Invoice Cancelled: {$invoice->invoice_number}",
                             'invoice',
                             $invoice->id,
-                            "Stock restored due to invoice cancellation"
+                            'Stock restored due to invoice cancellation'
                         );
                     } catch (\Exception $e) {
                         Log::error('Failed to restore stock for cancelled invoice line item', [
@@ -1284,7 +1323,7 @@ class InvoicesController extends Controller
                 }
             }
         }
-        
+
         // If changing FROM cancelled TO another status, deduct stock again
         if ($oldStatus === 'cancelled' && $newStatus !== 'cancelled') {
             foreach ($invoice->lineItems as $lineItem) {
@@ -1322,11 +1361,13 @@ class InvoicesController extends Controller
      */
     public function downloadPdf(Request $request, Invoice $invoice)
     {
-        $invoice->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company', 'source']);
-        
+        $this->authorize('view', $invoice);
+
+        $invoice->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company', 'source', 'source.source', 'signatures']);
+
         // Load serial numbers for line items that have serial_number_ids
         foreach ($invoice->lineItems as $lineItem) {
-            if (!empty($lineItem->serial_number_ids)) {
+            if (! empty($lineItem->serial_number_ids)) {
                 $lineItem->serialNumbers = \App\Models\ProductSerialNumber::whereIn('id', $lineItem->serial_number_ids)
                     ->get(['id', 'serial_number', 'status']);
             } else {
@@ -1337,19 +1378,26 @@ class InvoicesController extends Controller
         $invoice->setRelation('lineItems', $invoice->lineItems->reject(function ($item) {
             return strtolower(trim((string) ($item->description ?? ''))) === 'rounding adjustment';
         })->values());
-        
+
         $company = $invoice->company;
         $templateId = $request->get('template_id');
-        
-        $pdfService = new \App\Services\PdfGenerationService();
+
+        $pdfService = new \App\Services\PdfGenerationService;
         $pdf = $pdfService->generatePdf('invoice', compact('invoice', 'company'), $company, $templateId);
-        
+        $pdfContent = $pdf->output();
+        $filename = "invoice-{$invoice->invoice_number}.pdf";
+
+        $this->storePrintedDocumentNote($invoice, $filename, $pdfContent, "Invoice {$invoice->invoice_number} printed");
+
         // Update status to sent if it was draft
         if ($invoice->status === 'draft') {
             $invoice->update(['status' => 'sent']);
         }
-        
-        return $pdf->download("invoice-{$invoice->invoice_number}.pdf");
+
+        return response($pdfContent, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ]);
     }
 
     /**
@@ -1357,10 +1405,12 @@ class InvoicesController extends Controller
      */
     public function printPdf(Request $request, Invoice $invoice)
     {
-        $invoice->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company', 'source']);
-        
+        $this->authorize('view', $invoice);
+
+        $invoice->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company', 'source', 'source.source', 'signatures']);
+
         foreach ($invoice->lineItems as $lineItem) {
-            if (!empty($lineItem->serial_number_ids)) {
+            if (! empty($lineItem->serial_number_ids)) {
                 $lineItem->serialNumbers = \App\Models\ProductSerialNumber::whereIn('id', $lineItem->serial_number_ids)
                     ->get(['id', 'serial_number', 'status']);
             } else {
@@ -1371,16 +1421,19 @@ class InvoicesController extends Controller
         $invoice->setRelation('lineItems', $invoice->lineItems->reject(function ($item) {
             return strtolower(trim((string) ($item->description ?? ''))) === 'rounding adjustment';
         })->values());
-        
+
         $company = $invoice->company;
         $templateId = $request->get('template_id');
-        
-        $pdfService = new \App\Services\PdfGenerationService();
+
+        $pdfService = new \App\Services\PdfGenerationService;
         $pdf = $pdfService->generatePdf('invoice', compact('invoice', 'company'), $company, $templateId);
 
         $filename = "invoice-{$invoice->invoice_number}.pdf";
+        $pdfContent = $pdf->output();
 
-        return response($pdf->output(), 200, [
+        $this->storePrintedDocumentNote($invoice, $filename, $pdfContent, "Invoice {$invoice->invoice_number} printed");
+
+        return response($pdfContent, 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => "inline; filename=\"{$filename}\"",
         ]);
@@ -1391,6 +1444,8 @@ class InvoicesController extends Controller
      */
     public function email(Request $request, Invoice $invoice)
     {
+        $this->authorize('update', $invoice);
+
         $validated = $request->validate([
             'email' => 'required|string',
             'customMessage' => 'nullable|string',
@@ -1398,7 +1453,7 @@ class InvoicesController extends Controller
 
         $emails = array_unique(array_filter(array_map('trim', explode(',', $validated['email']))));
         foreach ($emails as $e) {
-            if (!filter_var($e, FILTER_VALIDATE_EMAIL)) {
+            if (! filter_var($e, FILTER_VALIDATE_EMAIL)) {
                 return redirect()->back()->withErrors(['email' => "Invalid email address: {$e}"]);
             }
         }
@@ -1406,12 +1461,12 @@ class InvoicesController extends Controller
             return redirect()->back()->withErrors(['email' => 'At least one valid email is required.']);
         }
 
-        $invoice->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'company']);
+        $invoice->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'company', 'signatures']);
         $company = $invoice->company;
-        
+
         // Load serial numbers for line items that have serial_number_ids
         foreach ($invoice->lineItems as $lineItem) {
-            if (!empty($lineItem->serial_number_ids)) {
+            if (! empty($lineItem->serial_number_ids)) {
                 $lineItem->serialNumbers = \App\Models\ProductSerialNumber::whereIn('id', $lineItem->serial_number_ids)
                     ->get(['id', 'serial_number', 'status']);
             } else {
@@ -1422,15 +1477,15 @@ class InvoicesController extends Controller
         $invoice->setRelation('lineItems', $invoice->lineItems->reject(function ($item) {
             return strtolower(trim((string) ($item->description ?? ''))) === 'rounding adjustment';
         })->values());
-        
+
         try {
             // Generate PDF
             $templateId = $request->get('template_id');
-            
-            $pdfService = new \App\Services\PdfGenerationService();
+
+            $pdfService = new \App\Services\PdfGenerationService;
             $pdf = $pdfService->generatePdf('invoice', compact('invoice', 'company'), $company, $templateId);
             $pdfContent = $pdf->output();
-            
+
             // Send email
             Mail::mailer('smtp')->send('emails.invoice', [
                 'invoice' => $invoice,
@@ -1444,7 +1499,7 @@ class InvoicesController extends Controller
                         'mime' => 'application/pdf',
                     ]);
 
-                if (!empty($company->email)) {
+                if (! empty($company->email)) {
                     $message->replyTo($company->email, $company->name ?? null);
                 }
             });
@@ -1476,7 +1531,7 @@ class InvoicesController extends Controller
                 $invoice->update(['status' => 'sent']);
             }
 
-            return redirect()->back()->with('success', 'Invoice sent successfully to ' . implode(', ', $emails));
+            return redirect()->back()->with('success', 'Invoice sent successfully to '.implode(', ', $emails));
         } catch (\Exception $e) {
             $subject = "Invoice {$invoice->invoice_number} - {$invoice->title}";
             foreach ($emails as $recipientEmail) {
@@ -1496,8 +1551,53 @@ class InvoicesController extends Controller
                     'error_message' => $e->getMessage(),
                 ]);
             }
-            return redirect()->back()->withErrors(['message' => 'Failed to send email: ' . $e->getMessage()]);
+
+            return redirect()->back()->withErrors(['message' => 'Failed to send email: '.$e->getMessage()]);
         }
+    }
+
+    public function sign(Request $request, Invoice $invoice): RedirectResponse
+    {
+        $this->authorize('update', $invoice);
+
+        $currentCompany = auth()->user()->getCurrentCompany();
+        if (! $currentCompany || ! $currentCompany->enable_document_signing) {
+            return redirect()->back()->withErrors(['signature' => 'Document signing is disabled for this company.']);
+        }
+
+        $validated = $request->validate([
+            'signer_name' => ['required', 'string', 'max:255'],
+            'signature_data' => ['required', 'string'],
+        ]);
+
+        if (! preg_match('/^data:image\/png;base64,/', $validated['signature_data'])) {
+            return redirect()->back()->withErrors(['signature_data' => 'Invalid signature format.']);
+        }
+
+        $raw = substr($validated['signature_data'], strpos($validated['signature_data'], ',') + 1);
+        $binary = base64_decode($raw, true);
+        if ($binary === false) {
+            return redirect()->back()->withErrors(['signature_data' => 'Invalid signature data.']);
+        }
+
+        $path = sprintf(
+            'signatures/%d/invoices/%d/%s-%s.png',
+            $invoice->company_id,
+            $invoice->id,
+            now()->format('YmdHis'),
+            bin2hex(random_bytes(4))
+        );
+        Storage::disk('public')->put($path, $binary);
+
+        $invoice->signatures()->create([
+            'company_id' => $invoice->company_id,
+            'user_id' => auth()->id(),
+            'signer_name' => trim($validated['signer_name']),
+            'signature_path' => $path,
+            'signed_at' => now(),
+        ]);
+
+        return redirect()->back()->with('success', 'Signature captured successfully.');
     }
 
     /**
@@ -1578,10 +1678,11 @@ class InvoicesController extends Controller
             return strtolower(trim((string) ($item->description ?? ''))) === strtolower($roundingDescription);
         });
 
-        if (abs($adjustment) < 0.0001 || !$roundingAccountId) {
+        if (abs($adjustment) < 0.0001 || ! $roundingAccountId) {
             if ($existingRoundingLine) {
                 $existingRoundingLine->delete();
             }
+
             return;
         }
 
@@ -1598,6 +1699,7 @@ class InvoicesController extends Controller
                 'account_id' => $roundingAccountId,
                 'line_group_id' => $existingRoundingLine->line_group_id ?? $defaultLineGroupId,
             ]);
+
             return;
         }
 
@@ -1621,7 +1723,7 @@ class InvoicesController extends Controller
 
     private function calculateInvoiceLineTaxAmount(float $lineTotal, $taxRateId): float
     {
-        if (!$taxRateId) {
+        if (! $taxRateId) {
             return 0.0;
         }
 
@@ -1647,4 +1749,30 @@ class InvoicesController extends Controller
         return $this->resolveInvoiceFallbackAccount($companyId)?->id;
     }
 
+    private function storePrintedDocumentNote(Invoice $invoice, string $filename, string $pdfContent, string $subject): void
+    {
+        $companyId = (int) $invoice->company_id;
+        $path = sprintf(
+            'notes/%d/printed/%s-%s',
+            $companyId,
+            now()->format('YmdHis'),
+            $filename
+        );
+
+        Storage::disk('public')->put($path, $pdfContent);
+
+        $note = new Note([
+            'company_id' => $companyId,
+            'user_id' => auth()->id(),
+            'subject' => $subject,
+            'description' => null,
+            'attachment_path' => $path,
+            'attachment_original_name' => $filename,
+            'attachment_mime' => 'application/pdf',
+            'attachment_size' => strlen($pdfContent),
+        ]);
+
+        $note->noteable()->associate($invoice);
+        $note->save();
+    }
 }

@@ -8,9 +8,9 @@ import administration from '@/routes/administration';
 interface SMSSettings {
     id?: number;
     bulksms_username: string;
-    bulksms_password: string;
     bulksms_sender_name?: string;
     is_active: boolean;
+    has_bulksms_password?: boolean;
 }
 
 const props = defineProps<{
@@ -19,7 +19,7 @@ const props = defineProps<{
 
 const form = useForm({
     bulksms_username: props.settings?.bulksms_username || '',
-    bulksms_password: props.settings?.bulksms_password || '',
+    bulksms_password: '',
     bulksms_sender_name: props.settings?.bulksms_sender_name || '',
     is_active: props.settings?.is_active ?? true,
 });
@@ -92,9 +92,13 @@ const handleActiveToggle = () => {
                                     class="w-full rounded border px-3 py-2 pr-10 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     :class="{ 'opacity-50 cursor-not-allowed': !form.is_active }"
                                     :disabled="!form.is_active"
-                                    placeholder="Your BulkSMS password"
-                                    :required="form.is_active"
+                                    :placeholder="settings?.has_bulksms_password ? 'Leave blank to keep current password' : 'Your BulkSMS password'"
+                                    :required="form.is_active && (!settings?.id || !settings?.has_bulksms_password)"
+                                    autocomplete="new-password"
                                 />
+                                <p v-if="form.is_active && settings?.has_bulksms_password" class="text-xs text-gray-500 mt-1">
+                                    Leave blank to keep your current password.
+                                </p>
                                 <button
                                     type="button"
                                     @click="togglePasswordVisibility"

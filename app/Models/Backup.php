@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Traits\ScopedToCurrentCompanyRouteBinding;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Backup extends Model
 {
+    use ScopedToCurrentCompanyRouteBinding;
+
     protected $fillable = [
         'company_id',
         'user_id',
@@ -42,12 +45,12 @@ class Backup extends Model
     {
         $bytes = $this->file_size;
         $units = ['B', 'KB', 'MB', 'GB', 'TB'];
-        
+
         for ($i = 0; $bytes > 1024 && $i < count($units) - 1; $i++) {
             $bytes /= 1024;
         }
-        
-        return round($bytes, 2) . ' ' . $units[$i];
+
+        return round($bytes, 2).' '.$units[$i];
     }
 
     public function isCompleted(): bool

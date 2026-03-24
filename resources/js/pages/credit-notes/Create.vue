@@ -475,6 +475,7 @@
 </template>
 
 <script setup lang="ts">
+import { useNumberFormat } from '@/composables/useNumberFormat';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, watch, ref, onMounted } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -551,6 +552,7 @@ interface LineGroup {
 }
 
 const props = defineProps<Props>();
+const { formatCurrency } = useNumberFormat();
 const createLineItemUid = () =>
     `line-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -1034,13 +1036,6 @@ function calculateLineTotalValue(item: LineItem): number {
         discount = sub * (item.discount_percentage! / 100);
     }
     return sub - discount;
-}
-
-function formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-ZA', {
-        style: 'currency',
-        currency: 'ZAR',
-    }).format(amount ?? 0);
 }
 
 const subtotalAfterDiscount = computed(() => {

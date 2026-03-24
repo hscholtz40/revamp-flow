@@ -300,8 +300,8 @@
                             <tr>
                                 <td>{{ $item->description }}</td>
                                 <td class="text-right">{{ $item->quantity }}</td>
-                                <td class="text-right">R {{ number_format($item->unit_price, 2) }}</td>
-                                <td class="text-right">R {{ number_format($item->total, 2) }}</td>
+                                <td class="text-right">{{ $quote->company->formatCurrencyZar($item->unit_price) }}</td>
+                                <td class="text-right">{{ $quote->company->formatCurrencyZar($item->total) }}</td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -311,21 +311,21 @@
             <div class="totals">
                 <div class="totals-row">
                     <span>Subtotal:</span>
-                    <span>R {{ number_format($quote->subtotal, 2) }}</span>
+                    <span>{{ $quote->company->formatCurrencyZar($quote->subtotal) }}</span>
                 </div>
                 @if($quote->discount_amount > 0)
                     <div class="totals-row">
                         <span>Discount:</span>
-                        <span>-R {{ number_format($quote->discount_amount, 2) }}</span>
+                        <span>-{{ $quote->company->formatCurrencyZar($quote->discount_amount) }}</span>
                     </div>
                 @endif
                 <div class="totals-row">
                     <span>Tax ({{ $quote->tax_rate }}%):</span>
-                    <span>R {{ number_format($quote->tax_amount, 2) }}</span>
+                    <span>{{ $quote->company->formatCurrencyZar($quote->tax_amount) }}</span>
                 </div>
                 <div class="totals-row total">
                     <span>Total:</span>
-                    <span>R {{ number_format($quote->total, 2) }}</span>
+                    <span>{{ $quote->company->formatCurrencyZar($quote->total) }}</span>
                 </div>
             </div>
 

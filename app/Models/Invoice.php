@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Traits\Auditable;
+use App\Traits\ScopedToCurrentCompanyRouteBinding;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,7 +14,7 @@ use Illuminate\Support\Facades\DB;
 
 class Invoice extends Model
 {
-    use HasFactory, Auditable;
+    use Auditable, HasFactory, ScopedToCurrentCompanyRouteBinding;
 
     protected $fillable = [
         'invoice_number',
@@ -38,6 +39,7 @@ class Invoice extends Model
         'notes',
         'xero_invoice_id',
         'terms',
+        'terms_conditions',
         'source_type',
         'source_id',
         'xero_updated_at',
@@ -109,6 +111,11 @@ class Invoice extends Model
         return $this->morphMany(LineGroup::class, 'line_groupable')->orderBy('sort_order');
     }
 
+    public function signatures(): MorphMany
+    {
+        return $this->morphMany(DocumentSignature::class, 'signable')->orderByDesc('signed_at');
+    }
+
     /**
      * Get the payments for this invoice.
      */
@@ -143,7 +150,7 @@ class Invoice extends Model
                 $company = Company::whereKey($companyId)->lockForUpdate()->first();
                 if ($company && $company->invoice_number_prefix !== null && $company->invoice_number_next !== null) {
                     $next = max(1, (int) $company->invoice_number_next);
-                    $number = $company->invoice_number_prefix . str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+                    $number = $company->invoice_number_prefix.str_pad((string) $next, 4, '0', STR_PAD_LEFT);
                     $company->invoice_number_next = $next + 1;
                     $company->save();
 
@@ -161,7 +168,7 @@ class Invoice extends Model
     {
         $year = date('Y');
         $month = date('m');
-        
+
         // Get the last invoice number for this year/month
         $lastInvoiceQuery = static::where('invoice_number', 'like', "INV-{$year}{$month}%");
         if ($companyId !== null) {
@@ -171,7 +178,7 @@ class Invoice extends Model
         $lastInvoice = $lastInvoiceQuery
             ->orderBy('invoice_number', 'desc')
             ->first();
-        
+
         if ($lastInvoice) {
             // Extract the sequence number and increment it
             $lastNumber = (int) substr($lastInvoice->invoice_number, -4);
@@ -179,8 +186,8 @@ class Invoice extends Model
         } else {
             $newNumber = 1;
         }
-        
-        return "INV-{$year}{$month}" . str_pad($newNumber, 4, '0', STR_PAD_LEFT);
+
+        return "INV-{$year}{$month}".str_pad($newNumber, 4, '0', STR_PAD_LEFT);
     }
 
     /**
@@ -196,19 +203,19 @@ class Invoice extends Model
             $unitPrice = $item->unit_price ?? 0;
             $discountAmount = $item->discount_amount ?? 0;
             $discountPercentage = $item->discount_percentage ?? 0;
-            
+
             $itemSubtotal = $quantity * $unitPrice;
-            
+
             if ($discountPercentage > 0) {
                 return $itemSubtotal * ($discountPercentage / 100);
             }
-            
+
             return $discountAmount;
         });
-        
+
         // Subtotal after discounts (sum of line item totals)
         $subtotal = $lineItems->sum('total');
-        
+
         // Tax is now calculated per line item - sum all line item tax amounts
         $taxAmount = $lineItems->sum('tax_amount') ?? 0;
         $total = $subtotal + $taxAmount;
@@ -220,6 +227,17 @@ class Invoice extends Model
             'tax_amount' => $taxAmount,
             'total' => $total,
         ]);
+    }
+
+    /**
+     * Heading for PDFs and print: "Tax Invoice" when total tax is positive, otherwise "Invoice"
+     * (often styled with text-transform: uppercase → INVOICE).
+     */
+    public function getPdfDocumentTitle(): string
+    {
+        $tax = (float) ($this->tax_amount ?? 0);
+
+        return $tax > 0.00001 ? 'Tax Invoice' : 'Invoice';
     }
 
     /**
@@ -255,18 +273,38 @@ class Invoice extends Model
 
     public function getJobNumberAttribute(): ?string
     {
-        if ($this->source_type !== 'jobcard') {
+        if ($this->source_type === 'jobcard') {
+            if ($this->relationLoaded('source')) {
+                return $this->source?->job_number;
+            }
+
+            /** @var \App\Models\Jobcard|null $jobcard */
+            $jobcard = $this->source()->first();
+
+            return $jobcard?->job_number;
+        }
+
+        if ($this->source_type !== 'quote') {
             return null;
         }
 
-        if ($this->relationLoaded('source')) {
-            return $this->source?->job_number;
+        /** @var \App\Models\Quote|null $quote */
+        $quote = null;
+        if ($this->relationLoaded('source') && $this->source instanceof Quote) {
+            $quote = $this->source;
+        } elseif (! empty($this->source_id)) {
+            $quote = Quote::with('source')->find($this->source_id);
         }
 
-        /** @var \App\Models\Jobcard|null $jobcard */
-        $jobcard = $this->source()->first();
+        if (! $quote || $quote->source_type !== 'jobcard') {
+            return null;
+        }
 
-        return $jobcard?->job_number;
+        if ($quote->relationLoaded('source')) {
+            return $quote->source?->job_number;
+        }
+
+        return Jobcard::find($quote->source_id)?->job_number;
     }
 
     public function getRecipientEmailAttribute(): ?string
@@ -313,6 +351,7 @@ class Invoice extends Model
         if ($this->relationLoaded('payments')) {
             return $this->payments->sum('amount');
         }
+
         return $this->payments()->sum('amount');
     }
 
@@ -326,6 +365,7 @@ class Invoice extends Model
                 ->where('status', '!=', 'voided')
                 ->sum(fn ($cn) => (float) $cn->total);
         }
+
         return (float) $this->creditNotes()
             ->where('status', '!=', 'voided')
             ->sum('total');
@@ -353,6 +393,7 @@ class Invoice extends Model
         }
 
         $total = (float) ($this->total ?? 0);
+
         return max(0, round($total - $totalPaid - $totalCredited, 2));
     }
 
@@ -365,6 +406,7 @@ class Invoice extends Model
         $totalCredited = (float) $this->creditNotes()
             ->where('status', '!=', 'voided')
             ->sum('total');
+
         return ((float) $this->total - $totalPaid - $totalCredited) <= 0.01;
     }
 }

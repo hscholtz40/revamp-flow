@@ -31,8 +31,8 @@ class GroupSeeder extends Seeder
             ]),
         ];
 
-        $modules = ['customers', 'users', 'groups', 'contacts', 'products', 'suppliers', 'stock-movements', 'purchase-orders', 'jobcards', 'quotes', 'invoices', 'credit-notes'];
-        
+        $modules = ['customers', 'users', 'groups', 'contacts', 'products', 'suppliers', 'stock-movements', 'purchase-orders', 'jobcards', 'quotes', 'invoices', 'credit-notes', 'timesheet'];
+
         // Add permissions for all groups
         foreach ($groups as $groupName => $group) {
             foreach ($modules as $module) {
@@ -43,17 +43,17 @@ class GroupSeeder extends Seeder
                     'can_edit' => true,
                     'can_delete' => true,
                 ];
-                
-        // Add special permission for editing completed items
-        if (in_array($module, ['jobcards', 'invoices', 'quotes', 'credit-notes'])) {
-            $permissions['can_edit_completed'] = in_array($groupName, ['Admin', 'Manager']);
-        }
-                
+
+                // Add special permission for editing completed items
+                if (in_array($module, ['jobcards', 'invoices', 'quotes', 'credit-notes'])) {
+                    $permissions['can_edit_completed'] = in_array($groupName, ['Admin', 'Manager']);
+                }
+
                 // Add special permission for editing salesperson on invoices (default to false, can be configured per group)
                 if ($module === 'invoices') {
                     $permissions['can_edit_salesperson'] = false;
                 }
-                
+
                 GroupPermission::updateOrCreate(
                     ['group_id' => $group->id, 'module' => $module],
                     $permissions
@@ -67,5 +67,3 @@ class GroupSeeder extends Seeder
         }
     }
 }
-
-

@@ -12,7 +12,11 @@
         <div class="p-4">
             <div class="flex items-center justify-between gap-3 mb-6">
                 <h1 class="text-2xl font-bold text-gray-900">Purchase Orders</h1>
-                <Link :href="purchaseOrders.create().url" class="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">
+                <Link
+                    v-if="canPurchaseOrdersCreate"
+                    :href="purchaseOrders.create().url"
+                    class="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+                >
                     New Purchase Order
                 </Link>
             </div>
@@ -153,7 +157,30 @@
                                 <td class="px-6 py-4 whitespace-nowrap" style="display: none;">
                                     <div class="text-sm text-gray-900">{{ po.updated_at ? formatDate(po.updated_at) : '-' }}</div>
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" @click.stop>
+                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium" @click.stop>
+                                    <div class="flex items-center justify-end gap-2">
+                                        <Link
+                                            v-if="canPurchaseOrdersEdit && canEditPoRow(po)"
+                                            :href="purchaseOrders.edit(po.id).url"
+                                            class="inline-flex items-center justify-center px-2 py-1.5 md:px-3 md:py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                            title="Edit"
+                                        >
+                                            <ListTableActionLabel label="Edit">
+                                                <Edit class="h-4 w-4" />
+                                            </ListTableActionLabel>
+                                        </Link>
+                                        <button
+                                            v-if="canPurchaseOrdersDelete && canDeletePoRow(po)"
+                                            type="button"
+                                            title="Delete"
+                                            class="inline-flex items-center justify-center px-2 py-1.5 md:px-3 md:py-1 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                                            @click="deletePurchaseOrder(po)"
+                                        >
+                                            <ListTableActionLabel label="Delete">
+                                                <Trash2 class="h-4 w-4" />
+                                            </ListTableActionLabel>
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         </tbody>
@@ -221,8 +248,12 @@
 </template>
 
 <script setup lang="ts">
+import ListTableActionLabel from '@/components/ListTableActionLabel.vue';
+import { useNumberFormat } from '@/composables/useNumberFormat';
+import { useAuthAbility } from '@/composables/useAuthAbilities';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
+import { Edit, Trash2 } from 'lucide-vue-next';
 import { ref, watch } from 'vue';
 import purchaseOrders from '@/routes/purchase-orders';
 
@@ -245,6 +276,7 @@ interface PurchaseOrder {
     created_at?: string;
     updated_at?: string;
     total: number;
+    items?: { quantity_received?: number }[];
 }
 
 interface Props {
@@ -276,6 +308,11 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+const { formatCurrency } = useNumberFormat();
+
+const canPurchaseOrdersCreate = useAuthAbility('purchase-orders', 'create');
+const canPurchaseOrdersEdit = useAuthAbility('purchase-orders', 'edit');
+const canPurchaseOrdersDelete = useAuthAbility('purchase-orders', 'delete');
 
 const search = ref(props.filters?.search || '');
 const supplierFilter = ref(props.filters?.supplier_id?.toString() || '');
@@ -327,13 +364,6 @@ const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString();
 };
 
-const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-ZA', {
-        style: 'currency',
-        currency: 'ZAR',
-    }).format(amount);
-};
-
 const getStatusBadgeClass = (status: string) => {
     const classes: Record<string, string> = {
         draft: 'bg-gray-100 text-gray-800',
@@ -342,6 +372,23 @@ const getStatusBadgeClass = (status: string) => {
         cancelled: 'bg-red-100 text-red-800',
     };
     return classes[status] || 'bg-gray-100 text-gray-800';
+};
+
+const canEditPoRow = (po: PurchaseOrder) => {
+    if (po.status === 'received') {
+        return false;
+    }
+    const items = po.items ?? [];
+    return !items.some((i) => (Number(i.quantity_received) || 0) > 0);
+};
+
+const canDeletePoRow = (po: PurchaseOrder) => po.status !== 'received';
+
+const deletePurchaseOrder = (po: PurchaseOrder) => {
+    if (!confirm(`Are you sure you want to delete purchase order ${po.po_number}?`)) {
+        return;
+    }
+    router.delete(purchaseOrders.destroy(po.id).url);
 };
 </script>
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useAuthAbility } from '@/composables/useAuthAbilities';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
@@ -18,7 +19,7 @@ interface User {
 
 interface StockMovement {
     id: number;
-    product: Product;
+    product: Product | null;
     type: 'in' | 'out' | 'adjustment' | 'transfer';
     quantity: number;
     unit_cost: number | null;
@@ -53,6 +54,8 @@ interface Props {
     };
     products?: Product[];
 }
+
+const canStockMovementsCreate = useAuthAbility('stock-movements', 'create');
 
 const props = withDefaults(defineProps<Props>(), {
     movements: () => ({ 
@@ -141,6 +144,7 @@ function getTypeColor(type: string) {
                     <p class="text-gray-600">Track all stock movements and inventory changes</p>
                 </div>
                 <Link
+                    v-if="canStockMovementsCreate"
                     :href="stockMovements.create().url"
                     class="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
                 >
@@ -241,8 +245,8 @@ function getTypeColor(type: string) {
                                 <div class="text-xs text-gray-500">{{ new Date(movement.created_at).toLocaleTimeString() }}</div>
                             </td>
                             <td class="whitespace-nowrap px-6 py-4">
-                                <div class="font-medium text-gray-900">{{ movement.product.name }}</div>
-                                <div v-if="movement.product.sku" class="text-xs text-gray-500">{{ movement.product.sku }}</div>
+                                <div class="font-medium text-gray-900">{{ movement.product?.name ?? 'Unknown product' }}</div>
+                                <div v-if="movement.product?.sku" class="text-xs text-gray-500">{{ movement.product.sku }}</div>
                             </td>
                             <td class="whitespace-nowrap px-6 py-4">
                                 <span :class="getTypeColor(movement.type)" class="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold capitalize">

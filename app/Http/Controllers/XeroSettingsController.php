@@ -2,21 +2,25 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\XeroSettings;
 use App\Models\Invoice;
 use App\Models\PurchaseOrder;
+use App\Models\XeroSettings;
 use App\Services\XeroService;
+use App\Support\SafeLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class XeroSettingsController extends Controller
 {
+    private const SESSION_XERO_OAUTH_STATE = 'xero_oauth_state';
+
     public function index()
     {
         $settings = XeroSettings::getCurrent();
         $currentCompany = auth()->user()->getCurrentCompany();
-        
+
         // Get companies the user has access to
         $user = auth()->user();
         if ($user->companies()->count() === 0) {
@@ -33,21 +37,27 @@ class XeroSettingsController extends Controller
                 ->orderBy('name')
                 ->get(['companies.id', 'companies.name', 'companies.is_default']);
         }
-        
-        \Log::info('Xero settings loaded', [
+
+        SafeLog::integration('info', 'xero', 'Settings loaded', [
             'settings_id' => $settings->id,
             'company_id' => $settings->company_id,
             'company_name' => $currentCompany->name,
             'is_enabled' => $settings->is_enabled,
             'tenant_name' => $settings->tenant_name,
-            'has_access_token' => !empty($settings->access_token),
-            'has_refresh_token' => !empty($settings->refresh_token),
-            'has_tenant_id' => !empty($settings->tenant_id),
+            'has_access_token' => ! empty($settings->access_token),
+            'has_refresh_token' => ! empty($settings->refresh_token),
+            'has_tenant_id' => ! empty($settings->tenant_id),
             'needs_reauthorization' => $settings->needsReauthorization(),
         ]);
-        
+
         return Inertia::render('administration/XeroSettings', [
-            'settings' => $settings,
+            'settings' => array_merge($settings->toArray(), [
+                'has_client_secret' => filled($settings->getAttribute('client_secret')),
+                'has_access_token' => filled($settings->getAttribute('access_token')),
+                'has_refresh_token' => filled($settings->getAttribute('refresh_token')),
+                'is_connected' => filled($settings->tenant_id) && filled($settings->getAttribute('access_token')),
+                'needs_reauthorization' => $settings->needsReauthorization(),
+            ]),
             'currentCompany' => $currentCompany,
             'availableCompanies' => $availableCompanies,
             'xeroTenants' => session('xero_tenants', []),
@@ -88,11 +98,10 @@ class XeroSettingsController extends Controller
         ]);
 
         $settings = XeroSettings::getCurrent();
-        
-        $settings->update([
+
+        $payload = [
             'is_enabled' => $request->boolean('is_enabled'),
             'client_id' => $request->client_id,
-            'client_secret' => $request->client_secret,
             'sync_customers' => $request->boolean('sync_customers'),
             'sync_products' => $request->boolean('sync_products'),
             'sync_invoices' => $request->boolean('sync_invoices'),
@@ -113,34 +122,71 @@ class XeroSettingsController extends Controller
             'sync_tax_rates_from_xero' => $request->boolean('sync_tax_rates_from_xero'),
             'sync_bank_accounts_from_xero' => $request->boolean('sync_bank_accounts_from_xero'),
             'sync_chart_of_accounts_from_xero' => $request->boolean('sync_chart_of_accounts_from_xero'),
-        ]);
+        ];
+
+        if ($request->filled('client_secret')) {
+            $payload['client_secret'] = $request->string('client_secret')->toString();
+        }
+
+        $settings->update($payload);
 
         return redirect()->back()->with('success', 'Xero settings updated successfully.');
     }
 
-    public function authorize()
+    public function redirectToXero()
     {
         $settings = XeroSettings::getCurrent();
-        
-        if (!$settings->client_id || !$settings->client_secret) {
+
+        if (! $settings->client_id || ! $settings->client_secret) {
             return redirect()->back()->withErrors(['message' => 'Please configure Client ID and Client Secret first.']);
         }
 
-        // Generate authorization URL
-        $authUrl = $this->generateAuthUrl($settings->client_id);
-        
-        return redirect($authUrl);
+        $state = bin2hex(random_bytes(32));
+        session([self::SESSION_XERO_OAUTH_STATE => $state]);
+
+        return redirect($this->generateAuthUrl($settings->client_id, $state));
     }
 
     public function callback(Request $request)
     {
+        if ($request->filled('error')) {
+            session()->forget(self::SESSION_XERO_OAUTH_STATE);
+
+            $description = $request->string('error_description')->toString();
+
+            return redirect('/administration/xero-settings')
+                ->withErrors([
+                    'message' => $description !== ''
+                        ? 'Xero authorization failed: '.$description
+                        : 'Xero authorization was cancelled or denied.',
+                ]);
+        }
+
+        if (! $request->filled('state')) {
+            session()->forget(self::SESSION_XERO_OAUTH_STATE);
+
+            return redirect('/administration/xero-settings')
+                ->withErrors(['message' => 'Missing OAuth state. Please try authorizing again.']);
+        }
+
+        $sessionState = session(self::SESSION_XERO_OAUTH_STATE);
+        $requestState = $request->string('state')->toString();
+
+        if (! is_string($sessionState) || $sessionState === '' || ! hash_equals($sessionState, $requestState)) {
+            session()->forget(self::SESSION_XERO_OAUTH_STATE);
+
+            return redirect('/administration/xero-settings')
+                ->withErrors(['message' => 'Invalid or expired OAuth state. Please try authorizing again.']);
+        }
+
+        session()->forget(self::SESSION_XERO_OAUTH_STATE);
+
         $request->validate([
             'code' => 'required|string',
-            'state' => 'required|string',
         ]);
 
         $settings = XeroSettings::getCurrent();
-        
+
         try {
             $tokens = $this->exchangeCodeForTokens($request->code, $settings);
             $tenants = $this->getAvailableTenants($tokens['access_token']);
@@ -159,7 +205,7 @@ class XeroSettingsController extends Controller
                 $updateData['tenant_name'] = $tenants[0]['tenantName'];
                 $settings->update($updateData);
 
-                \Log::info('Xero authorization successful (single tenant)', [
+                SafeLog::integration('info', 'xero', 'Authorization successful (single tenant)', [
                     'tenant_id' => $tenants[0]['tenantId'],
                     'tenant_name' => $tenants[0]['tenantName'],
                 ]);
@@ -170,22 +216,21 @@ class XeroSettingsController extends Controller
 
             $settings->update($updateData);
 
-            \Log::info('Xero authorization successful - awaiting tenant selection', [
+            SafeLog::integration('info', 'xero', 'Authorization successful - awaiting tenant selection', [
                 'available_tenants' => count($tenants),
             ]);
 
             return redirect('/administration/xero-settings')
                 ->with('success', 'Xero authorized! Please select an organisation below.')
                 ->with('xero_tenants', $tenants);
-                
+
         } catch (\Exception $e) {
-            \Log::error('Xero authorization failed', [
+            SafeLog::integration('error', 'xero', 'Authorization failed', [
                 'error' => $e->getMessage(),
-                'code' => $request->code
             ]);
-            
+
             return redirect('/administration/xero-settings')
-                ->withErrors(['message' => 'Failed to authorize with Xero: ' . $e->getMessage()]);
+                ->withErrors(['message' => 'Failed to authorize with Xero: '.$e->getMessage()]);
         }
     }
 
@@ -198,7 +243,7 @@ class XeroSettingsController extends Controller
 
         $settings = XeroSettings::getCurrent();
 
-        if (!$settings->access_token) {
+        if (! $settings->access_token) {
             return redirect()->back()->withErrors(['message' => 'Please authorize with Xero first.']);
         }
 
@@ -207,7 +252,7 @@ class XeroSettingsController extends Controller
             'tenant_name' => $request->tenant_name,
         ]);
 
-        \Log::info('Xero tenant selected', [
+        SafeLog::integration('info', 'xero', 'Tenant selected', [
             'tenant_id' => $request->tenant_id,
             'tenant_name' => $request->tenant_name,
         ]);
@@ -219,7 +264,7 @@ class XeroSettingsController extends Controller
     {
         $settings = XeroSettings::getCurrent();
 
-        if (!$settings->access_token) {
+        if (! $settings->access_token) {
             return redirect()->back()->withErrors(['message' => 'Please authorize with Xero first.']);
         }
 
@@ -231,16 +276,17 @@ class XeroSettingsController extends Controller
             }
 
             $tenants = $this->getAvailableTenants($settings->access_token);
+
             return redirect()->back()->with('xero_tenants', $tenants);
         } catch (\Exception $e) {
-            return redirect()->back()->withErrors(['message' => 'Failed to fetch tenants: ' . $e->getMessage()]);
+            return redirect()->back()->withErrors(['message' => 'Failed to fetch tenants: '.$e->getMessage()]);
         }
     }
 
     public function disconnect()
     {
         $settings = XeroSettings::getCurrent();
-        
+
         $settings->update([
             'access_token' => null,
             'refresh_token' => null,
@@ -255,21 +301,26 @@ class XeroSettingsController extends Controller
     public function switchCompany(Request $request)
     {
         $request->validate([
-            'company_id' => 'required|integer|exists:companies,id'
+            'company_id' => [
+                'required',
+                'integer',
+                Rule::exists('companies', 'id'),
+                function (string $attribute, mixed $value, \Closure $fail) {
+                    if (! auth()->user()->hasAccessToCompany((int) $value)) {
+                        $fail('You do not have access to this company.');
+                    }
+                },
+            ],
         ]);
 
         $user = auth()->user();
         $companyId = $request->company_id;
-        
-        // Check if user has access to this company
-        if (!$user->hasAccessToCompany($companyId)) {
-            return redirect()->back()->with('error', 'You do not have access to this company.');
-        }
 
         // Set the current company for the authenticated user
         $user->update(['current_company_id' => $companyId]);
 
         $company = \App\Models\Company::find($companyId);
+
         return redirect()->back()->with('success', "Switched to {$company->name} for Xero settings.");
     }
 
@@ -285,17 +336,17 @@ class XeroSettingsController extends Controller
         return redirect()->back()->with('success', 'Initial sync status reset successfully.');
     }
 
-    private function generateAuthUrl($clientId)
+    private function generateAuthUrl(string $clientId, string $state): string
     {
         $params = [
             'response_type' => 'code',
             'client_id' => $clientId,
             'redirect_uri' => url('/xero/callback'),
             'scope' => 'openid profile email offline_access accounting.transactions accounting.settings accounting.contacts',
-            'state' => csrf_token(),
+            'state' => $state,
         ];
 
-        return 'https://login.xero.com/identity/connect/authorize?' . http_build_query($params);
+        return 'https://login.xero.com/identity/connect/authorize?'.http_build_query($params);
     }
 
     private function exchangeCodeForTokens($code, $settings)
@@ -308,22 +359,23 @@ class XeroSettingsController extends Controller
             'redirect_uri' => url('/xero/callback'),
         ]);
 
-        if (!$response->successful()) {
-            \Log::error('Xero token exchange failed', [
-                'status' => $response->status(),
-                'body' => $response->body(),
-                'headers' => $response->headers()
-            ]);
-            throw new \Exception('Failed to exchange code for tokens: ' . $response->body());
+        if (! $response->successful()) {
+            SafeLog::integration(
+                'error',
+                'xero',
+                'Token exchange failed',
+                SafeLog::httpResponseContext($response->status(), $response->body())
+            );
+            throw new \Exception('Failed to exchange code for tokens (HTTP '.$response->status().').');
         }
 
         $tokens = $response->json();
-        
-        \Log::info('Xero token exchange response', [
+
+        SafeLog::integration('info', 'xero', 'Token exchange response metadata', [
             'response_keys' => array_keys($tokens),
             'has_access_token' => isset($tokens['access_token']),
             'has_refresh_token' => isset($tokens['refresh_token']),
-            'expires_in' => $tokens['expires_in'] ?? 'not_set'
+            'expires_in' => $tokens['expires_in'] ?? 'not_set',
         ]);
 
         return $tokens;
@@ -332,12 +384,12 @@ class XeroSettingsController extends Controller
     private function getAvailableTenants($accessToken): array
     {
         $response = \Http::withHeaders([
-            'Authorization' => 'Bearer ' . $accessToken,
+            'Authorization' => 'Bearer '.$accessToken,
             'Accept' => 'application/json',
         ])->get('https://api.xero.com/connections');
 
-        if (!$response->successful()) {
-            throw new \Exception('Failed to get tenant information: ' . $response->body());
+        if (! $response->successful()) {
+            throw new \Exception('Failed to get tenant information: '.$response->body());
         }
 
         $connections = $response->json();
@@ -367,7 +419,7 @@ class XeroSettingsController extends Controller
 
         return [
             'module' => $module,
-            'is_backfill_in_progress' => !$fullSyncCompleted,
+            'is_backfill_in_progress' => ! $fullSyncCompleted,
             'full_sync_completed' => $fullSyncCompleted,
             'next_page' => isset($cursor['page']) ? (int) $cursor['page'] : null,
             'current_page' => isset($pagination['page']) ? (int) $pagination['page'] : null,

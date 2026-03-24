@@ -4,9 +4,9 @@ namespace App\Http\Controllers\Administration;
 
 use App\Http\Controllers\Controller;
 use App\Models\PdfTemplate;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -18,6 +18,8 @@ class PdfTemplateController extends Controller
      */
     public function index(): Response
     {
+        $this->authorize('viewAny', PdfTemplate::class);
+
         $company = auth()->user()->getCurrentCompany();
         $modules = PdfTemplate::getModules();
         $templates = PdfTemplate::where('company_id', $company->id)
@@ -37,6 +39,8 @@ class PdfTemplateController extends Controller
      */
     public function create(Request $request): Response
     {
+        $this->authorize('create', PdfTemplate::class);
+
         $module = $request->get('module', 'invoice');
         $modules = PdfTemplate::getModules();
 
@@ -51,8 +55,10 @@ class PdfTemplateController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
+        $this->authorize('create', PdfTemplate::class);
+
         $company = auth()->user()->getCurrentCompany();
-        
+
         $validated = $request->validate([
             'module' => ['required', 'string', 'in:invoice,quote,jobcard,proforma-invoice,purchase-order'],
             'name' => ['required', 'string', 'max:255'],
@@ -84,6 +90,8 @@ class PdfTemplateController extends Controller
      */
     public function edit(PdfTemplate $pdfTemplate): Response
     {
+        $this->authorize('view', $pdfTemplate);
+
         $modules = PdfTemplate::getModules();
 
         return Inertia::render('administration/pdf-templates/Edit', [
@@ -97,13 +105,10 @@ class PdfTemplateController extends Controller
      */
     public function update(Request $request, PdfTemplate $pdfTemplate): RedirectResponse
     {
+        $this->authorize('update', $pdfTemplate);
+
         $company = auth()->user()->getCurrentCompany();
-        
-        // Ensure template belongs to current company
-        if ($pdfTemplate->company_id !== $company->id) {
-            abort(403, 'You do not have access to this template.');
-        }
-        
+
         $validated = $request->validate([
             'module' => ['required', 'string', 'in:invoice,quote,jobcard,proforma-invoice,purchase-order'],
             'name' => ['required', 'string', 'max:255'],
@@ -133,13 +138,8 @@ class PdfTemplateController extends Controller
      */
     public function destroy(PdfTemplate $pdfTemplate): RedirectResponse
     {
-        $company = auth()->user()->getCurrentCompany();
-        
-        // Ensure template belongs to current company
-        if ($pdfTemplate->company_id !== $company->id) {
-            abort(403, 'You do not have access to this template.');
-        }
-        
+        $this->authorize('delete', $pdfTemplate);
+
         $pdfTemplate->delete();
 
         return redirect()->route('administration.pdf-templates.index')
@@ -151,6 +151,8 @@ class PdfTemplateController extends Controller
      */
     public function uploadImage(Request $request): JsonResponse
     {
+        $this->authorize('create', PdfTemplate::class);
+
         $validated = $request->validate([
             'image' => ['required', 'image', 'mimes:jpeg,png,jpg,gif,svg,webp', 'max:5120'], // 5MB max
         ]);
@@ -158,7 +160,7 @@ class PdfTemplateController extends Controller
         if ($request->hasFile('image')) {
             $path = $request->file('image')->store('pdf-template-images', 'public');
             $url = Storage::url($path);
-            
+
             return response()->json([
                 'data' => [
                     [
@@ -172,4 +174,3 @@ class PdfTemplateController extends Controller
         return response()->json(['error' => 'No image provided'], 400);
     }
 }
-

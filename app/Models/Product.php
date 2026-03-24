@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Traits\Auditable;
+use App\Traits\ScopedToCurrentCompanyRouteBinding;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Product extends Model
 {
-    use HasFactory, Auditable;
+    use Auditable, HasFactory, ScopedToCurrentCompanyRouteBinding;
 
     protected $fillable = [
         'company_id',
@@ -124,11 +125,12 @@ class Product extends Model
      */
     public function isLowStock(): bool
     {
-        if (!$this->track_stock) {
+        if (! $this->track_stock) {
             return false;
         }
-        
+
         $threshold = $this->low_stock_threshold ?? $this->min_stock_level ?? 10;
+
         return $this->stock_quantity <= $threshold;
     }
 
@@ -139,8 +141,8 @@ class Product extends Model
     {
         $cost = (float) $this->cost;
         $price = (float) $this->price;
-        
-        if (!$cost || $cost == 0) {
+
+        if (! $cost || $cost == 0) {
             return null;
         }
 
@@ -152,7 +154,7 @@ class Product extends Model
      */
     public function getFormattedPriceAttribute(): string
     {
-        return '$' . number_format((float) $this->price, 2);
+        return '$'.number_format((float) $this->price, 2);
     }
 
     /**
@@ -160,6 +162,6 @@ class Product extends Model
      */
     public function getFormattedCostAttribute(): ?string
     {
-        return $this->cost ? '$' . number_format((float) $this->cost, 2) : null;
+        return $this->cost ? '$'.number_format((float) $this->cost, 2) : null;
     }
 }

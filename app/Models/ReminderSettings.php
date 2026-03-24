@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
+use App\Traits\ScopedToCurrentCompanyRouteBinding;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ReminderSettings extends Model
 {
-    use HasFactory;
+    use HasFactory, ScopedToCurrentCompanyRouteBinding;
 
     protected $fillable = [
         'company_id',
@@ -135,14 +136,14 @@ class ReminderSettings extends Model
      */
     public function getDefaultOverdueInvoiceEmailTemplate(): string
     {
-        return $this->overdue_invoice_email_template ?? 
-            "Dear {{customer_name}},\n\n" .
-            "This is a reminder that invoice {{invoice_number}} for the amount of {{invoice_total}} is overdue.\n\n" .
-            "Due Date: {{due_date}}\n" .
-            "Amount Due: {{invoice_total}}\n\n" .
-            "Please arrange payment at your earliest convenience.\n\n" .
-            "Thank you,\n" .
-            "{{company_name}}";
+        return $this->overdue_invoice_email_template ??
+            "Dear {{customer_name}},\n\n".
+            "This is a reminder that invoice {{invoice_number}} for the amount of {{invoice_total}} is overdue.\n\n".
+            "Due Date: {{due_date}}\n".
+            "Amount Due: {{invoice_total}}\n\n".
+            "Please arrange payment at your earliest convenience.\n\n".
+            "Thank you,\n".
+            '{{company_name}}';
     }
 
     /**
@@ -150,8 +151,8 @@ class ReminderSettings extends Model
      */
     public function getDefaultOverdueInvoiceSmsTemplate(): string
     {
-        return $this->overdue_invoice_sms_template ?? 
-            "Hi {{customer_name}}, Invoice {{invoice_number}} ({{invoice_total}}) is overdue. Due: {{due_date}}. Please arrange payment. {{company_name}}";
+        return $this->overdue_invoice_sms_template ??
+            'Hi {{customer_name}}, Invoice {{invoice_number}} ({{invoice_total}}) is overdue. Due: {{due_date}}. Please arrange payment. {{company_name}}';
     }
 
     /**
@@ -159,13 +160,13 @@ class ReminderSettings extends Model
      */
     public function getDefaultExpiringQuoteEmailTemplate(): string
     {
-        return $this->expiring_quote_email_template ?? 
-            "Dear {{customer_name}},\n\n" .
-            "This is a reminder that quote {{quote_number}} will expire on {{expiry_date}}.\n\n" .
-            "Quote Total: {{quote_total}}\n\n" .
-            "If you would like to proceed with this quote, please let us know before the expiry date.\n\n" .
-            "Thank you,\n" .
-            "{{company_name}}";
+        return $this->expiring_quote_email_template ??
+            "Dear {{customer_name}},\n\n".
+            "This is a reminder that quote {{quote_number}} will expire on {{expiry_date}}.\n\n".
+            "Quote Total: {{quote_total}}\n\n".
+            "If you would like to proceed with this quote, please let us know before the expiry date.\n\n".
+            "Thank you,\n".
+            '{{company_name}}';
     }
 
     /**
@@ -173,7 +174,7 @@ class ReminderSettings extends Model
      */
     public function getDefaultExpiringQuoteSmsTemplate(): string
     {
-        return $this->expiring_quote_sms_template ?? 
-            "Hi {{customer_name}}, Quote {{quote_number}} ({{quote_total}}) expires on {{expiry_date}}. Please contact us to proceed. {{company_name}}";
+        return $this->expiring_quote_sms_template ??
+            'Hi {{customer_name}}, Quote {{quote_number}} ({{quote_total}}) expires on {{expiry_date}}. Please contact us to proceed. {{company_name}}';
     }
 }

@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import ListTableActionLabel from '@/components/ListTableActionLabel.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
+import { Edit, Trash2 } from 'lucide-vue-next';
 
 interface EmailTemplate {
     id: number;
@@ -79,15 +81,20 @@ const deleteTemplate = (template: EmailTemplate) => {
                                     <div class="flex items-center gap-2">
                                         <Link
                                             :href="`/administration/email-templates/${template.id}/edit`"
-                                            class="rounded border border-gray-300 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                                            class="inline-flex items-center justify-center rounded border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 md:px-3 md:py-1"
                                         >
-                                            Edit
+                                            <ListTableActionLabel label="Edit">
+                                                <Edit class="h-4 w-4" />
+                                            </ListTableActionLabel>
                                         </Link>
                                         <button
+                                            type="button"
                                             @click="deleteTemplate(template)"
-                                            class="rounded border border-red-300 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+                                            class="inline-flex items-center justify-center rounded border border-red-300 px-2 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 md:px-3 md:py-1"
                                         >
-                                            Delete
+                                            <ListTableActionLabel label="Delete">
+                                                <Trash2 class="h-4 w-4" />
+                                            </ListTableActionLabel>
                                         </button>
                                     </div>
                                 </td>

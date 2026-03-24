@@ -280,12 +280,16 @@
             margin-top: 40px;
             padding-top: 20px;
             border-top: 1px solid #000;
+            page-break-inside: avoid;
         }
         
         .signature-row {
             display: table;
             width: 100%;
             margin-bottom: 15px;
+            page-break-inside: avoid;
+            break-inside: avoid;
+            table-layout: fixed;
         }
         
         .signature-item {
@@ -293,6 +297,8 @@
             width: 33.33%;
             text-align: left;
             font-size: 11px;
+            vertical-align: top;
+            padding: 0 6px;
         }
         
         .signature-line {
@@ -514,25 +520,25 @@
                     @foreach($group->items->sortBy('sort_order') as $item)
                 <tr>
                     <td>{{ $item->description ?? 'Item Description' }}{{ ($item->product && ($item->product->sku ?? $item->product->barcode)) ? ' (' . ($item->product->sku ?? $item->product->barcode) . ')' : '' }}</td>
-                    <td class="text-right">{{ number_format($item->quantity ?? 0, 2) }}</td>
-                    <td class="text-right">R{{ number_format($item->unit_price ?? 0, 2) }}</td>
+                    <td class="text-right">{{ $company->formatNumber($item->quantity ?? 0, 2) }}</td>
+                    <td class="text-right">{{ $company->formatCurrencyZar($item->unit_price ?? 0) }}</td>
                     <td class="text-right">
                         @if(($item->discount_percentage ?? 0) > 0)
-                            {{ number_format($item->discount_percentage, 2) }}%
+                            {{ $company->formatNumber($item->discount_percentage, 2) }}%
                         @elseif(($item->discount_amount ?? 0) > 0)
-                            R{{ number_format($item->discount_amount, 2) }}
+                            {{ $company->formatCurrencyZar($item->discount_amount) }}
                         @else
                             —
                         @endif
                     </td>
                     <td class="text-right">
                         @if($item->taxRate)
-                            R{{ number_format($item->tax_amount ?? 0, 2) }}
+                            {{ $company->formatCurrencyZar($item->tax_amount ?? 0) }}
                         @else
                             —
                         @endif
                     </td>
-                    <td class="text-right">R{{ number_format($item->total ?? 0, 2) }}</td>
+                    <td class="text-right">{{ $company->formatCurrencyZar($item->total ?? 0) }}</td>
                 </tr>
                     @endforeach
             @endforeach
@@ -552,29 +558,29 @@
     <div class="totals-section">
         <div class="total-row">
             <span>Subtotal:</span>
-            <span>R{{ number_format($quote->subtotal ?? 0, 2) }}</span>
+            <span>{{ $company->formatCurrencyZar($quote->subtotal ?? 0) }}</span>
         </div>
         @if(($quote->tax_amount ?? 0) > 0)
         <div class="total-row">
             <span>Tax:</span>
-            <span>R{{ number_format($quote->tax_amount, 2) }}</span>
+            <span>{{ $company->formatCurrencyZar($quote->tax_amount) }}</span>
         </div>
         @endif
         @if(($quote->discount_amount ?? 0) > 0)
         <div class="total-row">
             <span>Discount:</span>
-            <span>-R{{ number_format($quote->discount_amount, 2) }}</span>
+            <span>-{{ $company->formatCurrencyZar($quote->discount_amount) }}</span>
         </div>
         @endif
         @if(abs($roundingAdjustment) > 0.0001)
         <div class="total-row">
             <span>Rounding Adjustment:</span>
-            <span>R{{ number_format($roundingAdjustment, 2) }}</span>
+            <span>{{ $company->formatCurrencyZar($roundingAdjustment) }}</span>
         </div>
         @endif
         <div class="total-row final">
             <span>Total:</span>
-            <span>R{{ number_format($quote->total ?? 0, 2) }}</span>
+            <span>{{ $company->formatCurrencyZar($quote->total ?? 0) }}</span>
         </div>
     </div>
     

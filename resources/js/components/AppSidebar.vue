@@ -124,6 +124,15 @@ const footerNavItems: NavItem[] = [
     },
 ];
 
+const isAdministrator = computed(() => !!(page.props.auth?.user as { is_administrator?: boolean } | null)?.is_administrator);
+
+const filteredFooterNavItems = computed(() => {
+    if (!isAdministrator.value) {
+        return [];
+    }
+    return footerNavItems;
+});
+
 const moduleKeyMap: Record<string, string> = {
     'Customers': 'customers',
     'Contacts': 'contacts',
@@ -148,21 +157,16 @@ const filteredNavItems = computed(() => {
             return true;
         }
 
-        // Limited users can only see Jobcards and Timesheet
-        if (userType.value === 'limited') {
-            return item.title === 'Jobcards' || item.title === 'Timesheet';
-        }
-
         // Licensing is only visible on licensing instances
         if (item.title === 'Licensing') {
             return isLicensingInstance.value;
         }
-        
+
         // Check module visibility settings first
         const moduleKey = moduleKeyMap[item.title];
         if (moduleKey && currentCompany.value) {
             const visibleModules = currentCompany.value.visible_modules;
-            
+
             // If visible_modules is null or undefined, all modules are visible (default)
             if (visibleModules === null || visibleModules === undefined) {
                 // Continue to permission check - show module
@@ -179,39 +183,59 @@ const filteredNavItems = computed(() => {
                 }
             }
         }
-        
-        // Then check permissions
+
+        // Limited users only get Jobcards and Timesheet entries (still gated by permissions below)
+        if (userType.value === 'limited') {
+            if (item.title !== 'Jobcards' && item.title !== 'Timesheet') {
+                return false;
+            }
+        }
+
+        // Then check permissions (aligned with list/index route middleware)
         if (item.title === 'Customers') {
-            return page.props.auth?.abilities?.customers?.list;
+            return !!page.props.auth?.abilities?.customers?.list;
         }
         if (item.title === 'Contacts') {
-            return page.props.auth?.abilities?.contacts?.list;
+            return !!page.props.auth?.abilities?.contacts?.list;
         }
         if (item.title === 'Products & Services') {
-            return page.props.auth?.abilities?.products?.list;
+            return !!page.props.auth?.abilities?.products?.list;
         }
         if (item.title === 'Suppliers') {
-            return page.props.auth?.abilities?.suppliers?.list;
+            return !!page.props.auth?.abilities?.suppliers?.list;
         }
         if (item.title === 'Stock Movements') {
-            return page.props.auth?.abilities?.['stock-movements']?.view;
+            return !!page.props.auth?.abilities?.['stock-movements']?.view;
         }
         if (item.title === 'Purchase Orders') {
-            return page.props.auth?.abilities?.['purchase-orders']?.list;
+            return !!page.props.auth?.abilities?.['purchase-orders']?.list;
         }
-        if (item.title === 'Users') {
-            return page.props.auth?.abilities?.users?.list;
+        if (item.title === 'Jobcards') {
+            return !!page.props.auth?.abilities?.jobcards?.list;
         }
-        if (item.title === 'Groups') {
-            return page.props.auth?.abilities?.groups?.list;
+        if (item.title === 'Quotes') {
+            return !!page.props.auth?.abilities?.quotes?.view;
+        }
+        if (item.title === 'Invoices') {
+            return !!page.props.auth?.abilities?.invoices?.view;
         }
         if (item.title === 'Credit Notes') {
-            return page.props.auth?.abilities?.['credit-notes']?.list;
+            return !!page.props.auth?.abilities?.['credit-notes']?.list;
         }
         if (item.title === 'Reports') {
-            return page.props.auth?.abilities?.reports?.list;
+            return !!page.props.auth?.abilities?.reports?.list;
         }
-        return true;
+        if (item.title === 'Timesheet') {
+            return !!page.props.auth?.abilities?.timesheet?.view;
+        }
+        if (item.title === 'Users') {
+            return !!page.props.auth?.abilities?.users?.list;
+        }
+        if (item.title === 'Groups') {
+            return !!page.props.auth?.abilities?.groups?.list;
+        }
+
+        return false;
     });
 });
 </script>
@@ -265,7 +289,7 @@ const filteredNavItems = computed(() => {
         </SidebarContent>
 
         <SidebarFooter class="border-t border-sidebar-border/60 pt-3">
-            <NavFooter v-if="userType !== 'limited'" :items="footerNavItems" />
+            <NavFooter v-if="userType !== 'limited' && filteredFooterNavItems.length > 0" :items="filteredFooterNavItems" />
             <!-- Default Logo above user menu when company logo is uploaded -->
             <div v-if="currentCompany?.logo_path" class="mb-3 px-2">
                 <img

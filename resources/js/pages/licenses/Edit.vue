@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
+import { computed } from 'vue';
 import { ArrowLeft } from 'lucide-vue-next';
 import licenses from '@/routes/licenses';
 
@@ -26,9 +27,27 @@ interface License {
 interface Props {
     license: License;
     customers: Customer[];
+    canViewFullLicenseKey?: boolean;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+    canViewFullLicenseKey: false,
+});
+
+const pageTitle = computed(() => {
+    if (props.canViewFullLicenseKey) {
+        return `Edit License - ${props.license.license_key}`;
+    }
+    const suffix = props.license.customer?.name ? ` — ${props.license.customer.name}` : '';
+    return `Edit License #${props.license.id}${suffix}`;
+});
+
+const breadcrumbKeyLabel = computed(() => {
+    if (props.canViewFullLicenseKey) {
+        return props.license.license_key;
+    }
+    return props.license.customer?.name ?? `License #${props.license.id}`;
+});
 
 const form = useForm({
     customer_id: props.license.customer_id,
@@ -46,10 +65,10 @@ function submit() {
 </script>
 
 <template>
-    <Head :title="`Edit License - ${props.license.license_key}`" />
+    <Head :title="pageTitle" />
     <AppLayout :breadcrumbs="[
         { title: 'Licenses', href: licenses.index().url },
-        { title: props.license.license_key, href: licenses.show(props.license.id).url },
+        { title: breadcrumbKeyLabel, href: licenses.show(props.license.id).url },
         { title: 'Edit', href: '#' }
     ]">
         <div class="p-6">
@@ -63,6 +82,9 @@ function submit() {
                 </Link>
                 <h1 class="text-2xl font-bold text-gray-900">Edit License</h1>
                 <p class="mt-1 font-mono text-sm text-gray-500">{{ props.license.license_key }}</p>
+                <p v-if="!canViewFullLicenseKey" class="mt-1 text-sm text-gray-500">
+                    Full license keys are visible only to administrators.
+                </p>
             </div>
 
             <div class="rounded-lg border border-gray-200 bg-white p-6">

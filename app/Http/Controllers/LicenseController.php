@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Customer;
 use App\Models\License;
 use App\Services\CpanelService;
+use App\Support\CompanyScopedRules;
+use App\Support\SafeLog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -20,13 +22,14 @@ class LicenseController extends Controller
     {
         $currentCompany = auth()->user()->getCurrentCompany();
 
-        if (!$currentCompany) {
+        if (! $currentCompany) {
             return Inertia::render('licenses/Index', [
                 'licenses' => new \Illuminate\Pagination\LengthAwarePaginator([], 0, 15),
                 'filters' => [
                     'search' => $request->input('search', ''),
                     'status' => $request->input('status', ''),
                 ],
+                'canViewFullLicenseKey' => auth()->user()->isAdministrator(),
             ]);
         }
 
@@ -50,12 +53,16 @@ class LicenseController extends Controller
             ->paginate(15)
             ->withQueryString();
 
+        $maskKey = ! auth()->user()->isAdministrator();
+        $licenses->through(fn (License $l) => $this->licenseToPageArray($l, $maskKey));
+
         return Inertia::render('licenses/Index', [
             'licenses' => $licenses,
             'filters' => [
                 'search' => $search ?? '',
                 'status' => $status ?? '',
             ],
+            'canViewFullLicenseKey' => ! $maskKey,
         ]);
     }
 
@@ -82,13 +89,13 @@ class LicenseController extends Controller
     {
         $currentCompany = auth()->user()->getCurrentCompany();
 
-        if (!$currentCompany) {
+        if (! $currentCompany) {
             return redirect()->back()
                 ->withErrors(['message' => 'No company selected. Please select a company first.']);
         }
 
         $validated = $request->validate([
-            'customer_id' => ['required', 'exists:customers,id'],
+            'customer_id' => ['required', CompanyScopedRules::customer($currentCompany->id)],
             'url' => ['nullable', 'url', 'max:255'],
             'limited_users' => ['required', 'integer', 'min:0'],
             'standard_users' => ['required', 'integer', 'min:0'],
@@ -102,8 +109,12 @@ class LicenseController extends Controller
 
         $license = License::create($validated);
 
+        $message = auth()->user()->isAdministrator()
+            ? 'License created successfully. Key: '.$license->license_key
+            : 'License created successfully. Ask an administrator for the license key.';
+
         return redirect()->route('licenses.show', $license)
-            ->with('success', 'License created successfully. Key: ' . $license->license_key);
+            ->with('success', $message);
     }
 
     /**
@@ -111,12 +122,16 @@ class LicenseController extends Controller
      */
     public function show(License $license): Response
     {
-        $this->authorizeCompany($license);
+        $this->authorize('view', $license);
 
         $license->load('customer');
 
+        $maskKey = ! auth()->user()->isAdministrator();
+
         return Inertia::render('licenses/Show', [
-            'license' => $license,
+            'license' => $this->licenseToPageArray($license, $maskKey),
+            'canManageLicenseInfrastructure' => auth()->user()->isAdministrator(),
+            'canViewFullLicenseKey' => ! $maskKey,
         ]);
     }
 
@@ -125,7 +140,7 @@ class LicenseController extends Controller
      */
     public function edit(License $license): Response
     {
-        $this->authorizeCompany($license);
+        $this->authorize('view', $license);
 
         $currentCompany = auth()->user()->getCurrentCompany();
 
@@ -135,9 +150,12 @@ class LicenseController extends Controller
 
         $license->load('customer');
 
+        $maskKey = ! auth()->user()->isAdministrator();
+
         return Inertia::render('licenses/Edit', [
-            'license' => $license,
+            'license' => $this->licenseToPageArray($license, $maskKey),
             'customers' => $customers,
+            'canViewFullLicenseKey' => ! $maskKey,
         ]);
     }
 
@@ -146,10 +164,10 @@ class LicenseController extends Controller
      */
     public function update(Request $request, License $license): RedirectResponse
     {
-        $this->authorizeCompany($license);
+        $this->authorize('view', $license);
 
         $validated = $request->validate([
-            'customer_id' => ['required', 'exists:customers,id'],
+            'customer_id' => ['required', CompanyScopedRules::customer($license->company_id)],
             'url' => ['nullable', 'url', 'max:255'],
             'limited_users' => ['required', 'integer', 'min:0'],
             'standard_users' => ['required', 'integer', 'min:0'],
@@ -169,7 +187,7 @@ class LicenseController extends Controller
      */
     public function destroy(License $license): RedirectResponse
     {
-        $this->authorizeCompany($license);
+        $this->authorize('view', $license);
 
         $license->delete();
 
@@ -182,13 +200,13 @@ class LicenseController extends Controller
      */
     public function deploy(Request $request, License $license): RedirectResponse
     {
-        $this->authorizeCompany($license);
+        $this->authorize('view', $license);
 
         $request->validate([
             'zip_file' => ['required', 'file', 'mimes:zip', 'max:512000'], // max 500MB
         ]);
 
-        if (!$license->url) {
+        if (! $license->url) {
             return redirect()->back()
                 ->withErrors(['message' => 'License must have a URL set before deploying.']);
         }
@@ -198,9 +216,9 @@ class LicenseController extends Controller
                 ->withErrors(['message' => 'This license has already been deployed. Use Upgrade to update the instance.']);
         }
 
-        $cpanel = new CpanelService();
+        $cpanel = new CpanelService;
 
-        if (!$cpanel->isConfigured()) {
+        if (! $cpanel->isConfigured()) {
             return redirect()->back()
                 ->withErrors(['message' => 'cPanel integration is not configured. Please set the CPANEL_* environment variables.']);
         }
@@ -218,7 +236,7 @@ class LicenseController extends Controller
         // Store the uploaded file temporarily
         $zipFile = $request->file('zip_file');
         $zipPath = $zipFile->store('temp', 'local');
-        $fullZipPath = storage_path('app/private/' . $zipPath);
+        $fullZipPath = storage_path('app/private/'.$zipPath);
 
         try {
             $result = $cpanel->deploy($subdomain, $fullZipPath, $license->url);
@@ -237,16 +255,17 @@ class LicenseController extends Controller
                 ]);
 
                 return redirect()->route('licenses.show', $license)
-                    ->with('success', 'Instance deployed successfully to ' . $license->url);
+                    ->with('success', 'Instance deployed successfully to '.$license->url);
             }
 
-            Log::error('License deployment failed', [
+            Log::error('License deployment failed', SafeLog::redactContext([
                 'license_id' => $license->id,
-                'result' => $result,
-            ]);
+                'success' => $result['success'] ?? null,
+                'message_excerpt' => SafeLog::excerpt($result['message'] ?? '', 200),
+            ]));
 
             return redirect()->back()
-                ->withErrors(['message' => 'Deployment failed: ' . $result['message']]);
+                ->withErrors(['message' => 'Deployment failed: '.$result['message']]);
 
         } catch (\Exception $e) {
             // Clean up temp file on failure
@@ -260,7 +279,7 @@ class LicenseController extends Controller
             ]);
 
             return redirect()->back()
-                ->withErrors(['message' => 'Deployment failed: ' . $e->getMessage()]);
+                ->withErrors(['message' => 'Deployment failed: '.$e->getMessage()]);
         }
     }
 
@@ -269,20 +288,20 @@ class LicenseController extends Controller
      */
     public function upgrade(Request $request, License $license): RedirectResponse
     {
-        $this->authorizeCompany($license);
+        $this->authorize('view', $license);
 
         $request->validate([
             'zip_file' => ['required', 'file', 'mimes:zip', 'max:512000'], // max 500MB
         ]);
 
-        if (!$license->url) {
+        if (! $license->url) {
             return redirect()->back()
                 ->withErrors(['message' => 'License must have a URL set before upgrading.']);
         }
 
-        $cpanel = new CpanelService();
+        $cpanel = new CpanelService;
 
-        if (!$cpanel->isConfigured()) {
+        if (! $cpanel->isConfigured()) {
             return redirect()->back()
                 ->withErrors(['message' => 'cPanel integration is not configured. Please set the CPANEL_* environment variables.']);
         }
@@ -300,7 +319,7 @@ class LicenseController extends Controller
         // Store the uploaded file temporarily
         $zipFile = $request->file('zip_file');
         $zipPath = $zipFile->store('temp', 'local');
-        $fullZipPath = storage_path('app/private/' . $zipPath);
+        $fullZipPath = storage_path('app/private/'.$zipPath);
 
         try {
             $result = $cpanel->upgrade($subdomain, $fullZipPath);
@@ -317,16 +336,17 @@ class LicenseController extends Controller
                 ]);
 
                 return redirect()->route('licenses.show', $license)
-                    ->with('success', 'Instance upgraded successfully at ' . $license->url);
+                    ->with('success', 'Instance upgraded successfully at '.$license->url);
             }
 
-            Log::error('License upgrade failed', [
+            Log::error('License upgrade failed', SafeLog::redactContext([
                 'license_id' => $license->id,
-                'result' => $result,
-            ]);
+                'success' => $result['success'] ?? null,
+                'message_excerpt' => SafeLog::excerpt($result['message'] ?? '', 200),
+            ]));
 
             return redirect()->back()
-                ->withErrors(['message' => 'Upgrade failed: ' . $result['message']]);
+                ->withErrors(['message' => 'Upgrade failed: '.$result['message']]);
 
         } catch (\Exception $e) {
             // Clean up temp file on failure
@@ -340,7 +360,7 @@ class LicenseController extends Controller
             ]);
 
             return redirect()->back()
-                ->withErrors(['message' => 'Upgrade failed: ' . $e->getMessage()]);
+                ->withErrors(['message' => 'Upgrade failed: '.$e->getMessage()]);
         }
     }
 
@@ -349,16 +369,16 @@ class LicenseController extends Controller
      */
     public function forceSSL(License $license): RedirectResponse
     {
-        $this->authorizeCompany($license);
+        $this->authorize('view', $license);
 
-        if (!$license->url) {
+        if (! $license->url) {
             return redirect()->back()
                 ->withErrors(['message' => 'License must have a URL set before enabling SSL.']);
         }
 
-        $cpanel = new CpanelService();
+        $cpanel = new CpanelService;
 
-        if (!$cpanel->isConfigured()) {
+        if (! $cpanel->isConfigured()) {
             return redirect()->back()
                 ->withErrors(['message' => 'cPanel integration is not configured. Please set the CPANEL_* environment variables.']);
         }
@@ -376,11 +396,11 @@ class LicenseController extends Controller
 
             if ($result['success']) {
                 return redirect()->route('licenses.show', $license)
-                    ->with('success', 'AutoSSL requested and HTTPS redirect enabled for ' . $host);
+                    ->with('success', 'AutoSSL requested and HTTPS redirect enabled for '.$host);
             }
 
             return redirect()->back()
-                ->withErrors(['message' => 'Force SSL failed: ' . $result['message']]);
+                ->withErrors(['message' => 'Force SSL failed: '.$result['message']]);
 
         } catch (\Exception $e) {
             Log::error('Force SSL exception', [
@@ -389,19 +409,21 @@ class LicenseController extends Controller
             ]);
 
             return redirect()->back()
-                ->withErrors(['message' => 'Force SSL failed: ' . $e->getMessage()]);
+                ->withErrors(['message' => 'Force SSL failed: '.$e->getMessage()]);
         }
     }
 
     /**
-     * Ensure the license belongs to the current company.
+     * @return array<string, mixed>
      */
-    private function authorizeCompany(License $license): void
+    private function licenseToPageArray(License $license, bool $maskLicenseKey): array
     {
-        $currentCompany = auth()->user()->getCurrentCompany();
-
-        if (!$currentCompany || $license->company_id !== $currentCompany->id) {
-            abort(403, 'Unauthorized access to this license.');
+        $license->loadMissing('customer');
+        $data = $license->toArray();
+        if ($maskLicenseKey) {
+            $data['license_key'] = License::maskLicenseKey($license->license_key);
         }
+
+        return $data;
     }
 }

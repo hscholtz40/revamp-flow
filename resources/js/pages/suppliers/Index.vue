@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import ListTableActionLabel from '@/components/ListTableActionLabel.vue';
+import { useAuthAbility } from '@/composables/useAuthAbilities';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
-import { Plus, Search, Building2, Eye, Edit, Trash2, Phone, Mail } from 'lucide-vue-next';
+import { Plus, Search, Building2, Edit, Trash2, Phone, Mail } from 'lucide-vue-next';
 import suppliers from '@/routes/suppliers';
 
 interface Supplier {
@@ -36,6 +38,10 @@ const props = withDefaults(defineProps<Props>(), {
     suppliers: () => ({ data: [], links: [], meta: {} }),
     filters: () => ({}),
 });
+
+const canSuppliersCreate = useAuthAbility('suppliers', 'create');
+const canSuppliersEdit = useAuthAbility('suppliers', 'edit');
+const canSuppliersDelete = useAuthAbility('suppliers', 'delete');
 
 const search = ref(props.filters?.search || '');
 const activeOnly = ref(props.filters?.active_only || false);
@@ -122,6 +128,7 @@ function deleteSupplier(supplier: Supplier) {
                     <p class="text-gray-600">Manage your suppliers and vendors</p>
                 </div>
                 <Link
+                    v-if="canSuppliersCreate"
                     :href="suppliers.create().url"
                     class="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
                 >
@@ -238,16 +245,23 @@ function deleteSupplier(supplier: Supplier) {
                                 <td class="whitespace-nowrap px-6 py-4 text-right text-sm font-medium" @click.stop>
                                     <div class="flex items-center justify-end gap-2">
                                         <Link
+                                            v-if="canSuppliersEdit"
                                             :href="suppliers.edit(supplier.id).url"
-                                            class="text-indigo-600 hover:text-indigo-900"
+                                            class="inline-flex items-center justify-center px-2 py-1.5 md:px-3 md:py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                                         >
-                                            <Edit class="h-4 w-4" />
+                                            <ListTableActionLabel label="Edit">
+                                                <Edit class="h-4 w-4" />
+                                            </ListTableActionLabel>
                                         </Link>
                                         <button
+                                            v-if="canSuppliersDelete"
+                                            type="button"
                                             @click="deleteSupplier(supplier)"
-                                            class="text-red-600 hover:text-red-900"
+                                            class="inline-flex items-center justify-center px-2 py-1.5 md:px-3 md:py-1 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                                         >
-                                            <Trash2 class="h-4 w-4" />
+                                            <ListTableActionLabel label="Delete">
+                                                <Trash2 class="h-4 w-4" />
+                                            </ListTableActionLabel>
                                         </button>
                                     </div>
                                 </td>
@@ -255,7 +269,14 @@ function deleteSupplier(supplier: Supplier) {
                         </template>
                         <tr v-else>
                             <td colspan="6" class="px-6 py-8 text-center text-sm text-gray-500">
-                                No suppliers found. <Link :href="suppliers.create().url" class="text-blue-600 hover:text-blue-900">Create your first supplier</Link>
+                                No suppliers found.
+                                <Link
+                                    v-if="canSuppliersCreate"
+                                    :href="suppliers.create().url"
+                                    class="text-blue-600 hover:text-blue-900"
+                                >
+                                    Create your first supplier
+                                </Link>
                             </td>
                         </tr>
                     </tbody>

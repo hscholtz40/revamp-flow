@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Company;
 use App\Models\PdfTemplate;
-use App\Models\ReminderSettings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -16,7 +15,7 @@ class CompanySettingsController extends Controller
     public function index(): Response
     {
         $user = auth()->user();
-        
+
         // Get companies the user has access to
         if ($user->companies()->count() === 0) {
             // User has access to all companies - show all active companies
@@ -24,15 +23,15 @@ class CompanySettingsController extends Controller
                 ->orderBy('is_default', 'desc')
                 ->orderBy('name')
                 ->get();
-            } else {
-                // User has access to specific companies - only show those
-                $companies = $user->companies()
-                    ->where('is_active', true)
-                    ->orderBy('is_default', 'desc')
-                    ->orderBy('name')
-                    ->get(['companies.id', 'companies.name', 'companies.logo_path', 'companies.is_default', 'companies.is_active']);
-            }
-        
+        } else {
+            // User has access to specific companies - only show those
+            $companies = $user->companies()
+                ->where('is_active', true)
+                ->orderBy('is_default', 'desc')
+                ->orderBy('name')
+                ->get(['companies.id', 'companies.name', 'companies.logo_path', 'companies.is_default', 'companies.is_active']);
+        }
+
         return Inertia::render('company-settings/Index', [
             'companies' => $companies,
             'currentCompany' => $user->getCurrentCompany(),
@@ -67,6 +66,7 @@ class CompanySettingsController extends Controller
             'is_active' => ['boolean'],
             'is_default' => ['boolean'],
             'enable_pos' => ['boolean'],
+            'enable_document_signing' => ['boolean'],
             'logo' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg', 'max:2048'],
             'whatsapp_business_number' => ['nullable', 'string', 'max:20'],
             'bank_name' => ['nullable', 'string', 'max:255'],
@@ -83,7 +83,7 @@ class CompanySettingsController extends Controller
 
         // Create default reminder settings for the new company
         $company->getReminderSettings();
-        
+
         // Create default purchase order PDF template
         $this->createDefaultPurchaseOrderTemplate($company);
 
@@ -98,7 +98,7 @@ class CompanySettingsController extends Controller
     public function show(Company $company): Response
     {
         // Check if user has access to this company
-        if (!auth()->user()->hasAccessToCompany($company->id)) {
+        if (! auth()->user()->hasAccessToCompany($company->id)) {
             abort(403, 'You do not have access to this company.');
         }
 
@@ -110,7 +110,7 @@ class CompanySettingsController extends Controller
     public function edit(Company $company): Response
     {
         // Check if user has access to this company
-        if (!auth()->user()->hasAccessToCompany($company->id)) {
+        if (! auth()->user()->hasAccessToCompany($company->id)) {
             abort(403, 'You do not have access to this company.');
         }
 
@@ -125,23 +125,15 @@ class CompanySettingsController extends Controller
     public function update(Request $request, Company $company): RedirectResponse
     {
         // Check if user has access to this company
-        if (!auth()->user()->hasAccessToCompany($company->id)) {
+        if (! auth()->user()->hasAccessToCompany($company->id)) {
             abort(403, 'You do not have access to this company.');
         }
 
-        // Debug: Log the incoming request data
-        \Log::info('Company update request data:', [
-            'name' => $request->input('name'),
-            'email' => $request->input('email'),
-            'has_logo' => $request->hasFile('logo'),
-            'all_data' => $request->all(),
-            'content_type' => $request->header('Content-Type'),
-            'method' => $request->method()
-        ]);
-        
         // Handle case where multipart/form-data causes empty data
         if (empty($request->all()) && $request->hasFile('logo')) {
-            \Log::info('Empty request data detected, using existing company data');
+            \Log::info('Company update: empty form fields, logo-only save', [
+                'company_id' => $company->id,
+            ]);
             // Use existing company data and only update the logo
             $validated = [
                 'name' => $company->name,
@@ -163,16 +155,18 @@ class CompanySettingsController extends Controller
                 'is_active' => $company->is_active,
                 'is_default' => $company->is_default,
                 'enable_pos' => $company->enable_pos,
+                'enable_document_signing' => $company->enable_document_signing,
             ];
-            
+
             if ($request->hasFile('logo')) {
                 $validated['logo_path'] = $request->file('logo')->store('company-logos', 'public');
             }
-            
+
             $company->update($validated);
+
             return redirect()->route('company-settings.index')->with('success', 'Company updated successfully.');
         }
-        
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['nullable', 'email', 'max:255'],
@@ -194,6 +188,7 @@ class CompanySettingsController extends Controller
             'is_active' => ['boolean'],
             'is_default' => ['boolean'],
             'enable_pos' => ['boolean'],
+            'enable_document_signing' => ['boolean'],
             'logo' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg', 'max:2048'],
             'whatsapp_business_number' => ['nullable', 'string', 'max:20'],
             'bank_name' => ['nullable', 'string', 'max:255'],
@@ -223,7 +218,7 @@ class CompanySettingsController extends Controller
     public function destroy(Company $company): RedirectResponse
     {
         // Check if user has access to this company
-        if (!auth()->user()->hasAccessToCompany($company->id)) {
+        if (! auth()->user()->hasAccessToCompany($company->id)) {
             abort(403, 'You do not have access to this company.');
         }
 
@@ -253,14 +248,14 @@ class CompanySettingsController extends Controller
     public function switch(Company $company): RedirectResponse
     {
         $user = auth()->user();
-        
+
         // Check if user has access to this company
-        if (!$user->hasAccessToCompany($company->id)) {
+        if (! $user->hasAccessToCompany($company->id)) {
             return redirect()->back()->with('error', 'You do not have access to this company.');
         }
 
         // Check if company is active
-        if (!$company->is_active) {
+        if (! $company->is_active) {
             return redirect()->back()->with('error', 'This company is not active.');
         }
 
@@ -273,7 +268,7 @@ class CompanySettingsController extends Controller
     public function uploadLogo(Request $request, Company $company): RedirectResponse
     {
         // Check if user has access to this company
-        if (!auth()->user()->hasAccessToCompany($company->id)) {
+        if (! auth()->user()->hasAccessToCompany($company->id)) {
             abort(403, 'You do not have access to this company.');
         }
 
@@ -290,7 +285,7 @@ class CompanySettingsController extends Controller
         }
 
         $company->update($validated);
-        
+
         return redirect()->route('company-settings.index')->with('success', 'Company logo updated successfully.');
     }
 
@@ -300,7 +295,7 @@ class CompanySettingsController extends Controller
     public function updateReminderSettings(Request $request, Company $company): RedirectResponse
     {
         // Check if user has access to this company
-        if (!auth()->user()->hasAccessToCompany($company->id)) {
+        if (! auth()->user()->hasAccessToCompany($company->id)) {
             abort(403, 'You do not have access to this company.');
         }
 
@@ -372,7 +367,7 @@ class CompanySettingsController extends Controller
 
         return redirect()->back()->with('success', 'Reminder settings updated successfully.');
     }
-    
+
     /**
      * Create default purchase order PDF template for a company
      */
@@ -383,16 +378,16 @@ class CompanySettingsController extends Controller
             ->where('module', 'purchase-order')
             ->where('is_default', true)
             ->first();
-        
+
         if ($existing) {
             return;
         }
-        
+
         // Get templates from the command class
-        $command = new \App\Console\Commands\CreateDefaultPurchaseOrderTemplates();
+        $command = new \App\Console\Commands\CreateDefaultPurchaseOrderTemplates;
         $htmlTemplate = $command->getDefaultHtmlTemplate();
         $cssStyles = $command->getDefaultCssStyles();
-        
+
         PdfTemplate::create([
             'company_id' => $company->id,
             'module' => 'purchase-order',

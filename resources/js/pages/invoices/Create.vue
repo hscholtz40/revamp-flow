@@ -631,6 +631,21 @@
                             <div v-if="form.errors.terms" class="text-red-500 text-sm mt-1">
                                 {{ form.errors.terms }}
                             </div>
+                            <p class="text-xs text-gray-500 mt-1">Used to calculate due date (COD, Net days, etc.).</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Terms &amp; Conditions</label>
+                            <textarea
+                                v-model="form.terms_conditions"
+                                rows="5"
+                                class="w-full rounded border px-3 py-2"
+                                :class="{ 'border-red-500': form.errors.terms_conditions }"
+                                placeholder="Legal or commercial terms shown on the invoice PDF (separate from payment terms above)"
+                            />
+                            <div v-if="form.errors.terms_conditions" class="text-red-500 text-sm mt-1">
+                                {{ form.errors.terms_conditions }}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -653,6 +668,7 @@
 
 <script setup lang="ts">
 import ContactSelector from '@/components/ContactSelector.vue';
+import { useNumberFormat } from '@/composables/useNumberFormat';
 import { matchesProductSearch } from '@/composables/productSearch';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, watch, ref } from 'vue';
@@ -722,7 +738,8 @@ interface Props {
     users: User[];
     currentCompany: Company;
     selectedCustomer?: Customer | null;
-    defaultTerms?: string;
+    /** Company default body text for Terms &amp; Conditions (not payment terms). */
+    defaultTermsConditions?: string;
     currentUser: User;
     taxRates: { id: number; name: string; rate: number; is_default_sales: boolean }[];
     defaultSalesTaxRateId: number | null;
@@ -746,6 +763,7 @@ interface Props {
         discount_percentage?: number | null;
         notes?: string | null;
         terms?: string | null;
+        terms_conditions?: string | null;
         line_groups?: { name?: string | null; sort_order?: number | null }[];
         line_items?: {
             product_id?: number | null;
@@ -764,6 +782,7 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+const { formatCurrency } = useNumberFormat();
 const paymentTermsOptions = ['COD', 'Net 7 Days', 'Net 14 Days', 'Net 30 Days', 'Net 60 Days'];
 const ROUNDING_LINE_DESCRIPTION = 'Rounding Adjustment';
 const createLineItemUid = () =>
@@ -806,7 +825,8 @@ const form = useForm({
     discount_amount: 0,
     discount_percentage: 0,
     notes: '',
-    terms: props.defaultTerms || '',
+    terms: (props.selectedCustomer?.terms || 'COD').trim() || 'COD',
+    terms_conditions: props.defaultTermsConditions || '',
     line_groups: [
         { name: 'Items', sort_order: 0 },
     ] as LineGroup[],
@@ -857,7 +877,7 @@ if (props.prefill) {
     form.discount_amount = Number(source.discount_amount ?? 0) || 0;
     form.discount_percentage = Number(source.discount_percentage ?? 0) || 0;
     form.notes = source.notes || '';
-    form.terms = source.terms || form.terms;
+    form.terms_conditions = source.terms_conditions || form.terms_conditions || '';
 
     const prefillGroups = (source.line_groups || [])
         .map((group, index) => ({
@@ -900,7 +920,15 @@ if (props.prefill) {
     if (prefillCustomer) {
         selectedCustomer.value = prefillCustomer;
         customerSearchQuery.value = prefillCustomer.name;
+        form.terms = (prefillCustomer.terms || 'COD').trim() || 'COD';
+    } else if (source.terms) {
+        form.terms = source.terms;
     }
+
+    form.line_items.forEach((item, index) => {
+        discountTypes.value[index] =
+            (Number(item.discount_percentage) || 0) > 0 ? 'percentage' : 'amount';
+    });
 }
 
 const parseCustomerTermsToDays = (terms?: string) => {
@@ -1348,13 +1376,6 @@ const handleDiscountTypeChange = (index: number, event: Event) => {
         item.discount_amount = 0;
         item.discount_percentage = 0;
     }
-};
-
-const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-ZA', {
-        style: 'currency',
-        currency: 'ZAR',
-    }).format(amount || 0);
 };
 
 // Calculate subtotal before discounts

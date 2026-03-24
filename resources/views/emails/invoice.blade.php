@@ -298,8 +298,8 @@
                             <tr>
                                 <td>{{ $item->description }}</td>
                                 <td class="text-right">{{ $item->quantity }}</td>
-                                <td class="text-right">R {{ number_format($item->unit_price, 2) }}</td>
-                                <td class="text-right">R {{ number_format($item->total, 2) }}</td>
+                                <td class="text-right">{{ $invoice->company->formatCurrencyZar($item->unit_price) }}</td>
+                                <td class="text-right">{{ $invoice->company->formatCurrencyZar($item->total) }}</td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -309,15 +309,15 @@
             <div class="totals">
                 <div class="totals-row">
                     <span>Subtotal:</span>
-                    <span>R {{ number_format($invoice->subtotal, 2) }}</span>
+                    <span>{{ $invoice->company->formatCurrencyZar($invoice->subtotal) }}</span>
                 </div>
                 <div class="totals-row">
                     <span>Tax ({{ $invoice->tax_rate }}%):</span>
-                    <span>R {{ number_format($invoice->tax_amount, 2) }}</span>
+                    <span>{{ $invoice->company->formatCurrencyZar($invoice->tax_amount) }}</span>
                 </div>
                 <div class="totals-row total">
                     <span>Total:</span>
-                    <span>R {{ number_format($invoice->total, 2) }}</span>
+                    <span>{{ $invoice->company->formatCurrencyZar($invoice->total) }}</span>
                 </div>
             </div>
 
@@ -346,8 +346,14 @@
 
             @if($invoice->terms)
                 <div class="customer-section">
-                    <div class="section-title">Terms & Conditions</div>
+                    <div class="section-title">Payment Terms</div>
                     <div>{{ $invoice->terms }}</div>
+                </div>
+            @endif
+            @if($invoice->terms_conditions)
+                <div class="customer-section">
+                    <div class="section-title">Terms & Conditions</div>
+                    <div>{{ $invoice->terms_conditions }}</div>
                 </div>
             @endif
         </div>

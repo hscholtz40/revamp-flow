@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { ArrowLeft, Edit, Trash2, Copy, Check, Key, Users, Calendar, Clock, Globe, Rocket, ArrowUpCircle, Tag, ShieldCheck, Lock } from 'lucide-vue-next';
 import {
     Dialog,
@@ -38,9 +38,29 @@ interface License {
 
 interface Props {
     license: License;
+    canManageLicenseInfrastructure?: boolean;
+    canViewFullLicenseKey?: boolean;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+    canManageLicenseInfrastructure: false,
+    canViewFullLicenseKey: false,
+});
+
+const pageTitle = computed(() => {
+    if (props.canViewFullLicenseKey) {
+        return `License - ${props.license.license_key}`;
+    }
+    const suffix = props.license.customer?.name ? ` — ${props.license.customer.name}` : '';
+    return `License #${props.license.id}${suffix}`;
+});
+
+const breadcrumbKeyLabel = computed(() => {
+    if (props.canViewFullLicenseKey) {
+        return props.license.license_key;
+    }
+    return props.license.customer?.name ?? `License #${props.license.id}`;
+});
 
 const copied = ref(false);
 const showDeployDialog = ref(false);
@@ -56,6 +76,7 @@ const upgradeForm = useForm({
 });
 
 function copyLicenseKey() {
+    if (!props.canViewFullLicenseKey) return;
     navigator.clipboard.writeText(props.license.license_key).then(() => {
         copied.value = true;
         setTimeout(() => {
@@ -151,10 +172,10 @@ function formatDateTime(dateString: string | null): string {
 </script>
 
 <template>
-    <Head :title="`License - ${props.license.license_key}`" />
+    <Head :title="pageTitle" />
     <AppLayout :breadcrumbs="[
         { title: 'Licenses', href: licenses.index().url },
-        { title: props.license.license_key, href: '#' }
+        { title: breadcrumbKeyLabel, href: '#' }
     ]">
         <div class="p-6">
             <div class="mb-6">
@@ -192,7 +213,7 @@ function formatDateTime(dateString: string | null): string {
                     </div>
                     <div class="flex items-center gap-2">
                         <button
-                            v-if="!props.license.deployed_at"
+                            v-if="canManageLicenseInfrastructure && !props.license.deployed_at"
                             @click="showDeployDialog = true"
                             class="flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
                         >
@@ -200,7 +221,7 @@ function formatDateTime(dateString: string | null): string {
                             Deploy
                         </button>
                         <button
-                            v-if="props.license.deployed_at"
+                            v-if="canManageLicenseInfrastructure && props.license.deployed_at"
                             @click="showUpgradeDialog = true"
                             class="flex items-center gap-2 rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
                         >
@@ -208,7 +229,7 @@ function formatDateTime(dateString: string | null): string {
                             Upgrade
                         </button>
                         <button
-                            v-if="props.license.deployed_at && props.license.url"
+                            v-if="canManageLicenseInfrastructure && props.license.deployed_at && props.license.url"
                             @click="forceSSL"
                             :disabled="forcingSSL"
                             class="flex items-center gap-2 rounded-md bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -245,6 +266,8 @@ function formatDateTime(dateString: string | null): string {
                     <div class="flex items-center gap-3 rounded-lg bg-gray-50 p-4">
                         <code class="flex-1 text-lg font-mono font-semibold text-gray-900 break-all">{{ props.license.license_key }}</code>
                         <button
+                            v-if="canViewFullLicenseKey"
+                            type="button"
                             @click="copyLicenseKey"
                             class="flex-shrink-0 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                         >
@@ -252,6 +275,9 @@ function formatDateTime(dateString: string | null): string {
                             <Copy v-else class="h-4 w-4" />
                         </button>
                     </div>
+                    <p v-if="!canViewFullLicenseKey" class="mt-3 text-sm text-gray-500">
+                        Full license keys are visible only to administrators.
+                    </p>
                 </div>
 
                 <!-- Customer Card -->

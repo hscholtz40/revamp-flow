@@ -2,17 +2,24 @@
 
 namespace App\Services;
 
+use App\Support\SafeLog;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class WhatsAppService
 {
     private $provider;
+
     private $apiKey;
+
     private $apiSecret;
+
     private $accountSid;
+
     private $fromNumber;
+
     private $defaultTemplateName;
+
     private $defaultTemplateLanguage;
 
     public function __construct($provider, $apiKey, $apiSecret = null, $accountSid = null, $fromNumber = null, $defaultTemplateName = null, $defaultTemplateLanguage = 'en')
@@ -29,10 +36,10 @@ class WhatsAppService
     /**
      * Send a WhatsApp message
      *
-     * @param string $to Phone number (with country code, e.g., +27123456789)
-     * @param string|null $templateName Template name (required for Meta provider)
-     * @param array $parameters Named parameters for the template (e.g., ['customer_name' => 'John', 'invoice_number' => 'INV-001'])
-     * @param string $templateLanguage Language code (default: 'en')
+     * @param  string  $to  Phone number (with country code, e.g., +27123456789)
+     * @param  string|null  $templateName  Template name (required for Meta provider)
+     * @param  array  $parameters  Named parameters for the template (e.g., ['customer_name' => 'John', 'invoice_number' => 'INV-001'])
+     * @param  string  $templateLanguage  Language code (default: 'en')
      * @return array Response from WhatsApp API
      */
     public function sendMessage($to, $templateName = null, $parameters = [], $templateLanguage = 'en')
@@ -42,17 +49,17 @@ class WhatsAppService
             $to = $this->cleanPhoneNumber($to);
 
             // Validate phone number
-            if (!$this->isValidPhoneNumber($to)) {
+            if (! $this->isValidPhoneNumber($to)) {
                 throw new \Exception('Invalid phone number format');
             }
 
-            Log::info('Sending WhatsApp message', [
+            Log::info('Sending WhatsApp message', SafeLog::redactContext([
                 'to' => $to,
                 'from' => $this->fromNumber,
                 'provider' => $this->provider,
                 'template_name' => $templateName ?? $this->defaultTemplateName,
-                'parameters' => $parameters,
-            ]);
+                'parameter_keys' => array_keys($parameters),
+            ]));
 
             // Route to appropriate provider
             switch ($this->provider) {
@@ -62,25 +69,25 @@ class WhatsAppService
                 case 'meta':
                     // For Meta, template name is required
                     $templateName = $templateName ?? $this->defaultTemplateName;
-                    if (!$templateName) {
+                    if (! $templateName) {
                         throw new \Exception('Template name is required for Meta WhatsApp provider');
                     }
                     $language = $templateLanguage ?: $this->defaultTemplateLanguage ?: 'en';
+
                     return $this->sendViaMeta($to, $templateName, $parameters, $language);
                 default:
                     throw new \Exception("Unsupported WhatsApp provider: {$this->provider}");
             }
 
         } catch (\Exception $e) {
-            Log::error('WhatsApp service error', [
+            Log::error('WhatsApp service error', SafeLog::redactContext([
                 'to' => $to,
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
+            ]));
 
             return [
                 'success' => false,
-                'message' => 'WhatsApp service error: ' . $e->getMessage(),
+                'message' => 'WhatsApp service error: '.$e->getMessage(),
                 'data' => null,
             ];
         }
@@ -91,12 +98,12 @@ class WhatsAppService
      */
     private function sendViaTwilio($to, $message): array
     {
-        if (!$this->accountSid || !$this->apiSecret) {
+        if (! $this->accountSid || ! $this->apiSecret) {
             throw new \Exception('Twilio credentials not configured');
         }
 
         $url = "https://api.twilio.com/2010-04-01/Accounts/{$this->accountSid}/Messages.json";
-        
+
         $response = Http::asForm()
             ->withBasicAuth($this->accountSid, $this->apiSecret)
             ->timeout(30)
@@ -109,10 +116,10 @@ class WhatsAppService
         $responseData = $response->json();
 
         if ($response->successful()) {
-            Log::info('WhatsApp message sent successfully via Twilio', [
+            Log::info('WhatsApp message sent successfully via Twilio', SafeLog::redactContext([
                 'to' => $to,
-                'response' => $responseData,
-            ]);
+                'response_excerpt' => SafeLog::excerpt(json_encode($responseData ?: []), 200),
+            ]));
 
             return [
                 'success' => true,
@@ -120,15 +127,15 @@ class WhatsAppService
                 'data' => $responseData,
             ];
         } else {
-            Log::error('WhatsApp sending failed via Twilio', [
+            Log::error('WhatsApp sending failed via Twilio', SafeLog::redactContext([
                 'to' => $to,
-                'status' => $response->status(),
-                'response' => $responseData,
-            ]);
+                'http_status' => $response->status(),
+                'response_excerpt' => SafeLog::excerpt(json_encode($responseData ?: []), 300),
+            ]));
 
             return [
                 'success' => false,
-                'message' => 'Failed to send WhatsApp message: ' . ($responseData['message'] ?? 'Unknown error'),
+                'message' => 'Failed to send WhatsApp message: '.($responseData['message'] ?? 'Unknown error'),
                 'data' => $responseData,
             ];
         }
@@ -140,25 +147,25 @@ class WhatsAppService
      */
     private function sendViaMeta($to, $templateName, $parameters = [], $templateLanguage = 'en'): array
     {
-        if (!$this->apiKey) {
+        if (! $this->apiKey) {
             throw new \Exception('Meta API credentials not configured');
         }
 
         // Remove + from phone number for Meta API
         $to = ltrim($to, '+');
-        
+
         // Use v22.0 API version (as shown in Meta's example)
         $url = "https://graph.facebook.com/v22.0/{$this->fromNumber}/messages";
-        
+
         // Meta WhatsApp requires template messages only
-        if (!$templateName) {
+        if (! $templateName) {
             throw new \Exception('Template name is required for Meta WhatsApp provider');
         }
 
         // Build template payload
         // Convert 'en' to 'en_US' for Meta API compatibility
         $languageCode = $templateLanguage === 'en' ? 'en_US' : $templateLanguage;
-        
+
         $template = [
             'name' => $templateName,
             'language' => [
@@ -167,7 +174,7 @@ class WhatsAppService
         ];
 
         // Add named parameters if provided
-        if (!empty($parameters)) {
+        if (! empty($parameters)) {
             $bodyParams = [];
             foreach ($parameters as $paramName => $paramValue) {
                 $bodyParams[] = [
@@ -177,7 +184,7 @@ class WhatsAppService
                 ];
             }
 
-            if (!empty($bodyParams)) {
+            if (! empty($bodyParams)) {
                 $template['components'] = [
                     [
                         'type' => 'body',
@@ -195,7 +202,7 @@ class WhatsAppService
             'type' => 'template',
             'template' => $template,
         ];
-        
+
         $response = Http::withToken($this->apiKey)
             ->timeout(30)
             ->post($url, $payload);
@@ -203,13 +210,13 @@ class WhatsAppService
         $responseData = $response->json();
 
         if ($response->successful()) {
-            Log::info('WhatsApp message sent successfully via Meta', [
+            Log::info('WhatsApp message sent successfully via Meta', SafeLog::redactContext([
                 'to' => $to,
                 'type' => 'template',
                 'template' => $templateName,
-                'parameters' => $parameters,
-                'response' => $responseData,
-            ]);
+                'parameter_keys' => array_keys($parameters),
+                'response_excerpt' => SafeLog::excerpt(json_encode($responseData ?: []), 200),
+            ]));
 
             return [
                 'success' => true,
@@ -217,15 +224,15 @@ class WhatsAppService
                 'data' => $responseData,
             ];
         } else {
-            Log::error('WhatsApp sending failed via Meta', [
+            Log::error('WhatsApp sending failed via Meta', SafeLog::redactContext([
                 'to' => $to,
-                'status' => $response->status(),
-                'response' => $responseData,
-            ]);
+                'http_status' => $response->status(),
+                'response_excerpt' => SafeLog::excerpt(json_encode($responseData ?: []), 300),
+            ]));
 
             $errorMessage = $responseData['error']['message'] ?? 'Unknown error';
             $errorCode = $responseData['error']['code'] ?? null;
-            
+
             // Provide helpful error messages for common Meta API errors
             if ($errorCode == 131030) {
                 $errorMessage = 'Recipient phone number not in allowed list. Please add this number to your allowed recipients in Meta Business Manager (Settings > WhatsApp > API Setup > Manage phone number list).';
@@ -238,10 +245,10 @@ class WhatsAppService
             } elseif ($errorCode == 132000) {
                 $errorMessage = 'Number of parameters does not match the expected number of params. Your template may not have parameters defined, or the number of parameters sent does not match what the template expects. Please check your template configuration in Meta Business Manager.';
             }
-            
+
             return [
                 'success' => false,
-                'message' => 'Failed to send WhatsApp message: ' . $errorMessage,
+                'message' => 'Failed to send WhatsApp message: '.$errorMessage,
                 'data' => $responseData,
             ];
         }
@@ -256,12 +263,12 @@ class WhatsAppService
         $cleaned = preg_replace('/[^\d+]/', '', $phoneNumber);
 
         // If it doesn't start with +, assume it's a South African number and add +27
-        if (!str_starts_with($cleaned, '+')) {
+        if (! str_starts_with($cleaned, '+')) {
             // Remove leading 0 if present
             if (str_starts_with($cleaned, '0')) {
                 $cleaned = substr($cleaned, 1);
             }
-            $cleaned = '+27' . $cleaned;
+            $cleaned = '+27'.$cleaned;
         }
 
         return $cleaned;
@@ -276,4 +283,3 @@ class WhatsAppService
         return preg_match('/^\+[1-9]\d{1,14}$/', $phoneNumber);
     }
 }
-

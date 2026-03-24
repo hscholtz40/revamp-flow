@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Traits\Auditable;
+use App\Traits\ScopedToCurrentCompanyRouteBinding;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,7 +14,7 @@ use Illuminate\Support\Facades\DB;
 
 class Quote extends Model
 {
-    use HasFactory, Auditable;
+    use Auditable, HasFactory, ScopedToCurrentCompanyRouteBinding;
 
     protected $fillable = [
         'company_id',
@@ -85,6 +86,11 @@ class Quote extends Model
         return $this->morphMany(LineGroup::class, 'line_groupable')->orderBy('sort_order');
     }
 
+    public function signatures(): MorphMany
+    {
+        return $this->morphMany(DocumentSignature::class, 'signable')->orderByDesc('signed_at');
+    }
+
     public function invoice(): BelongsTo
     {
         return $this->belongsTo(Invoice::class);
@@ -93,6 +99,11 @@ class Quote extends Model
     public function source(): MorphTo
     {
         return $this->morphTo('source', 'source_type', 'source_id');
+    }
+
+    public function purchaseOrders(): HasMany
+    {
+        return $this->hasMany(PurchaseOrder::class, 'source_id')->where('source_type', 'quote');
     }
 
     /**
@@ -104,7 +115,7 @@ class Quote extends Model
             $company = Company::whereKey($companyId)->lockForUpdate()->first();
             if ($company && $company->quote_number_prefix !== null && $company->quote_number_next !== null) {
                 $next = max(1, (int) $company->quote_number_next);
-                $number = $company->quote_number_prefix . str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+                $number = $company->quote_number_prefix.str_pad((string) $next, 4, '0', STR_PAD_LEFT);
                 $company->quote_number_next = $next + 1;
                 $company->save();
 
@@ -121,21 +132,21 @@ class Quote extends Model
         $prefix = 'QT';
         $year = date('Y');
         $month = date('m');
-        
+
         // Get the last quote number for this year/month
         $lastQuote = static::where('company_id', $companyId)
             ->where('quote_number', 'like', "{$prefix}{$year}{$month}%")
             ->orderBy('quote_number', 'desc')
             ->first();
-        
+
         if ($lastQuote && $lastQuote->quote_number) {
             $lastNumber = (int) substr($lastQuote->quote_number, -4);
             $newNumber = $lastNumber + 1;
         } else {
             $newNumber = 1;
         }
-        
-        return $prefix . $year . $month . str_pad((string)$newNumber, 4, '0', STR_PAD_LEFT);
+
+        return $prefix.$year.$month.str_pad((string) $newNumber, 4, '0', STR_PAD_LEFT);
     }
 
     /**
@@ -151,19 +162,19 @@ class Quote extends Model
             $unitPrice = $item->unit_price ?? 0;
             $discountAmount = $item->discount_amount ?? 0;
             $discountPercentage = $item->discount_percentage ?? 0;
-            
+
             $itemSubtotal = $quantity * $unitPrice;
-            
+
             if ($discountPercentage > 0) {
                 return $itemSubtotal * ($discountPercentage / 100);
             }
-            
+
             return $discountAmount;
         });
-        
+
         // Subtotal after discounts (sum of line item totals)
         $subtotal = $lineItems->sum('total') ?? 0;
-        
+
         // Tax is now calculated per line item - sum all line item tax amounts
         $taxAmount = $lineItems->sum('tax_amount') ?? 0;
         $total = $subtotal + $taxAmount;
@@ -182,7 +193,7 @@ class Quote extends Model
      */
     public function getFormattedTotalAttribute(): string
     {
-        return 'R' . number_format($this->total ?? 0, 2);
+        return 'R'.number_format($this->total ?? 0, 2);
     }
 
     /**
@@ -190,7 +201,7 @@ class Quote extends Model
      */
     public function getStatusColorAttribute(): string
     {
-        return match($this->status) {
+        return match ($this->status) {
             'draft' => 'gray',
             'sent' => 'blue',
             'accepted' => 'green',
@@ -285,7 +296,10 @@ class Quote extends Model
     {
         // Ensure line items are loaded
         $this->load('lineItems');
-        
+
+        $this->loadMissing('customer');
+        $paymentTerms = trim((string) ($this->customer?->terms ?? 'COD')) ?: 'COD';
+
         $invoice = Invoice::create([
             'company_id' => $this->company_id,
             'customer_id' => $this->customer_id,
@@ -307,7 +321,8 @@ class Quote extends Model
             'tax_amount' => $this->tax_amount,
             'total' => $this->total,
             'notes' => $this->notes,
-            'terms' => $this->terms_conditions,
+            'terms' => $paymentTerms,
+            'terms_conditions' => $this->terms_conditions,
             'source_type' => 'quote',
             'source_id' => $this->id,
         ]);

@@ -45,8 +45,12 @@ return [
     ],
 
     'xero' => [
+        // HMAC key from Xero Developer Portal → your app → Webhooks (required for POST /xero/webhook).
+        'webhook_key' => env('XERO_WEBHOOK_KEY'),
         // Optional per-company safety ceiling. Set 0 to disable.
         'request_budget_per_minute' => env('XERO_REQUEST_BUDGET_PER_MINUTE', 50),
+        // Optional per-company daily ceiling (checked before each API call). Set 0 to disable.
+        'request_budget_per_day' => env('XERO_REQUEST_BUDGET_PER_DAY', 0),
         // Throttle invoice imports so a single run doesn't consume excessive resources.
         'invoice_import_page_size' => env('XERO_INVOICE_IMPORT_PAGE_SIZE', 50),
         'invoice_import_max_pages_per_run' => env('XERO_INVOICE_IMPORT_MAX_PAGES_PER_RUN', 5),
@@ -67,6 +71,22 @@ return [
         'purchase_order_import_page_delay_ms' => env('XERO_PURCHASE_ORDER_IMPORT_PAGE_DELAY_MS', 300),
         // Cache contact list to avoid frequent /Contacts pulls in scheduler runs.
         'contacts_cache_ttl_seconds' => env('XERO_CONTACTS_CACHE_TTL_SECONDS', 300),
+        // Minutes past each hour when Xero sync jobs may run (comma-separated). Default ~every 15 minutes.
+        // Parsed here so `php artisan config:cache` still works (avoid env() outside config files).
+        'sync_schedule_base_minutes' => (static function (): array {
+            $raw = explode(',', (string) env('XERO_SYNC_BASE_MINUTES', '0,15,30,45'));
+            $minutes = [];
+            foreach ($raw as $part) {
+                $m = (int) trim($part);
+                if ($m >= 0 && $m <= 59) {
+                    $minutes[] = $m;
+                }
+            }
+            $minutes = array_values(array_unique($minutes));
+            sort($minutes);
+
+            return $minutes !== [] ? $minutes : [0, 15, 30, 45];
+        })(),
         // Cap outbound sync batches per scheduler run.
         'invoice_export_max_per_run' => env('XERO_INVOICE_EXPORT_MAX_PER_RUN', 200),
         'quote_export_max_per_run' => env('XERO_QUOTE_EXPORT_MAX_PER_RUN', 150),

@@ -284,8 +284,8 @@
                             <tr>
                                 <td>{{ $item->description ?? 'Item Description' }}</td>
                                 <td class="text-right">{{ $item->quantity ?? 0 }}</td>
-                                <td class="text-right">R {{ number_format($item->unit_price ?? 0, 2) }}</td>
-                                <td class="text-right">R {{ number_format($item->total ?? 0, 2) }}</td>
+                                <td class="text-right">{{ $company->formatCurrencyZar($item->unit_price ?? 0) }}</td>
+                                <td class="text-right">{{ $company->formatCurrencyZar($item->total ?? 0) }}</td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -295,21 +295,21 @@
             <div class="totals">
                 <div class="totals-row">
                     <span>Subtotal:</span>
-                    <span>R {{ number_format($jobcard->subtotal ?? 0, 2) }}</span>
+                    <span>{{ $company->formatCurrencyZar($jobcard->subtotal ?? 0) }}</span>
                 </div>
                 @if(($jobcard->discount_amount ?? 0) > 0)
                     <div class="totals-row">
                         <span>Discount:</span>
-                        <span>-R {{ number_format($jobcard->discount_amount, 2) }}</span>
+                        <span>-{{ $company->formatCurrencyZar($jobcard->discount_amount) }}</span>
                     </div>
                 @endif
                 <div class="totals-row">
                     <span>Tax ({{ $jobcard->tax_rate ?? 0 }}%):</span>
-                    <span>R {{ number_format($jobcard->tax_amount ?? 0, 2) }}</span>
+                    <span>{{ $company->formatCurrencyZar($jobcard->tax_amount ?? 0) }}</span>
                 </div>
                 <div class="totals-row total">
                     <span>Total:</span>
-                    <span>R {{ number_format($jobcard->total ?? 0, 2) }}</span>
+                    <span>{{ $company->formatCurrencyZar($jobcard->total ?? 0) }}</span>
                 </div>
             </div>
 

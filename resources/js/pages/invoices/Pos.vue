@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useNumberFormat } from '@/composables/useNumberFormat';
 import { matchesProductSearch } from '@/composables/productSearch';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
@@ -25,7 +26,10 @@ const props = defineProps<{
     printPdfUrl?: string | null;
     defaultSalesTaxRate: { id: number; name: string; rate: number } | null;
     defaultSalesAccountLabel: string | null;
+    defaultTermsConditions?: string | null;
 }>();
+
+const { formatCurrency } = useNumberFormat();
 
 const paymentTermsOptions = ['COD', 'Net 7 Days', 'Net 14 Days', 'Net 30 Days', 'Net 60 Days'];
 const paymentMethodOptions = [
@@ -46,6 +50,7 @@ const form = useForm({
     invoice_date: new Date().toISOString().split('T')[0],
     due_date: new Date().toISOString().split('T')[0],
     terms: (props.selectedCustomer?.terms || 'COD').trim() || 'COD',
+    terms_conditions: props.defaultTermsConditions || '',
     notes: '',
     payment_method: '',
     amount_paid: 0,
@@ -254,11 +259,6 @@ const canCompleteSale = computed(() =>
     hasAtLeastOneLineItem.value &&
     areLineItemsValid.value
 );
-
-const formatCurrency = (amount: number) => new Intl.NumberFormat('en-ZA', {
-    style: 'currency',
-    currency: 'ZAR',
-}).format(amount || 0);
 
 const makeEmptyLineItem = () => ({
     product_id: null as number | null,

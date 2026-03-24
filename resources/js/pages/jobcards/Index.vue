@@ -14,7 +14,11 @@
             <!-- Header -->
             <div class="flex items-center justify-between gap-3 mb-6">
                 <h1 class="text-2xl font-bold text-gray-900">Jobcards</h1>
-                <Link v-if="!isLimitedUser" :href="jobcards.create().url" class="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">
+                <Link
+                    v-if="!isLimitedUser && canJobcardsCreate"
+                    :href="jobcards.create().url"
+                    class="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+                >
                     New Jobcard
                 </Link>
             </div>
@@ -35,11 +39,9 @@
                         <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
                         <select v-model="status" class="w-full rounded border px-3 py-2">
                             <option value="">All Statuses</option>
-                            <option value="draft">Draft</option>
-                            <option value="pending">Pending</option>
-                            <option value="in_progress">In Progress</option>
-                            <option value="completed">Completed</option>
-                            <option value="cancelled">Cancelled</option>
+                            <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">
+                                {{ opt.label }}
+                            </option>
                         </select>
                     </div>
                     <div>
@@ -246,31 +248,21 @@
                                             <Link
                                                 v-if="canEditJobcard(jobcard)"
                                                 :href="jobcards.edit(jobcard.id).url"
-                                                class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                                class="inline-flex items-center justify-center px-2 py-1.5 md:px-3 md:py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                                             >
-                                                Edit
+                                                <ListTableActionLabel label="Edit">
+                                                    <Edit class="h-4 w-4" />
+                                                </ListTableActionLabel>
                                             </Link>
-                                            <span
-                                                v-else
-                                                class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-gray-500 bg-gray-100 cursor-not-allowed"
-                                                title="Cannot edit completed jobcards without permission"
-                                            >
-                                                Edit
-                                            </span>
                                             <button
                                                 v-if="canDeleteJobcard(jobcard)"
                                                 @click="deleteJobcard(jobcard)"
-                                                class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                                                class="inline-flex items-center justify-center px-2 py-1.5 md:px-3 md:py-1 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                                             >
-                                                Delete
+                                                <ListTableActionLabel label="Delete">
+                                                    <Trash2 class="h-4 w-4" />
+                                                </ListTableActionLabel>
                                             </button>
-                                            <span
-                                                v-else
-                                                class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-gray-500 bg-gray-100 cursor-not-allowed"
-                                                title="Cannot delete completed jobcards without permission"
-                                            >
-                                                Delete
-                                            </span>
                                         </template>
                                     </div>
                                 </td>
@@ -308,14 +300,20 @@
 </template>
 
 <script setup lang="ts">
+import ListTableActionLabel from '@/components/ListTableActionLabel.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useAuthAbility } from '@/composables/useAuthAbilities';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { Edit, Trash2 } from 'lucide-vue-next';
 import { ref, computed, watch, nextTick } from 'vue';
 import jobcards from '@/routes/jobcards';
 import invoices from '@/routes/invoices';
 
 const page = usePage();
 const isLimitedUser = computed(() => (page.props.auth as any)?.user?.user_type === 'limited');
+const canJobcardsCreate = useAuthAbility('jobcards', 'create');
+const canJobcardsEdit = useAuthAbility('jobcards', 'edit');
+const canJobcardsDelete = useAuthAbility('jobcards', 'delete');
 
 interface AppUser {
     id: number;
@@ -383,9 +381,12 @@ interface Props {
         name: string;
     };
     canEditCompleted: boolean;
+    statusOptions?: Array<{ value: string; label: string }>;
 }
 
 const props = defineProps<Props>();
+
+const statusOptions = computed(() => props.statusOptions ?? []);
 
 const search = ref(props.filters?.search || '');
 const status = ref(props.filters?.status || '');
@@ -449,6 +450,9 @@ const sortIndicator = (field: string) => {
 };
 
 const canEditJobcard = (jobcard: Jobcard) => {
+    if (!canJobcardsEdit.value) {
+        return false;
+    }
     if (jobcard.status !== 'completed') {
         return true;
     }
@@ -456,6 +460,9 @@ const canEditJobcard = (jobcard: Jobcard) => {
 };
 
 const canDeleteJobcard = (jobcard: Jobcard) => {
+    if (!canJobcardsDelete.value) {
+        return false;
+    }
     if (jobcard.status !== 'completed') {
         return true;
     }
@@ -493,9 +500,11 @@ const getStatusBadgeClass = (status: string) => {
     return classes[status as keyof typeof classes] || classes.draft;
 };
 
-const formatStatus = (status: string) => {
-    if (!status) return '';
-    return status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+const formatStatus = (code: string) => {
+    if (!code) return '';
+    const opt = statusOptions.value.find((o) => o.value === code);
+    if (opt) return opt.label;
+    return code.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase());
 };
 
 const formatDate = (date: string) => {

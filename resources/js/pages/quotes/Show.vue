@@ -17,19 +17,28 @@
                         <div class="flex items-center gap-4">
                             <span class="text-sm font-medium text-gray-700">Current Status:</span>
                             <div class="flex items-center gap-2">
-                                <button
-                                    v-for="status in statusOptions"
-                                    :key="status.value"
-                                    @click="updateStatus(status.value)"
-                                    :class="[
-                                        'px-3 py-1 text-sm font-medium rounded-md transition-colors',
-                                        props.quote.status === status.value
-                                            ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
-                                    ]"
+                                <template v-if="hasQuotesEdit">
+                                    <button
+                                        v-for="status in statusOptions"
+                                        :key="status.value"
+                                        @click="updateStatus(status.value)"
+                                        :class="[
+                                            'px-3 py-1 text-sm font-medium rounded-md transition-colors',
+                                            props.quote.status === status.value
+                                                ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
+                                        ]"
+                                    >
+                                        {{ status.label }}
+                                    </button>
+                                </template>
+                                <span
+                                    v-else
+                                    :class="getStatusBadgeClass(props.quote.status)"
+                                    class="inline-flex px-3 py-1 text-sm font-semibold rounded-full"
                                 >
-                                    {{ status.label }}
-                                </button>
+                                    {{ formatStatus(props.quote.status) }}
+                                </span>
                             </div>
                         </div>
                         <div class="text-sm text-gray-500">
@@ -66,28 +75,42 @@
                             Email
                         </button>
                         <button
-                            v-if="!props.convertedJobcardId"
+                            v-if="canSignDocument"
+                            @click="openSignModal"
+                            class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                        >
+                            Sign
+                        </button>
+                        <button
+                            v-if="hasPurchaseOrdersCreate"
+                            @click="createPurchaseOrder"
+                            class="rounded-md bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2"
+                        >
+                            Create PO
+                        </button>
+                        <button
+                            v-if="hasQuotesEdit && !props.convertedJobcardId"
                             @click="convertToJobcard"
                             class="rounded-md bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
                         >
                             Convert to Jobcard
                         </button>
                         <Link
-                            v-else
+                            v-else-if="props.convertedJobcardId"
                             :href="jobcards.show(props.convertedJobcardId).url"
                             class="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
                         >
                             View Jobcard
                         </Link>
                         <button
-                            v-if="!props.quote.invoice_id"
+                            v-if="hasQuotesEdit && !props.quote.invoice_id"
                             @click="convertToInvoice"
                             class="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
                         >
                             Convert to Invoice
                         </button>
                         <Link
-                            v-else
+                            v-else-if="props.quote.invoice_id"
                             :href="invoices.show(props.quote.invoice_id).url"
                             class="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
                         >
@@ -100,13 +123,6 @@
                         >
                             Edit
                         </Link>
-                        <span
-                            v-else
-                            class="rounded-md bg-gray-400 px-4 py-2 text-sm font-medium text-white cursor-not-allowed"
-                            title="Cannot edit accepted quotes without permission"
-                        >
-                            Edit
-                        </span>
                     </div>
                 </div>
             </div>
@@ -261,6 +277,28 @@
                             </div>
                         </div>
                     </div>
+
+                    <div v-if="props.signatures && props.signatures.length > 0" class="rounded-lg bg-white border border-gray-200 shadow-sm">
+                        <div class="border-b border-gray-200 bg-gray-50 px-6 py-4">
+                            <h2 class="text-lg font-semibold text-gray-900">Signatures</h2>
+                            <p class="text-sm text-gray-600">Captured signatures for this quote</p>
+                        </div>
+                        <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div v-for="signature in props.signatures" :key="signature.id" class="rounded border border-gray-200 p-3">
+                                <div class="flex items-center justify-between text-xs text-gray-500 mb-2">
+                                    <span class="font-medium text-gray-700">{{ signature.signer_name }}</span>
+                                    <span>{{ signature.signed_at ? formatDateTime(signature.signed_at) : '-' }}</span>
+                                </div>
+                                <img
+                                    v-if="signature.signature_url"
+                                    :src="signature.signature_url"
+                                    alt="Signature"
+                                    class="h-24 w-full object-contain bg-white border border-gray-100 rounded"
+                                />
+                                <p v-if="signature.user_name" class="mt-2 text-xs text-gray-500">Captured by {{ signature.user_name }}</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Sidebar -->
@@ -342,6 +380,33 @@
                                     <span class="text-base font-semibold text-gray-900">Total:</span>
                                     <span class="text-base font-semibold text-gray-900">R{{ formatCurrency(props.quote.total) }}</span>
                                 </div>
+                                <div class="mt-2 flex justify-between">
+                                    <span class="text-sm text-gray-500">Purchasing Total:</span>
+                                    <span class="text-sm font-medium text-gray-900">R{{ formatCurrency(purchaseOrdersTotal) }}</span>
+                                </div>
+                                <div class="mt-2 flex justify-between">
+                                    <span class="text-sm text-gray-500">Total vs Purchasing:</span>
+                                    <span class="text-sm font-medium" :class="purchaseVariance >= 0 ? 'text-green-700' : 'text-red-700'">
+                                        R{{ formatCurrency(purchaseVariance) }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div v-if="props.relatedPurchaseOrders && props.relatedPurchaseOrders.length > 0" class="rounded-lg bg-white border border-gray-200 shadow-sm">
+                        <div class="border-b border-gray-200 bg-gray-50 px-6 py-4">
+                            <h2 class="text-lg font-semibold text-gray-900">Related Purchase Orders</h2>
+                            <p class="text-sm text-gray-600">Purchase orders linked to this quote</p>
+                        </div>
+                        <div class="p-6 space-y-2">
+                            <div v-for="po in props.relatedPurchaseOrders" :key="po.id" class="flex items-center justify-between rounded border border-gray-200 px-3 py-2">
+                                <div class="flex items-center gap-3">
+                                    <Link :href="purchaseOrders.show(po.id).url" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline">
+                                        {{ po.po_number }}
+                                    </Link>
+                                    <span class="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700 capitalize">{{ po.status }}</span>
+                                </div>
+                                <span class="text-sm font-medium text-gray-900">R{{ formatCurrency(po.total) }}</span>
                             </div>
                         </div>
                     </div>
@@ -444,6 +509,43 @@
             </div>
         </div>
 
+        <div v-if="showSignModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+            <div class="relative top-20 mx-auto p-5 border w-[720px] max-w-[95vw] shadow-lg rounded-md bg-white">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Capture Signature</h3>
+                <form @submit.prevent="saveSignature">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                        <input v-model="signForm.signer_name" type="text" class="w-full rounded border px-3 py-2" required />
+                        <div v-if="signForm.errors.signer_name" class="mt-1 text-sm text-red-600">{{ signForm.errors.signer_name }}</div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Signature</label>
+                        <canvas
+                            ref="signatureCanvas"
+                            class="w-full border rounded bg-white touch-none"
+                            @mousedown="startDraw"
+                            @mousemove="draw"
+                            @mouseup="stopDraw"
+                            @mouseleave="stopDraw"
+                            @touchstart.prevent="startDraw"
+                            @touchmove.prevent="draw"
+                            @touchend.prevent="stopDraw"
+                        />
+                        <div v-if="signForm.errors.signature_data" class="mt-1 text-sm text-red-600">{{ signForm.errors.signature_data }}</div>
+                    </div>
+                    <div class="mt-4 flex items-center justify-between">
+                        <button type="button" @click="clearSignature" class="rounded border px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">Clear</button>
+                        <div class="flex items-center gap-2">
+                            <button type="button" @click="showSignModal = false" class="rounded border px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+                            <button type="submit" :disabled="signForm.processing" class="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50">
+                                {{ signForm.processing ? 'Saving...' : 'Save Signature' }}
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <!-- Template Selection Modal for Download -->
         <div v-if="showTemplateModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
             <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
@@ -499,12 +601,14 @@
 </template>
 
 <script setup lang="ts">
+import { useAuthAbility } from '@/composables/useAuthAbilities';
 import AppLayout from '@/layouts/AppLayout.vue';
 import EmailRecipientsInput from '@/components/EmailRecipientsInput.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import quotes from '@/routes/quotes';
 import invoices from '@/routes/invoices';
 import jobcards from '@/routes/jobcards';
+import purchaseOrders from '@/routes/purchase-orders';
 import products from '@/routes/products';
 import customers from '@/routes/customers';
 import { ref, computed, watch } from 'vue';
@@ -570,13 +674,33 @@ interface Quote {
 interface Props {
     quote: Quote;
     canEditCompleted: boolean;
+    statusOptions: Array<{ value: string; label: string }>;
     pdfTemplates?: Array<{ id: number; name: string; module: string; is_default: boolean }>;
     defaultQuoteTemplateId?: number | null;
     defaultProformaTemplateId?: number | null;
     convertedJobcardId?: number | null;
+    relatedPurchaseOrders?: Array<{
+        id: number;
+        po_number: string;
+        status: string;
+        total: number;
+        created_at: string | null;
+    }>;
+    purchaseOrdersTotal?: number;
+    signatures?: Array<{
+        id: number;
+        signer_name: string;
+        signature_url: string | null;
+        signed_at: string | null;
+        user_name?: string | null;
+    }>;
+    documentSigningEnabled?: boolean;
 }
 
 const props = defineProps<Props>();
+
+const hasQuotesEdit = useAuthAbility('quotes', 'edit');
+const hasPurchaseOrdersCreate = useAuthAbility('purchase-orders', 'create');
 const isRoundingAdjustmentLine = (item: LineItem) => {
     return (item.description || '').trim().toLowerCase() === 'rounding adjustment';
 };
@@ -634,6 +758,7 @@ watch(showEmailModal, (open) => {
 });
 const showResultDialog = ref(false);
 const showTemplateModal = ref(false);
+const showSignModal = ref(false);
 const selectedPdfType = ref<string | null>(null);
 const selectedTemplateId = ref<number | null>(null);
 const emailResult = ref({
@@ -641,14 +766,26 @@ const emailResult = ref({
     email: '',
     message: ''
 });
+const signForm = useForm({
+    signer_name: '',
+    signature_data: '',
+});
+const signatureCanvas = ref<HTMLCanvasElement | null>(null);
+const isSigning = ref(false);
 
 // Computed property to check if user can edit the quote
 const canEditQuote = computed(() => {
+    if (!hasQuotesEdit.value) {
+        return false;
+    }
     if (props.quote.status !== 'accepted') {
         return true;
     }
     return props.canEditCompleted;
 });
+const canSignDocument = computed(() => !!props.documentSigningEnabled && canEditQuote.value);
+const purchaseOrdersTotal = computed(() => Number(props.purchaseOrdersTotal) || 0);
+const purchaseVariance = computed(() => (Number(props.quote.total) || 0) - purchaseOrdersTotal.value);
 
 function parseInitialEmails(str: string | null | undefined): string[] {
     if (!str) return [];
@@ -665,13 +802,7 @@ const emailForm = useForm({
     template_id: null as number | null,
 });
 
-const statusOptions = [
-    { value: 'draft', label: 'Draft' },
-    { value: 'sent', label: 'Sent' },
-    { value: 'accepted', label: 'Accepted' },
-    { value: 'rejected', label: 'Rejected' },
-    { value: 'expired', label: 'Expired' },
-];
+const statusOptions = computed(() => props.statusOptions || []);
 
 const updateStatus = (status: string) => {
     router.patch(quotes.updateStatus(props.quote.id).url, {
@@ -787,6 +918,10 @@ const convertToInvoice = () => {
     }
 };
 
+const createPurchaseOrder = () => {
+    window.location.href = `${purchaseOrders.create().url}?source_type=quote&source_id=${props.quote.id}`;
+};
+
 const getStatusBadgeClass = (status: string) => {
     const classes = {
         draft: 'bg-gray-100 text-gray-800',
@@ -798,8 +933,11 @@ const getStatusBadgeClass = (status: string) => {
     return classes[status as keyof typeof classes] || 'bg-gray-100 text-gray-800';
 };
 
-const formatStatus = (status: string) => {
-    return status.replace('_', ' ').toUpperCase();
+const formatStatus = (code: string) => {
+    if (!code) return '';
+    const opt = props.statusOptions?.find((o) => o.value === code);
+    if (opt) return opt.label;
+    return code.replace(/_/g, ' ').toUpperCase();
 };
 
 const formatDate = (dateString: string) => {
@@ -813,5 +951,76 @@ const formatCurrency = (value: number | null | undefined) => {
 
 const formatDateTime = (dateString: string) => {
     return new Date(dateString).toLocaleString();
+};
+
+const openSignModal = () => {
+    signForm.reset();
+    signForm.clearErrors();
+    showSignModal.value = true;
+
+    requestAnimationFrame(() => {
+        const canvas = signatureCanvas.value;
+        if (!canvas) return;
+        const width = canvas.clientWidth || 600;
+        canvas.width = width;
+        canvas.height = 180;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = '#111827';
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+    });
+};
+
+const startDraw = (event: MouseEvent | TouchEvent) => {
+    const canvas = signatureCanvas.value;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    isSigning.value = true;
+    const rect = canvas.getBoundingClientRect();
+    const point = 'touches' in event ? event.touches[0] : event;
+    ctx.beginPath();
+    ctx.moveTo(point.clientX - rect.left, point.clientY - rect.top);
+};
+
+const draw = (event: MouseEvent | TouchEvent) => {
+    if (!isSigning.value) return;
+    const canvas = signatureCanvas.value;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const rect = canvas.getBoundingClientRect();
+    const point = 'touches' in event ? event.touches[0] : event;
+    ctx.lineTo(point.clientX - rect.left, point.clientY - rect.top);
+    ctx.stroke();
+};
+
+const stopDraw = () => {
+    isSigning.value = false;
+};
+
+const clearSignature = () => {
+    const canvas = signatureCanvas.value;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+};
+
+const saveSignature = () => {
+    const canvas = signatureCanvas.value;
+    if (!canvas) return;
+    signForm.signature_data = canvas.toDataURL('image/png');
+    signForm.post(`/quotes/${props.quote.id}/sign`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            showSignModal.value = false;
+            router.reload({ only: ['signatures'] });
+        },
+    });
 };
 </script>

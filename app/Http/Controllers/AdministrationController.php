@@ -220,6 +220,100 @@ class AdministrationController extends Controller
         return redirect()->back()->with('success', 'Document numbering settings updated.');
     }
 
+    public function localization(): Response
+    {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        if (! $currentCompany) {
+            abort(404, 'No active company selected.');
+        }
+
+        return Inertia::render('administration/Localization', [
+            'localization' => [
+                'locale_decimal_separator' => $currentCompany->locale_decimal_separator ?: '.',
+                'locale_thousands_separator' => $currentCompany->locale_thousands_separator ?? ',',
+            ],
+            'company' => [
+                'id' => $currentCompany->id,
+                'name' => $currentCompany->name,
+            ],
+        ]);
+    }
+
+    public function updateLocalization(Request $request): RedirectResponse
+    {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        if (! $currentCompany) {
+            abort(404, 'No active company selected.');
+        }
+
+        $validated = $request->validate([
+            'locale_decimal_separator' => ['required', 'string', 'max:8'],
+            'locale_thousands_separator' => ['required', 'string', 'max:8'],
+        ]);
+
+        if ($validated['locale_decimal_separator'] === $validated['locale_thousands_separator']) {
+            return redirect()->back()
+                ->withErrors(['locale_thousands_separator' => 'Thousands separator must differ from the decimal separator.'])
+                ->withInput();
+        }
+
+        $currentCompany->update([
+            'locale_decimal_separator' => $validated['locale_decimal_separator'],
+            'locale_thousands_separator' => $validated['locale_thousands_separator'],
+        ]);
+
+        return redirect()->back()->with('success', 'Localization settings updated.');
+    }
+
+    public function statusEditor(): Response
+    {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        if (! $currentCompany) {
+            abort(404, 'No active company selected.');
+        }
+
+        return Inertia::render('administration/StatusEditor', [
+            'jobcardStatusOptions' => $currentCompany->getJobcardStatusOptions(),
+            'quoteStatusOptions' => $currentCompany->getQuoteStatusOptions(),
+            'defaultJobcardStatusLabels' => \App\Models\Company::DEFAULT_JOBCARD_STATUS_LABELS,
+            'defaultQuoteStatusLabels' => \App\Models\Company::DEFAULT_QUOTE_STATUS_LABELS,
+            'company' => [
+                'id' => $currentCompany->id,
+                'name' => $currentCompany->name,
+            ],
+        ]);
+    }
+
+    public function updateStatusEditor(Request $request): RedirectResponse
+    {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        if (! $currentCompany) {
+            abort(404, 'No active company selected.');
+        }
+
+        $validated = $request->validate([
+            'jobcard_status_labels' => ['required', 'array'],
+            'jobcard_status_labels.draft' => ['required', 'string', 'max:50'],
+            'jobcard_status_labels.pending' => ['required', 'string', 'max:50'],
+            'jobcard_status_labels.in_progress' => ['required', 'string', 'max:50'],
+            'jobcard_status_labels.completed' => ['required', 'string', 'max:50'],
+            'jobcard_status_labels.cancelled' => ['required', 'string', 'max:50'],
+            'quote_status_labels' => ['required', 'array'],
+            'quote_status_labels.draft' => ['required', 'string', 'max:50'],
+            'quote_status_labels.sent' => ['required', 'string', 'max:50'],
+            'quote_status_labels.accepted' => ['required', 'string', 'max:50'],
+            'quote_status_labels.rejected' => ['required', 'string', 'max:50'],
+            'quote_status_labels.expired' => ['required', 'string', 'max:50'],
+        ]);
+
+        $currentCompany->update([
+            'jobcard_status_labels' => $this->sanitizeStatusLabelMap($validated['jobcard_status_labels']),
+            'quote_status_labels' => $this->sanitizeStatusLabelMap($validated['quote_status_labels']),
+        ]);
+
+        return redirect()->back()->with('success', 'Status labels updated.');
+    }
+
     private function normalizePrefix(?string $value): ?string
     {
         if ($value === null) {
@@ -228,5 +322,23 @@ class AdministrationController extends Controller
 
         $trimmed = trim($value);
         return $trimmed === '' ? null : $trimmed;
+    }
+
+    /**
+     * @param  array<string, mixed>  $labels
+     * @return array<string, string>
+     */
+    private function sanitizeStatusLabelMap(array $labels): array
+    {
+        $clean = [];
+        foreach ($labels as $key => $value) {
+            if (! is_string($key)) {
+                continue;
+            }
+            $label = is_string($value) ? trim($value) : '';
+            $clean[$key] = $label === '' ? ucfirst(str_replace('_', ' ', $key)) : $label;
+        }
+
+        return $clean;
     }
 }

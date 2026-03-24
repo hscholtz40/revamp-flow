@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useAuthAbility } from '@/composables/useAuthAbilities';
+import { useNumberFormat } from '@/composables/useNumberFormat';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { Building2, Mail, Phone, MapPin, Edit, ArrowLeft, Package, FileText } from 'lucide-vue-next';
@@ -18,16 +20,27 @@ interface Supplier {
     notes: string | null;
     is_active: boolean;
     products?: Array<{ id: number; name: string; sku: string | null }>;
-    purchaseOrders?: Array<{ id: number; po_number: string; status: string; total: number; created_at: string }>;
     created_at: string;
     updated_at: string;
 }
 
 interface Props {
     supplier: Supplier;
+    purchaseOrders: {
+        data: Array<{ id: number; po_number: string; status: string; total: number; created_at: string }>;
+        links: { url: string | null; label: string; active: boolean }[];
+        current_page: number;
+        last_page: number;
+        per_page: number;
+        total: number;
+    };
 }
 
 const props = defineProps<Props>();
+
+const canSuppliersEdit = useAuthAbility('suppliers', 'edit');
+const canPurchaseOrdersList = useAuthAbility('purchase-orders', 'list');
+const { formatCurrency } = useNumberFormat();
 </script>
 
 <template>
@@ -53,6 +66,7 @@ const props = defineProps<Props>();
                     </div>
                     <div class="flex items-center gap-2">
                         <Link
+                            v-if="canSuppliersEdit"
                             :href="suppliers.edit(props.supplier.id).url"
                             class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                         >
@@ -118,16 +132,22 @@ const props = defineProps<Props>();
                     </div>
 
                     <!-- Purchase Orders -->
-                    <div v-if="props.supplier.purchaseOrders && props.supplier.purchaseOrders.length > 0" class="rounded-lg border border-gray-200 bg-white p-6">
-                        <h2 class="mb-4 text-lg font-semibold text-gray-900">Recent Purchase Orders</h2>
+                    <div v-if="canPurchaseOrdersList" class="rounded-lg border border-gray-200 bg-white p-6">
+                        <h2 class="mb-4 text-lg font-semibold text-gray-900">Purchase Orders</h2>
+                        <p class="mb-4 text-sm text-gray-600">Complete purchase order history for this supplier.</p>
+                        <div v-if="(props.purchaseOrders?.data || []).length === 0" class="py-4 text-sm text-gray-500">
+                            No purchase orders found.
+                        </div>
                         <div class="space-y-3">
-                            <div v-for="po in props.supplier.purchaseOrders" :key="po.id" class="flex items-center justify-between border-b pb-3 last:border-0 last:pb-0">
+                            <div v-for="po in props.purchaseOrders?.data || []" :key="po.id" class="flex items-center justify-between border-b pb-3 last:border-0 last:pb-0">
                                 <div>
-                                    <div class="font-medium text-gray-900">{{ po.po_number }}</div>
+                                    <Link :href="`/purchase-orders/${po.id}`" class="font-medium text-blue-700 hover:text-blue-900 hover:underline">
+                                        {{ po.po_number }}
+                                    </Link>
                                     <div class="text-sm text-gray-500">{{ new Date(po.created_at).toLocaleDateString() }}</div>
                                 </div>
                                 <div class="text-right">
-                                    <div class="font-medium text-gray-900">R{{ Number(po.total).toLocaleString('en-ZA', { minimumFractionDigits: 2 }) }}</div>
+                                    <div class="font-medium text-gray-900">{{ formatCurrency(Number(po.total || 0)) }}</div>
                                     <span :class="{
                                         'bg-green-100 text-green-800': po.status === 'received',
                                         'bg-blue-100 text-blue-800': po.status === 'sent',
@@ -137,6 +157,25 @@ const props = defineProps<Props>();
                                         {{ po.status }}
                                     </span>
                                 </div>
+                            </div>
+                        </div>
+                        <div v-if="props.purchaseOrders?.last_page > 1" class="mt-4 border-t border-gray-200 pt-4">
+                            <div class="flex items-center justify-end gap-1">
+                                <Link
+                                    v-for="link in props.purchaseOrders?.links || []"
+                                    :key="link.label"
+                                    :href="link.url || '#'"
+                                    :preserve-scroll="true"
+                                    :class="[
+                                        'px-3 py-1 text-sm rounded-md',
+                                        link.active
+                                            ? 'bg-blue-600 text-white'
+                                            : link.url
+                                                ? 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                                                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                    ]"
+                                    v-html="link.label"
+                                />
                             </div>
                         </div>
                     </div>
