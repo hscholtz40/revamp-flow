@@ -50,6 +50,7 @@ class XeroService
     private const SYNC_MODULE_CREDIT_NOTES = 'credit_notes';
 
     private const SYNC_MODULE_PURCHASE_ORDERS = 'purchase_orders';
+    private const OUTBOUND_SYNC_MIN_DRIFT_SECONDS = 60;
 
     private $settings;
 
@@ -1464,12 +1465,32 @@ class XeroService
             ->limit($maxInvoicesPerRun)
             ->with(['customer', 'lineItems'])
             ->get();
+
+        $remainingSlots = max(0, $maxInvoicesPerRun - $createCandidates->count());
+        $updateCandidates = collect();
+        if ($remainingSlots > 0) {
+            $updateCandidates = Invoice::where('company_id', $currentCompany->id)
+                ->whereNotNull('xero_invoice_id')
+                ->whereNotNull('xero_updated_at')
+                ->whereColumn('updated_at', '>', 'xero_updated_at')
+                ->orderByDesc('updated_at')
+                ->limit($maxInvoicesPerRun * 3)
+                ->with(['customer', 'lineItems'])
+                ->get()
+                ->filter(fn (Invoice $invoice) => $this->hasSignificantLocalSyncDrift($invoice->updated_at, $invoice->xero_updated_at))
+                ->take($remainingSlots)
+                ->values();
+        }
+
+        $invoices = $createCandidates->concat($updateCandidates)->values();
         $results = [];
 
         Log::info('Starting invoice sync to Xero', [
             'company_id' => $currentCompany->id,
             'invoice_count' => $invoices->count(),
-            'filter_applied' => 'updated_at_gt_xero_updated_at_or_unsynced',
+            'create_candidates' => $createCandidates->count(),
+            'update_candidates' => $updateCandidates->count(),
+            'filter_applied' => 'creates_first_then_updates_with_min_drift',
             'max_invoices_per_run' => $maxInvoicesPerRun,
         ]);
 
@@ -2350,7 +2371,8 @@ class XeroService
             'total' => $invoice->total,
         ]);
 
-        // If invoice already has a Xero ID, update it; otherwise create new
+        // If invoice already has a Xero ID, update it; otherwise create new.
+        // Avoid extra pre-read requests for invoice details; let Xero validate the payload.
         if ($invoice->xero_invoice_id) {
             $invoiceData['InvoiceID'] = $invoice->xero_invoice_id;
 
@@ -2436,6 +2458,26 @@ class XeroService
 
             // Parse Xero error for more specific message
             $errorData = json_decode($errorBody, true);
+            if (is_array($errorData) && $this->shouldMarkInvoiceAsSyncedOnValidationError($errorData)) {
+                $syncStamp = $this->resolveInvoiceValidationSyncTimestamp($errorData, $invoice);
+                $invoice->update(['xero_updated_at' => $syncStamp]);
+                $this->alignLocalUpdatedAtWithXero($invoice);
+
+                Log::warning('Marked invoice as synced after non-retriable Xero validation response', [
+                    'invoice_id' => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'xero_invoice_id' => $invoice->xero_invoice_id,
+                    'xero_updated_at' => $syncStamp->toDateTimeString(),
+                    'status' => $statusCode,
+                    'response' => $errorData,
+                ]);
+
+                return [
+                    'InvoiceID' => $invoice->xero_invoice_id,
+                    'UpdatedDateUTC' => $syncStamp->toIso8601String(),
+                ];
+            }
+
             if (isset($errorData['Elements'][0]['ValidationErrors'])) {
                 $errors = collect($errorData['Elements'][0]['ValidationErrors'])
                     ->pluck('Message')
@@ -3374,6 +3416,7 @@ class XeroService
                             continue;
                         }
                         $this->updateSupplierFromXero($existingSupplier, $xeroContact);
+                        $this->syncContactPersonsFromXero($xeroContact, $currentCompany->id, null, $existingSupplier->id);
                         $results[] = [
                             'supplier_id' => $existingSupplier->id,
                             'supplier_name' => $xeroContact['Name'],
@@ -3383,6 +3426,7 @@ class XeroService
                     } else {
                         // Create new supplier
                         $supplier = $this->createSupplierFromXero($xeroContact, $currentCompany);
+                        $this->syncContactPersonsFromXero($xeroContact, $currentCompany->id, null, $supplier->id);
                         $results[] = [
                             'supplier_id' => $supplier->id,
                             'supplier_name' => $xeroContact['Name'],
@@ -3582,6 +3626,88 @@ class XeroService
         }
 
         return null;
+    }
+
+    /**
+     * Create/update JCO contacts from Xero ContactPersons for a customer or supplier.
+     * This is intentionally one-way (Xero -> JCO) during import sync.
+     */
+    private function syncContactPersonsFromXero(array $xeroContact, int $companyId, ?int $customerId = null, ?int $supplierId = null): void
+    {
+        if (empty($xeroContact['ContactPersons']) || (!is_array($xeroContact['ContactPersons']))) {
+            return;
+        }
+
+        if (!$customerId && !$supplierId) {
+            return;
+        }
+
+        foreach ($xeroContact['ContactPersons'] as $contactPerson) {
+            $name = trim((string) ($contactPerson['FirstName'] ?? ''));
+            $lastName = trim((string) ($contactPerson['LastName'] ?? ''));
+            $fullName = trim($name . ' ' . $lastName);
+
+            if ($fullName === '') {
+                continue;
+            }
+
+            $payload = [
+                'company_id' => $companyId,
+                'customer_id' => $customerId,
+                'supplier_id' => $supplierId,
+                'name' => $fullName,
+                'email' => $this->normalizeNullableString($contactPerson['EmailAddress'] ?? null),
+                'phone' => $this->normalizeNullableString($contactPerson['PhoneNumber'] ?? null),
+                'position' => !empty($contactPerson['IncludeInEmails']) ? 'Primary Contact' : null,
+                'xero_contact_person_id' => $this->normalizeNullableString($contactPerson['ContactPersonID'] ?? null),
+                'is_primary' => false,
+            ];
+
+            $existingContact = null;
+            if (!empty($payload['xero_contact_person_id'])) {
+                $existingContact = Contact::where('company_id', $companyId)
+                    ->where('xero_contact_person_id', $payload['xero_contact_person_id'])
+                    ->where(function ($query) use ($customerId, $supplierId) {
+                        if ($customerId) {
+                            $query->where('customer_id', $customerId);
+                        } else {
+                            $query->where('supplier_id', $supplierId);
+                        }
+                    })
+                    ->first();
+            }
+
+            if (!$existingContact) {
+                $existingContact = Contact::where('company_id', $companyId)
+                    ->where('name', $fullName)
+                    ->when($customerId, fn ($query) => $query->where('customer_id', $customerId))
+                    ->when($supplierId, fn ($query) => $query->where('supplier_id', $supplierId))
+                    ->first();
+            }
+
+            if ($existingContact) {
+                $this->updateModelIfChanged($existingContact, $payload, 'contact', [
+                    'contact_id' => $existingContact->id,
+                    'company_id' => $companyId,
+                    'customer_id' => $customerId,
+                    'supplier_id' => $supplierId,
+                    'xero_contact_person_id' => $payload['xero_contact_person_id'],
+                ]);
+                continue;
+            }
+
+            Contact::create($payload);
+        }
+    }
+
+    private function normalizeNullableString(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $trimmed = trim((string) $value);
+        return $trimmed === '' ? null : $trimmed;
     }
 
     /**
@@ -4495,7 +4621,7 @@ class XeroService
     }
 
     /**
-     * Get Xero invoice by ID
+     * Get Xero invoice by ID using filtered list endpoint (avoids /Invoices/{id})
      */
     private function getXeroInvoice(string $invoiceId): ?array
     {
@@ -4936,7 +5062,10 @@ class XeroService
                     ->orWhereNull('xero_synced_at');
             })
             ->orderBy('id')
-            ->get();
+            ->get()
+            ->filter(fn (Payment $payment) => $this->hasSignificantLocalSyncDrift($payment->updated_at, $payment->xero_synced_at))
+            ->sortBy(fn (Payment $payment) => empty($payment->xero_payment_id) ? 0 : 1)
+            ->values();
 
         if ($payments->isEmpty()) {
             return [[
@@ -5057,6 +5186,26 @@ class XeroService
 
             // Parse Xero error for more specific message
             $errorData = json_decode($errorBody, true);
+            if (is_array($errorData) && $this->shouldMarkPaymentAsSyncedOnValidationError($errorData)) {
+                $syncStamp = $this->resolvePaymentValidationSyncTimestamp($errorData, $payment);
+                $payment->update(['xero_synced_at' => $syncStamp]);
+
+                Log::warning('Marked payment as synced after non-retriable Xero validation response', [
+                    'payment_id' => $payment->id,
+                    'invoice_id' => $invoice->id,
+                    'xero_invoice_id' => $invoice->xero_invoice_id,
+                    'xero_synced_at' => $syncStamp->toDateTimeString(),
+                    'response' => $errorData,
+                ]);
+
+                return [
+                    'payment_id' => $payment->id,
+                    'amount' => $payment->amount,
+                    'status' => 'skipped',
+                    'message' => 'Marked as synced after non-retriable Xero validation response',
+                ];
+            }
+
             if (isset($errorData['Elements'][0]['ValidationErrors'][0]['Message'])) {
                 $specificError = $errorData['Elements'][0]['ValidationErrors'][0]['Message'];
                 throw new \Exception("Failed to create payment in Xero: {$specificError}. The default bank account may not be valid for payments in Xero.");
@@ -5088,6 +5237,119 @@ class XeroService
             'status' => 'success',
             'xero_payment_id' => $xeroPayment['PaymentID'],
         ];
+    }
+
+    private function shouldMarkInvoiceAsSyncedOnValidationError(array $errorData): bool
+    {
+        if (($errorData['Type'] ?? null) !== 'ValidationException' || (int) ($errorData['ErrorNumber'] ?? 0) !== 10) {
+            return false;
+        }
+
+        $messages = collect(data_get($errorData, 'Elements.0.ValidationErrors', []))
+            ->pluck('Message')
+            ->filter(fn ($message) => is_string($message) && trim($message) !== '')
+            ->map(fn (string $message) => strtolower($message))
+            ->values();
+
+        if ($messages->isEmpty()) {
+            return false;
+        }
+
+        $nonRetriableMessageFragments = [
+            'must supply a lineitemid',
+            'status authorised cannot be applied',
+            'payments or credit notes allocated',
+        ];
+
+        foreach ($messages as $message) {
+            foreach ($nonRetriableMessageFragments as $fragment) {
+                if (str_contains($message, $fragment)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private function shouldMarkPaymentAsSyncedOnValidationError(array $errorData): bool
+    {
+        if (($errorData['Type'] ?? null) !== 'ValidationException' || (int) ($errorData['ErrorNumber'] ?? 0) !== 10) {
+            return false;
+        }
+
+        $messages = collect(data_get($errorData, 'Elements.0.ValidationErrors', []))
+            ->pluck('Message')
+            ->filter(fn ($message) => is_string($message) && trim($message) !== '')
+            ->map(fn (string $message) => strtolower($message))
+            ->values();
+
+        if ($messages->isEmpty()) {
+            return false;
+        }
+
+        $nonRetriableMessageFragments = [
+            'payments can only be made against authorised documents',
+            'payment amount exceeds the amount outstanding',
+        ];
+
+        foreach ($messages as $message) {
+            foreach ($nonRetriableMessageFragments as $fragment) {
+                if (str_contains($message, $fragment)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private function resolveInvoiceValidationSyncTimestamp(array $errorData, Invoice $invoice): \Carbon\Carbon
+    {
+        $updatedDateUtc = data_get($errorData, 'Elements.0.UpdatedDateUTC')
+            ?? data_get($errorData, 'Elements.0.Invoice.UpdatedDateUTC');
+        if (is_string($updatedDateUtc) && trim($updatedDateUtc) !== '') {
+            return $this->parseXeroDate($updatedDateUtc);
+        }
+
+        $date = data_get($errorData, 'Elements.0.Date');
+        if (is_string($date) && trim($date) !== '') {
+            return $this->parseXeroDate($date);
+        }
+
+        $dateString = data_get($errorData, 'Elements.0.DateString');
+        if (is_string($dateString) && trim($dateString) !== '') {
+            return $this->parseXeroDate($dateString);
+        }
+
+        return $invoice->xero_updated_at ?: now();
+    }
+
+    private function resolvePaymentValidationSyncTimestamp(array $errorData, Payment $payment): \Carbon\Carbon
+    {
+        $updatedDateUtc = data_get($errorData, 'Elements.0.UpdatedDateUTC')
+            ?? data_get($errorData, 'Elements.0.Invoice.UpdatedDateUTC');
+        if (is_string($updatedDateUtc) && trim($updatedDateUtc) !== '') {
+            return $this->parseXeroDate($updatedDateUtc);
+        }
+
+        $date = data_get($errorData, 'Elements.0.Date');
+        if (is_string($date) && trim($date) !== '') {
+            return $this->parseXeroDate($date);
+        }
+
+        return $payment->xero_synced_at ?: now();
+    }
+
+    private function hasSignificantLocalSyncDrift(
+        ?\Carbon\CarbonInterface $updatedAt,
+        ?\Carbon\CarbonInterface $xeroSyncedAt
+    ): bool {
+        if (empty($updatedAt) || empty($xeroSyncedAt)) {
+            return true;
+        }
+
+        return $updatedAt->diffInSeconds($xeroSyncedAt, false) >= self::OUTBOUND_SYNC_MIN_DRIFT_SECONDS;
     }
 
     private function invalidateXeroInvoiceCache(?string $xeroInvoiceId): void
@@ -6800,7 +7062,10 @@ class XeroService
                     ->orWhereNull('xero_synced_at');
             })
             ->orderBy('id')
-            ->get();
+            ->get()
+            ->filter(fn (Payment $payment) => $this->hasSignificantLocalSyncDrift($payment->updated_at, $payment->xero_synced_at))
+            ->sortBy(fn (Payment $payment) => empty($payment->xero_payment_id) ? 0 : 1)
+            ->values();
 
         if ($payments->isEmpty()) {
             return [[
