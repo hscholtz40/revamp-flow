@@ -2,6 +2,7 @@
 
 ## 2026-03-24
 
+- **Sidebar:** the **Administration** footer link is shown only when `auth.user.is_administrator` is true (matches `User::isAdministrator()` / administrator groups). Non-admins no longer see a nav item to pages that would 403 anyway.
 - **Build:** `vue-email-editor` is required for `EmailTemplateUnlayerEditor.vue` (Unlayer drag-and-drop email templates). It was already listed in `package.json` but could be missing from `node_modules` after a partial clone or skipped install—run `npm install` (lockfile updated) so Vite resolves the import.
 - **Suppliers**, **purchase orders** index, and **reports** (saved-report rows + report template cards): row **Edit** / **Delete** actions use the same pill-style controls as customers (indigo / red backgrounds) instead of plain colored text at `md+` breakpoints, which looked like bare links after the responsive action-label change.
 - **Quote and jobcard status labels** from Administration → Status Editor now appear everywhere the status is shown or chosen: **index list** (filter dropdown + status column), **create/edit** status fields, and **show** page read-only badges (via `formatStatus` lookup). Previously only the show-page status buttons used `statusOptions` from the server; list and edit views used hard-coded default text.

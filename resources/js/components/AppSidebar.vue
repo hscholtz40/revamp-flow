@@ -124,6 +124,15 @@ const footerNavItems: NavItem[] = [
     },
 ];
 
+const isAdministrator = computed(() => !!(page.props.auth?.user as { is_administrator?: boolean } | null)?.is_administrator);
+
+const filteredFooterNavItems = computed(() => {
+    if (!isAdministrator.value) {
+        return [];
+    }
+    return footerNavItems;
+});
+
 const moduleKeyMap: Record<string, string> = {
     'Customers': 'customers',
     'Contacts': 'contacts',
@@ -280,7 +289,7 @@ const filteredNavItems = computed(() => {
         </SidebarContent>
 
         <SidebarFooter class="border-t border-sidebar-border/60 pt-3">
-            <NavFooter v-if="userType !== 'limited'" :items="footerNavItems" />
+            <NavFooter v-if="userType !== 'limited' && filteredFooterNavItems.length > 0" :items="filteredFooterNavItems" />
             <!-- Default Logo above user menu when company logo is uploaded -->
             <div v-if="currentCompany?.logo_path" class="mb-3 px-2">
                 <img
