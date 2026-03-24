@@ -39,6 +39,7 @@ class XeroService
     private const SYNC_MODULE_CHART_OF_ACCOUNTS = 'chart_of_accounts';
     private const SYNC_MODULE_CREDIT_NOTES = 'credit_notes';
     private const SYNC_MODULE_PURCHASE_ORDERS = 'purchase_orders';
+    private const OUTBOUND_SYNC_MIN_DRIFT_SECONDS = 60;
 
     private $settings;
     private $baseUrl = 'https://api.xero.com';
@@ -1398,29 +1399,38 @@ class XeroService
         $currentCompany = $this->getCompany();
 
         $maxInvoicesPerRun = max(1, (int) config('services.xero.invoice_export_max_per_run', 200));
-        $invoices = Invoice::where('company_id', $currentCompany->id)
-            ->where(function ($query) {
-                $query->whereNull('xero_invoice_id')
-                    ->orWhereNull('xero_updated_at')
-                    ->orWhereColumn('updated_at', '>', 'xero_updated_at')
-                    ->orWhereHas('payments', function ($paymentQuery) {
-                        $paymentQuery->where(function ($unsyncedPaymentQuery) {
-                            $unsyncedPaymentQuery->whereNull('payments.xero_payment_id')
-                                ->orWhereNull('payments.xero_synced_at')
-                                ->orWhereColumn('payments.updated_at', '>', 'payments.xero_synced_at');
-                        });
-                    });
-            })
+        $createCandidates = Invoice::where('company_id', $currentCompany->id)
+            ->whereNull('xero_invoice_id')
             ->orderByDesc('updated_at')
             ->limit($maxInvoicesPerRun)
             ->with(['customer', 'lineItems'])
             ->get();
+
+        $remainingSlots = max(0, $maxInvoicesPerRun - $createCandidates->count());
+        $updateCandidates = collect();
+        if ($remainingSlots > 0) {
+            $updateCandidates = Invoice::where('company_id', $currentCompany->id)
+                ->whereNotNull('xero_invoice_id')
+                ->whereNotNull('xero_updated_at')
+                ->whereColumn('updated_at', '>', 'xero_updated_at')
+                ->orderByDesc('updated_at')
+                ->limit($maxInvoicesPerRun * 3)
+                ->with(['customer', 'lineItems'])
+                ->get()
+                ->filter(fn (Invoice $invoice) => $this->hasSignificantLocalSyncDrift($invoice->updated_at, $invoice->xero_updated_at))
+                ->take($remainingSlots)
+                ->values();
+        }
+
+        $invoices = $createCandidates->concat($updateCandidates)->values();
         $results = [];
         
         Log::info('Starting invoice sync to Xero', [
             'company_id' => $currentCompany->id,
             'invoice_count' => $invoices->count(),
-            'filter_applied' => 'updated_at_gt_xero_updated_at_or_unsynced',
+            'create_candidates' => $createCandidates->count(),
+            'update_candidates' => $updateCandidates->count(),
+            'filter_applied' => 'creates_first_then_updates_with_min_drift',
             'max_invoices_per_run' => $maxInvoicesPerRun,
         ]);
 
@@ -1431,7 +1441,7 @@ class XeroService
                 }
 
                 $hasLocalChangesForExport = !$invoice->xero_updated_at
-                    || ($invoice->updated_at && $invoice->updated_at->gt($invoice->xero_updated_at));
+                    || $this->hasSignificantLocalSyncDrift($invoice->updated_at, $invoice->xero_updated_at);
                 
                 // Avoid pre-read requests to Xero for each invoice. We rely on write responses
                 // and periodic inbound sync/webhooks to keep local and remote state aligned.
@@ -4404,7 +4414,10 @@ class XeroService
                     ->orWhereColumn('payments.updated_at', '>', 'payments.xero_synced_at');
             })
             ->orderBy('id')
-            ->get();
+            ->get()
+            ->filter(fn (Payment $payment) => $this->hasSignificantLocalSyncDrift($payment->updated_at, $payment->xero_synced_at))
+            ->sortBy(fn (Payment $payment) => empty($payment->xero_payment_id) ? 0 : 1)
+            ->values();
 
         if ($payments->isEmpty()) {
             return [[
@@ -4445,7 +4458,7 @@ class XeroService
      */
     private function createPaymentInXero(Invoice $invoice, Payment $payment, ?array $xeroInvoice = null): array
     {
-        if (!empty($payment->xero_payment_id) && !empty($payment->xero_synced_at) && !$payment->updated_at->gt($payment->xero_synced_at)) {
+        if (!empty($payment->xero_payment_id) && !empty($payment->xero_synced_at) && !$this->hasSignificantLocalSyncDrift($payment->updated_at, $payment->xero_synced_at)) {
             return [
                 'payment_id' => $payment->id,
                 'amount' => $payment->amount,
@@ -4669,6 +4682,17 @@ class XeroService
         }
 
         return $payment->xero_synced_at ?: now();
+    }
+
+    private function hasSignificantLocalSyncDrift(
+        ?\Carbon\CarbonInterface $updatedAt,
+        ?\Carbon\CarbonInterface $xeroSyncedAt
+    ): bool {
+        if (empty($updatedAt) || empty($xeroSyncedAt)) {
+            return true;
+        }
+
+        return $updatedAt->diffInSeconds($xeroSyncedAt, false) >= self::OUTBOUND_SYNC_MIN_DRIFT_SECONDS;
     }
 
     private function invalidateXeroInvoiceCache(?string $xeroInvoiceId): void
@@ -6340,7 +6364,10 @@ class XeroService
                     ->orWhereColumn('payments.updated_at', '>', 'payments.xero_synced_at');
             })
             ->orderBy('id')
-            ->get();
+            ->get()
+            ->filter(fn (Payment $payment) => $this->hasSignificantLocalSyncDrift($payment->updated_at, $payment->xero_synced_at))
+            ->sortBy(fn (Payment $payment) => empty($payment->xero_payment_id) ? 0 : 1)
+            ->values();
 
         if ($payments->isEmpty()) {
             return [[
@@ -6373,7 +6400,7 @@ class XeroService
 
     private function createCreditNotePaymentInXero(CreditNote $creditNote, Payment $payment): array
     {
-        if (!empty($payment->xero_payment_id) && !empty($payment->xero_synced_at) && !$payment->updated_at->gt($payment->xero_synced_at)) {
+        if (!empty($payment->xero_payment_id) && !empty($payment->xero_synced_at) && !$this->hasSignificantLocalSyncDrift($payment->updated_at, $payment->xero_synced_at)) {
             return [
                 'payment_id' => $payment->id,
                 'amount' => $payment->amount,
