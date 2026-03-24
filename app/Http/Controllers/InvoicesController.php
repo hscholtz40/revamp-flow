@@ -520,6 +520,8 @@ class InvoicesController extends Controller
                 }
             }
 
+            $this->ensureConvertedInvoiceRoundingLine($invoice, $defaultAccountId);
+
             $invoice->calculateTotals();
             $invoice->refresh();
 
@@ -1654,40 +1656,39 @@ class InvoicesController extends Controller
     private function ensureConvertedInvoiceRoundingLine(Invoice $invoice, ?int $fallbackAccountId = null): void
     {
         $roundingDescription = 'Rounding Adjustment';
-        $invoice->loadMissing('lineItems');
 
-        $baseItems = $invoice->lineItems->filter(function ($item) use ($roundingDescription) {
-            return strtolower(trim((string) ($item->description ?? ''))) !== strtolower($roundingDescription);
-        });
+        try {
+            $invoice->loadMissing('lineItems');
 
-        $baseSubtotal = (float) $baseItems->sum(function ($item) {
-            return (float) ($item->total ?? 0);
-        });
+            $baseItems = $invoice->lineItems->reject(
+                fn ($item) => Invoice::isRoundingAdjustmentLineItem($item->description ?? null)
+            );
 
-        $baseTax = (float) $baseItems->sum(function ($item) {
-            return (float) ($item->tax_amount ?? 0);
-        });
+            $baseSubtotal = (float) $baseItems->sum(fn ($item) => (float) ($item->total ?? 0));
+            $baseTax = (float) $baseItems->sum(fn ($item) => (float) ($item->tax_amount ?? 0));
+            $baseTotal = $baseSubtotal + $baseTax;
+            $roundedTargetTotal = round($baseTotal * 10) / 10;
+            $adjustment = round($roundedTargetTotal - $baseTotal, 2);
 
-        $baseTotal = $baseSubtotal + $baseTax;
-        $roundedTargetTotal = round($baseTotal * 10) / 10;
-        $adjustment = round($roundedTargetTotal - $baseTotal, 2);
+            $roundingAccountId = ChartOfAccount::getDefaultRoundingForCompany($invoice->company_id)?->id ?? $fallbackAccountId;
+            $defaultLineGroupId = $invoice->lineGroups()->orderBy('sort_order')->value('id');
 
-        $roundingAccountId = ChartOfAccount::getDefaultRoundingForCompany($invoice->company_id)?->id ?? $fallbackAccountId;
-        $defaultLineGroupId = $invoice->lineGroups()->orderBy('sort_order')->value('id');
-        $existingRoundingLine = $invoice->lineItems->first(function ($item) use ($roundingDescription) {
-            return strtolower(trim((string) ($item->description ?? ''))) === strtolower($roundingDescription);
-        });
+            // Remove every rounding row so client + server cannot stack duplicates (only the first match was updated before).
+            InvoiceLineItem::where('invoice_id', $invoice->id)
+                ->whereRaw('LOWER(TRIM(description)) = ?', [strtolower($roundingDescription)])
+                ->delete();
 
-        if (abs($adjustment) < 0.0001 || ! $roundingAccountId) {
-            if ($existingRoundingLine) {
-                $existingRoundingLine->delete();
+            $invoice->unsetRelation('lineItems');
+
+            if (abs($adjustment) < 0.0001 || ! $roundingAccountId) {
+                return;
             }
 
-            return;
-        }
+            $nextSortOrder = ((int) $invoice->lineItems()->max('sort_order')) + 1;
 
-        if ($existingRoundingLine) {
-            $existingRoundingLine->update([
+            InvoiceLineItem::create([
+                'invoice_id' => $invoice->id,
+                'product_id' => null,
                 'description' => $roundingDescription,
                 'quantity' => 1,
                 'unit_price' => $adjustment,
@@ -1697,28 +1698,12 @@ class InvoicesController extends Controller
                 'tax_rate_id' => null,
                 'tax_amount' => 0,
                 'account_id' => $roundingAccountId,
-                'line_group_id' => $existingRoundingLine->line_group_id ?? $defaultLineGroupId,
+                'line_group_id' => $defaultLineGroupId,
+                'sort_order' => $nextSortOrder,
             ]);
-
-            return;
+        } finally {
+            $invoice->unsetRelation('lineItems');
         }
-
-        $nextSortOrder = ((int) $invoice->lineItems()->max('sort_order')) + 1;
-        InvoiceLineItem::create([
-            'invoice_id' => $invoice->id,
-            'product_id' => null,
-            'description' => $roundingDescription,
-            'quantity' => 1,
-            'unit_price' => $adjustment,
-            'discount_amount' => 0,
-            'discount_percentage' => 0,
-            'total' => $adjustment,
-            'tax_rate_id' => null,
-            'tax_amount' => 0,
-            'account_id' => $roundingAccountId,
-            'line_group_id' => $defaultLineGroupId,
-            'sort_order' => $nextSortOrder,
-        ]);
     }
 
     private function calculateInvoiceLineTaxAmount(float $lineTotal, $taxRateId): float

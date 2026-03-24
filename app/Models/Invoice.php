@@ -191,6 +191,14 @@ class Invoice extends Model
     }
 
     /**
+     * Whether a line item is the synthetic nearest-$0.10 rounding row (matches UI / PDF / Xero helpers).
+     */
+    public static function isRoundingAdjustmentLineItem(?string $description): bool
+    {
+        return strtolower(trim((string) $description)) === 'rounding adjustment';
+    }
+
+    /**
      * Calculate totals for the invoice.
      */
     public function calculateTotals(): void
@@ -213,12 +221,14 @@ class Invoice extends Model
             return $discountAmount;
         });
 
-        // Subtotal after discounts (sum of line item totals)
-        $subtotal = $lineItems->sum('total');
+        // Subtotal: non-rounding lines only so Show/PDF "Subtotal + Rounding + Tax" does not double-count the adjustment.
+        $subtotal = $lineItems
+            ->reject(fn ($item) => static::isRoundingAdjustmentLineItem($item->description ?? null))
+            ->sum('total');
 
         // Tax is now calculated per line item - sum all line item tax amounts
         $taxAmount = $lineItems->sum('tax_amount') ?? 0;
-        $total = $subtotal + $taxAmount;
+        $total = $lineItems->sum('total') + $taxAmount;
 
         $this->update([
             'subtotal' => $subtotal,

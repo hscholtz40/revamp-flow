@@ -201,12 +201,30 @@ const lineTotal = (item: any) => {
     return subtotal - discAmt;
 };
 
+const roundCurrency = (amount: number): number => Math.round((amount + Number.EPSILON) * 100) / 100;
+
 const subtotal = computed(() => form.line_items.reduce((sum, i) => sum + lineTotal(i), 0));
 
 const defaultTaxRate = computed(() => Number(props.defaultSalesTaxRate?.rate || 0));
-const taxAmount = computed(() => Math.round((subtotal.value * (defaultTaxRate.value / 100) + Number.EPSILON) * 100) / 100);
 
-const total = computed(() => subtotal.value + taxAmount.value);
+/** Per-line tax, matching `InvoicesController::storePos` (rounded per line, then summed). */
+const taxAmount = computed(() => {
+    if (!props.defaultSalesTaxRate?.id || defaultTaxRate.value <= 0) {
+        return 0;
+    }
+    return form.line_items.reduce((sum: number, item: any) => {
+        const lineTax = roundCurrency(lineTotal(item) * (defaultTaxRate.value / 100));
+        return roundCurrency(sum + lineTax);
+    }, 0);
+});
+
+const roundToNearestTenCents = (amount: number): number => Math.round(amount * 10) / 10;
+
+const baseTotalBeforeRounding = computed(() => subtotal.value + taxAmount.value);
+const roundedTargetTotal = computed(() => roundToNearestTenCents(baseTotalBeforeRounding.value));
+const roundingAdjustment = computed(() => roundedTargetTotal.value - baseTotalBeforeRounding.value);
+
+const total = computed(() => subtotal.value + taxAmount.value + roundingAdjustment.value);
 
 watch(total, (newTotal) => {
     if (form.payment_method === 'account') {
@@ -527,6 +545,13 @@ const submit = () => {
                             <div class="flex justify-between">
                                 <span>Tax <span v-if="props.defaultSalesTaxRate">({{ props.defaultSalesTaxRate.rate }}%)</span></span>
                                 <span>{{ formatCurrency(taxAmount) }}</span>
+                            </div>
+                            <div
+                                v-if="Math.abs(roundingAdjustment) >= 0.0001"
+                                class="flex justify-between text-sm text-gray-600"
+                            >
+                                <span>Rounding</span>
+                                <span>{{ formatCurrency(roundingAdjustment) }}</span>
                             </div>
                             <div class="flex justify-between border-t pt-2 text-lg font-semibold"><span>Total</span><span>{{ formatCurrency(total) }}</span></div>
                         </div>

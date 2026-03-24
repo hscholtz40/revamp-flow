@@ -1449,7 +1449,7 @@ class XeroService
         $currentCompany = $this->getCompany();
 
         $maxInvoicesPerRun = max(1, (int) config('services.xero.invoice_export_max_per_run', 200));
-        $invoices = Invoice::where('company_id', $currentCompany->id)
+        $createCandidates = Invoice::where('company_id', $currentCompany->id)
             ->where(function ($query) {
                 $query->whereNull('xero_invoice_id')
                     ->orWhereNull('xero_updated_at')
@@ -1482,7 +1482,7 @@ class XeroService
                 ->values();
         }
 
-        $invoices = $createCandidates->concat($updateCandidates)->values();
+        $invoices = $createCandidates->concat($updateCandidates)->unique('id')->values();
         $results = [];
 
         Log::info('Starting invoice sync to Xero', [

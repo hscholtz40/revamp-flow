@@ -612,11 +612,18 @@
             $lineTotal = (float) ($item->total ?? (($item->quantity ?? 0) * ($item->unit_price ?? 0)));
             return $sum + $lineTotal;
         }, 0.0);
+        $subtotalExcludingRounding = $lineItemsForRoundingTotals->sum(function ($item) {
+            if (\App\Models\Invoice::isRoundingAdjustmentLineItem($item->description ?? null)) {
+                return 0.0;
+            }
+
+            return (float) ($item->total ?? 0);
+        });
     @endphp
     <div class="totals-section">
         <div class="total-row">
             <span>Subtotal:</span>
-            <span>{{ $company->formatCurrencyZar($invoice->subtotal ?? 0) }}</span>
+            <span>{{ $company->formatCurrencyZar($subtotalExcludingRounding) }}</span>
         </div>
         @if(($invoice->tax_amount ?? 0) > 0)
         <div class="total-row">

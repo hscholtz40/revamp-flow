@@ -358,7 +358,7 @@
                             <div class="space-y-2">
                                 <div class="flex justify-between">
                                     <span class="text-gray-600">Subtotal:</span>
-                                    <span class="font-medium">{{ formatCurrency(props.invoice.subtotal) }}</span>
+                                    <span class="font-medium">{{ formatCurrency(subtotalExcludingRounding) }}</span>
                                 </div>
                                 <div v-if="(Number(props.invoice.discount_amount) || 0) > 0" class="flex justify-between">
                                     <span class="text-gray-600">Discount:</span>
@@ -1036,6 +1036,16 @@ const roundingAdjustment = computed(() => {
             return sum;
         }
         return sum + (Number(item.total) || (Number(item.quantity) || 0) * (Number(item.unit_price) || 0));
+    }, 0);
+});
+
+/** Same basis as Create/Edit: ex–rounding line totals only (avoids relying on `invoice.subtotal` if duplicates or stale saves occurred). */
+const subtotalExcludingRounding = computed(() => {
+    return (props.invoice.line_items || []).reduce((sum, item) => {
+        if (isRoundingAdjustmentLine(item)) {
+            return sum;
+        }
+        return sum + (Number(item.total) || 0);
     }, 0);
 });
 
