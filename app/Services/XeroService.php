@@ -1433,138 +1433,8 @@ class XeroService
                 $hasLocalChangesForExport = !$invoice->xero_updated_at
                     || ($invoice->updated_at && $invoice->updated_at->gt($invoice->xero_updated_at));
                 
-                if ($invoice->xero_invoice_id) {
-                    $xeroInvoice = $this->getXeroInvoiceCached($invoice->xero_invoice_id);
-                    if ($xeroInvoice) {
-                        $xeroStatus = strtoupper((string) ($xeroInvoice['Status'] ?? ''));
-
-                        // Xero invoices in terminal states cannot be modified.
-                        // Keep local in sync and skip outbound updates for these.
-                        if (in_array($xeroStatus, ['VOIDED', 'DELETED'], true)) {
-                            Log::info('Skipping outbound invoice push because Xero invoice is non-editable', [
-                                'invoice_id' => $invoice->id,
-                                'invoice_number' => $invoice->invoice_number,
-                                'xero_invoice_id' => $invoice->xero_invoice_id,
-                                'xero_status' => $xeroStatus,
-                                'decision_reason' => 'skip_xero_terminal_status',
-                            ]);
-
-                            $this->updateInvoiceFromXeroData($invoice, $xeroInvoice);
-                            $results[] = [
-                                'invoice_id' => $invoice->id,
-                                'invoice_number' => $invoice->invoice_number,
-                                'status' => 'skipped',
-                                'message' => "Skipped outbound sync: Xero invoice status is {$xeroStatus}",
-                            ];
-                            continue;
-                        }
-
-                        // Check payment status in both systems
-                        $isPaidInXero = ($xeroInvoice['AmountDue'] ?? $xeroInvoice['AmountOwing'] ?? $xeroInvoice['Total'] ?? 0) <= 0.01;
-                        $isPaidLocally = $invoice->isFullyPaid();
-                        
-                        // If paid in both systems and there are no local changes to export, skip updating.
-                        // If local data changed after last Xero sync, we still attempt export.
-                        if ($isPaidInXero && $isPaidLocally && !$hasLocalChangesForExport) {
-                            Log::info('Invoice is fully paid in both systems, skipping update', [
-                                'invoice_id' => $invoice->id,
-                                'invoice_number' => $invoice->invoice_number,
-                                'xero_invoice_id' => $invoice->xero_invoice_id,
-                                'updated_at' => optional($invoice->updated_at)?->toDateTimeString(),
-                                'xero_updated_at' => optional($invoice->xero_updated_at)?->toDateTimeString(),
-                                'decision_reason' => 'skip_paid_no_change',
-                            ]);
-                            $results[] = [
-                                'invoice_id' => $invoice->id,
-                                'invoice_number' => $invoice->invoice_number,
-                                'status' => 'skipped',
-                                'message' => 'Invoice is fully paid in both systems',
-                            ];
-                            continue;
-                        }
-                        
-                        // If paid in Xero but not locally, import payments from Xero
-                        if ($isPaidInXero && !$isPaidLocally) {
-                            Log::info('Invoice is paid in Xero but not locally, importing payments', [
-                                'invoice_id' => $invoice->id,
-                                'invoice_number' => $invoice->invoice_number,
-                                'xero_invoice_id' => $invoice->xero_invoice_id,
-                            ]);
-                            
-                            try {
-                                // Fetch payments for this invoice from Xero
-                                $this->syncPaymentsForInvoiceFromXero($invoice, $xeroInvoice);
-                                
-                                // Refresh invoice to get updated payment status
-                                $invoice->refresh();
-                                
-                                $results[] = [
-                                    'invoice_id' => $invoice->id,
-                                    'invoice_number' => $invoice->invoice_number,
-                                    'status' => 'payments_imported',
-                                    'message' => 'Payments imported from Xero',
-                                ];
-                            } catch (\Exception $e) {
-                                Log::error('Failed to import payments from Xero for invoice', [
-                                    'invoice_id' => $invoice->id,
-                                    'invoice_number' => $invoice->invoice_number,
-                                    'error' => $e->getMessage(),
-                                ]);
-                                // Continue with normal sync if payment import fails
-                            }
-                        }
-                        
-                        // If paid locally but not in Xero, sync payments to Xero
-                        if (!$isPaidInXero && $isPaidLocally) {
-                            Log::info('Invoice is paid locally but not in Xero, syncing payments to Xero', [
-                                'invoice_id' => $invoice->id,
-                                'invoice_number' => $invoice->invoice_number,
-                                'xero_invoice_id' => $invoice->xero_invoice_id,
-                            ]);
-                            
-                            try {
-                                $paymentResults = $this->syncPaymentsToXero($invoice);
-                                $successCount = collect($paymentResults)->where('status', 'success')->count();
-                                
-                                if ($successCount > 0) {
-                                    $results[] = [
-                                        'invoice_id' => $invoice->id,
-                                        'invoice_number' => $invoice->invoice_number,
-                                        'status' => 'payments_synced',
-                                        'message' => "Synced {$successCount} payment(s) to Xero",
-                                    ];
-                                    continue; // Skip invoice update since payments were synced
-                                }
-                            } catch (\Exception $e) {
-                                Log::error('Failed to sync payments to Xero for invoice', [
-                                    'invoice_id' => $invoice->id,
-                                    'invoice_number' => $invoice->invoice_number,
-                                    'error' => $e->getMessage(),
-                                ]);
-                                // Continue with normal sync if payment sync fails
-                            }
-                        }
-                        
-                        if ($this->isXeroRecordNewerThanLocal($invoice, $xeroInvoice)) {
-                            Log::info('Skipping outbound invoice push because Xero record is newer', [
-                                'invoice_id' => $invoice->id,
-                                'invoice_number' => $invoice->invoice_number,
-                                'updated_at' => optional($invoice->updated_at)?->toDateTimeString(),
-                                'xero_updated_at' => optional($invoice->xero_updated_at)?->toDateTimeString(),
-                                'xero_updated_date_utc' => $xeroInvoice['UpdatedDateUTC'] ?? null,
-                                'decision_reason' => 'skip_xero_newer',
-                            ]);
-                            $this->updateInvoiceFromXeroData($invoice, $xeroInvoice);
-                            $results[] = [
-                                'invoice_id' => $invoice->id,
-                                'invoice_number' => $invoice->invoice_number,
-                                'status' => 'updated_from_xero',
-                                'message' => 'Invoice updated from Xero (Xero was newer)',
-                            ];
-                            continue;
-                        }
-                    }
-                }
+                // Avoid pre-read requests to Xero for each invoice. We rely on write responses
+                // and periodic inbound sync/webhooks to keep local and remote state aligned.
 
                 Log::info('Attempting outbound invoice sync to Xero', [
                     'invoice_id' => $invoice->id,
@@ -2234,73 +2104,10 @@ class XeroService
             'total' => $invoice->total,
         ]);
 
-        // If invoice already has a Xero ID, update it; otherwise create new
+        // If invoice already has a Xero ID, update it; otherwise create new.
+        // Avoid extra pre-read requests for invoice details; let Xero validate the payload.
         if ($invoice->xero_invoice_id) {
             $invoiceData['InvoiceID'] = $invoice->xero_invoice_id;
-            
-            // Fetch current Xero invoice to preserve constraints around paid/credited invoices.
-            $xeroInvoice = $this->getXeroInvoice($invoice->xero_invoice_id);
-            if ($xeroInvoice) {
-                $xeroAmountPaid = (float) ($xeroInvoice['AmountPaid'] ?? 0);
-                $xeroAmountCredited = (float) ($xeroInvoice['AmountCredited'] ?? 0);
-                $hasAllocations = $xeroAmountPaid > 0 || $xeroAmountCredited > 0;
-
-                // Xero rejects forcing AUTHORISED when payments/credits are already allocated.
-                // For updates, omit Status and let Xero keep its existing status.
-                if ($hasAllocations) {
-                    unset($invoiceData['Status']);
-                    Log::info('Skipping invoice status in Xero payload because allocations exist', [
-                        'invoice_id' => $invoice->id,
-                        'invoice_number' => $invoice->invoice_number,
-                        'xero_invoice_id' => $invoice->xero_invoice_id,
-                        'xero_status' => $xeroInvoice['Status'] ?? null,
-                        'amount_paid' => $xeroAmountPaid,
-                        'amount_credited' => $xeroAmountCredited,
-                    ]);
-                }
-            }
-
-            // For paid/allocated invoices, include existing LineItemIDs to keep Xero line links stable.
-            if ($xeroInvoice && (
-                ($xeroInvoice['Status'] ?? null) === 'PAID'
-                || (float) ($xeroInvoice['AmountPaid'] ?? 0) > 0
-                || (float) ($xeroInvoice['AmountCredited'] ?? 0) > 0
-            )) {
-                // Map local line items to Xero line items by matching description and amount
-                $xeroLineItems = $xeroInvoice['LineItems'] ?? [];
-                
-                foreach ($lineItems as $index => &$lineItem) {
-                    $isRoundingAdjustmentLine = $this->isRoundingAdjustmentLineDescription($lineItem['Description'] ?? null);
-                    if ($isRoundingAdjustmentLine) {
-                        // Keep rounding lines mutable so account/tax corrections can be applied
-                        // even when older Xero lines were created with a fallback account code.
-                        continue;
-                    }
-                    // Try to find matching Xero line item
-                    $matchedXeroItem = null;
-                    foreach ($xeroLineItems as $xeroItem) {
-                        // Match by description and line amount (within small tolerance for rounding)
-                        $descriptionMatch = ($lineItem['Description'] === ($xeroItem['Description'] ?? ''));
-                        $amountMatch = abs($lineItem['LineAmount'] - ($xeroItem['LineAmount'] ?? 0)) < 0.01;
-                        
-                        if ($descriptionMatch && $amountMatch && isset($xeroItem['LineItemID'])) {
-                            $matchedXeroItem = $xeroItem;
-                            break;
-                        }
-                    }
-                    
-                    // If we found a match, include the LineItemID
-                    if ($matchedXeroItem && isset($matchedXeroItem['LineItemID'])) {
-                        $lineItem['LineItemID'] = $matchedXeroItem['LineItemID'];
-                    } elseif (isset($xeroLineItems[$index]['LineItemID'])) {
-                        // Fallback: match by index if available
-                        $lineItem['LineItemID'] = $xeroLineItems[$index]['LineItemID'];
-                    }
-                }
-                unset($lineItem); // Break reference
-                
-                $invoiceData['LineItems'] = $lineItems;
-            }
         }
         
         $response = $this->makeXeroRequest('post', $this->baseUrl . '/api.xro/2.0/Invoices', [
@@ -2405,7 +2212,10 @@ class XeroService
     private function updateInvoiceFromXero(string $xeroInvoiceId): void
     {
         try {
-            $response = $this->makeXeroRequest('get', $this->baseUrl . '/api.xro/2.0/Invoices/' . $xeroInvoiceId);
+            $response = $this->makeXeroRequest(
+                'get',
+                $this->baseUrl . '/api.xro/2.0/Invoices?where=' . rawurlencode('InvoiceID==Guid("' . $xeroInvoiceId . '")') . '&summaryOnly=false'
+            );
 
             if (!$response->successful()) {
                 Log::error('Failed to fetch invoice from Xero: ' . $response->body());
@@ -4215,12 +4025,15 @@ class XeroService
     }
 
     /**
-     * Get Xero invoice by ID
+     * Get Xero invoice by ID using filtered list endpoint (avoids /Invoices/{id})
      */
     private function getXeroInvoice(string $invoiceId): ?array
     {
         try {
-            $response = $this->makeXeroRequest('get', $this->baseUrl . '/api.xro/2.0/Invoices/' . $invoiceId);
+            $response = $this->makeXeroRequest(
+                'get',
+                $this->baseUrl . '/api.xro/2.0/Invoices?where=' . rawurlencode('InvoiceID==Guid("' . $invoiceId . '")') . '&summaryOnly=false'
+            );
 
             if ($response->successful()) {
                 $result = $response->json();
@@ -4274,18 +4087,8 @@ class XeroService
 
     private function hydrateInvoiceDetails(array $xeroInvoice): array
     {
-        $hasLineItems = isset($xeroInvoice['LineItems']) && is_array($xeroInvoice['LineItems']) && count($xeroInvoice['LineItems']) > 0;
-        $hasNumber = !empty($xeroInvoice['InvoiceNumber']) || !empty($xeroInvoice['Reference']);
-        if ((empty($xeroInvoice['InvoiceID'])) || ($hasLineItems && $hasNumber)) {
-            return $xeroInvoice;
-        }
-
-        $detailed = $this->getXeroInvoice((string) $xeroInvoice['InvoiceID']);
-        if (!is_array($detailed) || empty($detailed)) {
-            return $xeroInvoice;
-        }
-
-        return array_replace($xeroInvoice, $detailed);
+        // Keep import request volume predictable; do not fetch per-invoice detail.
+        return $xeroInvoice;
     }
 
     /**
@@ -4631,47 +4434,13 @@ class XeroService
             ];
         }
 
-        // Check if invoice is already fully paid in Xero (use 0.01 tolerance for rounding)
-        $xeroInvoice = $xeroInvoice ?? $this->getXeroInvoiceCached($invoice->xero_invoice_id);
-        $amountDue = $xeroInvoice['AmountDue'] ?? $xeroInvoice['AmountOwing'] ?? null;
-        if ($xeroInvoice && $amountDue !== null && (float) $amountDue <= 0.01) {
-            Log::info('Skipping payment creation - invoice already fully paid in Xero', [
-                'invoice_id' => $invoice->id,
-                'xero_invoice_id' => $invoice->xero_invoice_id,
-                'amount_due' => $amountDue,
-                'payment_amount' => $payment->amount,
-            ]);
-            
-            return [
-                'payment_id' => $payment->id,
-                'amount' => $payment->amount,
-                'status' => 'skipped',
-                'message' => 'Invoice is already fully paid in Xero (Amount Due: ' . $amountDue . ')',
-            ];
-        }
-
-        // Cap payment amount to Xero AmountDue when available (never exceed outstanding balance in Xero).
-        // Do not cap by local remaining_balance here: for fully paid local invoices this is 0,
-        // which incorrectly blocks outbound payment creation.
-        $xeroAmountDue = $amountDue !== null ? (float) $amountDue : null;
-        $amountToSend = (float) $payment->amount;
-        if ($xeroAmountDue !== null && $xeroAmountDue >= 0) {
-            $amountToSend = min($amountToSend, $xeroAmountDue);
-        }
-        $amountToSend = round($amountToSend, 2);
-
+        $amountToSend = round((float) $payment->amount, 2);
         if ($amountToSend <= 0) {
-            Log::info('Skipping payment creation - no amount due to apply', [
-                'invoice_id' => $invoice->id,
-                'payment_id' => $payment->id,
-                'payment_amount' => $payment->amount,
-                'xero_amount_due' => $xeroAmountDue,
-            ]);
             return [
                 'payment_id' => $payment->id,
                 'amount' => $payment->amount,
                 'status' => 'skipped',
-                'message' => 'No amount due on invoice in Xero (Xero: ' . ($xeroAmountDue ?? 'unknown') . ', payment: ' . $payment->amount . ')',
+                'message' => 'Payment amount is zero',
             ];
         }
 
@@ -4750,8 +4519,6 @@ class XeroService
                 'xero_payment_id' => $xeroPayment['PaymentID'],
                 'xero_synced_at' => $syncStamp,
             ]);
-            // Invalidate cache so next payment in batch gets fresh AmountDue
-            $this->invalidateXeroInvoiceCache($invoice->xero_invoice_id);
         }
 
         return [
@@ -4930,20 +4697,6 @@ class XeroService
      */
     private function syncPaymentsForInvoiceFromXero(Invoice $invoice, array $xeroInvoice = null): void
     {
-        // If xeroInvoice not provided, fetch it
-        if (!$xeroInvoice && $invoice->xero_invoice_id) {
-            $xeroInvoice = $this->getXeroInvoice($invoice->xero_invoice_id);
-        }
-        
-        if (!$xeroInvoice) {
-            Log::warning('Cannot sync payments - Xero invoice not found', [
-                'invoice_id' => $invoice->id,
-                'invoice_number' => $invoice->invoice_number,
-                'xero_invoice_id' => $invoice->xero_invoice_id,
-            ]);
-            return;
-        }
-
         // Get payments from Xero invoice data
         // Note: Payments might not be included in the invoice response, so we may need to fetch them separately
         $xeroPayments = $xeroInvoice['Payments'] ?? [];

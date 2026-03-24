@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-03-24
+
+- Reduced Xero invoice/payment sync request volume by removing per-invoice pre-read calls before invoice export and payment export, so sync now writes directly and relies on write responses plus scheduled inbound sync/webhooks for reconciliation.
+- Removed Xero single-invoice endpoint usage (`/Invoices/{id}`) by switching invoice-by-ID lookups to filtered list queries and eliminating import-time per-invoice detail hydration fetches to lower rate-limit pressure during high-volume sync runs.
+
 ## 2026-03-23
 
 - Reduced Xero API request pressure by lowering scheduler frequencies for non-critical sync jobs, moving payment-import execution from `xero:sync-invoices` to `xero:sync-invoices-from-xero`, and removing immediate payment-create sync from the UI path so payment export is handled by the scheduled `xero:sync-payments` command.
