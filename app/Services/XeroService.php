@@ -2127,6 +2127,26 @@ class XeroService
             
             // Parse Xero error for more specific message
             $errorData = json_decode($errorBody, true);
+            if (is_array($errorData) && $this->shouldMarkInvoiceAsSyncedOnValidationError($errorData)) {
+                $syncStamp = $this->resolveInvoiceValidationSyncTimestamp($errorData, $invoice);
+                $invoice->update(['xero_updated_at' => $syncStamp]);
+                $this->alignLocalUpdatedAtWithXero($invoice);
+
+                Log::warning('Marked invoice as synced after non-retriable Xero validation response', [
+                    'invoice_id' => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'xero_invoice_id' => $invoice->xero_invoice_id,
+                    'xero_updated_at' => $syncStamp->toDateTimeString(),
+                    'status' => $statusCode,
+                    'response' => $errorData,
+                ]);
+
+                return [
+                    'InvoiceID' => $invoice->xero_invoice_id,
+                    'UpdatedDateUTC' => $syncStamp->toIso8601String(),
+                ];
+            }
+
             if (isset($errorData['Elements'][0]['ValidationErrors'])) {
                 $errors = collect($errorData['Elements'][0]['ValidationErrors'])
                     ->pluck('Message')
@@ -4498,6 +4518,26 @@ class XeroService
             
             // Parse Xero error for more specific message
             $errorData = json_decode($errorBody, true);
+            if (is_array($errorData) && $this->shouldMarkPaymentAsSyncedOnValidationError($errorData)) {
+                $syncStamp = $this->resolvePaymentValidationSyncTimestamp($errorData, $payment);
+                $payment->update(['xero_synced_at' => $syncStamp]);
+
+                Log::warning('Marked payment as synced after non-retriable Xero validation response', [
+                    'payment_id' => $payment->id,
+                    'invoice_id' => $invoice->id,
+                    'xero_invoice_id' => $invoice->xero_invoice_id,
+                    'xero_synced_at' => $syncStamp->toDateTimeString(),
+                    'response' => $errorData,
+                ]);
+
+                return [
+                    'payment_id' => $payment->id,
+                    'amount' => $payment->amount,
+                    'status' => 'skipped',
+                    'message' => 'Marked as synced after non-retriable Xero validation response',
+                ];
+            }
+
             if (isset($errorData['Elements'][0]['ValidationErrors'][0]['Message'])) {
                 $specificError = $errorData['Elements'][0]['ValidationErrors'][0]['Message'];
                 throw new \Exception("Failed to create payment in Xero: {$specificError}. The default bank account may not be valid for payments in Xero.");
@@ -4527,6 +4567,108 @@ class XeroService
             'status' => 'success',
             'xero_payment_id' => $xeroPayment['PaymentID'] ?? null,
         ];
+    }
+
+    private function shouldMarkInvoiceAsSyncedOnValidationError(array $errorData): bool
+    {
+        if (($errorData['Type'] ?? null) !== 'ValidationException' || (int) ($errorData['ErrorNumber'] ?? 0) !== 10) {
+            return false;
+        }
+
+        $messages = collect(data_get($errorData, 'Elements.0.ValidationErrors', []))
+            ->pluck('Message')
+            ->filter(fn ($message) => is_string($message) && trim($message) !== '')
+            ->map(fn (string $message) => strtolower($message))
+            ->values();
+
+        if ($messages->isEmpty()) {
+            return false;
+        }
+
+        $nonRetriableMessageFragments = [
+            'must supply a lineitemid',
+            'status authorised cannot be applied',
+            'payments or credit notes allocated',
+        ];
+
+        foreach ($messages as $message) {
+            foreach ($nonRetriableMessageFragments as $fragment) {
+                if (str_contains($message, $fragment)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private function shouldMarkPaymentAsSyncedOnValidationError(array $errorData): bool
+    {
+        if (($errorData['Type'] ?? null) !== 'ValidationException' || (int) ($errorData['ErrorNumber'] ?? 0) !== 10) {
+            return false;
+        }
+
+        $messages = collect(data_get($errorData, 'Elements.0.ValidationErrors', []))
+            ->pluck('Message')
+            ->filter(fn ($message) => is_string($message) && trim($message) !== '')
+            ->map(fn (string $message) => strtolower($message))
+            ->values();
+
+        if ($messages->isEmpty()) {
+            return false;
+        }
+
+        $nonRetriableMessageFragments = [
+            'payments can only be made against authorised documents',
+            'payment amount exceeds the amount outstanding',
+        ];
+
+        foreach ($messages as $message) {
+            foreach ($nonRetriableMessageFragments as $fragment) {
+                if (str_contains($message, $fragment)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private function resolveInvoiceValidationSyncTimestamp(array $errorData, Invoice $invoice): \Carbon\Carbon
+    {
+        $updatedDateUtc = data_get($errorData, 'Elements.0.UpdatedDateUTC')
+            ?? data_get($errorData, 'Elements.0.Invoice.UpdatedDateUTC');
+        if (is_string($updatedDateUtc) && trim($updatedDateUtc) !== '') {
+            return $this->parseXeroDate($updatedDateUtc);
+        }
+
+        $date = data_get($errorData, 'Elements.0.Date');
+        if (is_string($date) && trim($date) !== '') {
+            return $this->parseXeroDate($date);
+        }
+
+        $dateString = data_get($errorData, 'Elements.0.DateString');
+        if (is_string($dateString) && trim($dateString) !== '') {
+            return $this->parseXeroDate($dateString);
+        }
+
+        return $invoice->xero_updated_at ?: now();
+    }
+
+    private function resolvePaymentValidationSyncTimestamp(array $errorData, Payment $payment): \Carbon\Carbon
+    {
+        $updatedDateUtc = data_get($errorData, 'Elements.0.UpdatedDateUTC')
+            ?? data_get($errorData, 'Elements.0.Invoice.UpdatedDateUTC');
+        if (is_string($updatedDateUtc) && trim($updatedDateUtc) !== '') {
+            return $this->parseXeroDate($updatedDateUtc);
+        }
+
+        $date = data_get($errorData, 'Elements.0.Date');
+        if (is_string($date) && trim($date) !== '') {
+            return $this->parseXeroDate($date);
+        }
+
+        return $payment->xero_synced_at ?: now();
     }
 
     private function invalidateXeroInvoiceCache(?string $xeroInvoiceId): void

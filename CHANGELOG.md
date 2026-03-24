@@ -4,6 +4,7 @@
 
 - Reduced Xero invoice/payment sync request volume by removing per-invoice pre-read calls before invoice export and payment export, so sync now writes directly and relies on write responses plus scheduled inbound sync/webhooks for reconciliation.
 - Removed Xero single-invoice endpoint usage (`/Invoices/{id}`) by switching invoice-by-ID lookups to filtered list queries and eliminating import-time per-invoice detail hydration fetches to lower rate-limit pressure during high-volume sync runs.
+- Updated Xero outbound invoice/payment error handling to treat specific non-retriable `ValidationException` responses (paid/allocated invoice update conflicts and overpaid/non-authorised payment conflicts) as synced locally by stamping `xero_updated_at`/`xero_synced_at`, preventing repeated retry loops in scheduled sync.
 
 ## 2026-03-23
 
