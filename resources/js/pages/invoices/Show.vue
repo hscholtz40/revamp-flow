@@ -92,7 +92,7 @@
                             Sign
                         </button>
                         <button
-                            v-if="canEditInvoice && (props.invoice.remaining_balance || props.invoice.total) > 0"
+                            v-if="(props.invoice.remaining_balance || props.invoice.total) > 0"
                             @click="showPaymentModal = true"
                             class="rounded-md bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
                         >

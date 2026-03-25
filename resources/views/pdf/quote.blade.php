@@ -628,7 +628,7 @@
         @endif
     </div>
     
-    @if(($quote->signatures ?? collect())->count() > 0)
+    @if(($company->enable_document_signing ?? false) && ($quote->signatures ?? collect())->count() > 0)
         <div class="signature-section">
             <div style="font-weight: bold; margin-bottom: 10px;">Signatures</div>
             @foreach(($quote->signatures ?? collect())->chunk(3) as $signatureRow)
@@ -654,6 +654,23 @@
                     @endfor
                 </div>
             @endforeach
+        </div>
+    @elseif(! ($company->enable_document_signing ?? false))
+        <div class="signature-section">
+            <div class="signature-row">
+                <div class="signature-item">
+                    <div>Received by</div>
+                    <div class="signature-line"></div>
+                </div>
+                <div class="signature-item">
+                    <div>Date</div>
+                    <div class="signature-line"></div>
+                </div>
+                <div class="signature-item">
+                    <div>Signature</div>
+                    <div class="signature-line"></div>
+                </div>
+            </div>
         </div>
     @endif
     

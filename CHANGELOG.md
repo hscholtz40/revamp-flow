@@ -2,6 +2,7 @@
 
 ## 2026-03-25
 
+- **Invoices / permissions + PDF signatures:** Invoice Show now keeps **Add Payment** visible based on outstanding balance even when the user cannot edit invoices. Restored legacy PDF signature lines (**Received by / Date / Signature**) on invoice, quote, and jobcard templates when company **document signing is disabled**; when enabled, captured canvas signatures continue to render.
 - **Xero / encryption:** `XeroSettings` OAuth fields (`client_secret`, `access_token`, `refresh_token`) use a cast compatible with **legacy plaintext** values in the database. After 1.9.0, the built-in `encrypted` cast tried to decrypt existing **raw JWT** tokens and threw `DecryptException` (“The payload is invalid”), breaking `xero:sync-payments` and other jobs. The new cast decrypts when the value is Laravel-encrypted and otherwise returns the stored string; saves still encrypt.
 
 ## 2026-03-24
