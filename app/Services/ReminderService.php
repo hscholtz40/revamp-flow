@@ -36,7 +36,7 @@ class ReminderService
         if ($this->whatsappService) {
             Log::info('ReminderService initialized with WhatsApp service');
         } else {
-            Log::warning('ReminderService initialized without WhatsApp service - WhatsApp settings may not be configured');
+            Log::info('ReminderService initialized without WhatsApp service');
         }
     }
 

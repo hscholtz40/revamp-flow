@@ -8077,6 +8077,8 @@ class XeroService
 
         $currentCompany = $this->getCompany();
         $results = [];
+        $poBatchSize = max(1, min(50, (int) config('services.xero.purchase_order_export_batch_size', 25)));
+        $poBatchDelayMs = max(0, (int) config('services.xero.purchase_order_export_batch_delay_ms', 250));
 
         $purchaseOrders = PurchaseOrder::where('company_id', $currentCompany->id)
             ->where(function ($query) {
@@ -8478,11 +8480,24 @@ class XeroService
                     $errorMessages = collect($elements[$index]['ValidationErrors'])->pluck('Message')->filter()->implode(', ');
                 }
 
-                $out[] = [
-                    'po' => $po,
-                    'status' => 'error',
-                    'error' => $errorMessages !== '' ? $errorMessages : 'Failed to create/update purchase order in Xero',
-                ];
+                $rowError = $errorMessages !== '' ? $errorMessages : 'Failed to create/update purchase order in Xero';
+
+                // If batch returns row-level validation errors, retry this PO individually so
+                // single-record fallbacks (e.g. remove AccountCode/Status) can recover.
+                try {
+                    $xeroPORetry = $this->createOrUpdatePurchaseOrderInXero($po);
+                    $out[] = [
+                        'po' => $po,
+                        'status' => 'success',
+                        'xero_purchase_order' => $xeroPORetry,
+                    ];
+                } catch (\Exception $individualError) {
+                    $out[] = [
+                        'po' => $po,
+                        'status' => 'error',
+                        'error' => $individualError->getMessage() ?: $rowError,
+                    ];
+                }
             }
 
             return $out;

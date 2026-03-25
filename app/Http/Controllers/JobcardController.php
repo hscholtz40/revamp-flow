@@ -423,7 +423,7 @@ class JobcardController extends Controller
                         );
                     }
                 } catch (\Exception $e) {
-                    Log::error('Failed to deduct stock for jobcard line item', [
+                    Log::warning('Stock deduction skipped for jobcard line item', [
                         'jobcard_id' => $jobcard->id,
                         'product_id' => $lineItemData['product_id'],
                         'quantity' => $lineItemData['quantity'],

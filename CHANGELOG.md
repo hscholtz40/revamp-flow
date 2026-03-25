@@ -2,6 +2,7 @@
 
 ## 2026-03-25
 
+- **Xero PO sync reliability + log noise cleanup:** Fixed undefined `$poBatchSize`/`$poBatchDelayMs` in purchase-order export, and added per-row individual retry when batched PO rows return validation errors so account-code/status fallbacks can recover. Also reduced expected operational noise by downgrading jobcard stock-deduction failures to warning and lowering ReminderService “no WhatsApp service” initialization log level from warning to info.
 - **Xero payments rate-limit guard:** Removed per-invoice fallback calls to `GET /Payments?where=Invoice.InvoiceID==Guid(...)` during invoice payment reconciliation in `XeroService`. The flow now uses embedded invoice payment data and the existing bulk payments sync path, reducing high-volume payment GET bursts that were triggering Xero rate limits.
 - **Document email route permission fix:** Updated route middleware for invoice, quote, and jobcard email endpoints to require **view** permission (not **edit**) so view-only users can send document emails without hitting Access Denied.
 - **Xero invoice fetch rate-limit guard:** removed remaining direct `GET /Invoices/{id}` calls in `XeroService` and switched invoice-by-id lookups to `GET /Invoices?where=InvoiceID==Guid("...")`, including webhook invoice refresh flow. This lowers high-cost per-invoice endpoint usage in production and reduces risk of Xero rate-limit spikes.
