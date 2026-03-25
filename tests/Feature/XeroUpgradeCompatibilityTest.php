@@ -1,7 +1,9 @@
 <?php
 
+use App\Models\XeroSettings;
 use App\Services\XeroService;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Crypt;
 
 test('xero initial sync cache keys remain stable for upgrade compatibility', function () {
     $companyId = 42;
@@ -32,4 +34,29 @@ test('reset initial sync status clears all module cache markers', function () {
     expect(Cache::has($completedKey))->toBeFalse();
     expect(Cache::has($cursorKey))->toBeFalse();
     expect(Cache::has($paginationKey))->toBeFalse();
+});
+
+test('xero settings reads legacy plaintext oauth tokens without decrypt exception', function () {
+    $jwt = 'eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature';
+
+    $settings = new XeroSettings;
+    $settings->setRawAttributes([
+        'access_token' => $jwt,
+        'refresh_token' => 'plain-refresh-token',
+    ], true);
+
+    expect($settings->access_token)->toBe($jwt);
+    expect($settings->refresh_token)->toBe('plain-refresh-token');
+});
+
+test('xero settings still decrypts values stored with laravel encrypted cast', function () {
+    $plain = 'secret-client-value';
+    $encrypted = Crypt::encrypt($plain, false);
+
+    $settings = new XeroSettings;
+    $settings->setRawAttributes([
+        'client_secret' => $encrypted,
+    ], true);
+
+    expect($settings->client_secret)->toBe($plain);
 });

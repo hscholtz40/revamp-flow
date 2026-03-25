@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Casts\AsEncryptedWithPlaintextFallback;
 use App\Traits\ScopedToCurrentCompanyRouteBinding;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -54,9 +55,9 @@ class XeroSettings extends Model
     ];
 
     protected $casts = [
-        'client_secret' => 'encrypted',
-        'access_token' => 'encrypted',
-        'refresh_token' => 'encrypted',
+        'client_secret' => AsEncryptedWithPlaintextFallback::class,
+        'access_token' => AsEncryptedWithPlaintextFallback::class,
+        'refresh_token' => AsEncryptedWithPlaintextFallback::class,
         'is_enabled' => 'boolean',
         'token_expires_at' => 'datetime',
         'sync_customers' => 'boolean',

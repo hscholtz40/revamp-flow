@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-03-25
+
+- **Xero / encryption:** `XeroSettings` OAuth fields (`client_secret`, `access_token`, `refresh_token`) use a cast compatible with **legacy plaintext** values in the database. After 1.9.0, the built-in `encrypted` cast tried to decrypt existing **raw JWT** tokens and threw `DecryptException` (“The payload is invalid”), breaking `xero:sync-payments` and other jobs. The new cast decrypts when the value is Laravel-encrypted and otherwise returns the stored string; saves still encrypt.
+
 ## 2026-03-24
 
 - **Invoices / rounding:** `ensureConvertedInvoiceRoundingLine` now **deletes every** “Rounding Adjustment” row then **creates a single** normalized line, so client + server could no longer leave **stacked duplicate** rounding lines (which inflated totals and the rounding summary). Invoice **Show** and default **invoice PDF** **Subtotal** rows now sum line totals **excluding** rounding (same basis as Create/Edit), not only the stored `invoices.subtotal` column.
