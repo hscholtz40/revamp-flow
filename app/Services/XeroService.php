@@ -2840,15 +2840,14 @@ class XeroService
     private function updateInvoiceFromXero(string $xeroInvoiceId): void
     {
         try {
-            $response = $this->makeXeroRequest('get', $this->baseUrl.'/api.xro/2.0/Invoices/'.$xeroInvoiceId);
-
-            if (! $response->successful()) {
-                Log::error('Failed to fetch invoice from Xero', SafeLog::httpResponseContext($response->status(), $response->body()));
+            $xeroInvoice = $this->getXeroInvoiceCached($xeroInvoiceId);
+            if (! is_array($xeroInvoice) || empty($xeroInvoice)) {
+                Log::error('Failed to fetch invoice from Xero', [
+                    'xero_invoice_id' => $xeroInvoiceId,
+                ]);
 
                 return;
             }
-
-            $xeroInvoice = $response->json()['Invoices'][0];
 
             $currentCompany = $this->getCompany();
 
@@ -5128,12 +5127,14 @@ class XeroService
     }
 
     /**
-     * Get Xero invoice by ID using filtered list endpoint (avoids /Invoices/{id})
+     * Get Xero invoice by ID using filtered list endpoint (avoids /Invoices/{id}).
      */
     private function getXeroInvoice(string $invoiceId): ?array
     {
         try {
-            $response = $this->makeXeroRequest('get', $this->baseUrl.'/api.xro/2.0/Invoices/'.$invoiceId);
+            $encodedInvoiceId = str_replace('"', '\"', $invoiceId);
+            $where = urlencode('InvoiceID==Guid("'.$encodedInvoiceId.'")');
+            $response = $this->makeXeroRequest('get', $this->baseUrl.'/api.xro/2.0/Invoices?where='.$where);
 
             if ($response->successful()) {
                 $result = $response->json();

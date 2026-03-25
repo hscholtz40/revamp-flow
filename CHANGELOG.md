@@ -2,6 +2,7 @@
 
 ## 2026-03-25
 
+- **Xero invoice fetch rate-limit guard:** removed remaining direct `GET /Invoices/{id}` calls in `XeroService` and switched invoice-by-id lookups to `GET /Invoices?where=InvoiceID==Guid("...")`, including webhook invoice refresh flow. This lowers high-cost per-invoice endpoint usage in production and reduces risk of Xero rate-limit spikes.
 - **Document email permissions alignment:** Email send behavior is now consistent across document modules: email actions are authorized by **view** permission (not edit) for invoices and quotes, and the jobcard Show-page Email button no longer depends on edit rights.
 - **Invoices / email permission:** Restored the **Email** action for users without invoice edit rights. Invoice show now displays Email when the user can **view** invoices, and `InvoicesController::email` authorizes against **view** instead of **update** so send-email works for view-only roles.
 - **Xero / outbound batching expansion:** Extended batched POST exports beyond invoices. Outbound sync now batches **quotes** (`/Quotes`), **purchase orders** (`/PurchaseOrders`), and **suppliers/customers** (`/Contacts`) with `SummarizeErrors=false`, plus per-batch delays and fallback to single-record retries where needed. New env/config knobs: `XERO_QUOTE_EXPORT_BATCH_SIZE`, `XERO_QUOTE_EXPORT_BATCH_DELAY_MS`, `XERO_PURCHASE_ORDER_EXPORT_BATCH_SIZE`, `XERO_PURCHASE_ORDER_EXPORT_BATCH_DELAY_MS`, `XERO_SUPPLIER_EXPORT_BATCH_SIZE`, `XERO_SUPPLIER_EXPORT_BATCH_DELAY_MS`, `XERO_CUSTOMER_EXPORT_BATCH_SIZE`, `XERO_CUSTOMER_EXPORT_BATCH_DELAY_MS`.
