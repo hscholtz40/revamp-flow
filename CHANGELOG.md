@@ -2,6 +2,7 @@
 
 ## 2026-03-25
 
+- **Invoices / payments permission fix:** Allowed view-only invoice users to add payments by aligning `POST /payments` route middleware to `invoices,view` and authorizing against `InvoicePolicy::view` in `PaymentsController::store()`. This prevents the Add Payment flow from failing for non-edit roles.
 - **Xero invoice-by-id request reduction:** Added short-lived caching for `getXeroInvoiceCached()` and switched remaining hot paths (invoice hydrate, payment reconciliation, and invoice export pre-read) from direct `getXeroInvoice()` calls to the cached accessor, reducing repeated `GET /Invoices?where=InvoiceID==Guid("...")` bursts that trigger rate limits.
 - **Xero PO sync reliability + log noise cleanup:** Fixed undefined `$poBatchSize`/`$poBatchDelayMs` in purchase-order export, and added per-row individual retry when batched PO rows return validation errors so account-code/status fallbacks can recover. Also reduced expected operational noise by downgrading jobcard stock-deduction failures to warning and lowering ReminderService “no WhatsApp service” initialization log level from warning to info.
 - **Xero payments rate-limit guard:** Removed per-invoice fallback calls to `GET /Payments?where=Invoice.InvoiceID==Guid(...)` during invoice payment reconciliation in `XeroService`. The flow now uses embedded invoice payment data and the existing bulk payments sync path, reducing high-volume payment GET bursts that were triggering Xero rate limits.

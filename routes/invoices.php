@@ -23,7 +23,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/invoices/{invoice}/sign', [InvoicesController::class, 'sign'])->middleware('module.permission:invoices,edit')->name('invoices.sign');
 
     // Payment routes
-    Route::post('/payments', [PaymentsController::class, 'store'])->middleware('module.permission:invoices,edit')->name('payments.store');
+    Route::post('/payments', [PaymentsController::class, 'store'])->middleware('module.permission:invoices,view')->name('payments.store');
     Route::delete('/payments/{payment}', [PaymentsController::class, 'destroy'])->middleware('module.permission:invoices,edit')->name('payments.destroy');
 
 });

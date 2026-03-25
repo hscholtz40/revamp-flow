@@ -30,6 +30,7 @@ class PaymentsController extends Controller
         ]);
 
         $invoice = Invoice::findOrFail($validated['invoice_id']);
+        $this->authorize('view', $invoice);
 
         // Check if payment amount exceeds remaining balance
         $remainingBalance = $invoice->remaining_balance;
