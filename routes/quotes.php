@@ -25,7 +25,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('quotes.download-pdf');
 
     Route::post('/quotes/{quote}/email', [QuotesController::class, 'emailQuote'])
-        ->middleware('module.permission:quotes,edit')
+        ->middleware('module.permission:quotes,view')
         ->name('quotes.email');
     Route::post('/quotes/{quote}/sign', [QuotesController::class, 'sign'])
         ->middleware('module.permission:quotes,edit')

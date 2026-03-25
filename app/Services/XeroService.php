@@ -6047,24 +6047,10 @@ class XeroService
         // Note: Payments might not be included in the invoice response, so we may need to fetch them separately
         $xeroPayments = $xeroInvoice['Payments'] ?? [];
 
-        // If no payments in invoice data, try fetching payments for this invoice
-        if (empty($xeroPayments) && $invoice->xero_invoice_id) {
-            try {
-                // Fetch payments for this invoice from Xero Payments API
-                $response = $this->makeXeroRequest('get', $this->baseUrl.'/api.xro/2.0/Payments?where=Invoice.InvoiceID==Guid("'.$invoice->xero_invoice_id.'")');
-
-                if ($response->successful()) {
-                    $responseData = $response->json();
-                    $xeroPayments = $responseData['Payments'] ?? [];
-                }
-            } catch (\Exception $e) {
-                Log::warning('Failed to fetch payments for invoice from Xero', [
-                    'invoice_id' => $invoice->id,
-                    'xero_invoice_id' => $invoice->xero_invoice_id,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-        }
+        // Do not fall back to per-invoice Payments API lookups here.
+        // That path causes one GET per invoice and can easily hit rate limits.
+        // We import from embedded invoice payment lines when present, and rely on
+        // the dedicated payments sync flow for broader reconciliation.
 
         if (empty($xeroPayments)) {
             Log::info('No payments found in Xero for invoice', [

@@ -2,6 +2,8 @@
 
 ## 2026-03-25
 
+- **Xero payments rate-limit guard:** Removed per-invoice fallback calls to `GET /Payments?where=Invoice.InvoiceID==Guid(...)` during invoice payment reconciliation in `XeroService`. The flow now uses embedded invoice payment data and the existing bulk payments sync path, reducing high-volume payment GET bursts that were triggering Xero rate limits.
+- **Document email route permission fix:** Updated route middleware for invoice, quote, and jobcard email endpoints to require **view** permission (not **edit**) so view-only users can send document emails without hitting Access Denied.
 - **Xero invoice fetch rate-limit guard:** removed remaining direct `GET /Invoices/{id}` calls in `XeroService` and switched invoice-by-id lookups to `GET /Invoices?where=InvoiceID==Guid("...")`, including webhook invoice refresh flow. This lowers high-cost per-invoice endpoint usage in production and reduces risk of Xero rate-limit spikes.
 - **Document email permissions alignment:** Email send behavior is now consistent across document modules: email actions are authorized by **view** permission (not edit) for invoices and quotes, and the jobcard Show-page Email button no longer depends on edit rights.
 - **Invoices / email permission:** Restored the **Email** action for users without invoice edit rights. Invoice show now displays Email when the user can **view** invoices, and `InvoicesController::email` authorizes against **view** instead of **update** so send-email works for view-only roles.

@@ -12,7 +12,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::put('/jobcards/{jobcard}', [JobcardController::class, 'update'])->middleware('module.permission:jobcards,edit')->name('jobcards.update');
     Route::patch('/jobcards/{jobcard}/status', [JobcardController::class, 'updateStatus'])->middleware('module.permission:jobcards,edit')->name('jobcards.update-status');
     Route::get('/jobcards/{jobcard}/print', [JobcardController::class, 'print'])->middleware('module.permission:jobcards,view')->name('jobcards.print');
-    Route::post('/jobcards/{jobcard}/email', [JobcardController::class, 'email'])->middleware('module.permission:jobcards,edit')->name('jobcards.email');
+    Route::post('/jobcards/{jobcard}/email', [JobcardController::class, 'email'])->middleware('module.permission:jobcards,view')->name('jobcards.email');
     Route::post('/jobcards/{jobcard}/sign', [JobcardController::class, 'sign'])->middleware('module.permission:jobcards,edit')->name('jobcards.sign');
     Route::post('/jobcards/{jobcard}/convert-to-quote', [JobcardController::class, 'convertToQuote'])->middleware('module.permission:jobcards,edit')->name('jobcards.convert-to-quote');
     Route::post('/jobcards/{jobcard}/convert-to-invoice', [JobcardController::class, 'convertToInvoice'])->middleware('module.permission:jobcards,edit')->name('jobcards.convert-to-invoice');
