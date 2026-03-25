@@ -2,6 +2,7 @@
 
 ## 2026-03-25
 
+- **Invoice sync guard + stock log severity:** Invoice stock deduction now logs insufficient-stock skips as `warning` (not `error`) to match non-blocking behavior. Xero outbound invoice sync now short-circuits fully paid invoices (without unsynced payments) before invoice-by-id fetch/export, and skips outbound invoice updates after importing payments from Xero for paid invoices. This reduces `LineItemID` validation noise and cuts high-volume `GET /Invoices?where=InvoiceID==Guid(...)` bursts.
 - **Credit note allocation link formatting:** Credit note Show no longer repeats the invoice number when the linked invoice title already includes it; the allocations list now displays a cleaner invoice label.
 - **Credit note detail allocation links:** Credit note Show now normalizes allocation payloads to include invoice link metadata (`id`, `invoice_number`, `title`) so allocated invoices consistently render as clickable invoice-number links instead of falling back to raw invoice IDs.
 - **Invoice credit-note detail visibility:** Invoice Show now lists each allocated credit note row (linked to the credit note) with the exact allocated amount applied to that invoice, instead of only relying on a rolled-up credited total. This makes multi-credit-note application auditable per invoice.

@@ -1509,6 +1509,33 @@ class XeroService
 
                 $hasLocalChangesForExport = ! $invoice->xero_updated_at
                     || ($invoice->updated_at && $invoice->updated_at->gt($invoice->xero_updated_at));
+                $hasUnsyncedPaymentsToXero = $invoice->payments()
+                    ->where(function ($query) {
+                        $query->whereNull('xero_payment_id')
+                            ->orWhereNull('xero_synced_at');
+                    })
+                    ->exists();
+
+                // Do not attempt line-item updates for fully paid invoices.
+                // Xero rejects these updates and this guard also avoids unnecessary invoice-by-id GET calls.
+                if ($invoice->xero_invoice_id && $invoice->isFullyPaid() && ! $hasUnsyncedPaymentsToXero) {
+                    Log::info('Skipping outbound invoice push because local invoice is fully paid', [
+                        'invoice_id' => $invoice->id,
+                        'invoice_number' => $invoice->invoice_number,
+                        'xero_invoice_id' => $invoice->xero_invoice_id,
+                        'updated_at' => optional($invoice->updated_at)?->toDateTimeString(),
+                        'xero_updated_at' => optional($invoice->xero_updated_at)?->toDateTimeString(),
+                        'decision_reason' => 'skip_local_paid_no_unsynced_payments',
+                    ]);
+                    $results[] = [
+                        'invoice_id' => $invoice->id,
+                        'invoice_number' => $invoice->invoice_number,
+                        'status' => 'skipped',
+                        'message' => 'Skipped outbound sync: local invoice is fully paid',
+                    ];
+
+                    continue;
+                }
 
                 if ($invoice->xero_invoice_id) {
                     $xeroInvoice = $this->getXeroInvoiceCached($invoice->xero_invoice_id);
@@ -1540,13 +1567,6 @@ class XeroService
                         // Check payment status in both systems (never use Total as amount owing — breaks paid detection)
                         $isPaidInXero = $this->isXeroInvoiceFullyPaid($xeroInvoice);
                         $isPaidLocally = $invoice->isFullyPaid();
-                        $hasUnsyncedPaymentsToXero = $invoice->payments()
-                            ->where(function ($query) {
-                                $query->whereNull('xero_payment_id')
-                                    ->orWhereNull('xero_synced_at');
-                            })
-                            ->exists();
-
                         // If paid in both systems and there are no local changes to export, skip updating —
                         // unless JCO still has payments not linked in Xero (reconcile instead of skipping forever).
                         if ($isPaidInXero && $isPaidLocally && ! $hasLocalChangesForExport && ! $hasUnsyncedPaymentsToXero) {
@@ -1637,6 +1657,8 @@ class XeroService
                                 ]);
                                 // Continue with normal sync if payment import fails
                             }
+
+                            continue;
                         }
 
                         // If paid locally but not in Xero, sync payments to Xero

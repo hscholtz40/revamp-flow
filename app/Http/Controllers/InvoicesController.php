@@ -741,7 +741,7 @@ class InvoicesController extends Controller
                         );
                     }
                 } catch (\Exception $e) {
-                    Log::error('Failed to deduct stock for invoice line item', [
+                    Log::warning('Stock deduction skipped for invoice line item', [
                         'invoice_id' => $invoice->id,
                         'product_id' => $lineItemData['product_id'],
                         'quantity' => $lineItemData['quantity'],
