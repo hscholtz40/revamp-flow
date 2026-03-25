@@ -2348,7 +2348,7 @@ class XeroService
             $invoiceData['InvoiceID'] = $invoice->xero_invoice_id;
 
             // Fetch current Xero invoice to preserve constraints around paid/credited invoices.
-            $xeroInvoice = $this->getXeroInvoice($invoice->xero_invoice_id);
+            $xeroInvoice = $this->getXeroInvoiceCached($invoice->xero_invoice_id);
             if ($xeroInvoice) {
                 $xeroAmountPaid = (float) ($xeroInvoice['AmountPaid'] ?? 0);
                 $xeroAmountCredited = (float) ($xeroInvoice['AmountCredited'] ?? 0);
@@ -5267,7 +5267,7 @@ class XeroService
             return $xeroInvoice;
         }
 
-        $detailed = $this->getXeroInvoice((string) $xeroInvoice['InvoiceID']);
+        $detailed = $this->getXeroInvoiceCached((string) $xeroInvoice['InvoiceID']);
         if (! is_array($detailed) || empty($detailed)) {
             return $xeroInvoice;
         }
@@ -5865,6 +5865,17 @@ class XeroService
         if ($xeroInvoiceId && array_key_exists($xeroInvoiceId, $this->xeroInvoiceCache)) {
             unset($this->xeroInvoiceCache[$xeroInvoiceId]);
         }
+
+        if ($xeroInvoiceId) {
+            \Illuminate\Support\Facades\Cache::forget($this->getXeroInvoiceCacheKey($xeroInvoiceId));
+        }
+    }
+
+    private function getXeroInvoiceCacheKey(string $xeroInvoiceId): string
+    {
+        $companyId = (int) ($this->settings->company_id ?? 0);
+
+        return "xero:invoice:{$companyId}:{$xeroInvoiceId}";
     }
 
     private function getXeroInvoiceCached(?string $xeroInvoiceId): ?array
@@ -5877,7 +5888,12 @@ class XeroService
             return $this->xeroInvoiceCache[$xeroInvoiceId];
         }
 
-        $invoice = $this->getXeroInvoice($xeroInvoiceId);
+        $cacheKey = $this->getXeroInvoiceCacheKey($xeroInvoiceId);
+        $invoice = \Illuminate\Support\Facades\Cache::remember(
+            $cacheKey,
+            now()->addSeconds(60),
+            fn () => $this->getXeroInvoice($xeroInvoiceId)
+        );
         $this->xeroInvoiceCache[$xeroInvoiceId] = $invoice;
 
         return $invoice;
@@ -6030,7 +6046,7 @@ class XeroService
     {
         // If xeroInvoice not provided, fetch it
         if (! $xeroInvoice && $invoice->xero_invoice_id) {
-            $xeroInvoice = $this->getXeroInvoice($invoice->xero_invoice_id);
+            $xeroInvoice = $this->getXeroInvoiceCached($invoice->xero_invoice_id);
         }
 
         if (! $xeroInvoice) {
