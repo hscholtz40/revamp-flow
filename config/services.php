@@ -89,12 +89,22 @@ return [
         })(),
         // Cap outbound sync batches per scheduler run.
         'invoice_export_max_per_run' => env('XERO_INVOICE_EXPORT_MAX_PER_RUN', 200),
+        // Invoices per POST to Xero (API allows multiple ACCREC payloads in one request; max 50).
+        'invoice_export_batch_size' => env('XERO_INVOICE_EXPORT_BATCH_SIZE', 25),
+        'invoice_export_batch_delay_ms' => env('XERO_INVOICE_EXPORT_BATCH_DELAY_MS', 250),
         'quote_export_max_per_run' => env('XERO_QUOTE_EXPORT_MAX_PER_RUN', 150),
-        'quote_export_delay_ms' => env('XERO_QUOTE_EXPORT_DELAY_MS', 250),
+        'quote_export_batch_size' => env('XERO_QUOTE_EXPORT_BATCH_SIZE', 25),
+        'quote_export_batch_delay_ms' => env('XERO_QUOTE_EXPORT_BATCH_DELAY_MS', 250),
         'payment_export_max_invoices_per_run' => env('XERO_PAYMENT_EXPORT_MAX_INVOICES_PER_RUN', 120),
         'customer_export_max_per_run' => env('XERO_CUSTOMER_EXPORT_MAX_PER_RUN', 200),
+        'customer_export_batch_size' => env('XERO_CUSTOMER_EXPORT_BATCH_SIZE', 100),
+        'customer_export_batch_delay_ms' => env('XERO_CUSTOMER_EXPORT_BATCH_DELAY_MS', 250),
         'product_export_max_per_run' => env('XERO_PRODUCT_EXPORT_MAX_PER_RUN', 200),
         'supplier_export_max_per_run' => env('XERO_SUPPLIER_EXPORT_MAX_PER_RUN', 200),
+        'supplier_export_batch_size' => env('XERO_SUPPLIER_EXPORT_BATCH_SIZE', 100),
+        'supplier_export_batch_delay_ms' => env('XERO_SUPPLIER_EXPORT_BATCH_DELAY_MS', 250),
+        'purchase_order_export_batch_size' => env('XERO_PURCHASE_ORDER_EXPORT_BATCH_SIZE', 25),
+        'purchase_order_export_batch_delay_ms' => env('XERO_PURCHASE_ORDER_EXPORT_BATCH_DELAY_MS', 250),
     ],
 
 ];

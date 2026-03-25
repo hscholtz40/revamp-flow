@@ -645,6 +645,8 @@ class XeroService
 
         $currentCompany = $this->getCompany();
         $results = [];
+        $poBatchSize = max(1, min(50, (int) config('services.xero.purchase_order_export_batch_size', 25)));
+        $poBatchDelayMs = max(0, (int) config('services.xero.purchase_order_export_batch_delay_ms', 250));
         $maxPerRun = max(1, (int) config('services.xero.customer_export_max_per_run', 200));
 
         $customersQuery = Customer::where('company_id', $currentCompany->id)
@@ -673,7 +675,8 @@ class XeroService
         }
 
         $customersToSync = [];
-        $batchSize = 100;
+        $batchSize = max(1, min(100, (int) config('services.xero.customer_export_batch_size', 100)));
+        $batchDelayMs = max(0, (int) config('services.xero.customer_export_batch_delay_ms', 250));
 
         $customers = $customersQuery->take($maxPerRun)->get();
         foreach ($customers as $customer) {
@@ -726,7 +729,9 @@ class XeroService
                     $batchResults = $this->batchCreateOrUpdateCustomersInXero($customersToSync);
                     $results = array_merge($results, $batchResults);
                     $customersToSync = [];
-                    sleep(1);
+                    if ($batchDelayMs > 0) {
+                        usleep($batchDelayMs * 1000);
+                    }
                 }
             } catch (\Exception $e) {
                 $results[] = [
@@ -762,7 +767,7 @@ class XeroService
         $contactsData = array_map(fn ($item) => $item['contactData'], $customersData);
 
         try {
-            $response = $this->makeXeroRequest('post', $this->baseUrl.'/api.xro/2.0/Contacts', [
+            $response = $this->makeXeroRequest('post', $this->baseUrl.'/api.xro/2.0/Contacts?SummarizeErrors=false', [
                 'Contacts' => $contactsData,
             ]);
 
@@ -1028,7 +1033,7 @@ class XeroService
             $contactData['ContactID'] = $customer->xero_contact_id;
         }
 
-        $response = $this->makeXeroRequest('post', $this->baseUrl.'/api.xro/2.0/Contacts', [
+        $response = $this->makeXeroRequest('post', $this->baseUrl.'/api.xro/2.0/Contacts?SummarizeErrors=false', [
             'Contacts' => [$contactData],
         ]);
 
@@ -1494,11 +1499,12 @@ class XeroService
             'max_invoices_per_run' => $maxInvoicesPerRun,
         ]);
 
+        $invoiceExportBatchSize = max(1, min(50, (int) config('services.xero.invoice_export_batch_size', 25)));
+        $invoiceExportBatchDelayMs = max(0, (int) config('services.xero.invoice_export_batch_delay_ms', 250));
+        $pendingInvoiceExports = [];
+
         foreach ($invoices as $index => $invoice) {
             try {
-                if ($index > 0) {
-                    sleep(1);
-                }
 
                 $hasLocalChangesForExport = ! $invoice->xero_updated_at
                     || ($invoice->updated_at && $invoice->updated_at->gt($invoice->xero_updated_at));
@@ -1695,56 +1701,16 @@ class XeroService
                     'has_local_changes_for_export' => $hasLocalChangesForExport,
                 ]);
 
-                $xeroInvoice = $this->createOrUpdateInvoiceInXero($invoice);
-                if (isset($xeroInvoice['InvoiceID'])) {
-                    $invoice->update([
-                        'xero_invoice_id' => $xeroInvoice['InvoiceID'],
-                        ...$this->getXeroTimestamps($xeroInvoice),
-                    ]);
-                    $this->alignLocalUpdatedAtWithXero($invoice);
-                }
-                $results[] = [
-                    'invoice_id' => $invoice->id,
-                    'invoice_number' => $invoice->invoice_number,
-                    'status' => 'success',
-                    'xero_invoice_id' => $xeroInvoice['InvoiceID'] ?? null,
+                $pendingInvoiceExports[] = [
+                    'invoice' => $invoice,
+                    'invoiceData' => $this->buildAccRecInvoicePayloadForXero($invoice),
                 ];
-                Log::info('Invoice exported to Xero', [
-                    'invoice_id' => $invoice->id,
-                    'invoice_number' => $invoice->invoice_number,
-                    'xero_invoice_id' => $xeroInvoice['InvoiceID'] ?? null,
-                    'decision_reason' => 'exported',
-                ]);
 
-                // If this invoice is already fully paid locally, sync payment(s) immediately
-                // so Xero receives invoice + payment in the same sync run.
-                if ($invoice->isFullyPaid()) {
-                    try {
-                        $paymentResults = $this->syncPaymentsToXero($invoice);
-                        $successCount = collect($paymentResults)->where('status', 'success')->count();
-
-                        if ($successCount > 0) {
-                            $results[] = [
-                                'invoice_id' => $invoice->id,
-                                'invoice_number' => $invoice->invoice_number,
-                                'status' => 'payments_synced',
-                                'message' => "Synced {$successCount} payment(s) to Xero immediately after invoice export",
-                            ];
-                        }
-
-                        Log::info('Immediate payment sync attempted after invoice export', [
-                            'invoice_id' => $invoice->id,
-                            'invoice_number' => $invoice->invoice_number,
-                            'xero_invoice_id' => $invoice->xero_invoice_id,
-                            'payment_sync_success_count' => $successCount,
-                        ]);
-                    } catch (\Exception $paymentSyncError) {
-                        Log::error('Immediate payment sync failed after invoice export', [
-                            'invoice_id' => $invoice->id,
-                            'invoice_number' => $invoice->invoice_number,
-                            'xero_invoice_id' => $invoice->xero_invoice_id,
-                            'error' => $paymentSyncError->getMessage(),
-                        ]);
+                if (count($pendingInvoiceExports) >= $invoiceExportBatchSize) {
+                    $this->flushPendingInvoiceExportsToXero($pendingInvoiceExports, $results);
+                    $pendingInvoiceExports = [];
+                    if ($invoiceExportBatchDelayMs > 0) {
+                        usleep($invoiceExportBatchDelayMs * 1000);
                     }
                 }
             } catch (\Exception $e) {
@@ -1762,6 +1728,10 @@ class XeroService
                     'error' => $e->getMessage(),
                 ];
             }
+        }
+
+        if ($pendingInvoiceExports !== []) {
+            $this->flushPendingInvoiceExportsToXero($pendingInvoiceExports, $results);
         }
 
         return $results;
@@ -2287,9 +2257,9 @@ class XeroService
     }
 
     /**
-     * Create or update invoice in Xero
+     * Build the JSON payload for a single ACCREC invoice (create or update) for POST /Invoices.
      */
-    private function createOrUpdateInvoiceInXero(Invoice $invoice): array
+    private function buildAccRecInvoicePayloadForXero(Invoice $invoice): array
     {
         // Ensure line items are loaded
         if (! $invoice->relationLoaded('lineItems')) {
@@ -2373,6 +2343,7 @@ class XeroService
 
         // If invoice already has a Xero ID, update it; otherwise create new.
         // Avoid extra pre-read requests for invoice details; let Xero validate the payload.
+        $xeroInvoice = null;
         if ($invoice->xero_invoice_id) {
             $invoiceData['InvoiceID'] = $invoice->xero_invoice_id;
 
@@ -2441,7 +2412,269 @@ class XeroService
             }
         }
 
-        $response = $this->makeXeroRequest('post', $this->baseUrl.'/api.xro/2.0/Invoices', [
+        return $invoiceData;
+    }
+
+    /**
+     * @param  array<int, array{invoice: Invoice, invoiceData: array}>  $batchItems
+     * @return array<int, array{invoice: Invoice, status: string, xero_invoice?: array, error?: string}>
+     */
+    private function batchCreateOrUpdateInvoicesInXero(array $batchItems): array
+    {
+        if ($batchItems === []) {
+            return [];
+        }
+
+        $invoicesPayload = array_map(fn (array $item) => $item['invoiceData'], $batchItems);
+        $postUrl = $this->baseUrl.'/api.xro/2.0/Invoices?SummarizeErrors=false';
+
+        try {
+            $response = $this->makeXeroRequest('post', $postUrl, [
+                'Invoices' => $invoicesPayload,
+            ]);
+
+            if (! $response->successful()) {
+                throw new \Exception($response->body());
+            }
+
+            $result = $response->json();
+            $xeroInvoices = $result['Invoices'] ?? [];
+            $elements = $result['Elements'] ?? [];
+
+            if (count($xeroInvoices) !== count($batchItems)) {
+                Log::warning('Xero invoice batch response count does not match request; mapping by index may be unreliable', [
+                    'sent' => count($batchItems),
+                    'returned_invoices' => count($xeroInvoices),
+                ]);
+            }
+
+            $out = [];
+
+            foreach ($batchItems as $index => $item) {
+                $invoice = $item['invoice'];
+                $xeroRow = $xeroInvoices[$index] ?? null;
+
+                if ($this->xeroInvoiceApiRowHasFailures($xeroRow)) {
+                    $errorData = $this->buildInvoiceValidationErrorDataFromXeroRow($xeroRow ?? []);
+                    if ($this->shouldMarkInvoiceAsSyncedOnValidationError($errorData)) {
+                        $syncStamp = $this->resolveInvoiceValidationSyncTimestamp($errorData, $invoice);
+                        $invoice->update(['xero_updated_at' => $syncStamp]);
+                        $this->alignLocalUpdatedAtWithXero($invoice);
+
+                        Log::warning('Marked invoice as synced after non-retriable Xero validation response (batch)', [
+                            'invoice_id' => $invoice->id,
+                            'invoice_number' => $invoice->invoice_number,
+                            'xero_invoice_id' => $invoice->xero_invoice_id,
+                            'xero_updated_at' => $syncStamp->toDateTimeString(),
+                            'response' => $xeroRow,
+                        ]);
+
+                        $out[] = [
+                            'invoice' => $invoice,
+                            'status' => 'success',
+                            'xero_invoice' => [
+                                'InvoiceID' => $invoice->xero_invoice_id,
+                                'UpdatedDateUTC' => $syncStamp->toIso8601String(),
+                            ],
+                        ];
+
+                        continue;
+                    }
+
+                    $messages = collect($xeroRow['ValidationErrors'] ?? [])->pluck('Message')->filter()->implode(', ');
+                    if ($messages === '' && isset($elements[$index]['ValidationErrors'])) {
+                        $messages = collect($elements[$index]['ValidationErrors'])->pluck('Message')->filter()->implode(', ');
+                    }
+                    $out[] = [
+                        'invoice' => $invoice,
+                        'status' => 'error',
+                        'error' => $messages !== '' ? $messages : 'Xero rejected this invoice in the batch response',
+                    ];
+
+                    continue;
+                }
+
+                if ($xeroRow && isset($xeroRow['InvoiceID'])) {
+                    $out[] = [
+                        'invoice' => $invoice,
+                        'status' => 'success',
+                        'xero_invoice' => $xeroRow,
+                    ];
+
+                    continue;
+                }
+
+                if (isset($elements[$index]['ValidationErrors']) && ! empty($elements[$index]['ValidationErrors'])) {
+                    $messages = collect($elements[$index]['ValidationErrors'])->pluck('Message')->implode(', ');
+                    $out[] = [
+                        'invoice' => $invoice,
+                        'status' => 'error',
+                        'error' => $messages,
+                    ];
+
+                    continue;
+                }
+
+                $out[] = [
+                    'invoice' => $invoice,
+                    'status' => 'error',
+                    'error' => 'Unexpected Xero response for invoice (no InvoiceID)',
+                ];
+            }
+
+            return $out;
+        } catch (\Exception $e) {
+            Log::warning('Batch invoice export to Xero failed, falling back to individual POSTs', [
+                'error' => $e->getMessage(),
+                'batch_size' => count($batchItems),
+            ]);
+
+            $out = [];
+            foreach ($batchItems as $item) {
+                $invoice = $item['invoice'];
+                try {
+                    $xeroInvoice = $this->createOrUpdateInvoiceInXero($invoice);
+                    $out[] = [
+                        'invoice' => $invoice,
+                        'status' => 'success',
+                        'xero_invoice' => $xeroInvoice,
+                    ];
+                } catch (\Exception $individualError) {
+                    $out[] = [
+                        'invoice' => $invoice,
+                        'status' => 'error',
+                        'error' => $individualError->getMessage(),
+                    ];
+                }
+            }
+
+            return $out;
+        }
+    }
+
+    /**
+     * @param  array<int, array{invoice: Invoice, invoiceData: array}>  $pending
+     */
+    private function flushPendingInvoiceExportsToXero(array $pending, array &$results): void
+    {
+        if ($pending === []) {
+            return;
+        }
+
+        $batchResults = $this->batchCreateOrUpdateInvoicesInXero($pending);
+
+        foreach ($batchResults as $row) {
+            $invoice = $row['invoice'];
+
+            if (($row['status'] ?? '') === 'error') {
+                Log::error('Invoice sync failed', [
+                    'invoice_id' => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'error' => $row['error'] ?? 'Unknown error',
+                ]);
+                $results[] = [
+                    'invoice_id' => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'status' => 'error',
+                    'error' => $row['error'] ?? 'Unknown error',
+                ];
+
+                continue;
+            }
+
+            $xeroInvoice = $row['xero_invoice'] ?? [];
+            if (isset($xeroInvoice['InvoiceID'])) {
+                $invoice->update([
+                    'xero_invoice_id' => $xeroInvoice['InvoiceID'],
+                    ...$this->getXeroTimestamps($xeroInvoice),
+                ]);
+                $this->alignLocalUpdatedAtWithXero($invoice);
+            }
+
+            $results[] = [
+                'invoice_id' => $invoice->id,
+                'invoice_number' => $invoice->invoice_number,
+                'status' => 'success',
+                'xero_invoice_id' => $xeroInvoice['InvoiceID'] ?? null,
+            ];
+            Log::info('Invoice exported to Xero', [
+                'invoice_id' => $invoice->id,
+                'invoice_number' => $invoice->invoice_number,
+                'xero_invoice_id' => $xeroInvoice['InvoiceID'] ?? null,
+                'decision_reason' => 'exported',
+            ]);
+
+            if ($invoice->fresh()->isFullyPaid()) {
+                try {
+                    $paymentResults = $this->syncPaymentsToXero($invoice);
+                    $successCount = collect($paymentResults)->where('status', 'success')->count();
+
+                    if ($successCount > 0) {
+                        $results[] = [
+                            'invoice_id' => $invoice->id,
+                            'invoice_number' => $invoice->invoice_number,
+                            'status' => 'payments_synced',
+                            'message' => "Synced {$successCount} payment(s) to Xero immediately after invoice export",
+                        ];
+                    }
+
+                    Log::info('Immediate payment sync attempted after invoice export', [
+                        'invoice_id' => $invoice->id,
+                        'invoice_number' => $invoice->invoice_number,
+                        'xero_invoice_id' => $invoice->xero_invoice_id,
+                        'payment_sync_success_count' => $successCount,
+                    ]);
+                } catch (\Exception $paymentSyncError) {
+                    Log::error('Immediate payment sync failed after invoice export', [
+                        'invoice_id' => $invoice->id,
+                        'invoice_number' => $invoice->invoice_number,
+                        'xero_invoice_id' => $invoice->xero_invoice_id,
+                        'error' => $paymentSyncError->getMessage(),
+                    ]);
+                }
+            }
+        }
+    }
+
+    private function xeroInvoiceApiRowHasFailures(?array $row): bool
+    {
+        if ($row === null) {
+            return true;
+        }
+
+        if (! empty($row['HasErrors'])) {
+            return true;
+        }
+
+        $validationErrors = $row['ValidationErrors'] ?? [];
+
+        return is_array($validationErrors) && $validationErrors !== [];
+    }
+
+    /**
+     * Shape a Xero invoice row into the validation payload expected by shouldMarkInvoiceAsSyncedOnValidationError().
+     */
+    private function buildInvoiceValidationErrorDataFromXeroRow(array $row): array
+    {
+        return [
+            'Type' => 'ValidationException',
+            'ErrorNumber' => 10,
+            'Elements' => [[
+                'ValidationErrors' => $row['ValidationErrors'] ?? [],
+                'UpdatedDateUTC' => $row['UpdatedDateUTC'] ?? null,
+                'Invoice' => $row,
+            ]],
+        ];
+    }
+
+    /**
+     * Create or update invoice in Xero
+     */
+    private function createOrUpdateInvoiceInXero(Invoice $invoice): array
+    {
+        $invoiceData = $this->buildAccRecInvoicePayloadForXero($invoice);
+
+        $response = $this->makeXeroRequest('post', $this->baseUrl.'/api.xro/2.0/Invoices?SummarizeErrors=false', [
             'Invoices' => [$invoiceData],
         ]);
 
@@ -2499,6 +2732,31 @@ class XeroService
         }
 
         $xeroInvoice = $result['Invoices'][0];
+
+        if ($this->xeroInvoiceApiRowHasFailures($xeroInvoice)) {
+            $errorData = $this->buildInvoiceValidationErrorDataFromXeroRow($xeroInvoice);
+            if ($this->shouldMarkInvoiceAsSyncedOnValidationError($errorData)) {
+                $syncStamp = $this->resolveInvoiceValidationSyncTimestamp($errorData, $invoice);
+                $invoice->update(['xero_updated_at' => $syncStamp]);
+                $this->alignLocalUpdatedAtWithXero($invoice);
+
+                Log::warning('Marked invoice as synced after non-retriable Xero validation response (single POST body)', [
+                    'invoice_id' => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'xero_invoice_id' => $invoice->xero_invoice_id,
+                    'xero_updated_at' => $syncStamp->toDateTimeString(),
+                    'response' => $xeroInvoice,
+                ]);
+
+                return [
+                    'InvoiceID' => $invoice->xero_invoice_id,
+                    'UpdatedDateUTC' => $syncStamp->toIso8601String(),
+                ];
+            }
+
+            $errors = collect($xeroInvoice['ValidationErrors'] ?? [])->pluck('Message')->implode(', ');
+            throw new \Exception('Failed to create/update invoice in Xero: '.($errors !== '' ? $errors : 'Validation failed'));
+        }
 
         Log::info('Invoice successfully synced to Xero', [
             'invoice_id' => $invoice->id,
@@ -3321,6 +3579,9 @@ class XeroService
         }
 
         $suppliers = $suppliersQuery->take($maxPerRun)->get();
+        $batchSize = max(1, min(100, (int) config('services.xero.supplier_export_batch_size', 100)));
+        $batchDelayMs = max(0, (int) config('services.xero.supplier_export_batch_delay_ms', 250));
+        $suppliersToSync = [];
         foreach ($suppliers as $supplier) {
             try {
                 if ($supplier->xero_contact_id && isset($xeroContactsMap[$supplier->xero_contact_id])) {
@@ -3338,22 +3599,19 @@ class XeroService
                     }
                 }
 
-                $xeroSupplier = $this->createOrUpdateSupplierInXero($supplier);
-
-                if (isset($xeroSupplier['ContactID'])) {
-                    $supplier->update([
-                        'xero_contact_id' => $xeroSupplier['ContactID'],
-                        ...$this->getXeroTimestamps($xeroSupplier),
-                    ]);
-                    $this->alignLocalUpdatedAtWithXero($supplier);
-                }
-
-                $results[] = [
-                    'supplier_id' => $supplier->id,
-                    'supplier_name' => $supplier->name,
-                    'status' => 'success',
-                    'message' => 'Supplier synced to Xero',
+                $suppliersToSync[] = [
+                    'supplier' => $supplier,
+                    'contactData' => $this->buildSupplierContactPayloadForXero($supplier),
                 ];
+
+                if (count($suppliersToSync) >= $batchSize) {
+                    $batchResults = $this->batchCreateOrUpdateSuppliersInXero($suppliersToSync);
+                    $results = array_merge($results, $batchResults);
+                    $suppliersToSync = [];
+                    if ($batchDelayMs > 0) {
+                        usleep($batchDelayMs * 1000);
+                    }
+                }
             } catch (\Exception $e) {
                 Log::error('Failed to sync supplier to Xero', [
                     'supplier_id' => $supplier->id,
@@ -3368,6 +3626,11 @@ class XeroService
                     'error' => $e->getMessage(),
                 ];
             }
+        }
+
+        if (! empty($suppliersToSync)) {
+            $batchResults = $this->batchCreateOrUpdateSuppliersInXero($suppliersToSync);
+            $results = array_merge($results, $batchResults);
         }
 
         return $results;
@@ -3460,7 +3723,7 @@ class XeroService
     /**
      * Create or update supplier in Xero
      */
-    private function createOrUpdateSupplierInXero(Supplier $supplier): array
+    private function buildSupplierContactPayloadForXero(Supplier $supplier): array
     {
         $contactData = [
             'Name' => $supplier->name,
@@ -3492,7 +3755,114 @@ class XeroService
             $contactData['ContactID'] = $supplier->xero_contact_id;
         }
 
-        $response = $this->makeXeroRequest('post', $this->baseUrl.'/api.xro/2.0/Contacts', [
+        return $contactData;
+    }
+
+    /**
+     * @param  array<int, array{supplier: Supplier, contactData: array}>  $suppliersData
+     */
+    private function batchCreateOrUpdateSuppliersInXero(array $suppliersData): array
+    {
+        if ($suppliersData === []) {
+            return [];
+        }
+
+        $results = [];
+        $contactsData = array_map(fn ($item) => $item['contactData'], $suppliersData);
+
+        try {
+            $response = $this->makeXeroRequest('post', $this->baseUrl.'/api.xro/2.0/Contacts?SummarizeErrors=false', [
+                'Contacts' => $contactsData,
+            ]);
+
+            if (! $response->successful()) {
+                throw new \Exception('Failed to batch create/update suppliers in Xero: '.$response->body());
+            }
+
+            $result = $response->json();
+            $xeroContacts = $result['Contacts'] ?? [];
+            $elements = $result['Elements'] ?? [];
+
+            foreach ($suppliersData as $index => $item) {
+                $supplier = $item['supplier'];
+                $xeroSupplier = $xeroContacts[$index] ?? null;
+
+                if (is_array($xeroSupplier) && isset($xeroSupplier['ContactID'])) {
+                    $supplier->update([
+                        'xero_contact_id' => $xeroSupplier['ContactID'],
+                        ...$this->getXeroTimestamps($xeroSupplier),
+                    ]);
+                    $this->alignLocalUpdatedAtWithXero($supplier);
+
+                    $results[] = [
+                        'supplier_id' => $supplier->id,
+                        'supplier_name' => $supplier->name,
+                        'status' => 'success',
+                        'message' => 'Supplier synced to Xero',
+                    ];
+
+                    continue;
+                }
+
+                $errorMessages = '';
+                if (isset($elements[$index]['ValidationErrors'])) {
+                    $errorMessages = collect($elements[$index]['ValidationErrors'])->pluck('Message')->filter()->implode(', ');
+                }
+
+                $results[] = [
+                    'supplier_id' => $supplier->id,
+                    'supplier_name' => $supplier->name,
+                    'status' => 'error',
+                    'error' => $errorMessages !== '' ? $errorMessages : 'Failed to create/update supplier in Xero',
+                ];
+            }
+        } catch (\Exception $e) {
+            Log::warning('Batch supplier sync failed, falling back to individual requests', [
+                'error' => $e->getMessage(),
+                'batch_size' => count($suppliersData),
+            ]);
+
+            foreach ($suppliersData as $item) {
+                $supplier = $item['supplier'];
+                try {
+                    $xeroSupplier = $this->createOrUpdateSupplierInXero($supplier);
+
+                    if (isset($xeroSupplier['ContactID'])) {
+                        $supplier->update([
+                            'xero_contact_id' => $xeroSupplier['ContactID'],
+                            ...$this->getXeroTimestamps($xeroSupplier),
+                        ]);
+                        $this->alignLocalUpdatedAtWithXero($supplier);
+                    }
+
+                    $results[] = [
+                        'supplier_id' => $supplier->id,
+                        'supplier_name' => $supplier->name,
+                        'status' => 'success',
+                        'message' => 'Supplier synced to Xero',
+                    ];
+                } catch (\Exception $individualError) {
+                    $results[] = [
+                        'supplier_id' => $supplier->id,
+                        'supplier_name' => $supplier->name,
+                        'status' => 'error',
+                        'error' => $individualError->getMessage(),
+                    ];
+                }
+            }
+        }
+
+        return $results;
+    }
+
+    /**
+     * Create or update supplier in Xero
+     */
+    private function createOrUpdateSupplierInXero(Supplier $supplier): array
+    {
+        $contactData = $this->buildSupplierContactPayloadForXero($supplier);
+
+        $response = $this->makeXeroRequest('post', $this->baseUrl.'/api.xro/2.0/Contacts?SummarizeErrors=false', [
             'Contacts' => [$contactData],
         ]);
 
@@ -3721,7 +4091,8 @@ class XeroService
 
         $currentCompany = $this->getCompany();
         $maxPerRun = max(1, (int) config('services.xero.quote_export_max_per_run', 150));
-        $quoteDelayMs = max(0, (int) config('services.xero.quote_export_delay_ms', 250));
+        $quoteBatchSize = max(1, min(50, (int) config('services.xero.quote_export_batch_size', 25)));
+        $quoteBatchDelayMs = max(0, (int) config('services.xero.quote_export_batch_delay_ms', 250));
         $quotes = Quote::where('company_id', $currentCompany->id)
             ->where(function ($query) {
                 $query->whereNull('xero_quote_id')
@@ -3744,26 +4115,20 @@ class XeroService
             return ['skipped' => true, 'message' => 'No quote changes to sync to Xero'];
         }
 
-        foreach ($quotes as $index => $quote) {
+        $pendingQuoteExports = [];
+        foreach ($quotes as $quote) {
             try {
-                if ($index > 0 && $quoteDelayMs > 0) {
-                    usleep($quoteDelayMs * 1000);
-                }
-
-                $xeroQuote = $this->createOrUpdateQuoteInXero($quote);
-                if (isset($xeroQuote['QuoteID'])) {
-                    $quote->update([
-                        'xero_quote_id' => $xeroQuote['QuoteID'],
-                        ...$this->getXeroTimestamps($xeroQuote),
-                    ]);
-                    $this->alignLocalUpdatedAtWithXero($quote);
-                }
-                $results[] = [
-                    'quote_id' => $quote->id,
-                    'quote_number' => $quote->quote_number,
-                    'status' => 'success',
-                    'xero_quote_id' => $xeroQuote['QuoteID'] ?? null,
+                $pendingQuoteExports[] = [
+                    'quote' => $quote,
+                    'quoteData' => $this->buildQuotePayloadForXero($quote),
                 ];
+                if (count($pendingQuoteExports) >= $quoteBatchSize) {
+                    $this->flushPendingQuoteExportsToXero($pendingQuoteExports, $results, $currentCompany);
+                    $pendingQuoteExports = [];
+                    if ($quoteBatchDelayMs > 0) {
+                        usleep($quoteBatchDelayMs * 1000);
+                    }
+                }
             } catch (\Exception $e) {
                 // Enhanced error logging with more context
                 Log::error('Quote sync to Xero failed', [
@@ -3786,6 +4151,10 @@ class XeroService
                     'error' => $e->getMessage(),
                 ];
             }
+        }
+
+        if ($pendingQuoteExports !== []) {
+            $this->flushPendingQuoteExportsToXero($pendingQuoteExports, $results, $currentCompany);
         }
 
         return $results;
@@ -4051,9 +4420,141 @@ class XeroService
     }
 
     /**
+     * @param  array<int, array{quote: Quote, quoteData: array}>  $pendingQuoteExports
+     */
+    private function flushPendingQuoteExportsToXero(array $pendingQuoteExports, array &$results, Company $currentCompany): void
+    {
+        if ($pendingQuoteExports === []) {
+            return;
+        }
+
+        $batchResults = $this->batchCreateOrUpdateQuotesInXero($pendingQuoteExports);
+        foreach ($batchResults as $row) {
+            $quote = $row['quote'];
+            if (($row['status'] ?? '') === 'error') {
+                Log::error('Quote sync to Xero failed', [
+                    'company_id' => $currentCompany->id,
+                    'quote_id' => $quote->id,
+                    'quote_number' => $quote->quote_number,
+                    'xero_quote_id' => $quote->xero_quote_id,
+                    'customer_id' => $quote->customer_id,
+                    'has_line_items' => $quote->lineItems()->exists(),
+                    'line_items_count' => $quote->lineItems()->count(),
+                    'error' => $row['error'] ?? 'Unknown error',
+                ]);
+                $results[] = [
+                    'quote_id' => $quote->id,
+                    'quote_number' => $quote->quote_number,
+                    'status' => 'error',
+                    'error' => $row['error'] ?? 'Unknown error',
+                ];
+                continue;
+            }
+
+            $xeroQuote = $row['xero_quote'] ?? [];
+            if (isset($xeroQuote['QuoteID'])) {
+                $quote->update([
+                    'xero_quote_id' => $xeroQuote['QuoteID'],
+                    ...$this->getXeroTimestamps($xeroQuote),
+                ]);
+                $this->alignLocalUpdatedAtWithXero($quote);
+            }
+            $results[] = [
+                'quote_id' => $quote->id,
+                'quote_number' => $quote->quote_number,
+                'status' => 'success',
+                'xero_quote_id' => $xeroQuote['QuoteID'] ?? null,
+            ];
+        }
+    }
+
+    /**
+     * @param  array<int, array{quote: Quote, quoteData: array}>  $quotesData
+     * @return array<int, array{quote: Quote, status: string, xero_quote?: array, error?: string}>
+     */
+    private function batchCreateOrUpdateQuotesInXero(array $quotesData): array
+    {
+        if ($quotesData === []) {
+            return [];
+        }
+
+        $payloads = array_map(fn (array $item) => $item['quoteData'], $quotesData);
+
+        try {
+            $response = $this->makeXeroRequest('post', $this->baseUrl.'/api.xro/2.0/Quotes?SummarizeErrors=false', [
+                'Quotes' => $payloads,
+            ]);
+
+            if (! $response->successful()) {
+                throw new \Exception('Failed to batch create/update quotes in Xero: '.$response->body());
+            }
+
+            $result = $response->json();
+            $xeroQuotes = $result['Quotes'] ?? [];
+            $elements = $result['Elements'] ?? [];
+            $out = [];
+
+            foreach ($quotesData as $index => $item) {
+                $quote = $item['quote'];
+                $xeroQuote = $xeroQuotes[$index] ?? null;
+
+                if (is_array($xeroQuote) && isset($xeroQuote['QuoteID']) && empty($xeroQuote['ValidationErrors'])) {
+                    $out[] = [
+                        'quote' => $quote,
+                        'status' => 'success',
+                        'xero_quote' => $xeroQuote,
+                    ];
+                    continue;
+                }
+
+                $errorMessages = '';
+                if (is_array($xeroQuote) && isset($xeroQuote['ValidationErrors'])) {
+                    $errorMessages = collect($xeroQuote['ValidationErrors'])->pluck('Message')->filter()->implode(', ');
+                } elseif (isset($elements[$index]['ValidationErrors'])) {
+                    $errorMessages = collect($elements[$index]['ValidationErrors'])->pluck('Message')->filter()->implode(', ');
+                }
+
+                $out[] = [
+                    'quote' => $quote,
+                    'status' => 'error',
+                    'error' => $errorMessages !== '' ? $errorMessages : 'Failed to create/update quote in Xero',
+                ];
+            }
+
+            return $out;
+        } catch (\Exception $e) {
+            Log::warning('Batch quote sync failed, falling back to individual requests', [
+                'error' => $e->getMessage(),
+                'batch_size' => count($quotesData),
+            ]);
+
+            $out = [];
+            foreach ($quotesData as $item) {
+                $quote = $item['quote'];
+                try {
+                    $xeroQuote = $this->createOrUpdateQuoteInXero($quote);
+                    $out[] = [
+                        'quote' => $quote,
+                        'status' => 'success',
+                        'xero_quote' => $xeroQuote,
+                    ];
+                } catch (\Exception $individualError) {
+                    $out[] = [
+                        'quote' => $quote,
+                        'status' => 'error',
+                        'error' => $individualError->getMessage(),
+                    ];
+                }
+            }
+
+            return $out;
+        }
+    }
+
+    /**
      * Create or update quote in Xero
      */
-    private function createOrUpdateQuoteInXero(Quote $quote): array
+    private function buildQuotePayloadForXero(Quote $quote): array
     {
         // Ensure line items are loaded
         if (! $quote->relationLoaded('lineItems')) {
@@ -4136,13 +4637,19 @@ class XeroService
         // If quote already has a Xero ID, update it; otherwise create new
         if ($quote->xero_quote_id) {
             $quoteData['QuoteID'] = $quote->xero_quote_id;
-
             // Xero can reject status codes during quote updates.
             // Keep status immutable on update and only sync editable fields.
             unset($quoteData['Status']);
         }
 
-        $response = $this->makeXeroRequest('post', $this->baseUrl.'/api.xro/2.0/Quotes', [
+        return $quoteData;
+    }
+
+    private function createOrUpdateQuoteInXero(Quote $quote): array
+    {
+        $quoteData = $this->buildQuotePayloadForXero($quote);
+
+        $response = $this->makeXeroRequest('post', $this->baseUrl.'/api.xro/2.0/Quotes?SummarizeErrors=false', [
             'Quotes' => [$quoteData],
         ]);
 
@@ -4158,7 +4665,7 @@ class XeroService
                 $retryPayload = $quoteData;
                 unset($retryPayload['Status']);
 
-                $retryResponse = $this->makeXeroRequest('post', $this->baseUrl.'/api.xro/2.0/Quotes', [
+                $retryResponse = $this->makeXeroRequest('post', $this->baseUrl.'/api.xro/2.0/Quotes?SummarizeErrors=false', [
                     'Quotes' => [$retryPayload],
                 ]);
 
@@ -7594,6 +8101,7 @@ class XeroService
             ->with(['supplier', 'items.product'])
             ->get();
 
+        $pendingPurchaseOrderExports = [];
         foreach ($purchaseOrders as $po) {
             try {
                 if (! $po->supplier || ! $po->supplier->xero_contact_id) {
@@ -7622,23 +8130,17 @@ class XeroService
                     }
                 }
 
-                $xeroData = $this->createOrUpdatePurchaseOrderInXero($po);
-
-                if (! $po->xero_purchase_order_id && isset($xeroData['PurchaseOrderID'])) {
-                    $po->update([
-                        'xero_purchase_order_id' => $xeroData['PurchaseOrderID'],
-                        ...$this->getXeroTimestamps($xeroData),
-                    ]);
-                } else {
-                    $po->update($this->getXeroTimestamps($xeroData));
-                }
-                $this->alignLocalUpdatedAtWithXero($po);
-
-                $results[] = [
-                    'po_id' => $po->id,
-                    'po_number' => $po->po_number,
-                    'status' => 'success',
+                $pendingPurchaseOrderExports[] = [
+                    'po' => $po,
+                    'poData' => $this->buildPurchaseOrderPayloadForXero($po),
                 ];
+                if (count($pendingPurchaseOrderExports) >= $poBatchSize) {
+                    $this->flushPendingPurchaseOrderExportsToXero($pendingPurchaseOrderExports, $results);
+                    $pendingPurchaseOrderExports = [];
+                    if ($poBatchDelayMs > 0) {
+                        usleep($poBatchDelayMs * 1000);
+                    }
+                }
             } catch (\Exception $e) {
                 Log::error('Purchase order sync to Xero failed', [
                     'po_id' => $po->id,
@@ -7651,6 +8153,10 @@ class XeroService
                     'error' => $e->getMessage(),
                 ];
             }
+        }
+
+        if ($pendingPurchaseOrderExports !== []) {
+            $this->flushPendingPurchaseOrderExportsToXero($pendingPurchaseOrderExports, $results);
         }
 
         return $results;
@@ -7894,7 +8400,135 @@ class XeroService
         return $results;
     }
 
-    private function createOrUpdatePurchaseOrderInXero(PurchaseOrder $po): array
+    /**
+     * @param  array<int, array{po: PurchaseOrder, poData: array}>  $pendingPurchaseOrderExports
+     */
+    private function flushPendingPurchaseOrderExportsToXero(array $pendingPurchaseOrderExports, array &$results): void
+    {
+        if ($pendingPurchaseOrderExports === []) {
+            return;
+        }
+
+        $batchResults = $this->batchCreateOrUpdatePurchaseOrdersInXero($pendingPurchaseOrderExports);
+        foreach ($batchResults as $row) {
+            $po = $row['po'];
+            if (($row['status'] ?? '') === 'error') {
+                Log::error('Purchase order sync to Xero failed', [
+                    'po_id' => $po->id,
+                    'error' => $row['error'] ?? 'Unknown error',
+                ]);
+                $results[] = [
+                    'po_id' => $po->id,
+                    'po_number' => $po->po_number,
+                    'status' => 'error',
+                    'error' => $row['error'] ?? 'Unknown error',
+                ];
+                continue;
+            }
+
+            $xeroData = $row['xero_purchase_order'] ?? [];
+            if (! $po->xero_purchase_order_id && isset($xeroData['PurchaseOrderID'])) {
+                $po->update([
+                    'xero_purchase_order_id' => $xeroData['PurchaseOrderID'],
+                    ...$this->getXeroTimestamps($xeroData),
+                ]);
+            } else {
+                $po->update($this->getXeroTimestamps($xeroData));
+            }
+            $this->alignLocalUpdatedAtWithXero($po);
+
+            $results[] = [
+                'po_id' => $po->id,
+                'po_number' => $po->po_number,
+                'status' => 'success',
+            ];
+        }
+    }
+
+    /**
+     * @param  array<int, array{po: PurchaseOrder, poData: array}>  $purchaseOrdersData
+     * @return array<int, array{po: PurchaseOrder, status: string, xero_purchase_order?: array, error?: string}>
+     */
+    private function batchCreateOrUpdatePurchaseOrdersInXero(array $purchaseOrdersData): array
+    {
+        if ($purchaseOrdersData === []) {
+            return [];
+        }
+
+        $payloads = array_map(fn (array $item) => $item['poData'], $purchaseOrdersData);
+
+        try {
+            $response = $this->makeXeroRequest('post', $this->baseUrl.'/api.xro/2.0/PurchaseOrders?SummarizeErrors=false', [
+                'PurchaseOrders' => $payloads,
+            ]);
+
+            if (! $response->successful()) {
+                throw new \Exception('Failed to batch create/update purchase orders in Xero: '.$response->body());
+            }
+
+            $result = $response->json();
+            $xeroPOs = $result['PurchaseOrders'] ?? [];
+            $elements = $result['Elements'] ?? [];
+            $out = [];
+
+            foreach ($purchaseOrdersData as $index => $item) {
+                $po = $item['po'];
+                $xeroPO = $xeroPOs[$index] ?? null;
+
+                if (is_array($xeroPO) && isset($xeroPO['PurchaseOrderID']) && empty($xeroPO['ValidationErrors'])) {
+                    $out[] = [
+                        'po' => $po,
+                        'status' => 'success',
+                        'xero_purchase_order' => $xeroPO,
+                    ];
+                    continue;
+                }
+
+                $errorMessages = '';
+                if (is_array($xeroPO) && isset($xeroPO['ValidationErrors'])) {
+                    $errorMessages = collect($xeroPO['ValidationErrors'])->pluck('Message')->filter()->implode(', ');
+                } elseif (isset($elements[$index]['ValidationErrors'])) {
+                    $errorMessages = collect($elements[$index]['ValidationErrors'])->pluck('Message')->filter()->implode(', ');
+                }
+
+                $out[] = [
+                    'po' => $po,
+                    'status' => 'error',
+                    'error' => $errorMessages !== '' ? $errorMessages : 'Failed to create/update purchase order in Xero',
+                ];
+            }
+
+            return $out;
+        } catch (\Exception $e) {
+            Log::warning('Batch purchase order sync failed, falling back to individual requests', [
+                'error' => $e->getMessage(),
+                'batch_size' => count($purchaseOrdersData),
+            ]);
+
+            $out = [];
+            foreach ($purchaseOrdersData as $item) {
+                $po = $item['po'];
+                try {
+                    $xeroPO = $this->createOrUpdatePurchaseOrderInXero($po);
+                    $out[] = [
+                        'po' => $po,
+                        'status' => 'success',
+                        'xero_purchase_order' => $xeroPO,
+                    ];
+                } catch (\Exception $individualError) {
+                    $out[] = [
+                        'po' => $po,
+                        'status' => 'error',
+                        'error' => $individualError->getMessage(),
+                    ];
+                }
+            }
+
+            return $out;
+        }
+    }
+
+    private function buildPurchaseOrderPayloadForXero(PurchaseOrder $po): array
     {
         $po->load(['items.product', 'items.account', 'supplier']);
 
@@ -7956,7 +8590,14 @@ class XeroService
             unset($data['Status']);
         }
 
-        $response = $this->makeXeroRequest('post', $this->baseUrl.'/api.xro/2.0/PurchaseOrders', [
+        return $data;
+    }
+
+    private function createOrUpdatePurchaseOrderInXero(PurchaseOrder $po): array
+    {
+        $data = $this->buildPurchaseOrderPayloadForXero($po);
+
+        $response = $this->makeXeroRequest('post', $this->baseUrl.'/api.xro/2.0/PurchaseOrders?SummarizeErrors=false', [
             'PurchaseOrders' => [$data],
         ]);
 
@@ -7985,7 +8626,7 @@ class XeroService
             }
 
             if ($shouldRetry) {
-                $retryResponse = $this->makeXeroRequest('post', $this->baseUrl.'/api.xro/2.0/PurchaseOrders', [
+                $retryResponse = $this->makeXeroRequest('post', $this->baseUrl.'/api.xro/2.0/PurchaseOrders?SummarizeErrors=false', [
                     'PurchaseOrders' => [$retryData],
                 ]);
 
