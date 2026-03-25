@@ -381,15 +381,15 @@
                     </div>
 
                     <!-- Credit Notes -->
-                    <div v-if="props.invoice.credit_notes && props.invoice.credit_notes.length > 0" class="rounded-lg bg-white border border-gray-200 shadow-sm">
+                    <div v-if="displayCreditNotes.length > 0" class="rounded-lg bg-white border border-gray-200 shadow-sm">
                         <div class="border-b border-gray-200 bg-orange-50 px-6 py-4">
                             <h2 class="text-lg font-semibold text-gray-900">Credit Notes</h2>
-                            <p class="text-sm text-gray-600">Credit notes linked to this invoice</p>
+                            <p class="text-sm text-gray-600">Credit notes allocated to this invoice</p>
                         </div>
                         <div class="p-6">
                             <div class="space-y-2">
                                 <div
-                                    v-for="cn in props.invoice.credit_notes"
+                                    v-for="cn in displayCreditNotes"
                                     :key="cn.id"
                                     class="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg"
                                 >
@@ -400,7 +400,7 @@
                                         <p class="text-xs text-gray-500">{{ new Date(cn.credit_note_date).toLocaleDateString('en-ZA') }}</p>
                                     </div>
                                     <div class="text-right">
-                                        <span class="text-sm font-medium text-orange-600">-{{ formatCurrency(cn.total) }}</span>
+                                        <span class="text-sm font-medium text-orange-600">-{{ formatCurrency(cn.allocated_amount ?? cn.total) }}</span>
                                         <p class="text-xs text-gray-500 capitalize">{{ cn.status }}</p>
                                     </div>
                                 </div>
@@ -852,6 +852,15 @@ interface Payment {
     notes?: string;
 }
 
+interface AppliedCreditNote {
+    id: number;
+    credit_note_number: string;
+    credit_note_date: string;
+    status: string;
+    total?: number;
+    allocated_amount?: number;
+}
+
 interface Invoice {
     id: number;
     invoice_number: string;
@@ -882,6 +891,8 @@ interface Invoice {
     line_items: LineItem[];
     line_groups?: LineGroup[];
     payments?: Payment[];
+    credit_notes?: AppliedCreditNote[];
+    allocated_credit_notes?: AppliedCreditNote[];
     source?: any;
 }
 
@@ -909,6 +920,13 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+const displayCreditNotes = computed<AppliedCreditNote[]>(() => {
+    if ((props.invoice.allocated_credit_notes?.length || 0) > 0) {
+        return props.invoice.allocated_credit_notes || [];
+    }
+
+    return props.invoice.credit_notes || [];
+});
 
 const showEmailModal = ref(false);
 

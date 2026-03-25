@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ChartOfAccount;
 use App\Models\CreditNote;
+use App\Models\CreditNoteAllocation;
 use App\Models\CreditNoteLineItem;
 use App\Models\Customer;
 use App\Models\Invoice;
@@ -16,6 +17,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -185,6 +187,9 @@ class CreditNotesController extends Controller
         $validated = $request->validate([
             'customer_id' => ['required', CompanyScopedRules::customer($cid)],
             'invoice_id' => ['nullable', CompanyScopedRules::invoice($cid, true)],
+            'allocations' => ['nullable', 'array'],
+            'allocations.*.invoice_id' => ['required_with:allocations', CompanyScopedRules::invoice($cid, true)],
+            'allocations.*.amount' => ['required_with:allocations', 'numeric', 'min:0.01'],
             'title' => 'nullable|string|max:255',
             'description' => 'nullable|string',
             'credit_note_date' => 'required|date',
@@ -271,8 +276,10 @@ class CreditNotesController extends Controller
         }
 
         $creditNote->calculateTotals();
+        $this->applyAllocationsFromRequest($creditNote, $validated['allocations'] ?? null, $currentCompany->id);
+        $this->applyLegacyInvoiceAllocationIfPresent($creditNote, $validated['invoice_id'] ?? null, $currentCompany->id);
         $this->syncCreditNoteStatusFromBalance($creditNote);
-        $this->syncInvoiceStatusAfterCreditNoteChange($creditNote);
+        $this->syncInvoiceStatusesAfterCreditNoteChange($creditNote);
 
         return redirect()->route('credit-notes.show', $creditNote)
             ->with('success', "Credit note {$creditNote->credit_note_number} created successfully.");
@@ -280,9 +287,11 @@ class CreditNotesController extends Controller
 
     public function show(CreditNote $creditNote): Response
     {
+        $currentCompany = auth()->user()->getCurrentCompany();
         $creditNote->load([
             'customer',
             'invoice',
+            'allocations.invoice',
             'lineItems.product',
             'lineItems.taxRate',
             'lineItems.lineGroup',
@@ -294,8 +303,35 @@ class CreditNotesController extends Controller
         $creditNote->calculateTotals();
         $this->syncCreditNoteStatusFromBalance($creditNote);
 
+        $creditNoteData = $creditNote->toArray();
+        $creditNoteData['allocations'] = collect($creditNoteData['allocations'] ?? [])
+            ->map(function ($alloc) use ($currentCompany) {
+                $invoice = $alloc['invoice'] ?? null;
+                if (! $invoice && ! empty($alloc['invoice_id'])) {
+                    $resolved = Invoice::where('company_id', $currentCompany->id)
+                        ->whereKey($alloc['invoice_id'])
+                        ->first(['id', 'invoice_number', 'title']);
+                    if ($resolved) {
+                        $invoice = $resolved->toArray();
+                    }
+                }
+
+                return [
+                    'id' => $alloc['id'] ?? null,
+                    'invoice_id' => $alloc['invoice_id'] ?? null,
+                    'amount' => $alloc['amount'] ?? 0,
+                    'invoice' => $invoice ? [
+                        'id' => $invoice['id'] ?? null,
+                        'invoice_number' => $invoice['invoice_number'] ?? null,
+                        'title' => $invoice['title'] ?? null,
+                    ] : null,
+                ];
+            })
+            ->values()
+            ->all();
+
         return Inertia::render('credit-notes/Show', [
-            'creditNote' => $creditNote,
+            'creditNote' => $creditNoteData,
         ]);
     }
 
@@ -303,7 +339,7 @@ class CreditNotesController extends Controller
     {
         $currentCompany = auth()->user()->getCurrentCompany();
 
-        $creditNote->load(['customer', 'invoice', 'lineItems.product', 'lineItems.taxRate', 'lineItems.lineGroup', 'lineGroups']);
+        $creditNote->load(['customer', 'invoice', 'allocations.invoice', 'lineItems.product', 'lineItems.taxRate', 'lineItems.lineGroup', 'lineGroups']);
 
         $taxRates = TaxRate::where('company_id', $currentCompany->id)
             ->where('is_active', true)
@@ -384,6 +420,9 @@ class CreditNotesController extends Controller
         $validated = $request->validate([
             'customer_id' => ['required', CompanyScopedRules::customer($cid)],
             'invoice_id' => ['nullable', CompanyScopedRules::invoice($cid, true)],
+            'allocations' => ['nullable', 'array'],
+            'allocations.*.invoice_id' => ['required_with:allocations', CompanyScopedRules::invoice($cid, true)],
+            'allocations.*.amount' => ['required_with:allocations', 'numeric', 'min:0.01'],
             'title' => 'nullable|string|max:255',
             'description' => 'nullable|string',
             'credit_note_date' => 'required|date',
@@ -469,8 +508,10 @@ class CreditNotesController extends Controller
         }
 
         $creditNote->calculateTotals();
+        $this->applyAllocationsFromRequest($creditNote, $validated['allocations'] ?? null, $creditNote->company_id);
+        $this->applyLegacyInvoiceAllocationIfPresent($creditNote, $validated['invoice_id'] ?? null, $creditNote->company_id);
         $this->syncCreditNoteStatusFromBalance($creditNote);
-        $this->syncInvoiceStatusAfterCreditNoteChange($creditNote);
+        $this->syncInvoiceStatusesAfterCreditNoteChange($creditNote);
 
         return redirect()->route('credit-notes.show', $creditNote)
             ->with('success', "Credit note {$creditNote->credit_note_number} updated successfully.");
@@ -585,32 +626,40 @@ class CreditNotesController extends Controller
         return redirect()->back()->with('success', 'Refund payment removed successfully.');
     }
 
-    private function syncInvoiceStatusAfterCreditNoteChange(CreditNote $creditNote): void
+    private function syncInvoiceStatusesAfterCreditNoteChange(CreditNote $creditNote): void
     {
-        if (! $creditNote->invoice_id) {
-            return;
+        $invoiceIds = $creditNote->allocations()->pluck('invoice_id')->all();
+        if ($invoiceIds === []) {
+            $invoiceIds = $creditNote->invoice_id ? [$creditNote->invoice_id] : [];
         }
 
-        $invoice = Invoice::find($creditNote->invoice_id);
-        if (! $invoice) {
-            return;
-        }
+        foreach (array_unique(array_map('intval', $invoiceIds)) as $invoiceId) {
+            if (! $invoiceId) {
+                continue;
+            }
 
-        $invoice->refresh();
-        if ($invoice->isFullyPaid() && $invoice->status !== 'paid') {
-            $invoice->update(['status' => 'paid']);
+            $invoice = Invoice::find($invoiceId);
+            if (! $invoice) {
+                continue;
+            }
+
+            $invoice->refresh();
+            if ($invoice->isFullyPaid() && $invoice->status !== 'paid') {
+                $invoice->update(['status' => 'paid']);
+            }
         }
     }
 
     private function syncCreditNoteStatusFromBalance(CreditNote $creditNote): void
     {
         $creditNote->refresh();
-        $remaining = max(0, round((float) $creditNote->total - (float) $creditNote->payments()->sum('amount'), 2));
+        $allocated = (float) $creditNote->allocations()->sum('amount');
+        $remaining = max(0, round((float) $creditNote->total - (float) $creditNote->payments()->sum('amount') - $allocated, 2));
         $creditNote->update(['remaining_credit' => $remaining]);
 
         if ($creditNote->status !== 'voided') {
             // Credit notes allocated to an invoice must be authorised for outbound Xero sync.
-            if ($creditNote->invoice_id && in_array($creditNote->status, ['draft', 'submitted'], true)) {
+            if (($creditNote->invoice_id || $creditNote->allocations()->exists()) && in_array($creditNote->status, ['draft', 'submitted'], true)) {
                 $creditNote->update(['status' => 'authorised']);
             }
 
@@ -620,9 +669,110 @@ class CreditNotesController extends Controller
 
             // Invoice-linked notes can legitimately stay paid when the credit has been allocated
             // to settle the invoice, even if no refund payments exist on the note itself.
-            if (! $creditNote->invoice_id && $remaining > 0.01 && $creditNote->status === 'paid') {
+            if (! $creditNote->invoice_id && ! $creditNote->allocations()->exists() && $remaining > 0.01 && $creditNote->status === 'paid') {
                 $creditNote->update(['status' => 'authorised']);
             }
         }
+    }
+
+    /**
+     * @param  array<int, array{invoice_id:int, amount:float|int|string}>|null  $allocations
+     */
+    private function applyAllocationsFromRequest(CreditNote $creditNote, ?array $allocations, int $companyId): void
+    {
+        if ($allocations === null) {
+            return;
+        }
+
+        $creditNote->allocations()->delete();
+
+        $rows = collect($allocations)
+            ->map(function ($row) {
+                return [
+                    'invoice_id' => (int) ($row['invoice_id'] ?? 0),
+                    'amount' => round((float) ($row['amount'] ?? 0), 2),
+                ];
+            })
+            ->filter(fn ($row) => $row['invoice_id'] > 0 && $row['amount'] > 0)
+            ->unique('invoice_id')
+            ->values();
+
+        $totalToAllocate = (float) $rows->sum('amount');
+        $maxAllocatable = max(0, round((float) $creditNote->total - (float) $creditNote->payments()->sum('amount'), 2));
+        if ($totalToAllocate - $maxAllocatable > 0.01) {
+            throw ValidationException::withMessages([
+                'allocations' => ['Total allocated amount cannot exceed the available credit on this credit note.'],
+            ]);
+        }
+
+        foreach ($rows as $row) {
+            $invoice = Invoice::where('company_id', $companyId)->whereKey($row['invoice_id'])->first();
+            if (! $invoice) {
+                continue;
+            }
+            if ((int) $invoice->customer_id !== (int) $creditNote->customer_id) {
+                throw ValidationException::withMessages([
+                    'allocations' => ['Allocated invoices must belong to the same customer as the credit note.'],
+                ]);
+            }
+            if ($row['amount'] - (float) $invoice->remaining_balance > 0.01) {
+                throw ValidationException::withMessages([
+                    'allocations' => ["Allocation amount cannot exceed invoice remaining balance for invoice {$invoice->invoice_number}."],
+                ]);
+            }
+            CreditNoteAllocation::create([
+                'company_id' => $companyId,
+                'credit_note_id' => $creditNote->id,
+                'invoice_id' => $row['invoice_id'],
+                'amount' => $row['amount'],
+            ]);
+        }
+
+        // Keep legacy single invoice_id in sync for the common one-invoice case (e.g. lists/filters).
+        $creditNote->refresh();
+        $invoiceIds = $creditNote->allocations()->pluck('invoice_id')->all();
+        $creditNote->update([
+            'invoice_id' => count($invoiceIds) === 1 ? (int) $invoiceIds[0] : null,
+        ]);
+    }
+
+    private function applyLegacyInvoiceAllocationIfPresent(CreditNote $creditNote, $invoiceIdRaw, int $companyId): void
+    {
+        // If the new allocations UI is being used, do not auto-create legacy allocations.
+        if ($creditNote->allocations()->exists()) {
+            return;
+        }
+
+        $invoiceId = (int) ($invoiceIdRaw ?? 0);
+        if ($invoiceId <= 0) {
+            return;
+        }
+
+        $invoice = Invoice::where('company_id', $companyId)->whereKey($invoiceId)->first();
+        if (! $invoice) {
+            return;
+        }
+
+        if ((int) $invoice->customer_id !== (int) $creditNote->customer_id) {
+            throw ValidationException::withMessages([
+                'invoice_id' => ['Selected invoice must belong to the same customer as the credit note.'],
+            ]);
+        }
+
+        $maxAllocatable = max(0, round((float) $creditNote->total - (float) $creditNote->payments()->sum('amount'), 2));
+        $amount = min((float) $invoice->remaining_balance, $maxAllocatable);
+        $amount = round($amount, 2);
+        if ($amount <= 0) {
+            return;
+        }
+
+        CreditNoteAllocation::create([
+            'company_id' => $companyId,
+            'credit_note_id' => $creditNote->id,
+            'invoice_id' => $invoice->id,
+            'amount' => $amount,
+        ]);
+
+        $creditNote->update(['invoice_id' => $invoice->id]);
     }
 }

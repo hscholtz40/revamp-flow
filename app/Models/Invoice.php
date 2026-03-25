@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Facades\DB;
+use App\Models\CreditNoteAllocation;
 
 class Invoice extends Model
 {
@@ -130,6 +131,11 @@ class Invoice extends Model
     public function creditNotes(): HasMany
     {
         return $this->hasMany(CreditNote::class)->orderBy('credit_note_date', 'desc');
+    }
+
+    public function creditNoteAllocations(): HasMany
+    {
+        return $this->hasMany(CreditNoteAllocation::class)->orderByDesc('id');
     }
 
     /**
@@ -370,15 +376,23 @@ class Invoice extends Model
      */
     public function getTotalCreditedAttribute(): float
     {
-        if ($this->relationLoaded('creditNotes')) {
-            return (float) $this->creditNotes
-                ->where('status', '!=', 'voided')
-                ->sum(fn ($cn) => (float) $cn->total);
-        }
+        // Prefer explicit allocations (supports multi-invoice allocations).
+        $allocated = (float) CreditNoteAllocation::query()
+            ->join('credit_notes', 'credit_notes.id', '=', 'credit_note_allocations.credit_note_id')
+            ->where('credit_note_allocations.invoice_id', $this->id)
+            ->where('credit_notes.company_id', $this->company_id)
+            ->where('credit_notes.status', '!=', 'voided')
+            ->sum('credit_note_allocations.amount');
 
-        return (float) $this->creditNotes()
+        // Backward compatibility: legacy credit notes linked via credit_notes.invoice_id with no allocations.
+        $legacy = (float) CreditNote::query()
+            ->where('company_id', $this->company_id)
+            ->where('invoice_id', $this->id)
             ->where('status', '!=', 'voided')
+            ->whereDoesntHave('allocations')
             ->sum('total');
+
+        return round($allocated + $legacy, 2);
     }
 
     /**
@@ -392,15 +406,7 @@ class Invoice extends Model
             $totalPaid = (float) $this->payments()->sum('amount');
         }
 
-        if ($this->relationLoaded('creditNotes')) {
-            $totalCredited = (float) $this->creditNotes
-                ->where('status', '!=', 'voided')
-                ->sum(fn ($cn) => (float) $cn->total);
-        } else {
-            $totalCredited = (float) $this->creditNotes()
-                ->where('status', '!=', 'voided')
-                ->sum('total');
-        }
+        $totalCredited = (float) $this->total_credited;
 
         $total = (float) ($this->total ?? 0);
 
@@ -413,9 +419,7 @@ class Invoice extends Model
     public function isFullyPaid(): bool
     {
         $totalPaid = (float) $this->payments()->sum('amount');
-        $totalCredited = (float) $this->creditNotes()
-            ->where('status', '!=', 'voided')
-            ->sum('total');
+        $totalCredited = (float) $this->total_credited;
 
         return ((float) $this->total - $totalPaid - $totalCredited) <= 0.01;
     }

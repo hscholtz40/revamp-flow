@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ChartOfAccount;
 use App\Models\Customer;
+use App\Models\CreditNoteAllocation;
 use App\Models\EmailActivity;
 use App\Models\Invoice;
 use App\Models\InvoiceLineItem;
@@ -823,6 +824,29 @@ class InvoicesController extends Controller
 
         // Convert invoice to array first
         $invoiceData = $invoice->toArray();
+
+        $allocatedCreditNotes = CreditNoteAllocation::query()
+            ->where('company_id', $currentCompany->id)
+            ->where('invoice_id', $invoice->id)
+            ->with('creditNote')
+            ->get()
+            ->map(function (CreditNoteAllocation $allocation) {
+                $cn = $allocation->creditNote;
+                if (! $cn) {
+                    return null;
+                }
+
+                return [
+                    'id' => $cn->id,
+                    'credit_note_number' => $cn->credit_note_number,
+                    'credit_note_date' => optional($cn->credit_note_date)->toDateString(),
+                    'status' => $cn->status,
+                    'allocated_amount' => (float) $allocation->amount,
+                ];
+            })
+            ->filter()
+            ->values();
+        $invoiceData['allocated_credit_notes'] = $allocatedCreditNotes;
 
         // Then manually add serial numbers to each line item in the array
         if (isset($invoiceData['line_items']) && is_array($invoiceData['line_items'])) {

@@ -109,7 +109,40 @@
                         </div>
                     </div>
 
-                    <div v-if="creditNote.invoice" class="rounded-lg border border-gray-200 bg-white shadow-sm">
+                    <div v-if="(creditNote as any).allocations?.length" class="rounded-lg border border-gray-200 bg-white shadow-sm">
+                        <div class="border-b border-gray-200 bg-gray-50 px-6 py-4">
+                            <h2 class="text-lg font-semibold text-gray-900">Allocated Invoices</h2>
+                            <p class="text-sm text-gray-600">Invoices this credit note is allocated to (with amounts)</p>
+                        </div>
+                        <div class="p-6">
+                            <div class="space-y-2">
+                                <div
+                                    v-for="alloc in (creditNote as any).allocations"
+                                    :key="alloc.id || alloc.invoice_id"
+                                    class="flex items-center justify-between rounded border border-gray-200 px-3 py-2"
+                                >
+                                    <Link
+                                        v-if="alloc.invoice"
+                                        :href="`/invoices/${alloc.invoice.id}`"
+                                        class="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 hover:underline"
+                                    >
+                                        <FileText class="h-4 w-4" />
+                                        {{ alloc.invoice.invoice_number }}
+                                        <span
+                                            v-if="alloc.invoice.title && String(alloc.invoice.title).trim() !== '' && !String(alloc.invoice.title).includes(String(alloc.invoice.invoice_number))"
+                                            class="text-gray-500"
+                                        >
+                                            - {{ alloc.invoice.title }}
+                                        </span>
+                                    </Link>
+                                    <span v-else class="text-sm text-gray-700">Invoice unavailable</span>
+                                    <span class="text-sm font-medium text-gray-900">{{ formatCurrency(Number(alloc.amount || 0)) }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-else-if="creditNote.invoice" class="rounded-lg border border-gray-200 bg-white shadow-sm">
                         <div class="border-b border-gray-200 bg-gray-50 px-6 py-4">
                             <h2 class="text-lg font-semibold text-gray-900">Linked Invoice</h2>
                             <p class="text-sm text-gray-600">Invoice this credit note applies to</p>

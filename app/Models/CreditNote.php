@@ -82,6 +82,11 @@ class CreditNote extends Model
         return $this->hasMany(Payment::class)->orderBy('payment_date', 'desc');
     }
 
+    public function allocations(): HasMany
+    {
+        return $this->hasMany(CreditNoteAllocation::class)->orderBy('id');
+    }
+
     public static function generateCreditNoteNumber(int $companyId): string
     {
         $customNumber = DB::transaction(function () use ($companyId) {
@@ -129,7 +134,8 @@ class CreditNote extends Model
         $this->discount_amount = $discountAmount;
         $this->total = $subtotal + $taxAmount;
         $refunded = (float) $this->payments()->sum('amount');
-        $this->remaining_credit = max(0, round(((float) $this->total) - $refunded, 2));
+        $allocated = (float) $this->allocations()->sum('amount');
+        $this->remaining_credit = max(0, round(((float) $this->total) - $refunded - $allocated, 2));
         $this->save();
     }
 

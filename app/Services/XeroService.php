@@ -7,6 +7,7 @@ use App\Models\ChartOfAccount;
 use App\Models\Company;
 use App\Models\Contact;
 use App\Models\CreditNote;
+use App\Models\CreditNoteAllocation;
 use App\Models\CreditNoteLineItem;
 use App\Models\Customer;
 use App\Models\Invoice;
@@ -7360,7 +7361,10 @@ class XeroService
                             $allocationCount = isset($xeroNote['Allocations']) && is_array($xeroNote['Allocations'])
                                 ? count($xeroNote['Allocations'])
                                 : 0;
-                            $needsAllocationBackfill = empty($existing->invoice_id) && $allocationCount > 0;
+                            $resolvedInvoiceIds = $this->resolveCreditNoteInvoiceIds($xeroNote, $currentCompany);
+                            // Only backfill the legacy single invoice_id when the allocation maps to exactly one invoice.
+                            // Credit notes can be allocated across multiple invoices; in that case we keep invoice_id null.
+                            $needsAllocationBackfill = empty($existing->invoice_id) && count($resolvedInvoiceIds) === 1;
 
                             if (! $this->xeroUpdatedAtChanged($existing, $xeroNote) && ! $needsAllocationBackfill) {
                                 $results[] = [
@@ -7499,12 +7503,38 @@ class XeroService
 
     private function syncCreditNoteAllocationToXero(CreditNote $creditNote): void
     {
-        if (! $creditNote->xero_credit_note_id || ! $creditNote->invoice_id) {
+        if (! $creditNote->xero_credit_note_id) {
             return;
         }
 
-        $invoice = Invoice::find($creditNote->invoice_id);
-        if (! $invoice || ! $invoice->xero_invoice_id) {
+        $creditNote->loadMissing(['allocations.invoice']);
+
+        $desired = [];
+        if ($creditNote->allocations->isNotEmpty()) {
+            foreach ($creditNote->allocations as $alloc) {
+                $invoice = $alloc->invoice;
+                if (! $invoice || ! $invoice->xero_invoice_id) {
+                    continue;
+                }
+                $amount = round((float) $alloc->amount, 2);
+                if ($amount <= 0) {
+                    continue;
+                }
+                $desired[$invoice->xero_invoice_id] = ($desired[$invoice->xero_invoice_id] ?? 0) + $amount;
+            }
+        } elseif ($creditNote->invoice_id) {
+            // Legacy single-invoice allocation behaviour.
+            $invoice = Invoice::find($creditNote->invoice_id);
+            if (! $invoice || ! $invoice->xero_invoice_id) {
+                return;
+            }
+
+            $allocationAmount = min((float) $creditNote->total, (float) $invoice->remaining_balance);
+            if ($allocationAmount <= 0) {
+                return;
+            }
+            $desired[$invoice->xero_invoice_id] = round((float) $allocationAmount, 2);
+        } else {
             return;
         }
 
@@ -7512,36 +7542,57 @@ class XeroService
             $this->baseUrl.'/api.xro/2.0/CreditNotes/'.$creditNote->xero_credit_note_id
         );
 
+        $alreadyAllocatedInvoiceIds = [];
         if ($existingCN->successful()) {
             $xeroData = $existingCN->json()['CreditNotes'][0] ?? [];
-            $allocations = $xeroData['Allocations'] ?? [];
-
-            foreach ($allocations as $alloc) {
-                if (($alloc['Invoice']['InvoiceID'] ?? '') === $invoice->xero_invoice_id) {
-                    return;
+            $existingAllocations = $xeroData['Allocations'] ?? [];
+            if (is_array($existingAllocations)) {
+                foreach ($existingAllocations as $alloc) {
+                    $invId = $alloc['Invoice']['InvoiceID'] ?? null;
+                    if ($invId) {
+                        $alreadyAllocatedInvoiceIds[$invId] = true;
+                    }
                 }
             }
         }
 
-        $totalPaid = (float) $invoice->payments()->sum('amount');
-        $otherCredits = (float) $invoice->creditNotes()
-            ->where('id', '!=', $creditNote->id)
-            ->where('status', '!=', 'voided')
-            ->sum('total');
-        $invoiceOwing = max(0, (float) $invoice->total - $totalPaid - $otherCredits);
-        $allocationAmount = min((float) $creditNote->total, $invoiceOwing);
-        if ($allocationAmount <= 0) {
+        $payloadAllocations = [];
+        foreach ($desired as $xeroInvoiceId => $amount) {
+            if (! $xeroInvoiceId || $amount <= 0) {
+                continue;
+            }
+
+            if (isset($alreadyAllocatedInvoiceIds[$xeroInvoiceId])) {
+                continue;
+            }
+
+            // Cap to current local remaining balance to reduce Xero validation failures.
+            $localInvoice = Invoice::where('company_id', $creditNote->company_id)
+                ->where('xero_invoice_id', $xeroInvoiceId)
+                ->first();
+            if ($localInvoice) {
+                $amount = min((float) $amount, (float) $localInvoice->remaining_balance);
+            }
+            $amount = round((float) $amount, 2);
+            if ($amount <= 0) {
+                continue;
+            }
+
+            $payloadAllocations[] = [
+                'Invoice' => ['InvoiceID' => $xeroInvoiceId],
+                'Amount' => $amount,
+                'Date' => $creditNote->credit_note_date->format('Y-m-d'),
+            ];
+        }
+
+        if ($payloadAllocations === []) {
             return;
         }
 
         $response = $this->makeXeroRequest('put',
             $this->baseUrl.'/api.xro/2.0/CreditNotes/'.$creditNote->xero_credit_note_id.'/Allocations',
             [
-                'Allocations' => [[
-                    'Invoice' => ['InvoiceID' => $invoice->xero_invoice_id],
-                    'Amount' => round($allocationAmount, 2),
-                    'Date' => $creditNote->credit_note_date->format('Y-m-d'),
-                ]],
+                'Allocations' => $payloadAllocations,
             ]
         );
 
@@ -7549,10 +7600,11 @@ class XeroService
             throw new \Exception('Failed to allocate credit note in Xero: '.$response->body());
         }
 
-        Log::info('Credit note allocated to invoice in Xero', [
+        Log::info('Credit note allocations synced to Xero', [
             'credit_note_id' => $creditNote->id,
-            'invoice_id' => $invoice->id,
-            'amount' => $allocationAmount,
+            'credit_note_number' => $creditNote->credit_note_number,
+            'xero_credit_note_id' => $creditNote->xero_credit_note_id,
+            'allocations_count' => count($payloadAllocations),
         ]);
     }
 
@@ -7865,7 +7917,8 @@ class XeroService
             throw new \Exception('Could not resolve customer for credit note '.($xeroNote['CreditNoteNumber'] ?? $xeroNote['CreditNoteID']));
         }
 
-        $invoiceId = $this->resolveCreditNoteInvoiceId($xeroNote, $company);
+        $invoiceIds = $this->resolveCreditNoteInvoiceIds($xeroNote, $company);
+        $invoiceId = count($invoiceIds) === 1 ? $invoiceIds[0] : null;
 
         $creditNote = CreditNote::create([
             'company_id' => $company->id,
@@ -7885,15 +7938,26 @@ class XeroService
         ]);
         $this->alignLocalUpdatedAtWithXero($creditNote);
 
-        $this->createCreditNoteLineItemsFromXero($creditNote, $xeroNote['LineItems'] ?? [], $company);
-        $this->syncInvoiceStatusAfterCreditNoteImport($invoiceId, $company->id);
+        $this->createCreditNoteLineItemsFromXero(
+            $creditNote,
+            $xeroNote['LineItems'] ?? [],
+            $company,
+            $this->normalizeXeroLineAmountType($xeroNote['LineAmountTypes'] ?? null)
+        );
+        $this->syncCreditNoteAllocationsFromXero($creditNote, $xeroNote, $company);
+        $creditNote->calculateTotals();
+        $this->syncInvoiceStatusesAfterCreditNoteImport($invoiceIds, $company->id);
 
         return $creditNote;
     }
 
     private function updateCreditNoteFromXeroData(CreditNote $creditNote, array $xeroNote): void
     {
-        $invoiceId = $this->resolveCreditNoteInvoiceId($xeroNote, Company::find($creditNote->company_id)) ?? $creditNote->invoice_id;
+        $company = Company::find($creditNote->company_id);
+        $invoiceIds = $this->resolveCreditNoteInvoiceIds($xeroNote, $company);
+        $resolvedInvoiceId = count($invoiceIds) === 1 ? $invoiceIds[0] : null;
+        // Preserve existing invoice_id when we cannot safely map to exactly one invoice (multi-allocation).
+        $invoiceId = $resolvedInvoiceId ?? $creditNote->invoice_id;
 
         $updated = $this->updateModelIfChanged($creditNote, [
             'status' => $this->mapXeroCreditNoteStatusToLocal($xeroNote['Status'] ?? 'DRAFT'),
@@ -7915,7 +7979,12 @@ class XeroService
 
         if (isset($xeroNote['LineItems']) && is_array($xeroNote['LineItems']) && count($xeroNote['LineItems']) > 0) {
             $creditNote->lineItems()->delete();
-            $this->createCreditNoteLineItemsFromXero($creditNote, $xeroNote['LineItems'], Company::find($creditNote->company_id));
+            $this->createCreditNoteLineItemsFromXero(
+                $creditNote,
+                $xeroNote['LineItems'],
+                $company,
+                $this->normalizeXeroLineAmountType($xeroNote['LineAmountTypes'] ?? null)
+            );
         } elseif (isset($xeroNote['LineItems']) && is_array($xeroNote['LineItems'])) {
             Log::info('Skipping credit note line item replacement due to empty Xero LineItems payload', [
                 'credit_note_id' => $creditNote->id,
@@ -7925,7 +7994,91 @@ class XeroService
             ]);
         }
 
-        $this->syncInvoiceStatusAfterCreditNoteImport($invoiceId, $creditNote->company_id);
+        $this->syncCreditNoteAllocationsFromXero($creditNote, $xeroNote, $company);
+        $creditNote->calculateTotals();
+
+        // Update all affected invoices (credit notes can be allocated across multiple invoices in Xero).
+        $this->syncInvoiceStatusesAfterCreditNoteImport($invoiceIds, $creditNote->company_id);
+    }
+
+    private function syncCreditNoteAllocationsFromXero(CreditNote $creditNote, array $xeroNote, Company $company): void
+    {
+        $creditNote->allocations()->delete();
+
+        $allocations = $xeroNote['Allocations'] ?? [];
+        if (! is_array($allocations) || $allocations === []) {
+            // Keep legacy single invoice_id cleared if there are no allocations in Xero.
+            if ($creditNote->invoice_id !== null) {
+                $creditNote->update(['invoice_id' => null]);
+            }
+
+            return;
+        }
+
+        $rows = [];
+        foreach ($allocations as $allocation) {
+            $amount = round((float) ($allocation['Amount'] ?? 0), 2);
+            if ($amount <= 0) {
+                continue;
+            }
+
+            $localInvoice = null;
+            $xeroInvoiceId = $allocation['Invoice']['InvoiceID'] ?? $allocation['InvoiceID'] ?? null;
+            if (! empty($xeroInvoiceId)) {
+                $localInvoice = Invoice::where('company_id', $company->id)
+                    ->where('xero_invoice_id', $xeroInvoiceId)
+                    ->first();
+            }
+
+            if (! $localInvoice) {
+                $invoiceNumber = $allocation['Invoice']['InvoiceNumber'] ?? $allocation['InvoiceNumber'] ?? null;
+                if (! empty($invoiceNumber)) {
+                    $localInvoice = Invoice::where('company_id', $company->id)
+                        ->where('invoice_number', $invoiceNumber)
+                        ->first();
+                }
+            }
+
+            if (! $localInvoice) {
+                Log::warning('Skipping Xero credit note allocation; local invoice not found', [
+                    'company_id' => $company->id,
+                    'credit_note_id' => $creditNote->id,
+                    'credit_note_number' => $creditNote->credit_note_number,
+                    'xero_credit_note_id' => $xeroNote['CreditNoteID'] ?? $creditNote->xero_credit_note_id,
+                    'xero_invoice_id' => $xeroInvoiceId,
+                    'invoice_number' => $allocation['Invoice']['InvoiceNumber'] ?? $allocation['InvoiceNumber'] ?? null,
+                    'amount' => $amount,
+                ]);
+                continue;
+            }
+
+            // Credit note and invoice should generally match customer, but don't hard-fail on historic data.
+            if ((int) $localInvoice->customer_id !== (int) $creditNote->customer_id) {
+                Log::warning('Xero credit note allocation invoice customer differs from credit note customer', [
+                    'company_id' => $company->id,
+                    'credit_note_id' => $creditNote->id,
+                    'invoice_id' => $localInvoice->id,
+                    'credit_note_customer_id' => $creditNote->customer_id,
+                    'invoice_customer_id' => $localInvoice->customer_id,
+                ]);
+            }
+
+            $rows[$localInvoice->id] = ($rows[$localInvoice->id] ?? 0) + $amount;
+        }
+
+        foreach ($rows as $invoiceId => $amount) {
+            CreditNoteAllocation::create([
+                'company_id' => $company->id,
+                'credit_note_id' => $creditNote->id,
+                'invoice_id' => (int) $invoiceId,
+                'amount' => round((float) $amount, 2),
+            ]);
+        }
+
+        $invoiceIds = array_keys($rows);
+        $creditNote->update([
+            'invoice_id' => count($invoiceIds) === 1 ? (int) $invoiceIds[0] : null,
+        ]);
     }
 
     private function resolveAccountId(?string $accountCode, int $companyId): ?int
@@ -7957,12 +8110,16 @@ class XeroService
         return $taxRate?->id;
     }
 
-    private function resolveCreditNoteInvoiceId(array $xeroNote, ?Company $company): ?int
+    /**
+     * @return array<int, int> local invoice ids
+     */
+    private function resolveCreditNoteInvoiceIds(array $xeroNote, ?Company $company): array
     {
         if (! $company || empty($xeroNote['Allocations'])) {
-            return null;
+            return [];
         }
 
+        $out = [];
         foreach ($xeroNote['Allocations'] as $allocation) {
             $xeroInvoiceId = $allocation['Invoice']['InvoiceID'] ?? $allocation['InvoiceID'] ?? null;
             if (! empty($xeroInvoiceId)) {
@@ -7970,7 +8127,8 @@ class XeroService
                     ->where('xero_invoice_id', $xeroInvoiceId)
                     ->first();
                 if ($localInvoice) {
-                    return $localInvoice->id;
+                    $out[] = $localInvoice->id;
+                    continue;
                 }
             }
 
@@ -7980,41 +8138,74 @@ class XeroService
                     ->where('invoice_number', $invoiceNumber)
                     ->first();
                 if ($localInvoice) {
-                    return $localInvoice->id;
+                    $out[] = $localInvoice->id;
                 }
             }
         }
 
-        return null;
-    }
-
-    private function syncInvoiceStatusAfterCreditNoteImport(?int $invoiceId, int $companyId): void
-    {
-        if (! $invoiceId) {
-            return;
-        }
-
-        $invoice = Invoice::where('company_id', $companyId)
-            ->whereKey($invoiceId)
-            ->first();
-        if (! $invoice) {
-            return;
-        }
-
-        $invoice->refresh();
-
-        if ($invoice->isFullyPaid() && $invoice->status !== 'paid') {
-            $invoice->update(['status' => 'paid']);
-            Log::info('Marked invoice as paid after credit note import from Xero', [
-                'invoice_id' => $invoice->id,
-                'invoice_number' => $invoice->invoice_number,
-                'decision_reason' => 'credit_note_allocation_settled_invoice',
+        $out = array_values(array_unique(array_map('intval', $out)));
+        if (count($out) > 1) {
+            Log::info('Xero credit note has multiple invoice allocations; leaving invoice_id unset', [
+                'company_id' => $company->id,
+                'xero_credit_note_id' => $xeroNote['CreditNoteID'] ?? null,
+                'credit_note_number' => $xeroNote['CreditNoteNumber'] ?? null,
+                'resolved_invoice_ids' => $out,
+                'allocation_count' => is_array($xeroNote['Allocations'] ?? null) ? count($xeroNote['Allocations']) : null,
             ]);
         }
+
+        return $out;
     }
 
-    private function createCreditNoteLineItemsFromXero(CreditNote $creditNote, array $xeroLineItems, Company $company): void
+    /**
+     * @param array<int, int> $invoiceIds
+     */
+    private function syncInvoiceStatusesAfterCreditNoteImport(array $invoiceIds, int $companyId): void
     {
+        if ($invoiceIds === []) {
+            return;
+        }
+
+        foreach ($invoiceIds as $invoiceId) {
+            if (! $invoiceId) {
+                continue;
+            }
+
+            $invoice = Invoice::where('company_id', $companyId)
+                ->whereKey($invoiceId)
+                ->first();
+            if (! $invoice) {
+                continue;
+            }
+
+            $invoice->refresh();
+
+            if ($invoice->isFullyPaid() && $invoice->status !== 'paid') {
+                $invoice->update(['status' => 'paid']);
+                Log::info('Marked invoice as paid after credit note import from Xero', [
+                    'invoice_id' => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'decision_reason' => 'credit_note_allocation_settled_invoice',
+                ]);
+            }
+        }
+    }
+
+    private function normalizeXeroLineAmountType(?string $lineAmountType): string
+    {
+        $type = strtoupper(trim((string) $lineAmountType));
+
+        return in_array($type, ['EXCLUSIVE', 'INCLUSIVE', 'NOTAX'], true) ? $type : 'EXCLUSIVE';
+    }
+
+    private function createCreditNoteLineItemsFromXero(
+        CreditNote $creditNote,
+        array $xeroLineItems,
+        Company $company,
+        string $lineAmountType = 'EXCLUSIVE'
+    ): void
+    {
+        $isInclusive = $lineAmountType === 'INCLUSIVE';
         $sortOrder = 0;
         foreach ($xeroLineItems as $xeroLineItem) {
             $product = null;
@@ -8039,17 +8230,31 @@ class XeroService
                 $taxRateId = $taxRate?->id;
             }
 
+            $quantity = (int) ($xeroLineItem['Quantity'] ?? 1);
+            $rawUnitAmount = (float) ($xeroLineItem['UnitAmount'] ?? 0);
+            $rawLineAmount = (float) ($xeroLineItem['LineAmount'] ?? 0);
+            $rawTaxAmount = (float) ($xeroLineItem['TaxAmount'] ?? 0);
+
+            // Xero CreditNotes can be Inclusive or Exclusive. Our local totals are modeled as:
+            // line.total = exclusive line amount, line.tax_amount = tax, and document.total = subtotal + tax.
+            // When Xero is Inclusive, normalize the line amounts back to exclusive so local totals match.
+            $exclusiveLineAmount = $isInclusive ? ($rawLineAmount - $rawTaxAmount) : $rawLineAmount;
+            $exclusiveUnitAmount = $rawUnitAmount;
+            if ($isInclusive && $quantity !== 0) {
+                $exclusiveUnitAmount = $exclusiveLineAmount / $quantity;
+            }
+
             CreditNoteLineItem::create([
                 'credit_note_id' => $creditNote->id,
                 'product_id' => $product?->id,
                 'tax_rate_id' => $taxRateId,
                 'description' => $xeroLineItem['Description'] ?? 'Item',
-                'quantity' => (int) ($xeroLineItem['Quantity'] ?? 1),
-                'unit_price' => (float) ($xeroLineItem['UnitAmount'] ?? 0),
+                'quantity' => $quantity,
+                'unit_price' => $exclusiveUnitAmount,
                 'discount_amount' => (float) ($xeroLineItem['DiscountAmount'] ?? 0),
                 'discount_percentage' => (float) ($xeroLineItem['DiscountRate'] ?? 0),
-                'tax_amount' => (float) ($xeroLineItem['TaxAmount'] ?? 0),
-                'total' => (float) ($xeroLineItem['LineAmount'] ?? 0),
+                'tax_amount' => $rawTaxAmount,
+                'total' => $exclusiveLineAmount,
                 'account_code' => $xeroLineItem['AccountCode'] ?? null,
                 'account_id' => $this->resolveAccountId($xeroLineItem['AccountCode'] ?? null, $company->id),
                 'sort_order' => $sortOrder++,

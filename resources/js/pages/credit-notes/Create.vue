@@ -72,7 +72,7 @@
                         </div>
 
                         <div class="relative">
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Invoice (optional)</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Allocate to invoices (optional)</label>
                             <div class="relative">
                                 <input
                                     v-model="invoiceSearchQuery"
@@ -116,6 +116,52 @@
                             <p v-if="form.errors.invoice_id" class="text-red-500 text-sm mt-1">
                                 {{ form.errors.invoice_id }}
                             </p>
+
+                            <div class="mt-2 flex items-center justify-between gap-2">
+                                <button
+                                    type="button"
+                                    class="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                                    :disabled="!selectedInvoiceOption"
+                                    @click="addAllocationFromSelectedInvoice()"
+                                >
+                                    Add allocation
+                                </button>
+                                <p v-if="form.errors.allocations" class="text-red-500 text-sm">
+                                    {{ form.errors.allocations }}
+                                </p>
+                            </div>
+
+                            <div v-if="(form as any).allocations?.length" class="mt-3 space-y-2">
+                                <div
+                                    v-for="(alloc, idx) in (form as any).allocations"
+                                    :key="`${alloc.invoice_id}-${idx}`"
+                                    class="flex items-center justify-between gap-3 rounded border border-gray-200 px-3 py-2"
+                                >
+                                    <div class="min-w-0">
+                                        <div class="truncate text-sm font-medium text-gray-900">
+                                            {{ allocationInvoiceLabel(alloc.invoice_id) }}
+                                        </div>
+                                        <div class="text-xs text-gray-500">Invoice ID: {{ alloc.invoice_id }}</div>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <input
+                                            v-model.number="alloc.amount"
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            class="w-32 rounded border border-gray-300 px-2 py-1 text-sm"
+                                            placeholder="Amount"
+                                        />
+                                        <button
+                                            type="button"
+                                            class="rounded border border-gray-300 px-2 py-1 text-sm text-gray-600 hover:bg-gray-50"
+                                            @click="removeAllocation(idx)"
+                                        >
+                                            Remove
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <div>
@@ -620,6 +666,7 @@ const initialCustomerId = props.selectedCustomer?.id
 const form = useForm({
     customer_id: initialCustomerId,
     invoice_id: props.selectedInvoice?.id ?? '',
+    allocations: [] as Array<{ invoice_id: number; amount: number }>,
     credit_note_date: new Date().toISOString().split('T')[0],
     title: props.selectedInvoice ? `Credit for ${props.selectedInvoice.invoice_number}` : '',
     reference: props.selectedInvoice?.invoice_number ?? '',
@@ -694,6 +741,7 @@ watch(
     },
 );
 const filteredInvoiceOptions = computed(() => invoiceSearchResults.value);
+const allocationInvoices = ref<Record<number, InvoiceOption>>({});
 
 function handleCustomerSearch() {
     if (customerSearchDebounce.value) {
@@ -790,6 +838,31 @@ function clearInvoice() {
     invoiceSearchQuery.value = '';
     invoiceSearchFocused.value = false;
     invoiceSearchResults.value = [];
+}
+
+function allocationInvoiceLabel(invoiceId: number): string {
+    const inv = allocationInvoices.value[invoiceId];
+    if (!inv) return `Invoice #${invoiceId}`;
+    return selectedInvoiceLabel(inv);
+}
+
+function addAllocationFromSelectedInvoice() {
+    const inv = selectedInvoiceOption.value;
+    if (!inv) return;
+    allocationInvoices.value[inv.id] = inv;
+    const list = ((form as any).allocations ?? []) as Array<{ invoice_id: number; amount: number }>;
+    const existing = list.find((a) => Number(a.invoice_id) === Number(inv.id));
+    if (!existing) {
+        list.push({ invoice_id: inv.id, amount: 0 });
+        (form as any).allocations = list;
+    }
+    clearInvoice();
+}
+
+function removeAllocation(index: number) {
+    const list = ((form as any).allocations ?? []) as Array<{ invoice_id: number; amount: number }>;
+    list.splice(index, 1);
+    (form as any).allocations = list;
 }
 
 function normalizeLineItemOrder() {
