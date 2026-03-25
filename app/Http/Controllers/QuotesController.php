@@ -701,7 +701,7 @@ class QuotesController extends Controller
      */
     public function emailQuote(Request $request, Quote $quote): RedirectResponse
     {
-        $this->authorize('update', $quote);
+        $this->authorize('view', $quote);
 
         $currentCompany = auth()->user()->getCurrentCompany();
 

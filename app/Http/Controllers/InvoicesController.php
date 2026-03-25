@@ -1446,7 +1446,7 @@ class InvoicesController extends Controller
      */
     public function email(Request $request, Invoice $invoice)
     {
-        $this->authorize('update', $invoice);
+        $this->authorize('view', $invoice);
 
         $validated = $request->validate([
             'email' => 'required|string',

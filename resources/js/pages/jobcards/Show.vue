@@ -81,7 +81,7 @@
                             Download PDF
                         </button>
                         <button
-                            v-if="hasJobcardEdit"
+                            v-if="canEmailJobcard"
                             @click="showEmailModal = true"
                             class="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
                         >
@@ -782,6 +782,7 @@ const page = usePage();
 const isLimitedUser = computed(() => (page.props.auth as any)?.user?.user_type === 'limited');
 const hasJobcardEdit = useAuthAbility('jobcards', 'edit');
 const hasJobcardDelete = useAuthAbility('jobcards', 'delete');
+const canEmailJobcard = useAuthAbility('jobcards', 'view');
 const hasPurchaseOrdersCreate = useAuthAbility('purchase-orders', 'create');
 const hasPurchaseOrdersList = useAuthAbility('purchase-orders', 'list');
 
