@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-03-26
+
+- **License validation cadence (performance):** Instance license checks now use the persisted `instance_licenses` validation state for up to 24 hours and only call the remote license server once per day (unless force-refresh is requested). Updating the license key now clears stored validation metadata so the new key is revalidated immediately on next check.
+
 ## 2026-03-25
 
 - **Invoice sync guard + stock log severity:** Invoice stock deduction now logs insufficient-stock skips as `warning` (not `error`) to match non-blocking behavior. Xero outbound invoice sync now short-circuits fully paid invoices (without unsynced payments) before invoice-by-id fetch/export, and skips outbound invoice updates after importing payments from Xero for paid invoices. This reduces `LineItemID` validation noise and cuts high-volume `GET /Invoices?where=InvoiceID==Guid(...)` bursts.

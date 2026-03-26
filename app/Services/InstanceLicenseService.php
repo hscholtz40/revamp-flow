@@ -47,6 +47,10 @@ class InstanceLicenseService
             ];
         }
 
+        if (!$forceRefresh && !$this->shouldRefreshValidation($settings)) {
+            return $this->buildResultFromStoredSettings($settings);
+        }
+
         $cacheKey = $this->cacheKey($settings->license_key);
         if (!$forceRefresh) {
             $cached = Cache::get($cacheKey);
@@ -131,6 +135,10 @@ class InstanceLicenseService
         $settings->license_key = Str::upper(trim($licenseKey));
         $settings->status = 'unvalidated';
         $settings->message = 'License key saved. Validation pending.';
+        $settings->licensed_url = null;
+        $settings->limited_users = null;
+        $settings->standard_users = null;
+        $settings->last_validated_at = null;
         $settings->save();
 
         Cache::forget($this->cacheKey($settings->license_key));
@@ -233,6 +241,40 @@ class InstanceLicenseService
         $settings->standard_users = is_array($licenseData) ? (int) data_get($licenseData, 'standard_users') : null;
         $settings->last_validated_at = now();
         $settings->save();
+    }
+
+    private function shouldRefreshValidation(InstanceLicense $settings): bool
+    {
+        if ($settings->status === 'unvalidated' || !$settings->last_validated_at) {
+            return true;
+        }
+
+        return $settings->last_validated_at->lte(now()->subDay());
+    }
+
+    /**
+     * @return array{
+     *   valid: bool,
+     *   message: string,
+     *   license: array<string,mixed>|null
+     * }
+     */
+    private function buildResultFromStoredSettings(InstanceLicense $settings): array
+    {
+        $license = null;
+        if ($settings->status === 'valid') {
+            $license = [
+                'url' => $settings->licensed_url,
+                'limited_users' => $settings->limited_users,
+                'standard_users' => $settings->standard_users,
+            ];
+        }
+
+        return [
+            'valid' => $settings->status === 'valid',
+            'message' => $settings->message ?: 'License validation failed.',
+            'license' => $license,
+        ];
     }
 
     private function reportCurrentVersion(string $licenseKey, string $localUrl): void
