@@ -7,7 +7,7 @@ import { Edit } from 'lucide-vue-next';
 import users from '@/routes/users';
 import { ref, watch } from 'vue';
 
-interface User { id: number; name: string; email: string; user_type: 'standard' | 'limited' | 'info' }
+interface User { id: number; name: string; email: string; user_type: 'standard' | 'limited' | 'info' | 'client' }
 
 const canUsersCreate = useAuthAbility('users', 'create');
 const canUsersEdit = useAuthAbility('users', 'edit');
@@ -72,6 +72,7 @@ watch(search, (value) => {
                                         'bg-green-100 text-green-800': u.user_type === 'standard' || !u.user_type,
                                         'bg-yellow-100 text-yellow-800': u.user_type === 'limited',
                                         'bg-gray-100 text-gray-600': u.user_type === 'info',
+                                        'bg-indigo-100 text-indigo-800': u.user_type === 'client',
                                     }"
                                     class="inline-flex rounded-full px-2 py-0.5 text-xs font-semibold capitalize"
                                 >

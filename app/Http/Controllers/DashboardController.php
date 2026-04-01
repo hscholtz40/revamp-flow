@@ -10,6 +10,7 @@ use App\Models\Jobcard;
 use App\Models\Product;
 use App\Models\Contact;
 use App\Models\User;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -50,8 +51,12 @@ class DashboardController extends Controller
             ->value('revenue');
     }
 
-    public function index(Request $request): Response
+    public function index(Request $request): Response|RedirectResponse
     {
+        if (auth()->user()?->isClientUser()) {
+            return redirect()->route('client-zone.dashboard');
+        }
+
         $currentCompany = auth()->user()?->getCurrentCompany();
 
         // If the user has no accessible/active company, return a safe dashboard with zeroed metrics

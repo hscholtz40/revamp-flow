@@ -27,6 +27,8 @@ const page = usePage();
 
 const currentCompany = computed(() => page.props.currentCompany as Company | null);
 const companies = computed(() => page.props.companies as Company[] || []);
+const userType = computed(() => (page.props.auth?.user as { user_type?: string } | null)?.user_type ?? 'standard');
+const showCompanySwitcher = computed(() => userType.value !== 'client');
 </script>
 
 <template>
@@ -43,7 +45,8 @@ const companies = computed(() => page.props.companies as Company[] || []);
         <!-- Company Switcher -->
         <div class="flex items-center gap-2">
             <ListViewColumnsEditor />
-            <CompanySwitcher 
+            <CompanySwitcher
+                v-if="showCompanySwitcher"
                 :current-company="currentCompany" 
                 :companies="companies" 
             />

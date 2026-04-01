@@ -72,6 +72,16 @@ class Customer extends Model
         return $this->hasMany(Quote::class);
     }
 
+    public function portalUsers(): HasMany
+    {
+        return $this->hasMany(User::class);
+    }
+
+    public function updateRequests(): HasMany
+    {
+        return $this->hasMany(CustomerUpdateRequest::class);
+    }
+
     /**
      * Generate a unique account code based on customer name
      */

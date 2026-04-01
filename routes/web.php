@@ -6,6 +6,10 @@ use App\Http\Middleware\EnsureNotInstalled;
 
 Route::get('/', function () {
     if (auth()->check()) {
+        if (auth()->user()->isClientUser()) {
+            return redirect()->route('client-zone.dashboard');
+        }
+
         return redirect()->route('dashboard');
     }
     return redirect()->route('login');
@@ -44,6 +48,8 @@ require __DIR__.'/teams.php';
 require __DIR__.'/licenses.php';
 require __DIR__.'/list-view-preferences.php';
 require __DIR__.'/notes.php';
+require __DIR__.'/client-zone.php';
+require __DIR__.'/registered-users.php';
 
 // Installer routes (available only before first install)
 Route::middleware([EnsureNotInstalled::class])->group(function () {

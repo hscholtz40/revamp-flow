@@ -40,6 +40,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'module.permission' => EnsureModulePermission::class,
             'timesheet.permission' => \App\Http\Middleware\EnsureTimesheetPermission::class,
             'admin' => EnsureUserIsAdministrator::class,
+            'approved.client' => \App\Http\Middleware\EnsureApprovedClient::class,
             'licensing' => \App\Http\Middleware\EnsureLicensingInstance::class,
             'license.api.auth' => \App\Http\Middleware\AuthenticateLicenseApiRequest::class,
             'license.infrastructure' => EnsureLicenseInfrastructureAccess::class,

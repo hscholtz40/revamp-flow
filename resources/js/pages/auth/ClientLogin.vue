@@ -19,20 +19,20 @@ defineProps<{
 
 <template>
     <AuthBase
-        title="Welcome back"
-        description="Sign in to your JobCardOnline account to continue"
+        title="Client Zone Login"
+        description="Sign in to securely access your customer documents"
     >
-        <Head title="Log in" />
+        <Head title="Client Login" />
 
         <div
             v-if="status"
-            class="mb-6 rounded-lg bg-green-50 p-4 text-center text-sm font-medium text-green-700 border border-green-200"
+            class="mb-6 rounded-lg border border-green-200 bg-green-50 p-4 text-center text-sm font-medium text-green-700"
         >
             {{ status }}
         </div>
 
         <Form
-            v-bind="AuthenticatedSessionController.store.form()"
+            v-bind="AuthenticatedSessionController.storeClient.form()"
             :reset-on-success="['password']"
             v-slot="{ errors, processing }"
             class="space-y-6"
@@ -81,9 +81,9 @@ defineProps<{
 
                 <div class="flex items-center justify-between">
                     <Label for="remember" class="flex items-center space-x-3 cursor-pointer">
-                        <Checkbox 
-                            id="remember" 
-                            name="remember" 
+                        <Checkbox
+                            id="remember"
+                            name="remember"
                             :tabindex="3"
                             class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                         />
@@ -96,27 +96,27 @@ defineProps<{
                     class="w-full h-12 text-base font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-200 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                     :tabindex="4"
                     :disabled="processing"
-                    data-test="login-button"
+                    data-test="client-login-button"
                 >
                     <LoaderCircle
                         v-if="processing"
                         class="h-5 w-5 animate-spin mr-2"
                     />
-                    {{ processing ? 'Signing in...' : 'Sign in to your account' }}
+                    {{ processing ? 'Signing in...' : 'Sign in to Client Zone' }}
                 </Button>
             </div>
 
             <div class="mt-6 text-center">
                 <p class="text-sm text-gray-600">
-                    Looking for client access?
-                    <a href="/client-login" class="ml-1 font-medium text-blue-600 hover:text-blue-500">
-                        Client Login
+                    Staff user?
+                    <a href="/login" class="ml-1 font-medium text-blue-600 hover:text-blue-500">
+                        Staff Login
                     </a>
                 </p>
                 <p class="mt-2 text-sm text-gray-600">
-                    Don't have a client account?
-                    <a href="/client-zone/register" class="font-medium text-blue-600 hover:text-blue-500">
-                        Register for client access
+                    Need client access?
+                    <a href="/client-zone/register" class="ml-1 font-medium text-blue-600 hover:text-blue-500">
+                        Register
                     </a>
                 </p>
             </div>

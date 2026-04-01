@@ -12,7 +12,7 @@ const props = defineProps<{
 const form = useForm({
     name: props.user.name ?? '',
     email: props.user.email ?? '',
-    user_type: (props.user.user_type ?? 'standard') as 'standard' | 'limited' | 'info',
+    user_type: (props.user.user_type ?? 'standard') as 'standard' | 'limited' | 'info' | 'client',
     hourly_rate: props.user.hourly_rate ?? null,
     password: '',
     groups: (props.user.groups ?? []).map((g: any) => g.id) as number[],
@@ -42,9 +42,11 @@ function submit() { form.put(users.update(props.user.id).url); }
                     <option value="standard">Standard</option>
                     <option value="limited">Limited</option>
                     <option value="info">Info</option>
+                    <option value="client">Client</option>
                 </select>
                 <p v-if="form.user_type === 'limited'" class="mt-1 text-xs text-gray-500">Limited users can only view jobcards, change jobcard status, and create booked time.</p>
                 <p v-if="form.user_type === 'info'" class="mt-1 text-xs text-gray-500">Info users are for reference only and will not have login access.</p>
+                <p v-if="form.user_type === 'client'" class="mt-1 text-xs text-gray-500">Client users should remain linked to a customer record.</p>
                 <div v-if="form.errors.user_type" class="text-sm text-red-600">{{ form.errors.user_type }}</div>
             </label>
             <label class="block">

@@ -28,6 +28,10 @@ class User extends Authenticatable
         'user_type',
         'hourly_rate',
         'current_company_id',
+        'customer_id',
+        'approval_status',
+        'approved_at',
+        'approved_by',
     ];
 
     /**
@@ -53,6 +57,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'hourly_rate' => 'decimal:2',
             'smtp_password' => 'encrypted',
+            'approved_at' => 'datetime',
         ];
     }
 
@@ -69,6 +74,11 @@ class User extends Authenticatable
     public function currentCompany(): BelongsTo
     {
         return $this->belongsTo(Company::class, 'current_company_id');
+    }
+
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class);
     }
 
     public function timeEntries(): HasMany
@@ -89,6 +99,16 @@ class User extends Authenticatable
     public function teams(): BelongsToMany
     {
         return $this->belongsToMany(Team::class)->withTimestamps();
+    }
+
+    public function approvedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function customerUpdateRequests(): HasMany
+    {
+        return $this->hasMany(CustomerUpdateRequest::class);
     }
 
     public function hasModulePermission(string $module, string $ability): bool
@@ -193,6 +213,20 @@ class User extends Authenticatable
     public function isInfoUser(): bool
     {
         return $this->user_type === 'info';
+    }
+
+    public function isClientUser(): bool
+    {
+        return $this->user_type === 'client';
+    }
+
+    public function isClientApproved(): bool
+    {
+        if (! $this->isClientUser()) {
+            return true;
+        }
+
+        return $this->approval_status === 'approved';
     }
 
     public function hasAccessToCompany(int $companyId): bool

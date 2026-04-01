@@ -61,6 +61,14 @@ class LoginRequest extends FormRequest
             ]);
         }
 
+        if ($user->isClientUser() && ! $user->isClientApproved()) {
+            RateLimiter::hit($this->throttleKey());
+
+            throw ValidationException::withMessages([
+                'email' => 'Your client account is still pending administrator approval.',
+            ]);
+        }
+
         RateLimiter::clear($this->throttleKey());
 
         return $user;

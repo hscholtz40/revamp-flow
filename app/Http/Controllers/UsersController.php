@@ -57,7 +57,7 @@ class UsersController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'user_type' => ['required', 'string', 'in:standard,limited,info'],
+            'user_type' => ['required', 'string', 'in:standard,limited,info,client'],
             'hourly_rate' => ['nullable', 'numeric', 'min:0'],
             'password' => [$isInfoUser ? 'nullable' : 'required', 'string', 'min:8'],
             'groups' => ['array'],
@@ -120,7 +120,7 @@ class UsersController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email,' . $user->id],
-            'user_type' => ['required', 'string', 'in:standard,limited,info'],
+            'user_type' => ['required', 'string', 'in:standard,limited,info,client'],
             'hourly_rate' => ['nullable', 'numeric', 'min:0'],
             'password' => ['nullable', 'string', 'min:8'],
             'groups' => ['sometimes','array'],

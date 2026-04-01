@@ -50,6 +50,26 @@ const mainNavItems: NavItem[] = [
         icon: LayoutGrid,
     },
     {
+        title: 'Client Zone',
+        href: '/client-zone',
+        icon: BookOpen,
+    },
+    {
+        title: 'Client Documents',
+        href: '/client-zone/documents',
+        icon: Folder,
+    },
+    {
+        title: 'Request Info Update',
+        href: '/client-zone/request-update',
+        icon: Building2,
+    },
+    {
+        title: 'Registered Users',
+        href: '/registered-users',
+        icon: Users,
+    },
+    {
         title: 'Customers',
         href: customers.index().url,
         icon: Users,
@@ -149,12 +169,24 @@ const moduleKeyMap: Record<string, string> = {
 };
 
 const userType = computed(() => (page.props.auth?.user as any)?.user_type ?? 'standard');
+const homeHref = computed(() => userType.value === 'client' ? '/client-zone' : dashboard().url);
 
 const filteredNavItems = computed(() => {
     return mainNavItems.filter((item) => {
+        if (userType.value === 'client') {
+            return ['Client Zone', 'Client Documents', 'Request Info Update'].includes(item.title);
+        }
+
         // Dashboard is always visible
         if (item.title === 'Dashboard') {
             return true;
+        }
+
+        if (item.title === 'Client Zone') {
+            return false;
+        }
+        if (item.title === 'Client Documents' || item.title === 'Request Info Update') {
+            return false;
         }
 
         // Licensing is only visible on licensing instances
@@ -228,6 +260,9 @@ const filteredNavItems = computed(() => {
         if (item.title === 'Timesheet') {
             return !!page.props.auth?.abilities?.timesheet?.view;
         }
+        if (item.title === 'Registered Users') {
+            return isAdministrator.value;
+        }
         if (item.title === 'Users') {
             return !!page.props.auth?.abilities?.users?.list;
         }
@@ -254,7 +289,7 @@ const filteredNavItems = computed(() => {
                         as-child
                         class="!h-auto rounded-2xl border border-sidebar-border/70 bg-sidebar-accent/30 p-3 shadow-sm transition-all duration-200 hover:border-sidebar-border hover:bg-sidebar-accent/60 hover:shadow-md"
                     >
-                        <Link :href="dashboard().url" class="block w-full">
+                        <Link :href="homeHref" class="block w-full">
                             <!-- Company Logo or Fallback -->
                             <div class="flex flex-col gap-2 w-full">
                                 <div class="flex w-full items-center justify-center rounded-xl bg-gradient-to-br from-primary/10 via-primary/5 to-secondary/10 p-2 ring-1 ring-primary/10">
@@ -275,7 +310,7 @@ const filteredNavItems = computed(() => {
                                     <span class="text-sm font-semibold tracking-tight text-sidebar-foreground">
                                         {{ currentCompany?.name || 'Company' }}
                                     </span>
-                                    <span class="text-[11px] uppercase tracking-[0.08em] text-sidebar-foreground/55">Dashboard</span>
+                                    <span class="text-[11px] uppercase tracking-[0.08em] text-sidebar-foreground/55">{{ userType === 'client' ? 'Client Zone' : 'Dashboard' }}</span>
                                 </div>
                             </div>
                         </Link>

@@ -106,6 +106,8 @@ class HandleInertiaRequests extends Middleware
                     'email' => $user->email,
                     'is_administrator' => $user->isAdministrator(),
                     'user_type' => $user->user_type ?? 'standard',
+                    'approval_status' => $user->approval_status,
+                    'customer_id' => $user->customer_id,
                     'hourly_rate' => $user->hourly_rate,
                     'avatar' => null, // Can be added later if needed
                     'email_verified_at' => $user->email_verified_at?->toIso8601String(),
