@@ -2,6 +2,11 @@
 
 ## 2026-04-01
 
+- **UI / checkbox toggle polish:** Fixed inconsistent checkbox/toggle rendering by enforcing rounded styling for the shared UI checkbox component and improving global checkbox alignment in flex rows (notably in Xero integration settings), so toggle controls are consistently rounded and vertically aligned.
+- **UI / toggle shape enforcement:** Strengthened global checkbox toggle CSS with hard overrides for width/height/radius so page-level utility classes (e.g. `rounded`, `h-4`, `w-4`) no longer force square/small variants; toggles now keep the full rounded slider shape consistently.
+- **UI / toggle centering refinement:** Corrected slider knob offsets so the knob sits perfectly centered inside the track in both off/on states, improving visual alignment in dense permission tables and settings screens.
+- **UI / toggle vertical centering fix:** Switched checkbox toggle knob alignment to true center positioning (`top: 50%` with transform) and balanced inner-track offsets to eliminate visible top/bottom spacing mismatch.
+- **UI / checkbox controls:** Restyled native checkbox inputs globally to render as slider-style toggles (including checked, focus, disabled, and dark-mode states) so toggle behavior looks consistent throughout the app without per-page component rewrites.
 - **Recurring jobcards/invoices + scheduler:** Added recurring-document management in Jobcards and Invoices via a new **Recurring** tab where users can select a source document, recurrence frequency (`daily`, `weekly`, `monthly`, `quarterly`, `yearly`), and start/end dates. Added scheduled generation (`recurring:generate-documents`) plus backend cloning logic to automatically create due documents from templates.
 - **Groups / payment methods:** Each group can enable which recording methods members may use (**Card**, **Cash**, **EFT**) under Administration → Groups → Edit, in the permissions panel. Shared `auth.payment_methods` drives invoice **Add Payment**, **POS** (cash/card/eft only; **Account** stays separate), and credit-note **refund** method buttons. `PaymentsController`, POS checkout, and credit-note refund routes reject disallowed methods server-side. Defaults for existing groups: all three on.
 
