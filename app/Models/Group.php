@@ -11,10 +11,20 @@ class Group extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'description', 'is_administrator'];
+    protected $fillable = [
+        'name',
+        'description',
+        'is_administrator',
+        'payment_method_card',
+        'payment_method_cash',
+        'payment_method_eft',
+    ];
 
     protected $casts = [
         'is_administrator' => 'boolean',
+        'payment_method_card' => 'boolean',
+        'payment_method_cash' => 'boolean',
+        'payment_method_eft' => 'boolean',
     ];
 
     public function users(): BelongsToMany

@@ -371,8 +371,8 @@
 <script setup lang="ts">
 import { useNumberFormat } from '@/composables/useNumberFormat';
 import { useAuthAbility } from '@/composables/useAuthAbilities';
-import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
+import { computed, ref, watch } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Edit, Trash2, FileText, Wallet } from 'lucide-vue-next';
 
@@ -423,6 +423,7 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+const page = usePage();
 const { formatCurrency } = useNumberFormat();
 const creditNote = computed(() => props.creditNote);
 
@@ -475,17 +476,31 @@ const statusOptions = [
     { value: 'voided', label: 'Voided' },
 ];
 
-const paymentMethodOptions = [
-    { value: 'cash', label: 'Cash' },
-    { value: 'card', label: 'Card' },
-    { value: 'eft', label: 'EFT' },
-];
+const paymentMethodOptions = computed(() => {
+    const pm = page.props.auth?.payment_methods;
+    const all = [
+        { value: 'cash', label: 'Cash' },
+        { value: 'card', label: 'Card' },
+        { value: 'eft', label: 'EFT' },
+    ] as const;
+    if (!pm) {
+        return [...all];
+    }
+    return all.filter((m) => pm[m.value as keyof typeof pm]);
+});
 
 const refundForm = useForm({
     amount: Number(creditNote.value.remaining_credit || 0),
     payment_method: '',
     payment_date: new Date().toISOString().split('T')[0],
     notes: '',
+});
+
+watch(paymentMethodOptions, (opts) => {
+    const v = refundForm.payment_method;
+    if (v && !opts.some((o) => o.value === v)) {
+        refundForm.payment_method = '';
+    }
 });
 
 const statusColors: Record<string, string> = {

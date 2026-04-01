@@ -3,6 +3,12 @@ import type { LucideIcon } from 'lucide-vue-next';
 
 export interface Auth {
     user: User | null;
+    /** When set, UI should only offer these cash/card/eft options for recording payments. */
+    payment_methods?: {
+        cash: boolean;
+        card: boolean;
+        eft: boolean;
+    } | null;
     abilities?: {
         customers?: {
             list?: boolean;

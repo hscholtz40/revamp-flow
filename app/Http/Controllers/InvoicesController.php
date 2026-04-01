@@ -424,6 +424,14 @@ class InvoicesController extends Controller
             'tendered_amount' => 'nullable|numeric|min:0',
         ]);
 
+        if (($validated['payment_method'] ?? '') !== 'account') {
+            abort_unless(
+                auth()->user()->canRecordPaymentMethod($validated['payment_method']),
+                403,
+                'You are not permitted to record POS payments with this method.'
+            );
+        }
+
         $customer = Customer::where('company_id', $currentCompany->id)->findOrFail($validated['customer_id']);
         $invoiceDate = Carbon::parse($validated['invoice_date'])->startOfDay();
         $invoiceNumber = Invoice::generateInvoiceNumber($currentCompany->id);

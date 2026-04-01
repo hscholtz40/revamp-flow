@@ -6,6 +6,7 @@ use App\Models\Group;
 use App\Models\GroupPermission;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -65,6 +66,21 @@ class GroupsController extends Controller
             'permissions.*.can_delete' => ['boolean'],
             'permissions.*.can_edit_completed' => ['boolean'],
             'permissions.*.can_edit_salesperson' => ['boolean'],
+            'payment_method_card' => ['required', 'boolean'],
+            'payment_method_cash' => ['required', 'boolean'],
+            'payment_method_eft' => ['required', 'boolean'],
+        ]);
+
+        if (! $data['payment_method_card'] && ! $data['payment_method_cash'] && ! $data['payment_method_eft']) {
+            throw ValidationException::withMessages([
+                'payment_methods' => ['At least one payment method must be enabled for this group.'],
+            ]);
+        }
+
+        $group->update([
+            'payment_method_card' => $data['payment_method_card'],
+            'payment_method_cash' => $data['payment_method_cash'],
+            'payment_method_eft' => $data['payment_method_eft'],
         ]);
 
         foreach ($data['permissions'] as $perm) {

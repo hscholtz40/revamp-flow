@@ -83,6 +83,7 @@ class HandleInertiaRequests extends Middleware
                 'auth' => [
                     'user' => null,
                     'abilities' => null,
+                    'payment_methods' => null,
                 ],
                 'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
                 'isLicensingInstance' => config('app.is_licensing_instance'),
@@ -182,6 +183,7 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $userData ?? $parentAuth['user'] ?? null,
                 'abilities' => $this->getUserAbilities($isInstalled, $user, $isInstallerRoute) ?? $parentAuth['abilities'] ?? null,
+                'payment_methods' => $user ? $user->getAllowedPaymentMethodsMap() : ($parentAuth['payment_methods'] ?? null),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'isLicensingInstance' => config('app.is_licensing_instance'),

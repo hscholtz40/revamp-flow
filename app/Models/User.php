@@ -122,6 +122,64 @@ class User extends Authenticatable
             ->exists();
     }
 
+    /**
+     * Payment methods (cash, card, eft) this user may record, derived from group flags (union).
+     * Administrators and users with no groups get all methods.
+     */
+    public function getAllowedPaymentMethods(): array
+    {
+        if ($this->isAdministrator()) {
+            return ['cash', 'card', 'eft'];
+        }
+
+        $groupIds = $this->groups()->pluck('groups.id');
+        if ($groupIds->isEmpty()) {
+            return ['cash', 'card', 'eft'];
+        }
+
+        $allowed = ['cash' => false, 'card' => false, 'eft' => false];
+        foreach (Group::query()->whereIn('id', $groupIds)->get([
+            'payment_method_cash',
+            'payment_method_card',
+            'payment_method_eft',
+        ]) as $group) {
+            if ($group->payment_method_cash) {
+                $allowed['cash'] = true;
+            }
+            if ($group->payment_method_card) {
+                $allowed['card'] = true;
+            }
+            if ($group->payment_method_eft) {
+                $allowed['eft'] = true;
+            }
+        }
+
+        return array_keys(array_filter($allowed));
+    }
+
+    /**
+     * @return array{cash: bool, card: bool, eft: bool}
+     */
+    public function getAllowedPaymentMethodsMap(): array
+    {
+        $methods = $this->getAllowedPaymentMethods();
+
+        return [
+            'cash' => in_array('cash', $methods, true),
+            'card' => in_array('card', $methods, true),
+            'eft' => in_array('eft', $methods, true),
+        ];
+    }
+
+    public function canRecordPaymentMethod(string $method): bool
+    {
+        if (! in_array($method, ['cash', 'card', 'eft'], true)) {
+            return true;
+        }
+
+        return in_array($method, $this->getAllowedPaymentMethods(), true);
+    }
+
     public function isLimitedUser(): bool
     {
         return $this->user_type === 'limited';

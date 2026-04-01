@@ -1123,12 +1123,19 @@ const sendEmail = () => {
     });
 };
 
-// Payment form
-const paymentMethodOptions = [
-    { value: 'cash', label: 'Cash' },
-    { value: 'card', label: 'Card' },
-    { value: 'eft', label: 'EFT' },
-];
+// Payment form — options respect group payment-method access (shared auth.payment_methods)
+const paymentMethodOptions = computed(() => {
+    const pm = page.props.auth?.payment_methods;
+    const all = [
+        { value: 'cash', label: 'Cash' },
+        { value: 'card', label: 'Card' },
+        { value: 'eft', label: 'EFT' },
+    ] as const;
+    if (!pm) {
+        return [...all];
+    }
+    return all.filter((m) => pm[m.value as keyof typeof pm]);
+});
 
 const paymentForm = useForm({
     invoice_id: props.invoice.id,
@@ -1136,6 +1143,13 @@ const paymentForm = useForm({
     payment_method: '',
     payment_date: new Date().toISOString().split('T')[0], // Today's date
     notes: '',
+});
+
+watch(paymentMethodOptions, (opts) => {
+    const v = paymentForm.payment_method;
+    if (v && !opts.some((o) => o.value === v)) {
+        paymentForm.payment_method = '';
+    }
 });
 
 const addPayment = () => {

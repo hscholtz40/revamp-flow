@@ -2,7 +2,7 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { useNumberFormat } from '@/composables/useNumberFormat';
 import { matchesProductSearch } from '@/composables/productSearch';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import invoices from '@/routes/invoices';
 
@@ -31,12 +31,20 @@ const props = defineProps<{
 
 const { formatCurrency } = useNumberFormat();
 
+const page = usePage();
+
 const paymentTermsOptions = ['COD', 'Net 7 Days', 'Net 14 Days', 'Net 30 Days', 'Net 60 Days'];
-const paymentMethodOptions = [
+const basePosPaymentMethods = [
     { value: 'cash', label: 'Cash' },
     { value: 'card', label: 'Card' },
-    { value: 'account', label: 'Account' },
+    { value: 'eft', label: 'EFT' },
 ];
+const paymentMethodOptions = computed(() => {
+    const pm = page.props.auth?.payment_methods;
+    const filtered = !pm ? [...basePosPaymentMethods] : basePosPaymentMethods.filter((m) => pm[m.value as 'cash' | 'card' | 'eft']);
+    return [...filtered, { value: 'account', label: 'Account' }];
+});
+
 const showProductSuggestions = ref<Record<number, boolean>>({});
 const pendingPrintWindow = ref<Window | null>(null);
 const customerSearchQuery = ref(props.selectedCustomer?.name || '');
@@ -66,6 +74,17 @@ const form = useForm({
         },
     ],
 });
+
+watch(
+    paymentMethodOptions,
+    (opts) => {
+        const v = form.payment_method;
+        if (v && !opts.some((o) => o.value === v)) {
+            form.payment_method = '';
+        }
+    },
+    { immediate: true }
+);
 
 const parseTermsDays = (terms: string) => {
     if (/^cod$/i.test(terms)) return 0;

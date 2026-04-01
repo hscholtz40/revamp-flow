@@ -4,12 +4,26 @@ import { Head, Link, useForm } from '@inertiajs/vue3';
 import groups from '@/routes/groups';
 import { modules } from '@/lib/modules';
 
-const props = defineProps<{ group: { id: number; name: string; description?: string; is_administrator?: boolean; permissions: any[] } }>();
+const props = defineProps<{
+    group: {
+        id: number;
+        name: string;
+        description?: string;
+        is_administrator?: boolean;
+        payment_method_card?: boolean;
+        payment_method_cash?: boolean;
+        payment_method_eft?: boolean;
+        permissions: any[];
+    };
+}>();
 
 const form = useForm({
     name: props.group.name,
     description: props.group.description || '',
     is_administrator: props.group.is_administrator || false,
+    payment_method_card: props.group.payment_method_card !== false,
+    payment_method_cash: props.group.payment_method_cash !== false,
+    payment_method_eft: props.group.payment_method_eft !== false,
     permissions: modules.map((m) => {
         const existing = props.group.permissions.find((p: any) => p.module === m.key) || {};
         return {
@@ -26,7 +40,16 @@ const form = useForm({
 });
 
 function saveDetails() { form.put(groups.update(props.group.id).url, { preserveScroll: true }); }
-function savePermissions() { form.transform((d) => ({ permissions: d.permissions })).put(groups.permissions(props.group.id).url, { preserveScroll: true }); }
+function savePermissions() {
+    form
+        .transform((d) => ({
+            permissions: d.permissions,
+            payment_method_card: d.payment_method_card,
+            payment_method_cash: d.payment_method_cash,
+            payment_method_eft: d.payment_method_eft,
+        }))
+        .put(groups.permissions(props.group.id).url, { preserveScroll: true });
+}
 </script>
 
 <template>
@@ -102,6 +125,27 @@ function savePermissions() { form.transform((d) => ({ permissions: d.permissions
                             </tr>
                         </tbody>
                     </table>
+                    <div class="mt-4 rounded border border-gray-200 bg-gray-50 p-3">
+                        <div class="mb-2 text-sm font-medium text-gray-800">Payment methods (invoice payments, POS, refunds)</div>
+                        <p class="mb-3 text-xs text-gray-600">
+                            Users in this group may only record <strong>Cash</strong>, <strong>Card</strong>, or <strong>EFT</strong> for the options you enable below. At least one must stay on.
+                        </p>
+                        <div class="flex flex-wrap gap-4">
+                            <label class="flex items-center gap-2 text-sm">
+                                <input type="checkbox" v-model="form.payment_method_card" class="rounded border-gray-300" />
+                                Card
+                            </label>
+                            <label class="flex items-center gap-2 text-sm">
+                                <input type="checkbox" v-model="form.payment_method_cash" class="rounded border-gray-300" />
+                                Cash
+                            </label>
+                            <label class="flex items-center gap-2 text-sm">
+                                <input type="checkbox" v-model="form.payment_method_eft" class="rounded border-gray-300" />
+                                EFT
+                            </label>
+                        </div>
+                        <p v-if="form.errors.payment_methods" class="mt-2 text-sm text-red-600">{{ form.errors.payment_methods }}</p>
+                    </div>
                     <div>
                         <button :disabled="form.processing" class="rounded bg-blue-600 px-4 py-2 text-white">Save Permissions</button>
                         <Link :href="groups.index().url" class="ml-3 rounded border px-4 py-2">Back</Link>

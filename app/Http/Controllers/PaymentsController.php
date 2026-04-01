@@ -29,6 +29,12 @@ class PaymentsController extends Controller
             'notes' => 'nullable|string|max:1000',
         ]);
 
+        abort_unless(
+            auth()->user()->canRecordPaymentMethod($validated['payment_method']),
+            403,
+            'You are not permitted to record payments with this method.'
+        );
+
         $invoice = Invoice::findOrFail($validated['invoice_id']);
         $this->authorize('view', $invoice);
 

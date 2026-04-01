@@ -552,6 +552,12 @@ class CreditNotesController extends Controller
             'notes' => 'nullable|string|max:1000',
         ]);
 
+        abort_unless(
+            auth()->user()->canRecordPaymentMethod($validated['payment_method']),
+            403,
+            'You are not permitted to record refunds with this method.'
+        );
+
         $creditNote->refresh();
         $remainingCredit = max(0, round((float) $creditNote->total - (float) $creditNote->payments()->sum('amount'), 2));
         if ((float) $validated['amount'] > $remainingCredit) {
