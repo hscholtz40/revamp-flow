@@ -2,6 +2,7 @@
 
 ## 2026-04-01
 
+- **Recurring jobcards/invoices + scheduler:** Added recurring-document management in Jobcards and Invoices via a new **Recurring** tab where users can select a source document, recurrence frequency (`daily`, `weekly`, `monthly`, `quarterly`, `yearly`), and start/end dates. Added scheduled generation (`recurring:generate-documents`) plus backend cloning logic to automatically create due documents from templates.
 - **Groups / payment methods:** Each group can enable which recording methods members may use (**Card**, **Cash**, **EFT**) under Administration → Groups → Edit, in the permissions panel. Shared `auth.payment_methods` drives invoice **Add Payment**, **POS** (cash/card/eft only; **Account** stays separate), and credit-note **refund** method buttons. `PaymentsController`, POS checkout, and credit-note refund routes reject disallowed methods server-side. Defaults for existing groups: all three on.
 
 ## 2026-03-26

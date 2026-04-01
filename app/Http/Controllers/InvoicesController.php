@@ -14,6 +14,7 @@ use App\Models\Note;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\Quote;
+use App\Models\RecurringDocument;
 use App\Models\TaxRate;
 use App\Models\User;
 use App\Services\ReminderService;
@@ -166,11 +167,38 @@ class InvoicesController extends Controller
         $customers = Customer::where('company_id', $currentCompany->id)
             ->orderBy('name')
             ->get();
+        $recurringSourceOptions = Invoice::query()
+            ->where('company_id', $currentCompany->id)
+            ->orderByDesc('created_at')
+            ->limit(100)
+            ->get(['id', 'invoice_number', 'title']);
+        $recurringSourceLookup = $recurringSourceOptions->keyBy('id');
+        $recurringDocuments = RecurringDocument::query()
+            ->where('company_id', $currentCompany->id)
+            ->where('document_type', RecurringDocument::TYPE_INVOICE)
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(function (RecurringDocument $recurring) use ($recurringSourceLookup) {
+                $source = $recurringSourceLookup->get($recurring->source_id);
+                $recurring->source_label = $source ? ($source->invoice_number.' - '.$source->title) : 'Source not found';
+
+                return $recurring;
+            })
+            ->values();
 
         return Inertia::render('invoices/Index', [
             'invoices' => $invoices,
             'customers' => $customers,
             'currentCompany' => $currentCompany,
+            'recurringDocuments' => $recurringDocuments,
+            'recurringSourceOptions' => $recurringSourceOptions,
+            'recurringFrequencies' => [
+                RecurringDocument::FREQ_DAILY,
+                RecurringDocument::FREQ_WEEKLY,
+                RecurringDocument::FREQ_MONTHLY,
+                RecurringDocument::FREQ_QUARTERLY,
+                RecurringDocument::FREQ_YEARLY,
+            ],
             'filters' => [
                 'status' => $request->input('status', ''),
                 'customer_id' => $request->input('customer_id', ''),
@@ -1654,6 +1682,51 @@ class InvoicesController extends Controller
             'source_type' => 'jobcard',
             'source_id' => $jobcard->id,
         ]);
+    }
+
+    public function storeRecurring(Request $request): RedirectResponse
+    {
+        $this->authorize('create', Invoice::class);
+        $currentCompany = auth()->user()->getCurrentCompany();
+
+        $validated = $request->validate([
+            'source_id' => ['required', 'integer'],
+            'frequency' => ['required', 'in:daily,weekly,monthly,quarterly,yearly'],
+            'start_date' => ['required', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+        ]);
+
+        $source = Invoice::query()
+            ->where('company_id', $currentCompany->id)
+            ->findOrFail((int) $validated['source_id']);
+
+        RecurringDocument::create([
+            'company_id' => $currentCompany->id,
+            'document_type' => RecurringDocument::TYPE_INVOICE,
+            'source_id' => $source->id,
+            'frequency' => $validated['frequency'],
+            'start_date' => $validated['start_date'],
+            'end_date' => $validated['end_date'] ?? null,
+            'next_run_date' => $validated['start_date'],
+            'created_by' => auth()->id(),
+        ]);
+
+        return redirect()->route('invoices.index')
+            ->with('success', 'Recurring invoice added.');
+    }
+
+    public function destroyRecurring(int $recurringDocument): RedirectResponse
+    {
+        $currentCompany = auth()->user()->getCurrentCompany();
+
+        RecurringDocument::query()
+            ->where('company_id', $currentCompany->id)
+            ->where('document_type', RecurringDocument::TYPE_INVOICE)
+            ->findOrFail($recurringDocument)
+            ->delete();
+
+        return redirect()->route('invoices.index')
+            ->with('success', 'Recurring invoice removed.');
     }
 
     private function resolveInvoiceDueDateFromCustomerTerms(?Customer $customer, Carbon $invoiceDate): Carbon

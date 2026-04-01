@@ -48,6 +48,9 @@ foreach ($xeroSyncCommands as $index => $signature) {
 // Schedule automated reminders to run daily at 9 AM
 Schedule::command('reminders:send')->dailyAt('09:00');
 
+// Generate recurring documents daily.
+Schedule::command('recurring:generate-documents')->dailyAt('00:10');
+
 // Schedule automated backups
 Schedule::call(function () {
     $schedules = \App\Models\BackupSchedule::where('is_active', true)

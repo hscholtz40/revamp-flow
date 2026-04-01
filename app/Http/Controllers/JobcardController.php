@@ -11,6 +11,7 @@ use App\Models\Note;
 use App\Models\Product;
 use App\Models\PurchaseOrder;
 use App\Models\Quote;
+use App\Models\RecurringDocument;
 use App\Models\TaxRate;
 use App\Models\Team;
 use App\Models\User;
@@ -181,12 +182,39 @@ class JobcardController extends Controller
             $q->where('company_id', $currentCompany->id);
         })->orWhereDoesntHave('companies')->orderBy('name')->get(['id', 'name']);
         $teams = Team::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name']);
+        $recurringSourceOptions = Jobcard::query()
+            ->where('company_id', $currentCompany->id)
+            ->orderByDesc('created_at')
+            ->limit(100)
+            ->get(['id', 'job_number', 'title']);
+        $recurringSourceLookup = $recurringSourceOptions->keyBy('id');
+        $recurringDocuments = RecurringDocument::query()
+            ->where('company_id', $currentCompany->id)
+            ->where('document_type', RecurringDocument::TYPE_JOBCARD)
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(function (RecurringDocument $recurring) use ($recurringSourceLookup) {
+                $source = $recurringSourceLookup->get($recurring->source_id);
+                $recurring->source_label = $source ? ($source->job_number.' - '.$source->title) : 'Source not found';
+
+                return $recurring;
+            })
+            ->values();
 
         return Inertia::render('jobcards/Index', [
             'jobcards' => $jobcards,
             'customers' => $customers,
             'users' => $users,
             'teams' => $teams,
+            'recurringDocuments' => $recurringDocuments,
+            'recurringSourceOptions' => $recurringSourceOptions,
+            'recurringFrequencies' => [
+                RecurringDocument::FREQ_DAILY,
+                RecurringDocument::FREQ_WEEKLY,
+                RecurringDocument::FREQ_MONTHLY,
+                RecurringDocument::FREQ_QUARTERLY,
+                RecurringDocument::FREQ_YEARLY,
+            ],
             'statusOptions' => $currentCompany->getJobcardStatusOptions(),
             'filters' => [
                 'status' => $request->input('status', ''),
@@ -802,6 +830,50 @@ class JobcardController extends Controller
 
         return redirect()->route('jobcards.index')
             ->with('success', 'Jobcard deleted successfully');
+    }
+
+    public function storeRecurring(Request $request): RedirectResponse
+    {
+        $currentCompany = auth()->user()->getCurrentCompany();
+
+        $validated = $request->validate([
+            'source_id' => ['required', 'integer'],
+            'frequency' => ['required', 'in:daily,weekly,monthly,quarterly,yearly'],
+            'start_date' => ['required', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+        ]);
+
+        $source = Jobcard::query()
+            ->where('company_id', $currentCompany->id)
+            ->findOrFail((int) $validated['source_id']);
+
+        RecurringDocument::create([
+            'company_id' => $currentCompany->id,
+            'document_type' => RecurringDocument::TYPE_JOBCARD,
+            'source_id' => $source->id,
+            'frequency' => $validated['frequency'],
+            'start_date' => $validated['start_date'],
+            'end_date' => $validated['end_date'] ?? null,
+            'next_run_date' => $validated['start_date'],
+            'created_by' => auth()->id(),
+        ]);
+
+        return redirect()->route('jobcards.index')
+            ->with('success', 'Recurring jobcard added.');
+    }
+
+    public function destroyRecurring(int $recurringDocument): RedirectResponse
+    {
+        $currentCompany = auth()->user()->getCurrentCompany();
+
+        RecurringDocument::query()
+            ->where('company_id', $currentCompany->id)
+            ->where('document_type', RecurringDocument::TYPE_JOBCARD)
+            ->findOrFail($recurringDocument)
+            ->delete();
+
+        return redirect()->route('jobcards.index')
+            ->with('success', 'Recurring jobcard removed.');
     }
 
     /**

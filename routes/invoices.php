@@ -10,6 +10,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/invoices', [InvoicesController::class, 'index'])->middleware('module.permission:invoices,view')->name('invoices.index');
     Route::get('/invoices/create', [InvoicesController::class, 'create'])->middleware('module.permission:invoices,create')->name('invoices.create');
     Route::post('/invoices', [InvoicesController::class, 'store'])->middleware('module.permission:invoices,create')->name('invoices.store');
+    Route::post('/invoices/recurring', [InvoicesController::class, 'storeRecurring'])->middleware('module.permission:invoices,create')->name('invoices.recurring.store');
+    Route::delete('/invoices/recurring/{recurringDocument}', [InvoicesController::class, 'destroyRecurring'])->middleware('module.permission:invoices,delete')->name('invoices.recurring.destroy');
     Route::get('/invoices/{invoice}', [InvoicesController::class, 'show'])->middleware('module.permission:invoices,view')->name('invoices.show');
     Route::get('/invoices/{invoice}/edit', [InvoicesController::class, 'edit'])->middleware('module.permission:invoices,edit')->name('invoices.edit');
     Route::put('/invoices/{invoice}', [InvoicesController::class, 'update'])->middleware('module.permission:invoices,edit')->name('invoices.update');

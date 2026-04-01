@@ -23,6 +23,25 @@
                 </Link>
             </div>
 
+            <div class="mb-4 inline-flex rounded-md border border-gray-300 bg-white p-1">
+                <button
+                    class="rounded px-3 py-1.5 text-sm"
+                    :class="activeTab === 'documents' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'"
+                    @click="activeTab = 'documents'"
+                >
+                    Documents
+                </button>
+                <button
+                    class="rounded px-3 py-1.5 text-sm"
+                    :class="activeTab === 'recurring' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'"
+                    @click="activeTab = 'recurring'"
+                >
+                    Recurring
+                </button>
+            </div>
+
+            <template v-if="activeTab === 'documents'">
+
             <!-- Filters -->
             <div class="bg-white rounded-lg border p-4 mb-6">
                 <div class="grid grid-cols-1 md:grid-cols-7 gap-4">
@@ -295,6 +314,58 @@
                     </div>
                 </div>
             </div>
+            </template>
+
+            <div v-else class="space-y-4">
+                <div class="bg-white rounded-lg border p-4">
+                    <h2 class="mb-3 text-lg font-semibold text-gray-900">Add Recurring Jobcard</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+                        <select v-model="recurringForm.source_id" class="rounded border px-3 py-2">
+                            <option value="">Select source jobcard</option>
+                            <option v-for="source in props.recurringSourceOptions" :key="source.id" :value="String(source.id)">
+                                {{ source.job_number }} - {{ source.title }}
+                            </option>
+                        </select>
+                        <select v-model="recurringForm.frequency" class="rounded border px-3 py-2">
+                            <option v-for="freq in props.recurringFrequencies" :key="freq" :value="freq">{{ freq }}</option>
+                        </select>
+                        <input v-model="recurringForm.start_date" type="date" class="rounded border px-3 py-2" />
+                        <input v-model="recurringForm.end_date" type="date" class="rounded border px-3 py-2" />
+                        <button class="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700" @click="addRecurringJobcard">
+                            Add recurring
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg border overflow-hidden">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Frequency</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Start</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">End</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Next Run</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="item in props.recurringDocuments" :key="item.id" class="border-t">
+                                <td class="px-4 py-2 text-sm text-gray-900">{{ item.source_label }}</td>
+                                <td class="px-4 py-2 text-sm text-gray-900">{{ item.frequency }}</td>
+                                <td class="px-4 py-2 text-sm text-gray-900">{{ formatDate(item.start_date) }}</td>
+                                <td class="px-4 py-2 text-sm text-gray-900">{{ item.end_date ? formatDate(item.end_date) : '-' }}</td>
+                                <td class="px-4 py-2 text-sm text-gray-900">{{ formatDate(item.next_run_date) }}</td>
+                                <td class="px-4 py-2 text-sm">
+                                    <button class="rounded bg-red-100 px-2 py-1 text-red-700 hover:bg-red-200" @click="deleteRecurringJobcard(item.id)">
+                                        Delete
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </AppLayout>
 </template>
@@ -382,6 +453,17 @@ interface Props {
     };
     canEditCompleted: boolean;
     statusOptions?: Array<{ value: string; label: string }>;
+    recurringFrequencies: string[];
+    recurringSourceOptions: Array<{ id: number; job_number: string; title: string }>;
+    recurringDocuments: Array<{
+        id: number;
+        source_id: number;
+        frequency: string;
+        start_date: string;
+        end_date: string | null;
+        next_run_date: string;
+        source_label?: string;
+    }>;
 }
 
 const props = defineProps<Props>();
@@ -396,6 +478,13 @@ const assignedToTeamId = ref(props.filters?.assigned_to_team_id || '');
 const showClosed = ref(props.filters?.show_closed ?? false);
 const sortBy = ref(props.filters?.sort_by || 'job_number');
 const sortDir = ref<'asc' | 'desc'>(props.filters?.sort_dir || 'desc');
+const activeTab = ref<'documents' | 'recurring'>('documents');
+const recurringForm = ref({
+    source_id: '',
+    frequency: props.recurringFrequencies[0] || 'monthly',
+    start_date: new Date().toISOString().slice(0, 10),
+    end_date: '',
+});
 
 // Flag to prevent watch from running during initial setup
 let isInitialized = false;
@@ -510,6 +599,21 @@ const formatStatus = (code: string) => {
 const formatDate = (date: string) => {
     if (!date) return '';
     return new Date(date).toLocaleDateString();
+};
+
+const addRecurringJobcard = () => {
+    if (!recurringForm.value.source_id) {
+        alert('Please select a source jobcard.');
+        return;
+    }
+    router.post('/jobcards/recurring', recurringForm.value, {
+        preserveState: true,
+    });
+};
+
+const deleteRecurringJobcard = (id: number) => {
+    if (!confirm('Delete this recurring jobcard?')) return;
+    router.delete(`/jobcards/recurring/${id}`, { preserveState: true });
 };
 
 // Watch for filter changes and update URL

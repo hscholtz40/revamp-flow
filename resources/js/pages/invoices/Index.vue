@@ -24,6 +24,25 @@
                 </div>
             </div>
 
+            <div class="mb-4 inline-flex rounded-md border border-gray-300 bg-white p-1">
+                <button
+                    class="rounded px-3 py-1.5 text-sm"
+                    :class="activeTab === 'documents' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'"
+                    @click="activeTab = 'documents'"
+                >
+                    Documents
+                </button>
+                <button
+                    class="rounded px-3 py-1.5 text-sm"
+                    :class="activeTab === 'recurring' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'"
+                    @click="activeTab = 'recurring'"
+                >
+                    Recurring
+                </button>
+            </div>
+
+            <template v-if="activeTab === 'documents'">
+
             <!-- Filters -->
             <div class="bg-white rounded-lg border p-4 mb-6">
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -322,6 +341,58 @@
                     </div>
                 </div>
             </div>
+            </template>
+
+            <div v-else class="space-y-4">
+                <div class="bg-white rounded-lg border p-4">
+                    <h2 class="mb-3 text-lg font-semibold text-gray-900">Add Recurring Invoice</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+                        <select v-model="recurringForm.source_id" class="rounded border px-3 py-2">
+                            <option value="">Select source invoice</option>
+                            <option v-for="source in props.recurringSourceOptions" :key="source.id" :value="String(source.id)">
+                                {{ source.invoice_number }} - {{ source.title }}
+                            </option>
+                        </select>
+                        <select v-model="recurringForm.frequency" class="rounded border px-3 py-2">
+                            <option v-for="freq in props.recurringFrequencies" :key="freq" :value="freq">{{ freq }}</option>
+                        </select>
+                        <input v-model="recurringForm.start_date" type="date" class="rounded border px-3 py-2" />
+                        <input v-model="recurringForm.end_date" type="date" class="rounded border px-3 py-2" />
+                        <button class="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700" @click="addRecurringInvoice">
+                            Add recurring
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg border overflow-hidden">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Frequency</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Start</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">End</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Next Run</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="item in props.recurringDocuments" :key="item.id" class="border-t">
+                                <td class="px-4 py-2 text-sm text-gray-900">{{ item.source_label }}</td>
+                                <td class="px-4 py-2 text-sm text-gray-900">{{ item.frequency }}</td>
+                                <td class="px-4 py-2 text-sm text-gray-900">{{ formatDate(item.start_date) }}</td>
+                                <td class="px-4 py-2 text-sm text-gray-900">{{ item.end_date ? formatDate(item.end_date) : '-' }}</td>
+                                <td class="px-4 py-2 text-sm text-gray-900">{{ formatDate(item.next_run_date) }}</td>
+                                <td class="px-4 py-2 text-sm">
+                                    <button class="rounded bg-red-100 px-2 py-1 text-red-700 hover:bg-red-200" @click="deleteRecurringInvoice(item.id)">
+                                        Delete
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </AppLayout>
 </template>
@@ -407,6 +478,17 @@ interface Props {
     canEditCompleted: boolean;
     canCreateInvoices: boolean;
     isPosEnabled: boolean;
+    recurringFrequencies: string[];
+    recurringSourceOptions: Array<{ id: number; invoice_number: string; title: string }>;
+    recurringDocuments: Array<{
+        id: number;
+        source_id: number;
+        frequency: string;
+        start_date: string;
+        end_date: string | null;
+        next_run_date: string;
+        source_label?: string;
+    }>;
 }
 
 const props = defineProps<Props>();
@@ -421,6 +503,13 @@ const customerId = ref(props.filters.customer_id || '');
 const showPaid = ref(props.filters.show_paid || false);
 const sortBy = ref(props.filters.sort_by || 'created_at');
 const sortDir = ref<'asc' | 'desc'>(props.filters.sort_dir || 'desc');
+const activeTab = ref<'documents' | 'recurring'>('documents');
+const recurringForm = ref({
+    source_id: '',
+    frequency: props.recurringFrequencies[0] || 'monthly',
+    start_date: new Date().toISOString().slice(0, 10),
+    end_date: '',
+});
 
 // Helper functions for edit/delete permissions
 const canEditInvoice = (invoice: Invoice) => {
@@ -510,5 +599,20 @@ const deleteInvoice = (id: number) => {
     if (confirm('Are you sure you want to delete this invoice?')) {
         router.delete(invoices.destroy(id).url);
     }
+};
+
+const addRecurringInvoice = () => {
+    if (!recurringForm.value.source_id) {
+        alert('Please select a source invoice.');
+        return;
+    }
+    router.post('/invoices/recurring', recurringForm.value, {
+        preserveState: true,
+    });
+};
+
+const deleteRecurringInvoice = (id: number) => {
+    if (!confirm('Delete this recurring invoice?')) return;
+    router.delete(`/invoices/recurring/${id}`, { preserveState: true });
 };
 </script>
