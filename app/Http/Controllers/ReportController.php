@@ -101,6 +101,8 @@ class ReportController extends Controller
             'report_template_id' => ['nullable', CompanyScopedRules::reportTemplateSelectableForCompany($currentCompany->id)],
         ]);
 
+        $validated['config'] = $this->sanitizeReportConfig($validated['entity_type'], $validated['config']);
+
         $report = Report::create([
             'company_id' => $currentCompany->id,
             'report_template_id' => $validated['report_template_id'] ?? null,
@@ -233,6 +235,8 @@ class ReportController extends Controller
             'config' => 'required|array',
             'report_template_id' => ['nullable', CompanyScopedRules::reportTemplateSelectableForCompany($currentCompany->id)],
         ]);
+
+        $validated['config'] = $this->sanitizeReportConfig($validated['entity_type'], $validated['config']);
 
         $report->update([
             'report_template_id' => $validated['report_template_id'] ?? null,
@@ -448,7 +452,7 @@ class ReportController extends Controller
         $entityType = $report->entity_type;
         // Filters come from template or passed parameter, not from report
         $filters = $filters ?? [];
-        $config = $report->config ?? [];
+        $config = $this->sanitizeReportConfig($entityType, $report->config ?? []);
         $columns = $config['columns'] ?? [];
         $groupBy = $config['group_by'] ?? null;
         $sortBy = $config['sort_by'] ?? null;
@@ -741,6 +745,9 @@ class ReportController extends Controller
     {
         if (str_contains($groupBy, '.')) {
             [$relation, $field] = explode('.', $groupBy, 2);
+            if (! $this->isAllowedRelationField($entityType, $relation, $field)) {
+                return null;
+            }
 
             if ($entityType === 'invoice') {
                 if ($relation === 'salesperson') {
@@ -1142,13 +1149,14 @@ class ReportController extends Controller
         // For non-grouped, we'll modify the query to get all records
         $entityType = $report->entity_type;
         $config = $report->config ?? [];
-        $groupBy = $config['group_by'] ?? null;
+        $groupBy = $this->sanitizeGroupOrSortField($entityType, $config['group_by'] ?? null);
 
         if ($groupBy) {
             // Grouped reports already return all data
             $reportData = $this->getReportData($report, $mergedFilters, 1, 100000);
         } else {
             // For non-grouped, get all data without pagination
+            $config = $this->sanitizeReportConfig($entityType, $config);
             $columns = $config['columns'] ?? [];
             $query = $this->getBaseQuery($entityType, $mergedFilters, null, $config['sort_by'] ?? null, $columns);
 
@@ -1159,10 +1167,9 @@ class ReportController extends Controller
 
                 if (str_contains($sortBy, '.')) {
                     [$relation, $field] = explode('.', $sortBy, 2);
-                    $tableName = $this->getTableName($entityType);
-                    if ($entityType === 'invoice' && $relation === 'salesperson') {
+                    if ($entityType === 'invoice' && $relation === 'salesperson' && $this->isAllowedRelationField($entityType, $relation, $field)) {
                         $query->orderBy('salesperson_users.'.$field, $sortDirection);
-                    } elseif ($relation === 'customer') {
+                    } elseif ($relation === 'customer' && $this->isAllowedRelationField($entityType, $relation, $field)) {
                         $query->orderBy('customers.'.$field, $sortDirection);
                     }
                 } else {
@@ -1203,10 +1210,10 @@ class ReportController extends Controller
             ];
         }
 
-        $config = $report->config ?? [];
+        $entityType = $report->entity_type;
+        $config = $this->sanitizeReportConfig($entityType, $report->config ?? []);
         $columns = $config['columns'] ?? [];
         $groupBy = $config['group_by'] ?? null;
-        $entityType = $report->entity_type;
 
         // Generate filename
         $filename = str_replace(' ', '_', $report->name).'_'.date('Y-m-d_His').'.csv';
@@ -1403,10 +1410,88 @@ class ReportController extends Controller
      */
     private function mapReportColumnToDatabaseColumn(string $entityType, string $column): string
     {
+        if (! $this->isAllowedColumn($entityType, $column) && ! in_array($column, ['formatted_date', 'formatted_total'], true)) {
+            throw new \InvalidArgumentException("Invalid report column: {$column}");
+        }
+
         return match ($column) {
             'formatted_date' => $this->getDocumentDateField($entityType),
             'formatted_total' => 'total',
             default => $column,
+        };
+    }
+
+    private function sanitizeReportConfig(string $entityType, array $config): array
+    {
+        $allowedColumns = $this->getAllowedColumns($entityType);
+        $columns = array_values(array_unique(array_filter((array) ($config['columns'] ?? []), function ($column) use ($allowedColumns) {
+            return is_string($column) && in_array($column, $allowedColumns, true);
+        })));
+
+        if (empty($columns)) {
+            $columns = ['number', 'customer.name', 'formatted_date', 'status', 'formatted_total'];
+        }
+
+        $groupBy = $this->sanitizeGroupOrSortField($entityType, $config['group_by'] ?? null);
+        $sortBy = $this->sanitizeGroupOrSortField($entityType, $config['sort_by'] ?? null);
+        $sortDirection = strtolower((string) ($config['sort_direction'] ?? 'asc')) === 'desc' ? 'desc' : 'asc';
+
+        return array_merge($config, [
+            'columns' => $columns,
+            'group_by' => $groupBy,
+            'sort_by' => $sortBy,
+            'sort_direction' => $sortDirection,
+        ]);
+    }
+
+    private function sanitizeGroupOrSortField(string $entityType, mixed $field): ?string
+    {
+        if (! is_string($field) || $field === '') {
+            return null;
+        }
+
+        return $this->isAllowedColumn($entityType, $field) ? $field : null;
+    }
+
+    private function isAllowedColumn(string $entityType, string $column): bool
+    {
+        return in_array($column, $this->getAllowedColumns($entityType), true);
+    }
+
+    private function isAllowedRelationField(string $entityType, string $relation, string $field): bool
+    {
+        $allowed = match ($entityType) {
+            'invoice' => [
+                'customer' => ['name', 'account_code'],
+                'salesperson' => ['name'],
+            ],
+            'quote', 'jobcard' => [
+                'customer' => ['name', 'account_code'],
+            ],
+            default => [],
+        };
+
+        return isset($allowed[$relation]) && in_array($field, $allowed[$relation], true);
+    }
+
+    private function getAllowedColumns(string $entityType): array
+    {
+        return match ($entityType) {
+            'invoice' => [
+                'number', 'customer.name', 'salesperson.name', 'formatted_date', 'status',
+                'subtotal', 'tax_amount', 'discount_amount', 'formatted_total', 'total',
+                'payment_count', 'last_payment_date', 'payments_summary', 'total_paid',
+                'total_credited', 'remaining_balance', 'count', 'created_at',
+            ],
+            'quote' => [
+                'number', 'customer.name', 'formatted_date', 'status', 'subtotal',
+                'tax_amount', 'discount_amount', 'formatted_total', 'total', 'count', 'created_at',
+            ],
+            'jobcard' => [
+                'number', 'customer.name', 'formatted_date', 'status', 'subtotal',
+                'tax_amount', 'discount_amount', 'formatted_total', 'total', 'count', 'created_at',
+            ],
+            default => [],
         };
     }
 

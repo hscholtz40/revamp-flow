@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
+import { useDateTimeFormat } from '@/composables/useDateTimeFormat';
+import { getSafeExternalUrl } from '@/composables/useSafeExternalUrl';
 
 interface NoteUser {
     id: number;
@@ -71,6 +73,7 @@ const searchingRecords = ref(false);
 
 const canLoadNotes = computed(() => !!formModule.value && !!formRecordId.value);
 const isContextLocked = computed(() => !props.showModuleSelector && !!props.module && !!props.recordId);
+const { formatDateTime } = useDateTimeFormat();
 
 const csrf = () => {
     const meta = document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null;
@@ -86,8 +89,10 @@ const fileSize = (size?: number | null) => {
 };
 
 const formatDate = (value: string) => {
-    return new Date(value).toLocaleString();
+    return formatDateTime(value);
 };
+
+const getSafeAttachmentUrl = (url?: string | null) => getSafeExternalUrl(url);
 
 const resetForm = () => {
     formSubject.value = '';
@@ -277,8 +282,9 @@ onMounted(() => {
                         <div class="mt-2 flex items-center justify-between gap-2 text-xs text-gray-500">
                             <span>By {{ note.user?.name || 'System' }}</span>
                             <a
-                                v-if="note.attachment_url"
-                                :href="note.attachment_url"
+                                v-if="getSafeAttachmentUrl(note.attachment_url)"
+                                :href="getSafeAttachmentUrl(note.attachment_url) || '#'"
+                                rel="noopener noreferrer"
                                 class="text-blue-600 hover:text-blue-800 hover:underline"
                             >
                                 {{ note.attachment_original_name || 'Download attachment' }}

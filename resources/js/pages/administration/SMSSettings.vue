@@ -179,7 +179,7 @@ const handleActiveToggle = () => {
                 <div class="text-sm text-blue-800 space-y-2">
                     <p><strong>Getting Started:</strong></p>
                     <ul class="list-disc list-inside ml-4 space-y-1">
-                        <li>Sign up for a BulkSMS account at <a href="https://www.bulksms.com" target="_blank" class="underline">bulksms.com</a></li>
+                        <li>Sign up for a BulkSMS account at <a href="https://www.bulksms.com" target="_blank" rel="noopener noreferrer" class="underline">bulksms.com</a></li>
                         <li>Get your username and password from your BulkSMS dashboard</li>
                         <li>Enter your credentials above to enable SMS functionality</li>
                     </ul>

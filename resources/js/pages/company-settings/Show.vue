@@ -3,6 +3,8 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { ArrowLeft, Edit, Trash2, Building2, Star, Calendar, Mail, Phone, Globe, MapPin } from 'lucide-vue-next';
 import companySettings from '@/routes/company-settings';
+import { computed } from 'vue';
+import { getSafeExternalUrl } from '@/composables/useSafeExternalUrl';
 
 interface Company {
     id: number;
@@ -28,6 +30,7 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+const safeWebsiteUrl = computed(() => getSafeExternalUrl(props.company.website));
 </script>
 
 <template>
@@ -125,12 +128,12 @@ const props = defineProps<Props>();
                                     </div>
                                 </div>
 
-                                <div v-if="props.company.website" class="flex items-center gap-3">
+                                <div v-if="safeWebsiteUrl" class="flex items-center gap-3">
                                     <Globe class="h-5 w-5 text-gray-400" />
                                     <div>
                                         <div class="text-sm font-medium text-gray-500">Website</div>
-                                        <a :href="props.company.website" target="_blank" class="text-blue-600 hover:underline">
-                                            {{ props.company.website }}
+                                        <a :href="safeWebsiteUrl" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">
+                                            {{ safeWebsiteUrl }}
                                         </a>
                                     </div>
                                 </div>

@@ -1,7 +1,28 @@
 # Changelog
 
+## 2026-04-08
+
+- **Security hardening (critical remediation):** Sanitized `.env.example` placeholders, restricted Administration license read route to admin-only, removed insecure cPanel HTTP web-exec fallback, and added stronger license API request signing with nonce-based anti-replay protection.
+- **Report + frontend injection defenses:** Added strict report config allowlists for sortable/groupable columns to block unsafe SQL field injection paths, sanitized user-provided external URLs before rendering, and enforced `rel="noopener noreferrer"` on `_blank` links.
+- **Platform and pipeline security controls:** Enabled global CSP/security headers middleware (with nonce support for inline bootstrap script/style), introduced a dedicated security CI workflow (`composer audit`, `npm audit`, gitleaks), tightened workflow permissions, and enforced `npm ci`-only installs in CI jobs.
+- **Testing compatibility (SQLite):** Guarded MySQL-specific `purchase_order_items.product_id` migration SQL so SQLite test runs no longer fail on unsupported `ALTER ... MODIFY` syntax during migration bootstrap.
+- **Testing compatibility (SQLite user enum migration):** Guarded MySQL-specific `users.user_type` enum alter statements so SQLite-based tests can bootstrap migrations without failing on unsupported `MODIFY COLUMN`.
+- **Permission boundary test alignment:** Updated invoice email permission-boundary expectation to match current behavior (view-level access allowed, request proceeds to validation), asserting validation errors instead of forbidden response.
+
+- **Localization date/time preferences:** Added company-level localization settings for timezone, date format, and time format in Administration → Localization, alongside existing number separators.
+- **App-wide date/time adherence:** Date/time rendering now follows the selected localization timezone and display format across the web app, and request-time server timezone is aligned to the active company setting for consistent backend-generated timestamps.
+- **PDF/signature date-time formatting:** Default PDF templates (invoice, quote, jobcard, proforma, purchase order, and client statement) now format document dates and signature timestamps via company localization settings, showing only configured date + time (`H:i`/12h) without weekday/timezone text.
+- **Client-zone signature timestamp formatting:** Client Zone signature history now formats `signed_at` using localization settings instead of rendering raw datetime strings, removing weekday/timezone text like `GMT+0200 (...)`.
+- **Localization preview + signature UI formatting:** Date/time preview and document signature timestamps now use explicit localized formatting options (date + hour/minute only), preventing fallback browser strings that include weekday/timezone text.
+- **Notes panel timestamp localization:** Record notes now display created timestamps through the shared localization formatter so note history uses selected date/time format without weekday/timezone text.
+- **Strict date-time output normalization:** Shared localization formatter now builds datetime as `date + time` explicitly (no locale-added weekday/comma/timezone suffix), ensuring values render like `08/04/2026 09:27` across preview/signature/notes views.
+- **Localized datepicker on all date inputs:** Replaced plain browser rendering for all `date`/`datetime-local` inputs with a global localized flatpickr layer that keeps ISO submit values for backend compatibility while consistently displaying the selected localization date/time format in every form field.
+- **Reports + timesheet date consistency:** Updated reports date rendering to use localization formatting and hardened date-input reinitialization (mutation observer + delayed reapply) so timesheet filter fields no longer fall back to default browser format after filter updates.
+
 ## 2026-04-01
 
+- **Xero invoice/quote discount normalization:** Outbound ACCREC line-item export now clamps discount percentage to 0-100 and caps discount amount to the line subtotal magnitude before calculating/sending `LineAmount`. This prevents fully discounted lines from exporting with negative line totals that Xero rejects as expected `0.00`.
+- **Xero ACCREC discounted line export hardening:** Discounted invoice/quote lines now omit explicit `LineAmount` and let Xero derive totals from quantity/unit/discount fields, preventing validation failures where Xero expects a fully discounted line to total `0.00`.
 - **Client auth isolation:** Added a dedicated client login endpoint/page (`/client-login`) separate from staff login. Client accounts are blocked from staff login and staff accounts are blocked from client login, enforcing role-specific authentication entrypoints.
 - **Client statement local time correction:** Adjusted statement PDF `Generated` timestamp to render in `Africa/Johannesburg` time so generated times align with expected local business time (e.g. UTC+2).
 - **Vite/Inertia page resolution hardening:** Updated app Blade Vite includes to load only `resources/js/app.ts` (instead of adding the current page component path), preventing manifest lookup errors for newly added Inertia pages when a stale build manifest is present.

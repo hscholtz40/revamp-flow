@@ -3,6 +3,7 @@
 use App\Http\Middleware\EnsureLicenseInfrastructureAccess;
 use App\Http\Middleware\EnsureModulePermission;
 use App\Http\Middleware\EnsureUserIsAdministrator;
+use App\Http\Middleware\CspMiddleware;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
@@ -31,6 +32,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             HandleAppearance::class,
             HandleInertiaRequests::class,
+            CspMiddleware::class,
             AddLinkHeadersForPreloadedAssets::class,
             \App\Http\Middleware\RestrictLimitedUser::class,
             \App\Http\Middleware\EnsureLicenseIsValid::class,

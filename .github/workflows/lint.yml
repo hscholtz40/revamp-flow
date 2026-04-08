@@ -11,7 +11,7 @@ on:
       - main
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   quality:
@@ -28,12 +28,7 @@ jobs:
         run: composer install -q --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
 
       - name: Install Node Dependencies
-        run: |
-          # Try npm ci first, fallback to npm install if lock file is out of sync
-          if ! npm ci --legacy-peer-deps 2>/dev/null; then
-            echo "Lock file out of sync, using npm install"
-            npm install --legacy-peer-deps
-          fi
+        run: npm ci --legacy-peer-deps
 
       - name: Run Pint (PHP Linter)
         continue-on-error: true

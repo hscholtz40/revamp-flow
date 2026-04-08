@@ -3,6 +3,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import { ArrowLeft, Edit, Trash2, Copy, Check, Key, Users, Calendar, Clock, Globe, Rocket, ArrowUpCircle, Tag, ShieldCheck, Lock } from 'lucide-vue-next';
+import { getSafeExternalUrl } from '@/composables/useSafeExternalUrl';
 import {
     Dialog,
     DialogContent,
@@ -66,6 +67,7 @@ const copied = ref(false);
 const showDeployDialog = ref(false);
 const showUpgradeDialog = ref(false);
 const forcingSSL = ref(false);
+const safeLicenseUrl = computed(() => getSafeExternalUrl(props.license.url));
 
 const deployForm = useForm({
     zip_file: null as File | null,
@@ -299,9 +301,9 @@ function formatDateTime(dateString: string | null): string {
                         <Globe class="h-5 w-5 text-gray-500" />
                         <h2 class="text-lg font-semibold text-gray-900">Authorized URL</h2>
                     </div>
-                    <div v-if="props.license.url" class="rounded-lg bg-gray-50 p-4">
-                        <a :href="props.license.url" target="_blank" class="text-blue-600 hover:text-blue-800 break-all">
-                            {{ props.license.url }}
+                    <div v-if="safeLicenseUrl" class="rounded-lg bg-gray-50 p-4">
+                        <a :href="safeLicenseUrl" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 break-all">
+                            {{ safeLicenseUrl }}
                         </a>
                         <p class="mt-2 text-xs text-gray-500">Only validation requests from this URL will be accepted.</p>
                     </div>

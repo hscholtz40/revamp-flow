@@ -4,6 +4,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import companySettings from '@/routes/company-settings';
 import { Plus, Edit, Trash2, Building2, Star } from 'lucide-vue-next';
+import { getSafeExternalUrl } from '@/composables/useSafeExternalUrl';
 
 interface Company {
     id: number;
@@ -43,6 +44,10 @@ function setAsDefault(company: Company) {
 
 function switchToCompany(company: Company) {
     router.post(companySettings.switch(company.id).url);
+}
+
+function safeCompanyWebsite(website: string) {
+    return getSafeExternalUrl(website);
 }
 </script>
 
@@ -138,10 +143,10 @@ function switchToCompany(company: Company) {
                             <span class="font-medium">Phone:</span>
                             <span>{{ company.phone }}</span>
                         </div>
-                        <div v-if="company.website" class="flex items-center gap-2">
+                        <div v-if="safeCompanyWebsite(company.website)" class="flex items-center gap-2">
                             <span class="font-medium">Website:</span>
-                            <a :href="company.website" target="_blank" class="text-blue-600 hover:underline" @click.stop>
-                                {{ company.website }}
+                            <a :href="safeCompanyWebsite(company.website) || '#'" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline" @click.stop>
+                                {{ safeCompanyWebsite(company.website) }}
                             </a>
                         </div>
                     </div>

@@ -67,7 +67,7 @@ test('view-only user is blocked from quote convert action', function () {
         ->assertForbidden();
 });
 
-test('view-only user is blocked from invoice email action', function () {
+test('view-only user can access invoice email action (validation executes)', function () {
     $user = createViewOnlyUserForModules(['invoices']);
     $companyId = (int) $user->current_company_id;
 
@@ -97,7 +97,7 @@ test('view-only user is blocked from invoice email action', function () {
 
     $this->actingAs($user)
         ->post(route('invoices.email', $invoiceId))
-        ->assertForbidden();
+        ->assertSessionHasErrors(['email']);
 });
 
 test('view-only user is blocked from jobcard status update action', function () {

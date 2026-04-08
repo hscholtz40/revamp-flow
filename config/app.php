@@ -149,5 +149,7 @@ return [
     'license_server_url' => env('LICENSE_SERVER_URL', 'https://jco.nexorasoftware.co.za'),
     'license_validation_timeout' => (int) env('LICENSE_VALIDATION_TIMEOUT', 10),
     'license_api_max_clock_skew' => (int) env('LICENSE_API_MAX_CLOCK_SKEW', 300),
+    'license_api_nonce_ttl' => (int) env('LICENSE_API_NONCE_TTL', 300),
+    'csp_enabled' => (bool) env('CSP_ENABLED', false),
 
 ];

@@ -253,9 +253,9 @@ const isMeta = () => form.provider === 'meta';
                     <div>
                         <p><strong>Meta WhatsApp Business API Setup:</strong></p>
                         <ul class="list-disc list-inside ml-4 space-y-1">
-                            <li>Create a Meta Business Account at <a href="https://business.facebook.com" target="_blank" class="underline">business.facebook.com</a></li>
+                            <li>Create a Meta Business Account at <a href="https://business.facebook.com" target="_blank" rel="noopener noreferrer" class="underline">business.facebook.com</a></li>
                             <li>Set up a WhatsApp Business Account through Meta Business Manager</li>
-                            <li>Go to <a href="https://developers.facebook.com" target="_blank" class="underline">developers.facebook.com</a> and create a new app</li>
+                            <li>Go to <a href="https://developers.facebook.com" target="_blank" rel="noopener noreferrer" class="underline">developers.facebook.com</a> and create a new app</li>
                             <li>Add the WhatsApp product to your app</li>
                             <li>Get your Access Token from the App Dashboard → WhatsApp → API Setup</li>
                             <li>Find your Phone Number ID in the same section (this is a numeric ID, not your actual phone number)</li>

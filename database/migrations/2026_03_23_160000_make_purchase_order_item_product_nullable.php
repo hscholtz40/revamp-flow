@@ -10,6 +10,11 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            // SQLite does not support MySQL-style ALTER ... MODIFY syntax used below.
+            return;
+        }
+
         DB::statement('ALTER TABLE purchase_order_items MODIFY product_id BIGINT UNSIGNED NULL');
     }
 
@@ -18,6 +23,10 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         DB::statement('ALTER TABLE purchase_order_items MODIFY product_id BIGINT UNSIGNED NOT NULL');
     }
 };

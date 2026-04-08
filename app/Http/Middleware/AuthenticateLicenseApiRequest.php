@@ -6,6 +6,7 @@ use App\Models\License;
 use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Symfony\Component\HttpFoundation\Response;
 
 class AuthenticateLicenseApiRequest
@@ -18,8 +19,9 @@ class AuthenticateLicenseApiRequest
         $licenseKey = (string) $request->input('license_key', '');
         $timestamp = (string) $request->header('X-License-Timestamp', '');
         $signature = (string) $request->header('X-License-Signature', '');
+        $nonce = (string) $request->header('X-License-Nonce', '');
 
-        if ($licenseKey === '' || $timestamp === '' || $signature === '') {
+        if ($licenseKey === '' || $timestamp === '' || $signature === '' || $nonce === '') {
             return $this->unauthorized('Missing license API authentication headers.');
         }
 
@@ -34,8 +36,12 @@ class AuthenticateLicenseApiRequest
             return $this->unauthorized('Expired request signature.');
         }
 
+        if (!preg_match('/^[a-zA-Z0-9_-]{16,128}$/', $nonce)) {
+            return $this->unauthorized('Invalid nonce header.');
+        }
+
         $payloadHash = hash('sha256', (string) $request->getContent());
-        $toSign = $timestamp . '|' . strtoupper($request->method()) . '|' . $request->path() . '|' . $payloadHash;
+        $toSign = $timestamp . '|' . $nonce . '|' . strtoupper($request->method()) . '|' . $request->path() . '|' . $payloadHash;
         $expectedSignature = hash_hmac('sha256', $toSign, $licenseKey);
 
         if (!hash_equals($expectedSignature, $signature)) {
@@ -46,6 +52,12 @@ class AuthenticateLicenseApiRequest
         $licenseExists = License::query()->where('license_key', $licenseKey)->exists();
         if (!$licenseExists) {
             return $this->unauthorized('License authentication failed.');
+        }
+
+        $nonceTtlSeconds = max((int) config('app.license_api_nonce_ttl', 300), 60);
+        $nonceCacheKey = 'license-api-nonce:' . sha1($licenseKey . '|' . $timestamp . '|' . $nonce);
+        if (!Cache::add($nonceCacheKey, true, now()->addSeconds($nonceTtlSeconds))) {
+            return $this->unauthorized('Replay request detected.');
         }
 
         return $next($request);

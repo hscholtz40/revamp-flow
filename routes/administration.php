@@ -7,12 +7,9 @@ use App\Http\Controllers\WhatsAppSettingsController;
 use App\Http\Controllers\Administration\PdfTemplateController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['auth', 'verified'])->group(function () {
-    Route::get('/administration/license', [AdministrationController::class, 'license'])->name('administration.license');
-});
-
 Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::get('/administration', [AdministrationController::class, 'index'])->name('administration.index');
+    Route::get('/administration/license', [AdministrationController::class, 'license'])->name('administration.license');
     Route::post('/administration/license', [AdministrationController::class, 'updateLicense'])->name('administration.license.update');
     Route::get('/administration/document-numbering', [AdministrationController::class, 'documentNumbering'])->name('administration.document-numbering');
     Route::put('/administration/document-numbering', [AdministrationController::class, 'updateDocumentNumbering'])->name('administration.document-numbering.update');

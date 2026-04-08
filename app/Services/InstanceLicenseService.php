@@ -320,14 +320,16 @@ class InstanceLicenseService
             $body = '{}';
         }
         $timestamp = (string) now()->timestamp;
+        $nonce = Str::random(32);
         $path = parse_url($url, PHP_URL_PATH) ?: '/';
         $payloadHash = hash('sha256', $body);
-        $toSign = $timestamp . '|POST|' . ltrim($path, '/') . '|' . $payloadHash;
+        $toSign = $timestamp . '|' . $nonce . '|POST|' . ltrim($path, '/') . '|' . $payloadHash;
         $signature = hash_hmac('sha256', $toSign, $licenseKey);
 
         return $client
             ->withHeaders([
                 'X-License-Timestamp' => $timestamp,
+                'X-License-Nonce' => $nonce,
                 'X-License-Signature' => $signature,
                 'Content-Type' => 'application/json',
             ])
