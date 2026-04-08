@@ -20,7 +20,7 @@
         <div><strong>Customer:</strong> {{ $customer->name }}</div>
         <div><strong>Email:</strong> {{ $customer->email }}</div>
         <div><strong>Company:</strong> {{ $company->name }}</div>
-        <div><strong>Generated:</strong> {{ $generatedAt->timezone('Africa/Johannesburg')->format('Y-m-d H:i') }}</div>
+        <div><strong>Generated:</strong> {{ $company->formatLocalizedDateTime($generatedAt) }}</div>
     </div>
 
     <h2>Ageing Summary</h2>
@@ -63,8 +63,8 @@
             @forelse ($rows as $row)
                 <tr>
                     <td>{{ $row['invoice_number'] }}</td>
-                    <td>{{ optional($row['invoice_date'])->format('Y-m-d') }}</td>
-                    <td>{{ optional($row['due_date'])->format('Y-m-d') }}</td>
+                    <td>{{ $company->formatLocalizedDate($row['invoice_date'] ?? null) }}</td>
+                    <td>{{ $company->formatLocalizedDate($row['due_date'] ?? null) }}</td>
                     <td>{{ $row['status'] }}</td>
                     <td class="num">{{ number_format((float) $row['total'], 2) }}</td>
                     <td class="num">{{ number_format((float) $row['payments'], 2) }}</td>

@@ -326,9 +326,9 @@
             <div class="po-info">
                 <h4>Purchase Order Details</h4>
                 <p><strong>PO Number:</strong> {{ $purchaseOrder->po_number ?? 'N/A' }}</p>
-                <p><strong>Order Date:</strong> {{ $purchaseOrder->order_date ? \Carbon\Carbon::parse($purchaseOrder->order_date)->format('Y/m/d') : date('Y/m/d') }}</p>
+                <p><strong>Order Date:</strong> {{ $purchaseOrder->order_date ? $company->formatLocalizedDate($purchaseOrder->order_date) : $company->formatLocalizedDate(now()) }}</p>
                 @if($purchaseOrder->expected_delivery_date)
-                    <p><strong>Expected Delivery:</strong> {{ \Carbon\Carbon::parse($purchaseOrder->expected_delivery_date)->format('Y/m/d') }}</p>
+                    <p><strong>Expected Delivery:</strong> {{ $company->formatLocalizedDate($purchaseOrder->expected_delivery_date) }}</p>
                 @endif
                 <p><strong>Status:</strong> {{ ucfirst($purchaseOrder->status ?? 'Draft') }}</p>
             </div>
@@ -362,10 +362,10 @@
             <div class="po-info">
                 <h4>Delivery Information</h4>
                 @if($purchaseOrder->expected_delivery_date)
-                    <p><strong>Expected:</strong> {{ \Carbon\Carbon::parse($purchaseOrder->expected_delivery_date)->format('Y/m/d') }}</p>
+                    <p><strong>Expected:</strong> {{ $company->formatLocalizedDate($purchaseOrder->expected_delivery_date) }}</p>
                 @endif
                 @if($purchaseOrder->received_date)
-                    <p><strong>Received:</strong> {{ \Carbon\Carbon::parse($purchaseOrder->received_date)->format('Y/m/d') }}</p>
+                    <p><strong>Received:</strong> {{ $company->formatLocalizedDate($purchaseOrder->received_date) }}</p>
                 @endif
             </div>
         </div>
@@ -489,7 +489,7 @@
     
     <div class="footer">
         <div class="footer-left">
-            Generated on {{ date('Y/m/d H:i') }}
+            Generated on {{ $company->formatLocalizedDateTime(now()) }}
         </div>
         <div class="footer-right">
             {{ $company->name ?? 'Company' }}

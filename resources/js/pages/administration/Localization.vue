@@ -56,6 +56,61 @@
                     </div>
                 </div>
 
+                <div class="rounded-lg border border-gray-200 p-4 space-y-4">
+                    <h3 class="text-sm font-semibold text-gray-900">Date and time</h3>
+                    <p class="text-xs text-gray-600">
+                        These settings control how dates and times are displayed throughout the application.
+                    </p>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
+                            <select
+                                v-model="form.locale_timezone"
+                                class="w-full rounded border px-3 py-2"
+                                :class="{ 'border-red-500': form.errors.locale_timezone }"
+                            >
+                                <option v-for="timezone in timezones" :key="timezone" :value="timezone">{{ timezone }}</option>
+                            </select>
+                            <div v-if="form.errors.locale_timezone" class="text-red-500 text-sm mt-1">
+                                {{ form.errors.locale_timezone }}
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Date format</label>
+                            <select
+                                v-model="form.locale_date_format"
+                                class="w-full rounded border px-3 py-2"
+                                :class="{ 'border-red-500': form.errors.locale_date_format }"
+                            >
+                                <option v-for="option in dateFormatOptions" :key="option.value" :value="option.value">
+                                    {{ option.label }}
+                                </option>
+                            </select>
+                            <div v-if="form.errors.locale_date_format" class="text-red-500 text-sm mt-1">
+                                {{ form.errors.locale_date_format }}
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Time format</label>
+                            <select
+                                v-model="form.locale_time_format"
+                                class="w-full rounded border px-3 py-2"
+                                :class="{ 'border-red-500': form.errors.locale_time_format }"
+                            >
+                                <option value="24h">24-hour</option>
+                                <option value="12h">12-hour (AM/PM)</option>
+                            </select>
+                            <div v-if="form.errors.locale_time_format" class="text-red-500 text-sm mt-1">
+                                {{ form.errors.locale_time_format }}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="rounded-md bg-gray-50 border border-gray-200 p-3 text-sm text-gray-700">
+                        <span class="font-medium text-gray-900">Date/time preview:</span>
+                        {{ dateTimePreview }}
+                    </div>
+                </div>
+
                 <div class="flex justify-end">
                     <button
                         type="submit"
@@ -75,12 +130,17 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import { formatDecimalWithSeparators } from '@/composables/useNumberFormat';
+import { formatLocalizedDateTime } from '@/composables/useDateTimeFormat';
 
 const props = defineProps<{
     localization: {
         locale_decimal_separator: string;
         locale_thousands_separator: string;
+        locale_timezone: string;
+        locale_date_format: 'dd/mm/yyyy' | 'mm/dd/yyyy' | 'yyyy-mm-dd' | 'd mmm yyyy';
+        locale_time_format: '24h' | '12h';
     };
+    timezones: string[];
     company: {
         id: number;
         name: string;
@@ -90,7 +150,18 @@ const props = defineProps<{
 const form = useForm({
     locale_decimal_separator: props.localization.locale_decimal_separator,
     locale_thousands_separator: props.localization.locale_thousands_separator,
+    locale_timezone: props.localization.locale_timezone,
+    locale_date_format: props.localization.locale_date_format,
+    locale_time_format: props.localization.locale_time_format,
 });
+
+const timezones = props.timezones;
+const dateFormatOptions = [
+    { value: 'dd/mm/yyyy', label: 'DD/MM/YYYY' },
+    { value: 'mm/dd/yyyy', label: 'MM/DD/YYYY' },
+    { value: 'yyyy-mm-dd', label: 'YYYY-MM-DD' },
+    { value: 'd mmm yyyy', label: 'D MMM YYYY' },
+] as const;
 
 const preview = computed(() => {
     const dec = form.locale_decimal_separator || '.';
@@ -100,6 +171,15 @@ const preview = computed(() => {
     }
     const sample = formatDecimalWithSeparators(1234567.89, 2, 2, dec, thou);
     return `R${sample} (example amount)`;
+});
+
+const dateTimePreview = computed(() => {
+    const previewDate = new Date('2026-04-08T14:35:00Z');
+    return formatLocalizedDateTime(previewDate, {
+        timezone: form.locale_timezone,
+        date_format: form.locale_date_format,
+        time_format: form.locale_time_format,
+    });
 });
 
 function submit() {

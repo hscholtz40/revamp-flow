@@ -464,7 +464,7 @@
             <div class="validity-period">
                 <label>Valid Until</label>
                 <div style="border: 1px solid #000; height: 20px; margin-top: 5px; padding: 2px;">
-                    {{ $quote->expiry_date ? \Carbon\Carbon::parse($quote->expiry_date)->format('Y/m/d') : date('Y/m/d', strtotime('+30 days')) }}
+                    {{ $quote->expiry_date ? $company->formatLocalizedDate($quote->expiry_date) : $company->formatLocalizedDate(now()->addDays(30)) }}
                 </div>
             </div>
         </div>
@@ -486,7 +486,7 @@
         </div>
         <div class="quote-detail">
             <span class="quote-detail-label">Date</span>
-            <span class="quote-detail-value">{{ $quote->created_at ? \Carbon\Carbon::parse($quote->created_at)->format('Y/m/d') : date('Y/m/d') }}</span>
+            <span class="quote-detail-value">{{ $quote->created_at ? $company->formatLocalizedDate($quote->created_at) : $company->formatLocalizedDate(now()) }}</span>
         </div>
         <div class="quote-detail">
             <span class="quote-detail-label">Order No</span>
@@ -639,7 +639,7 @@
                                 <div style="font-size: 10px; margin-bottom: 6px;">
                                     <strong>{{ $signature->signer_name }}</strong>
                                     @if($signature->signed_at)
-                                        - {{ $signature->signed_at->format('Y/m/d H:i') }}
+                                        - {{ $company->formatLocalizedDateTime($signature->signed_at) }}
                                     @endif
                                 </div>
                                 @php($signatureDataUri = $signature->getSignaturePathForPdf())
@@ -679,7 +679,7 @@
             JobCard Online (Registered to {{ $company->name ?? 'Company' }})
         </div>
         <div class="footer-right">
-            {{ date('Y/m/d H:i:s') }}
+            {{ $company->formatLocalizedDateTime(now()) }}
         </div>
     </div>
 </body>

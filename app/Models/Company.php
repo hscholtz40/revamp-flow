@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -91,6 +92,9 @@ class Company extends Model
         'purchase_order_number_next',
         'locale_decimal_separator',
         'locale_thousands_separator',
+        'locale_timezone',
+        'locale_date_format',
+        'locale_time_format',
         'jobcard_status_labels',
         'quote_status_labels',
     ];
@@ -140,6 +144,63 @@ class Company extends Model
     public function formatCurrencyZar(float|int|string|null $amount, int $decimals = 2): string
     {
         return 'R'.$this->formatNumber($amount, $decimals);
+    }
+
+    public function getLocalizedPhpDateFormat(): string
+    {
+        return match ($this->locale_date_format) {
+            'mm/dd/yyyy' => 'm/d/Y',
+            'yyyy-mm-dd' => 'Y-m-d',
+            'd mmm yyyy' => 'j M Y',
+            default => 'd/m/Y',
+        };
+    }
+
+    public function getLocalizedPhpTimeFormat(): string
+    {
+        return $this->locale_time_format === '12h' ? 'h:i A' : 'H:i';
+    }
+
+    public function formatLocalizedDate(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+
+        return $this->toLocalizedCarbon($value)->format($this->getLocalizedPhpDateFormat());
+    }
+
+    public function formatLocalizedTime(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+
+        return $this->toLocalizedCarbon($value)->format($this->getLocalizedPhpTimeFormat());
+    }
+
+    public function formatLocalizedDateTime(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+
+        return $this->toLocalizedCarbon($value)->format(
+            $this->getLocalizedPhpDateFormat().' '.$this->getLocalizedPhpTimeFormat()
+        );
+    }
+
+    private function toLocalizedCarbon(mixed $value): Carbon
+    {
+        $timezone = is_string($this->locale_timezone) && $this->locale_timezone !== ''
+            ? $this->locale_timezone
+            : config('app.timezone', 'UTC');
+
+        if ($value instanceof Carbon) {
+            return $value->copy()->setTimezone($timezone);
+        }
+
+        return Carbon::parse($value)->setTimezone($timezone);
     }
 
     /**

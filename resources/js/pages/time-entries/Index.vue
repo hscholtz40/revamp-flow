@@ -176,6 +176,7 @@
 <script setup lang="ts">
 import ListTableActionLabel from '@/components/ListTableActionLabel.vue';
 import { useAuthAbility } from '@/composables/useAuthAbilities';
+import { useDateTimeFormat } from '@/composables/useDateTimeFormat';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { Trash2 } from 'lucide-vue-next';
@@ -210,6 +211,7 @@ const props = defineProps<Props>();
 const page = usePage();
 const isLimitedUser = computed(() => (page.props.auth as any)?.user?.user_type === 'limited');
 const canTimesheetDelete = useAuthAbility('timesheet', 'delete');
+const { formatDate } = useDateTimeFormat();
 const showTimesheetActions = computed(() => !isLimitedUser.value && canTimesheetDelete.value);
 const timesheetTableColspan = computed(() => {
     if (isLimitedUser.value) {
@@ -225,10 +227,6 @@ const filters = ref({
     end_date: props.filters.end_date || '',
     is_billable: props.filters.is_billable,
 });
-
-const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString();
-};
 
 const clearFilters = () => {
     filters.value = {

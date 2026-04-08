@@ -495,7 +495,7 @@
         </div>
         <div class="invoice-detail">
             <span class="invoice-detail-label">Date</span>
-            <span class="invoice-detail-value">{{ $invoice->invoice_date ? \Carbon\Carbon::parse($invoice->invoice_date)->format('Y/m/d') : date('Y/m/d') }}</span>
+            <span class="invoice-detail-value">{{ $invoice->invoice_date ? $company->formatLocalizedDate($invoice->invoice_date) : $company->formatLocalizedDate(now()) }}</span>
         </div>
         <div class="invoice-detail">
             <span class="invoice-detail-label">Order No</span>
@@ -673,7 +673,7 @@
                                 <div style="font-size: 10px; margin-bottom: 6px;">
                                     <strong>{{ $signature->signer_name }}</strong>
                                     @if($signature->signed_at)
-                                        - {{ $signature->signed_at->format('Y/m/d H:i') }}
+                                        - {{ $company->formatLocalizedDateTime($signature->signed_at) }}
                                     @endif
                                 </div>
                                 @php($signatureDataUri = $signature->getSignaturePathForPdf())
@@ -714,7 +714,7 @@
             JobCard Online (Registered to {{ $company->name ?? 'Company' }})
         </div>
         <div class="footer-right">
-            {{ date('Y/m/d H:i:s') }}
+            {{ $company->formatLocalizedDateTime(now()) }}
         </div>
     </div>
 </body>

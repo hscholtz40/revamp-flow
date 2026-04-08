@@ -795,9 +795,11 @@ import jobcards from '@/routes/jobcards';
 import products from '@/routes/products';
 import customers from '@/routes/customers';
 import { useNumberFormat } from '@/composables/useNumberFormat';
+import { useDateTimeFormat } from '@/composables/useDateTimeFormat';
 
 const page = usePage();
 const { formatCurrency } = useNumberFormat();
+const { formatDate: formatLocalizedDate, formatDateTime: formatLocalizedDateTime } = useDateTimeFormat();
 const canCreateCreditNote = computed(() => !!(page.props.auth as any)?.abilities?.['credit-notes']?.create);
 
 interface SerialNumber {
@@ -992,11 +994,11 @@ const statusOptions = [
 ];
 
 const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString();
+    return formatLocalizedDate(date);
 };
 
 const formatDateTime = (date: string) => {
-    return new Date(date).toLocaleString();
+    return formatLocalizedDateTime(date);
 };
 
 const formatStatus = (status: string) => {

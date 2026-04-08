@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\Company;
+use DateTimeZone;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -79,6 +80,11 @@ class HandleInertiaRequests extends Middleware
                     'decimal_separator' => '.',
                     'thousands_separator' => ',',
                 ],
+                'dateTimeFormat' => [
+                    'timezone' => config('app.timezone', 'UTC'),
+                    'date_format' => 'dd/mm/yyyy',
+                    'time_format' => '24h',
+                ],
                 'flash' => $sharedFlash,
                 'auth' => [
                     'user' => null,
@@ -151,6 +157,18 @@ class HandleInertiaRequests extends Middleware
             }
         }
 
+        $resolvedTimezone = config('app.timezone', 'UTC');
+        if ($currentCompany && is_string($currentCompany->locale_timezone) && $currentCompany->locale_timezone !== '') {
+            try {
+                new DateTimeZone($currentCompany->locale_timezone);
+                $resolvedTimezone = $currentCompany->locale_timezone;
+            } catch (\Throwable $e) {
+                // Keep default timezone when company setting is invalid.
+            }
+        }
+        config(['app.timezone' => $resolvedTimezone]);
+        date_default_timezone_set($resolvedTimezone);
+
         // Check if parent share already has auth data
         $parentAuth = $parentShare['auth'] ?? null;
 
@@ -179,6 +197,21 @@ class HandleInertiaRequests extends Middleware
             ] : [
                 'decimal_separator' => '.',
                 'thousands_separator' => ',',
+            ],
+            'dateTimeFormat' => $currentCompany ? [
+                'timezone' => ($currentCompany->locale_timezone !== null && $currentCompany->locale_timezone !== '')
+                    ? $currentCompany->locale_timezone
+                    : $resolvedTimezone,
+                'date_format' => ($currentCompany->locale_date_format !== null && $currentCompany->locale_date_format !== '')
+                    ? $currentCompany->locale_date_format
+                    : 'dd/mm/yyyy',
+                'time_format' => ($currentCompany->locale_time_format !== null && $currentCompany->locale_time_format !== '')
+                    ? $currentCompany->locale_time_format
+                    : '24h',
+            ] : [
+                'timezone' => $resolvedTimezone,
+                'date_format' => 'dd/mm/yyyy',
+                'time_format' => '24h',
             ],
             'companies' => $companies,
             'flash' => $sharedFlash,

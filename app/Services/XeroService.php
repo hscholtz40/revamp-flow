@@ -2185,8 +2185,8 @@ class XeroService
         $lineAmount = (float) $lineItem->total;
         $quantity = (float) $lineItem->quantity;
         $unitAmount = (float) $lineItem->unit_price;
-        $discountAmount = (float) ($lineItem->discount_amount ?? 0);
-        $discountPercentage = (float) ($lineItem->discount_percentage ?? 0);
+        $discountAmount = max(0.0, (float) ($lineItem->discount_amount ?? 0));
+        $discountPercentage = max(0.0, (float) ($lineItem->discount_percentage ?? 0));
 
         $accountCode = $fallbackSalesAccountCode;
         if ($lineItem->account_id && $lineItem->account && ! empty($lineItem->account->account_code)) {
@@ -2202,13 +2202,34 @@ class XeroService
         $expectedSubtotal = $quantity * $unitAmount;
         $calculatedLineAmount = $expectedSubtotal;
         $hasDiscount = false;
+        $effectiveDiscountPercentage = min(100.0, $discountPercentage);
+        $effectiveDiscountAmount = $discountAmount;
+        $maxDiscountableAmount = abs($expectedSubtotal);
 
-        if ($discountPercentage > 0) {
+        if ($effectiveDiscountAmount > $maxDiscountableAmount) {
+            $effectiveDiscountAmount = $maxDiscountableAmount;
+        }
+
+        if ($effectiveDiscountPercentage !== $discountPercentage || $effectiveDiscountAmount !== $discountAmount) {
+            Log::info('Normalized outbound discount for Xero ACCREC line item export', [
+                'document_type' => $documentType,
+                'document_id' => $documentId,
+                'line_item_id' => $lineItem->id,
+                'expected_subtotal' => $expectedSubtotal,
+                'original_discount_percentage' => $discountPercentage,
+                'normalized_discount_percentage' => $effectiveDiscountPercentage,
+                'original_discount_amount' => $discountAmount,
+                'normalized_discount_amount' => $effectiveDiscountAmount,
+            ]);
+        }
+
+        if ($effectiveDiscountPercentage > 0) {
             $hasDiscount = true;
-            $calculatedLineAmount = $expectedSubtotal * (1 - ($discountPercentage / 100));
-        } elseif ($discountAmount > 0) {
+            $calculatedLineAmount = $expectedSubtotal * (1 - ($effectiveDiscountPercentage / 100));
+        } elseif ($effectiveDiscountAmount > 0) {
             $hasDiscount = true;
-            $calculatedLineAmount = $expectedSubtotal - $discountAmount;
+            $discountDirection = $expectedSubtotal >= 0 ? 1 : -1;
+            $calculatedLineAmount = $expectedSubtotal - ($effectiveDiscountAmount * $discountDirection);
         }
 
         if ($hasDiscount && abs($calculatedLineAmount - $lineAmount) > 0.01) {
@@ -2219,8 +2240,8 @@ class XeroService
                 'stored_total' => $lineAmount,
                 'calculated_total' => $calculatedLineAmount,
                 'expected_subtotal' => $expectedSubtotal,
-                'discount_amount' => $discountAmount,
-                'discount_percentage' => $discountPercentage,
+                'discount_amount' => $effectiveDiscountAmount,
+                'discount_percentage' => $effectiveDiscountPercentage,
             ]);
             $lineAmount = round($calculatedLineAmount, 2);
         }
@@ -2249,8 +2270,8 @@ class XeroService
             'account_code' => $accountCode,
             'quantity' => $quantity,
             'unit_price' => $unitAmount,
-            'discount_amount' => $discountAmount,
-            'discount_percentage' => $discountPercentage,
+            'discount_amount' => $effectiveDiscountAmount,
+            'discount_percentage' => $effectiveDiscountPercentage,
             'line_item_total' => $lineAmount,
             'expected_subtotal' => $expectedSubtotal,
             'calculated_line_amount' => $calculatedLineAmount,
@@ -2260,7 +2281,6 @@ class XeroService
             'Description' => $lineItem->description ?? 'Item',
             'Quantity' => $quantity,
             'UnitAmount' => $unitAmount,
-            'LineAmount' => round($lineAmount, 2),
             'AccountCode' => $accountCode,
             'TaxType' => $taxTypeCode,
         ];
@@ -2270,10 +2290,28 @@ class XeroService
             $lineItemData['ItemCode'] = $itemCode;
         }
 
-        if ($discountPercentage > 0) {
-            $lineItemData['DiscountRate'] = round($discountPercentage, 2);
-        } elseif ($discountAmount > 0) {
-            $lineItemData['DiscountAmount'] = round($discountAmount, 2);
+        if ($effectiveDiscountPercentage > 0) {
+            $lineItemData['DiscountRate'] = round($effectiveDiscountPercentage, 2);
+        } elseif ($effectiveDiscountAmount > 0) {
+            $lineItemData['DiscountAmount'] = round($effectiveDiscountAmount, 2);
+        }
+
+        // When discount fields are present, omit explicit LineAmount.
+        // Xero then derives the line total from Quantity/UnitAmount/Discount* and avoids
+        // "line total does not match expected" failures on fully discounted lines.
+        if (! $hasDiscount) {
+            $lineItemData['LineAmount'] = round($lineAmount, 2);
+        } else {
+            Log::debug('Omitting explicit LineAmount for discounted ACCREC line item export', [
+                'document_type' => $documentType,
+                'document_id' => $documentId,
+                'line_item_id' => $lineItem->id,
+                'quantity' => $quantity,
+                'unit_amount' => $unitAmount,
+                'discount_percentage' => $effectiveDiscountPercentage,
+                'discount_amount' => $effectiveDiscountAmount,
+                'calculated_line_amount' => round($calculatedLineAmount, 2),
+            ]);
         }
 
         return $lineItemData;

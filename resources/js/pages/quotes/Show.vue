@@ -612,6 +612,7 @@ import purchaseOrders from '@/routes/purchase-orders';
 import products from '@/routes/products';
 import customers from '@/routes/customers';
 import { ref, computed, watch } from 'vue';
+import { useDateTimeFormat } from '@/composables/useDateTimeFormat';
 
 interface Customer {
     id: number;
@@ -941,7 +942,7 @@ const formatStatus = (code: string) => {
 };
 
 const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString();
+    return formatLocalizedDate(dateString);
 };
 
 const formatCurrency = (value: number | null | undefined) => {
@@ -950,8 +951,10 @@ const formatCurrency = (value: number | null | undefined) => {
 };
 
 const formatDateTime = (dateString: string) => {
-    return new Date(dateString).toLocaleString();
+    return formatLocalizedDateTime(dateString);
 };
+
+const { formatDate: formatLocalizedDate, formatDateTime: formatLocalizedDateTime } = useDateTimeFormat();
 
 const openSignModal = () => {
     signForm.reset();

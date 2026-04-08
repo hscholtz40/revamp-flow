@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\InstanceLicenseService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
@@ -231,7 +232,11 @@ class AdministrationController extends Controller
             'localization' => [
                 'locale_decimal_separator' => $currentCompany->locale_decimal_separator ?: '.',
                 'locale_thousands_separator' => $currentCompany->locale_thousands_separator ?? ',',
+                'locale_timezone' => $currentCompany->locale_timezone ?: 'Africa/Johannesburg',
+                'locale_date_format' => $currentCompany->locale_date_format ?: 'dd/mm/yyyy',
+                'locale_time_format' => $currentCompany->locale_time_format ?: '24h',
             ],
+            'timezones' => timezone_identifiers_list(),
             'company' => [
                 'id' => $currentCompany->id,
                 'name' => $currentCompany->name,
@@ -249,6 +254,9 @@ class AdministrationController extends Controller
         $validated = $request->validate([
             'locale_decimal_separator' => ['required', 'string', 'max:8'],
             'locale_thousands_separator' => ['required', 'string', 'max:8'],
+            'locale_timezone' => ['required', 'string', Rule::in(timezone_identifiers_list())],
+            'locale_date_format' => ['required', 'string', 'in:dd/mm/yyyy,mm/dd/yyyy,yyyy-mm-dd,d mmm yyyy'],
+            'locale_time_format' => ['required', 'string', 'in:24h,12h'],
         ]);
 
         if ($validated['locale_decimal_separator'] === $validated['locale_thousands_separator']) {
@@ -260,6 +268,9 @@ class AdministrationController extends Controller
         $currentCompany->update([
             'locale_decimal_separator' => $validated['locale_decimal_separator'],
             'locale_thousands_separator' => $validated['locale_thousands_separator'],
+            'locale_timezone' => $validated['locale_timezone'],
+            'locale_date_format' => $validated['locale_date_format'],
+            'locale_time_format' => $validated['locale_time_format'],
         ]);
 
         return redirect()->back()->with('success', 'Localization settings updated.');

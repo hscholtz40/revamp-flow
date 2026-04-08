@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import ListTableActionLabel from '@/components/ListTableActionLabel.vue';
 import { useAuthAbility } from '@/composables/useAuthAbilities';
+import { useDateTimeFormat } from '@/composables/useDateTimeFormat';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
@@ -52,6 +53,7 @@ const canReportsCreate = useAuthAbility('reports', 'create');
 const canReportsEdit = useAuthAbility('reports', 'edit');
 const canReportsDelete = useAuthAbility('reports', 'delete');
 const canReportsView = useAuthAbility('reports', 'view');
+const { formatDate } = useDateTimeFormat();
 
 const deleteReport = (reportId: number) => {
     if (confirm('Are you sure you want to delete this report?')) {
@@ -247,7 +249,7 @@ const deleteTemplate = (templateId: number, event: Event) => {
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="text-sm text-gray-500">
-                                        {{ new Date(report.created_at).toLocaleDateString() }}
+                                        {{ formatDate(report.created_at) }}
                                     </div>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium" @click.stop>

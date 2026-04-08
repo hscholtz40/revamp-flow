@@ -2,6 +2,7 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import { computed, onMounted, ref } from 'vue';
+import { useDateTimeFormat } from '@/composables/useDateTimeFormat';
 
 const props = defineProps<{
     documentType: 'invoice' | 'quote' | 'jobcard';
@@ -17,6 +18,7 @@ const canvasRef = ref<HTMLCanvasElement | null>(null);
 const drawing = ref(false);
 const hasDrawnSignature = ref(false);
 const ctx = computed(() => canvasRef.value?.getContext('2d') ?? null);
+const { formatDateTime } = useDateTimeFormat();
 
 const form = useForm({
     signer_name: '',
@@ -127,7 +129,7 @@ onMounted(() => {
                 <h2 class="mb-3 text-lg font-medium">Signatures</h2>
                 <div v-if="(document.signatures || []).length" class="mb-4 space-y-2 text-sm">
                     <div v-for="sig in document.signatures" :key="sig.id" class="rounded border p-2">
-                        <div><strong>{{ sig.signer_name }}</strong> - {{ sig.signed_at }}</div>
+                        <div><strong>{{ sig.signer_name }}</strong> - {{ sig.signed_at ? formatDateTime(sig.signed_at) : '-' }}</div>
                         <img v-if="sig.signature_url" :src="sig.signature_url" alt="Signature" class="mt-2 h-16" />
                     </div>
                 </div>

@@ -486,7 +486,7 @@
         </div>
         <div class="jobcard-detail">
             <span class="jobcard-detail-label">Date</span>
-            <span class="jobcard-detail-value">{{ $jobcard->created_at ? \Carbon\Carbon::parse($jobcard->created_at)->format('Y/m/d') : date('Y/m/d') }}</span>
+            <span class="jobcard-detail-value">{{ $jobcard->created_at ? $company->formatLocalizedDate($jobcard->created_at) : $company->formatLocalizedDate(now()) }}</span>
         </div>
         <div class="jobcard-detail">
             <span class="jobcard-detail-label">Order No</span>
@@ -498,7 +498,7 @@
         </div>
         <div class="jobcard-detail">
             <span class="jobcard-detail-label">Due Date</span>
-            <span class="jobcard-detail-value">{{ $jobcard->due_date ? \Carbon\Carbon::parse($jobcard->due_date)->format('Y/m/d') : 'TBD' }}</span>
+            <span class="jobcard-detail-value">{{ $jobcard->due_date ? $company->formatLocalizedDate($jobcard->due_date) : 'TBD' }}</span>
         </div>
     </div>
     
@@ -641,7 +641,7 @@
                                 <div style="font-size: 10px; margin-bottom: 6px;">
                                     <strong>{{ $signature->signer_name }}</strong>
                                     @if($signature->signed_at)
-                                        - {{ $signature->signed_at->format('Y/m/d H:i') }}
+                                        - {{ $company->formatLocalizedDateTime($signature->signed_at) }}
                                     @endif
                                 </div>
                                 @php($signatureDataUri = $signature->getSignaturePathForPdf())
@@ -681,7 +681,7 @@
             JobCard Online (Registered to {{ $company->name ?? 'Company' }})
         </div>
         <div class="footer-right">
-            {{ date('Y/m/d H:i:s') }}
+            {{ $company->formatLocalizedDateTime(now()) }}
         </div>
     </div>
 </body>

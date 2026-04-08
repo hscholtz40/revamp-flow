@@ -777,8 +777,10 @@ import purchaseOrders from '@/routes/purchase-orders';
 import products from '@/routes/products';
 import customers from '@/routes/customers';
 import TimeTracking from '@/components/TimeTracking.vue';
+import { useDateTimeFormat } from '@/composables/useDateTimeFormat';
 
 const page = usePage();
+const { formatDate: formatLocalizedDate, formatDateTime: formatLocalizedDateTime } = useDateTimeFormat();
 const isLimitedUser = computed(() => (page.props.auth as any)?.user?.user_type === 'limited');
 const hasJobcardEdit = useAuthAbility('jobcards', 'edit');
 const hasJobcardDelete = useAuthAbility('jobcards', 'delete');
@@ -1068,12 +1070,12 @@ const formatStatus = (code: string) => {
 
 const formatDate = (date: string) => {
     if (!date) return '';
-    return new Date(date).toLocaleDateString();
+    return formatLocalizedDate(date);
 };
 
 const formatDateTime = (dateTime: string) => {
     if (!dateTime) return '';
-    return new Date(dateTime).toLocaleString();
+    return formatLocalizedDateTime(dateTime);
 };
 
 // Email functionality
