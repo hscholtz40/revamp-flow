@@ -3,6 +3,7 @@ import 'vue-sonner/style.css';
 import 'flatpickr/dist/flatpickr.min.css';
 
 import { createInertiaApp, router } from '@inertiajs/vue3';
+import DragHandleIcon from '@/components/DragHandleIcon.vue';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import FlashToasts from '@/components/FlashToasts.vue';
 import { Toaster } from 'vue-sonner';
@@ -136,6 +137,12 @@ function patchDateLocalization(format: DateTimeFormatProps | undefined): void {
     });
 }
 
+function refreshLocalizedDateInputs(format: DateTimeFormatProps | undefined): void {
+    applyDateInputLocalization(format);
+    requestAnimationFrame(() => applyDateInputLocalization(format));
+    window.setTimeout(() => applyDateInputLocalization(format), 100);
+}
+
 createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),
     resolve: (name) =>
@@ -147,9 +154,7 @@ createInertiaApp({
         const initialProps = (props?.initialPage?.props ?? {}) as { dateTimeFormat?: DateTimeFormatProps };
         activeDateTimeFormat = initialProps.dateTimeFormat;
         patchDateLocalization(initialProps.dateTimeFormat);
-        applyDateInputLocalization(initialProps.dateTimeFormat);
-        requestAnimationFrame(() => applyDateInputLocalization(initialProps.dateTimeFormat));
-        setTimeout(() => applyDateInputLocalization(initialProps.dateTimeFormat), 100);
+        refreshLocalizedDateInputs(initialProps.dateTimeFormat);
 
         document.addEventListener('focusin', (event) => {
             const target = event.target as HTMLElement | null;
@@ -164,7 +169,9 @@ createInertiaApp({
         dateInputMutationObserver = new MutationObserver(() => {
             scheduleDateInputLocalization(activeDateTimeFormat);
         });
-        dateInputMutationObserver.observe(document.body, {
+        // Observe the Inertia root instead of the whole document to keep the
+        // localization pass scoped to app-driven DOM updates.
+        dateInputMutationObserver.observe(el, {
             childList: true,
             subtree: true,
             attributes: true,
@@ -175,9 +182,7 @@ createInertiaApp({
             const nextProps = (event.detail.page.props ?? {}) as { dateTimeFormat?: DateTimeFormatProps };
             activeDateTimeFormat = nextProps.dateTimeFormat;
             patchDateLocalization(nextProps.dateTimeFormat);
-            applyDateInputLocalization(nextProps.dateTimeFormat);
-            requestAnimationFrame(() => applyDateInputLocalization(nextProps.dateTimeFormat));
-            setTimeout(() => applyDateInputLocalization(nextProps.dateTimeFormat), 100);
+            refreshLocalizedDateInputs(nextProps.dateTimeFormat);
         });
 
         createApp({
@@ -194,6 +199,7 @@ createInertiaApp({
                 ]),
         })
             .use(plugin)
+            .component('DragHandleIcon', DragHandleIcon)
             .mount(el);
     },
     progress: {
@@ -207,9 +213,11 @@ initializeTheme();
 // Global error handler for Inertia
 router.on('error', (event) => {
     console.error('Inertia error:', event.detail);
-    
+
+    const detail = event.detail as { errors?: unknown; message?: string };
+
     // Handle specific error types
-    if (event.detail.message?.includes('Cannot read properties of null')) {
+    if (detail.message?.includes('Cannot read properties of null')) {
         console.warn('Null reference error detected, this may be due to missing data or route issues');
         // Don't show error to user for null reference errors as they're usually handled gracefully
         return;

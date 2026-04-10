@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useDateTimeFormat } from '@/composables/useDateTimeFormat';
 import { getSafeExternalUrl } from '@/composables/useSafeExternalUrl';
+import { getCsrfToken } from '@/lib/csrf';
 
 interface NoteUser {
     id: number;
@@ -74,11 +75,6 @@ const searchingRecords = ref(false);
 const canLoadNotes = computed(() => !!formModule.value && !!formRecordId.value);
 const isContextLocked = computed(() => !props.showModuleSelector && !!props.module && !!props.recordId);
 const { formatDateTime } = useDateTimeFormat();
-
-const csrf = () => {
-    const meta = document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null;
-    return meta?.content || '';
-};
 
 const fileSize = (size?: number | null) => {
     const value = Number(size || 0);
@@ -168,7 +164,7 @@ const submitNote = async () => {
         const response = await fetch('/notes', {
             method: 'POST',
             headers: {
-                'X-CSRF-TOKEN': csrf(),
+                'X-CSRF-TOKEN': getCsrfToken(),
                 Accept: 'application/json',
             },
             body: payload,

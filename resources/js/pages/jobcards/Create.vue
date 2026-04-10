@@ -547,14 +547,7 @@
 
                             <!-- Remove -->
                             <div class="flex items-center justify-center gap-2 md:pt-1.5">
-                                <svg class="h-5 w-5 cursor-grab rounded border border-gray-300 bg-gray-100 p-0.5 text-gray-600" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                    <circle cx="6" cy="5" r="1.2" />
-                                    <circle cx="6" cy="10" r="1.2" />
-                                    <circle cx="6" cy="15" r="1.2" />
-                                    <circle cx="12" cy="5" r="1.2" />
-                                    <circle cx="12" cy="10" r="1.2" />
-                                    <circle cx="12" cy="15" r="1.2" />
-                                </svg>
+                                <DragHandleIcon />
                                 <button
                                     type="button"
                                     @click="removeLineItem(index)"
@@ -690,6 +683,7 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import ContactSelector from '@/components/ContactSelector.vue';
+import { getCsrfToken } from '@/lib/csrf';
 import { matchesProductSearch } from '@/composables/productSearch';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
@@ -1005,7 +999,7 @@ const quickCreateCustomer = async () => {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
                 'X-Requested-With': 'XMLHttpRequest',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                'X-CSRF-TOKEN': getCsrfToken(),
             },
             body: JSON.stringify(quickCreateForm.data()),
         });

@@ -15,6 +15,7 @@ use App\Models\Quote;
 use App\Models\TaxRate;
 use App\Services\QuoteUpsertService;
 use App\Services\ReminderService;
+use App\Support\ColumnFilters;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
@@ -64,14 +65,7 @@ class QuotesController extends Controller
             });
         }
 
-        $columnFilters = collect($request->query())
-            ->filter(fn ($value, $key) => str_starts_with((string) $key, 'colf_'))
-            ->mapWithKeys(function ($value, $key) {
-                $trimmed = trim((string) $value);
-
-                return [substr((string) $key, 5) => $trimmed];
-            })
-            ->filter(fn ($value) => $value !== '');
+        $columnFilters = ColumnFilters::fromRequest($request);
 
         foreach ($columnFilters as $filterKey => $filterValue) {
             switch ($filterKey) {

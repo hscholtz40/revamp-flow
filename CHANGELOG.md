@@ -2,6 +2,7 @@
 
 ## 2026-04-10
 
+- **Safe frontend/backend cleanup pass:** Centralized frontend CSRF access and drag-handle UI, made list-column editing target explicit tables, added initial Vitest coverage, moved invoice/jobcard validation into Form Requests, extracted transactional invoice upserts and shared report/list filter helpers, and reduced repeated report/filter/controller logic without changing feature behavior.
 - **Code quality hardening:** Moved quote and customer validation into dedicated Form Requests, extracted transactional quote/customer write services, added safer transaction boundaries to quote/jobcard/payment flows, and aligned customer/contact helper routes with module permissions to reduce partial writes and authorization drift without changing user-facing features.
 - **Frontend form reuse + CI gates:** Shared customer lookup/quick-create logic across quote and invoice forms via a reusable composable, centralized customer/document TypeScript types, and strengthened CI with frontend typechecking, non-mutating lint/format checks, and PHPStan/Larastan analysis. Release builds now also support tag-triggered packaging.
 - **Staff user selectors + jobcard invoice stock deltas:** Staff-facing user pickers and validations now exclude Client Zone users so client accounts cannot be assigned as internal staff or salespeople, and jobcard-origin invoices now adjust stock only for quantity deltas beyond what the source jobcard already consumed, including restoring stock when invoiced quantities are reduced below the jobcard quantities.

@@ -1,4 +1,5 @@
 import type { CustomerLookupCustomer, QuickCreateCustomerPayload, QuickCreateCustomerResponse } from '@/types/customers';
+import { getCsrfToken } from '@/lib/csrf';
 import { useForm } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
@@ -12,10 +13,6 @@ interface UseCustomerLookupOptions {
     quickCreateUrl?: string;
     searchErrorMessage?: string;
     createErrorMessage?: string;
-}
-
-function csrfToken(): string {
-    return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 }
 
 export function useCustomerLookup({
@@ -123,7 +120,7 @@ export function useCustomerLookup({
                     'Content-Type': 'application/json',
                     Accept: 'application/json',
                     'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-TOKEN': csrfToken(),
+                    'X-CSRF-TOKEN': getCsrfToken(),
                 },
                 body: JSON.stringify(quickCreateForm.data()),
             });

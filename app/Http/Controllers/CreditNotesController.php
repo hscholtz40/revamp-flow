@@ -12,6 +12,7 @@ use App\Models\Payment;
 use App\Models\Product;
 use App\Models\TaxRate;
 use App\Services\XeroService;
+use App\Support\ColumnFilters;
 use App\Support\CompanyScopedRules;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -52,14 +53,7 @@ class CreditNotesController extends Controller
             });
         }
 
-        $columnFilters = collect($request->query())
-            ->filter(fn ($value, $key) => str_starts_with((string) $key, 'colf_'))
-            ->mapWithKeys(function ($value, $key) {
-                $trimmed = trim((string) $value);
-
-                return [substr((string) $key, 5) => $trimmed];
-            })
-            ->filter(fn ($value) => $value !== '');
+        $columnFilters = ColumnFilters::fromRequest($request);
 
         foreach ($columnFilters as $filterKey => $filterValue) {
             switch ($filterKey) {

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { getCsrfToken } from '@/lib/csrf';
 import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue';
 
 type UnlayerDesign = Record<string, unknown>;
@@ -75,7 +76,7 @@ const unwrapDesignMarker = (input: string) => {
             design: JSON.parse(decoded) as UnlayerDesign,
             html,
         };
-    } catch (_error) {
+    } catch {
         return { design: null as UnlayerDesign | null, html: input || '' };
     }
 };
@@ -127,14 +128,13 @@ const registerImageUpload = () => {
         }
 
         try {
-            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
             const formData = new FormData();
             formData.append('image', imageFile);
 
             const response = await fetch(uploadUrl.value, {
                 method: 'POST',
                 headers: {
-                    'X-CSRF-TOKEN': csrfToken,
+                    'X-CSRF-TOKEN': getCsrfToken(),
                     'X-Requested-With': 'XMLHttpRequest',
                 },
                 body: formData,
@@ -143,7 +143,7 @@ const registerImageUpload = () => {
             const data = await response.json();
             const src = data?.data?.[0]?.src || '';
             done({ progress: 100, url: src });
-        } catch (_error) {
+        } catch {
             done({ progress: 100, url: '' });
         }
     });

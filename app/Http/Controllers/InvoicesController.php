@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Invoices\StoreInvoiceRequest;
+use App\Http\Requests\Invoices\UpdateInvoiceRequest;
 use App\Models\ChartOfAccount;
 use App\Models\CreditNoteAllocation;
 use App\Models\Customer;
@@ -17,8 +19,10 @@ use App\Models\Quote;
 use App\Models\RecurringDocument;
 use App\Models\TaxRate;
 use App\Models\User;
+use App\Services\InvoiceUpsertService;
 use App\Services\ReminderService;
 use App\Services\StockService;
+use App\Support\ColumnFilters;
 use App\Support\CompanyScopedRules;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -28,7 +32,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Validator;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -73,14 +76,7 @@ class InvoicesController extends Controller
             });
         }
 
-        $columnFilters = collect($request->query())
-            ->filter(fn ($value, $key) => str_starts_with((string) $key, 'colf_'))
-            ->mapWithKeys(function ($value, $key) {
-                $trimmed = trim((string) $value);
-
-                return [substr((string) $key, 5) => $trimmed];
-            })
-            ->filter(fn ($value) => $value !== '');
+        $columnFilters = ColumnFilters::fromRequest($request);
 
         foreach ($columnFilters as $filterKey => $filterValue) {
             switch ($filterKey) {
@@ -609,50 +605,10 @@ class InvoicesController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request): RedirectResponse
+    public function store(StoreInvoiceRequest $request, InvoiceUpsertService $invoiceUpsertService): RedirectResponse
     {
-        $this->authorize('create', Invoice::class);
-
         $currentCompany = auth()->user()->getCurrentCompany();
-        $cid = $currentCompany->id;
-
-        $validator = Validator::make($request->all(), [
-            'title' => 'nullable|string|max:255',
-            'description' => 'nullable|string',
-            'customer_id' => ['required', CompanyScopedRules::customer($cid)],
-            'contact_id' => ['nullable', CompanyScopedRules::contactForRequest($cid)],
-            'email' => 'nullable|email|max:255',
-            'phone' => 'nullable|string|max:255',
-            'order_number' => 'nullable|string|max:255',
-            'salesperson_id' => ['nullable', CompanyScopedRules::staffUser()],
-            'invoice_date' => 'required|date',
-            'due_date' => 'nullable|date|after_or_equal:invoice_date',
-            'tax_rate' => 'required|numeric|min:0|max:100',
-            'discount_amount' => 'nullable|numeric|min:0',
-            'discount_percentage' => 'nullable|numeric|min:0|max:100',
-            'notes' => 'nullable|string',
-            'terms' => 'nullable|string|max:255',
-            'terms_conditions' => 'nullable|string',
-            'source_type' => 'nullable|in:quote,jobcard',
-            'source_id' => 'nullable|integer',
-            'line_groups' => 'nullable|array|min:1',
-            'line_groups.*.id' => 'nullable|integer',
-            'line_groups.*.name' => 'required_with:line_groups|string|max:255',
-            'line_items' => 'required|array|min:1',
-            'line_items.*.product_id' => ['nullable', CompanyScopedRules::product($cid)],
-            'line_items.*.description' => 'required|string',
-            'line_items.*.quantity' => 'required|integer|min:1',
-            'line_items.*.unit_price' => 'required|numeric',
-            'line_items.*.discount_amount' => 'nullable|numeric|min:0',
-            'line_items.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
-            'line_items.*.tax_rate_id' => ['nullable', CompanyScopedRules::taxRate($cid)],
-            'line_items.*.account_id' => ['nullable', CompanyScopedRules::chartOfAccount($cid)],
-            'line_items.*.line_group_id' => 'nullable|integer',
-            'line_items.*.serial_number_ids' => 'nullable|array',
-            'line_items.*.serial_number_ids.*' => ['nullable', CompanyScopedRules::productSerialNumberForCompany($cid)],
-        ]);
-        $validator->after(CompanyScopedRules::afterValidateLineItemSerialsMatchProduct($cid));
-        $validated = $validator->validate();
+        $validated = $request->validated();
 
         // Generate invoice number
         $invoiceNumber = Invoice::generateInvoiceNumber($currentCompany->id);
@@ -669,123 +625,17 @@ class InvoicesController extends Controller
         // Set default salesperson to current user if not provided
         $salespersonId = $validated['salesperson_id'] ?? auth()->id();
 
-        // Create invoice
-        $invoice = Invoice::create([
-            'invoice_number' => $invoiceNumber,
-            'order_number' => $validated['order_number'] ?? null,
-            'title' => ! empty(trim((string) ($validated['title'] ?? ''))) ? trim((string) $validated['title']) : $invoiceNumber,
-            'description' => $validated['description'] ?? null,
-            'customer_id' => $validated['customer_id'],
-            'contact_id' => $validated['contact_id'] ?? null,
-            'email' => $validated['email'] ?? null,
-            'phone' => $validated['phone'] ?? null,
-            'salesperson_id' => $salespersonId,
-            'company_id' => $currentCompany->id,
-            'invoice_date' => $validated['invoice_date'],
-            'due_date' => $dueDate->toDateString(),
-            'tax_rate' => $validated['tax_rate'],
-            'discount_amount' => $validated['discount_amount'] ?? 0,
-            'discount_percentage' => $validated['discount_percentage'] ?? 0,
-            'notes' => $validated['notes'] ?? null,
-            'terms' => $validated['terms'] ?? null,
-            'terms_conditions' => $validated['terms_conditions'] ?? null,
-            'source_type' => $validated['source_type'] ?? null,
-            'source_id' => $validated['source_id'] ?? null,
-        ]);
-
-        $groupPayload = $validated['line_groups'] ?? [['name' => 'Items']];
-        $groupMap = [];
-        foreach (array_values($groupPayload) as $groupIndex => $groupData) {
-            $group = $invoice->lineGroups()->create([
-                'name' => $groupData['name'] ?: 'Items',
-                'sort_order' => $groupIndex,
-            ]);
-            $groupMap[(string) ($groupData['id'] ?? ($groupIndex + 1))] = $group->id;
-        }
-        $defaultGroupId = reset($groupMap);
-
-        // Create line items
-        foreach ($validated['line_items'] as $index => $lineItemData) {
-            // Calculate total before creating
-            $quantity = $lineItemData['quantity'] ?? 0;
-            $unitPrice = $lineItemData['unit_price'] ?? 0;
-            $discountAmount = $lineItemData['discount_amount'] ?? 0;
-            $discountPercentage = $lineItemData['discount_percentage'] ?? 0;
-
-            $subtotal = $quantity * $unitPrice;
-
-            // Apply discount: percentage takes precedence over amount
-            if ($discountPercentage > 0) {
-                $discountAmount = $subtotal * ($discountPercentage / 100);
-            }
-
-            $total = $subtotal - $discountAmount;
-
-            // Calculate per-line-item tax
-            $taxRateId = $lineItemData['tax_rate_id'] ?? null;
-            $lineTaxAmount = 0;
-            if ($taxRateId) {
-                $taxRateModel = TaxRate::find($taxRateId);
-                if ($taxRateModel) {
-                    $lineTaxAmount = round($total * ($taxRateModel->rate / 100), 2);
-                }
-            }
-
-            $lineItem = InvoiceLineItem::create([
-                'invoice_id' => $invoice->id,
-                'line_group_id' => $groupMap[(string) ($lineItemData['line_group_id'] ?? '')] ?? $defaultGroupId,
-                'product_id' => $lineItemData['product_id'],
-                'description' => $lineItemData['description'],
-                'quantity' => $quantity,
-                'unit_price' => $unitPrice,
-                'discount_amount' => $lineItemData['discount_amount'] ?? 0,
-                'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
-                'total' => $total,
-                'tax_rate_id' => $taxRateId,
-                'tax_amount' => $lineTaxAmount,
-                'account_id' => $lineItemData['account_id'] ?? $defaultAccountId,
-                'sort_order' => $index,
-                'serial_number_ids' => $lineItemData['serial_number_ids'] ?? null,
-            ]);
-
-            // Update serial numbers to sold status and link to invoice
-            if (! empty($lineItemData['serial_number_ids'])) {
-                try {
-                    \App\Models\ProductSerialNumber::whereIn('id', $lineItemData['serial_number_ids'])
-                        ->update([
-                            'status' => 'sold',
-                            'invoice_id' => $invoice->id,
-                            'sale_date' => now(),
-                        ]);
-                } catch (\Exception $e) {
-                    Log::error('Failed to update serial numbers for invoice line item', [
-                        'invoice_id' => $invoice->id,
-                        'product_id' => $lineItemData['product_id'],
-                        'serial_number_ids' => $lineItemData['serial_number_ids'],
-                        'error' => $e->getMessage(),
-                    ]);
-                    // Continue even if serial number update fails
-                }
-            }
-
-        }
-
-        $this->syncInvoiceStockAdjustments(
+        $invoice = $invoiceUpsertService->createForCompany(
+            $validated,
             $currentCompany->id,
+            $invoiceNumber,
+            $dueDate->toDateString(),
+            $salespersonId,
+            $defaultAccountId,
             $sourceJobcard,
-            null,
-            $validated['line_items'],
-            "Invoice: {$invoiceNumber}",
-            "Stock synced for invoice {$invoiceNumber}",
-            $invoice->id
+            fn (...$args) => $this->syncInvoiceStockAdjustments(...$args),
+            fn (Invoice $targetInvoice, ?int $fallbackAccountId = null) => $this->ensureConvertedInvoiceRoundingLine($targetInvoice, $fallbackAccountId)
         );
-
-        $this->ensureConvertedInvoiceRoundingLine($invoice, $defaultAccountId);
-
-        // Calculate totals
-        $invoice->calculateTotals();
-        $invoice->refresh();
-        $invoice->load('customer', 'company');
 
         if (($validated['source_type'] ?? null) === 'quote' && ! empty($validated['source_id'])) {
             $sourceQuote = Quote::where('company_id', $currentCompany->id)->find($validated['source_id']);
@@ -1012,200 +862,23 @@ class InvoicesController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Invoice $invoice): RedirectResponse
+    public function update(UpdateInvoiceRequest $request, Invoice $invoice, InvoiceUpsertService $invoiceUpsertService): RedirectResponse
     {
-        $this->authorize('update', $invoice);
-
-        $cid = $invoice->company_id;
-
-        $validator = Validator::make($request->all(), [
-            'title' => 'nullable|string|max:255',
-            'description' => 'nullable|string',
-            'customer_id' => ['required', CompanyScopedRules::customer($cid)],
-            'contact_id' => ['nullable', CompanyScopedRules::contactForRequest($cid)],
-            'email' => 'nullable|email|max:255',
-            'phone' => 'nullable|string|max:255',
-            'order_number' => 'nullable|string|max:255',
-            'salesperson_id' => ['nullable', CompanyScopedRules::staffUser()],
-            'invoice_date' => 'required|date',
-            'due_date' => 'required|date|after_or_equal:invoice_date',
-            'tax_rate' => 'required|numeric|min:0|max:100',
-            'discount_amount' => 'nullable|numeric|min:0',
-            'discount_percentage' => 'nullable|numeric|min:0|max:100',
-            'notes' => 'nullable|string',
-            'terms' => 'nullable|string|max:255',
-            'terms_conditions' => 'nullable|string',
-            'line_groups' => 'nullable|array|min:1',
-            'line_groups.*.id' => 'nullable|integer',
-            'line_groups.*.name' => 'required_with:line_groups|string|max:255',
-            'line_items' => 'required|array|min:1',
-            'line_items.*.product_id' => ['nullable', CompanyScopedRules::product($cid)],
-            'line_items.*.description' => 'required|string',
-            'line_items.*.quantity' => 'required|integer|min:1',
-            'line_items.*.unit_price' => 'required|numeric',
-            'line_items.*.discount_amount' => 'nullable|numeric|min:0',
-            'line_items.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
-            'line_items.*.tax_rate_id' => ['nullable', CompanyScopedRules::taxRate($cid)],
-            'line_items.*.account_id' => ['nullable', CompanyScopedRules::chartOfAccount($cid)],
-            'line_items.*.line_group_id' => 'nullable|integer',
-            'line_items.*.serial_number_ids' => 'nullable|array',
-            'line_items.*.serial_number_ids.*' => ['nullable', CompanyScopedRules::productSerialNumberForCompany($cid)],
-        ]);
-        $validator->after(CompanyScopedRules::afterValidateLineItemSerialsMatchProduct($cid));
-        $validated = $validator->validate();
+        $validated = $request->validated();
 
         // Check if user can edit salesperson
         $canEditSalesperson = auth()->user()->canEditSalesperson('invoices');
-
-        // Prepare update data
-        $updateData = [
-            'title' => ! empty(trim((string) ($validated['title'] ?? ''))) ? trim((string) $validated['title']) : $invoice->invoice_number,
-            'description' => $validated['description'] ?? null,
-            'customer_id' => $validated['customer_id'],
-            'contact_id' => $validated['contact_id'] ?? null,
-            'email' => $validated['email'] ?? null,
-            'phone' => $validated['phone'] ?? null,
-            'order_number' => $validated['order_number'] ?? null,
-            'invoice_date' => $validated['invoice_date'],
-            'due_date' => $validated['due_date'],
-            'tax_rate' => $validated['tax_rate'],
-            'notes' => $validated['notes'] ?? null,
-            'terms' => $validated['terms'] ?? null,
-            'terms_conditions' => $validated['terms_conditions'] ?? null,
-        ];
-
-        // Only update salesperson if user has permission
-        if ($canEditSalesperson && isset($validated['salesperson_id'])) {
-            $updateData['salesperson_id'] = $validated['salesperson_id'];
-        }
-
-        $wasCancelled = $invoice->status === 'cancelled';
         $sourceJobcard = $this->resolveSourceJobcardForInvoice($invoice);
-        $oldLineItems = $invoice->lineItems()->with('product')->get();
-
-        // Update invoice
-        $invoice->update($updateData);
         $defaultAccountId = $this->resolveInvoiceFallbackAccountId($invoice->company_id);
-
-        // Restore stock and serial numbers for old line items (if invoice was not cancelled)
-        // Stock was already restored when invoice was cancelled, so skip if it was cancelled
-        if (! $wasCancelled) {
-            foreach ($oldLineItems as $oldLineItem) {
-                // Restore serial numbers to available status
-                if (! empty($oldLineItem->serial_number_ids)) {
-                    try {
-                        \App\Models\ProductSerialNumber::whereIn('id', $oldLineItem->serial_number_ids)
-                            ->where('invoice_id', $invoice->id)
-                            ->update([
-                                'status' => 'available',
-                                'invoice_id' => null,
-                                'sale_date' => null,
-                            ]);
-                    } catch (\Exception $e) {
-                        Log::error('Failed to restore serial numbers for updated invoice line item', [
-                            'invoice_id' => $invoice->id,
-                            'line_item_id' => $oldLineItem->id,
-                            'error' => $e->getMessage(),
-                        ]);
-                    }
-                }
-            }
-        }
-
-        // Delete existing line items
-        $invoice->lineItems()->delete();
-        $invoice->lineGroups()->delete();
-        $groupPayload = $validated['line_groups'] ?? [['name' => 'Items']];
-        $groupMap = [];
-        foreach (array_values($groupPayload) as $groupIndex => $groupData) {
-            $group = $invoice->lineGroups()->create([
-                'name' => $groupData['name'] ?: 'Items',
-                'sort_order' => $groupIndex,
-            ]);
-            $groupMap[(string) ($groupData['id'] ?? ($groupIndex + 1))] = $group->id;
-        }
-        $defaultGroupId = reset($groupMap);
-
-        // Create new line items
-        foreach ($validated['line_items'] as $index => $lineItemData) {
-            // Calculate total before creating
-            $quantity = $lineItemData['quantity'] ?? 0;
-            $unitPrice = $lineItemData['unit_price'] ?? 0;
-            $discountAmount = $lineItemData['discount_amount'] ?? 0;
-            $discountPercentage = $lineItemData['discount_percentage'] ?? 0;
-
-            $subtotal = $quantity * $unitPrice;
-
-            // Apply discount: percentage takes precedence over amount
-            if ($discountPercentage > 0) {
-                $discountAmount = $subtotal * ($discountPercentage / 100);
-            }
-
-            $total = $subtotal - $discountAmount;
-
-            // Calculate per-line-item tax
-            $taxRateId = $lineItemData['tax_rate_id'] ?? null;
-            $lineTaxAmount = 0;
-            if ($taxRateId) {
-                $taxRateModel = TaxRate::find($taxRateId);
-                if ($taxRateModel) {
-                    $lineTaxAmount = round($total * ($taxRateModel->rate / 100), 2);
-                }
-            }
-
-            $lineItem = InvoiceLineItem::create([
-                'invoice_id' => $invoice->id,
-                'line_group_id' => $groupMap[(string) ($lineItemData['line_group_id'] ?? '')] ?? $defaultGroupId,
-                'product_id' => $lineItemData['product_id'],
-                'description' => $lineItemData['description'],
-                'quantity' => $quantity,
-                'unit_price' => $unitPrice,
-                'discount_amount' => $lineItemData['discount_amount'] ?? 0,
-                'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
-                'total' => $total,
-                'tax_rate_id' => $taxRateId,
-                'tax_amount' => $lineTaxAmount,
-                'account_id' => $lineItemData['account_id'] ?? $defaultAccountId,
-                'sort_order' => $index,
-                'serial_number_ids' => $lineItemData['serial_number_ids'] ?? null,
-            ]);
-
-            // Update serial numbers to sold status and link to invoice
-            if (! empty($lineItemData['serial_number_ids']) && ! $wasCancelled) {
-                try {
-                    \App\Models\ProductSerialNumber::whereIn('id', $lineItemData['serial_number_ids'])
-                        ->update([
-                            'status' => 'sold',
-                            'invoice_id' => $invoice->id,
-                            'sale_date' => now(),
-                        ]);
-                } catch (\Exception $e) {
-                    Log::error('Failed to update serial numbers for updated invoice line item', [
-                        'invoice_id' => $invoice->id,
-                        'product_id' => $lineItemData['product_id'],
-                        'serial_number_ids' => $lineItemData['serial_number_ids'],
-                        'error' => $e->getMessage(),
-                    ]);
-                    // Continue even if serial number update fails
-                }
-            }
-
-        }
-
-        $this->syncInvoiceStockAdjustments(
-            $invoice->company_id,
+        $invoice = $invoiceUpsertService->update(
+            $invoice,
+            $validated,
+            $canEditSalesperson,
+            $defaultAccountId,
             $sourceJobcard,
-            $wasCancelled ? null : $oldLineItems,
-            $wasCancelled ? null : $validated['line_items'],
-            "Invoice Updated: {$invoice->invoice_number}",
-            'Stock synced for invoice line item update',
-            $invoice->id
+            fn (...$args) => $this->syncInvoiceStockAdjustments(...$args),
+            fn (Invoice $targetInvoice, ?int $fallbackAccountId = null) => $this->ensureConvertedInvoiceRoundingLine($targetInvoice, $fallbackAccountId)
         );
-
-        $this->ensureConvertedInvoiceRoundingLine($invoice, $defaultAccountId);
-
-        // Calculate totals
-        $invoice->calculateTotals();
 
         return redirect()->route('invoices.show', $invoice)
             ->with('success', 'Invoice updated successfully.');

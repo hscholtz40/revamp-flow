@@ -7,6 +7,7 @@ use App\Models\Jobcard;
 use App\Models\Quote;
 use App\Models\Report;
 use App\Models\ReportTemplate;
+use App\Services\ReportFiltersService;
 use App\Support\CompanyScopedRules;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -48,7 +49,7 @@ class ReportController extends Controller
     /**
      * Show the form for creating a new report
      */
-    public function create(Request $request): Response
+    public function create(Request $request, ReportFiltersService $reportFiltersService): Response
     {
         $currentCompany = auth()->user()->getCurrentCompany();
 
@@ -68,22 +69,15 @@ class ReportController extends Controller
             $template = ReportTemplate::find($templateId);
         }
 
-        // Get customers and products for filters
-        $customers = \App\Models\Customer::where('company_id', $currentCompany->id)
-            ->orderBy('name')
-            ->get(['id', 'name', 'account_code']);
-
-        $products = \App\Models\Product::where('company_id', $currentCompany->id)
-            ->orderBy('name')
-            ->get(['id', 'name', 'sku']);
+        $filterOptions = $reportFiltersService->resolveFilterOptions($currentCompany->id);
 
         return Inertia::render('reports/Create', [
             'templates' => $templates,
             'currentCompany' => $currentCompany,
             'entityType' => $entityType,
             'template' => $template,
-            'customers' => $customers,
-            'products' => $products,
+            'customers' => $filterOptions['customers'],
+            'products' => $filterOptions['products'],
         ]);
     }
 
@@ -119,72 +113,24 @@ class ReportController extends Controller
     /**
      * Display the specified report with data
      */
-    public function show(Request $request, Report $report): Response
+    public function show(Request $request, Report $report, ReportFiltersService $reportFiltersService): Response
     {
         $this->authorize('view', $report);
 
         $currentCompany = auth()->user()->getCurrentCompany();
 
-        // Load template with filters
         $report->load(['template', 'creator']);
-
-        // Start with template filters (if template exists)
-        $templateFilters = $report->template?->filters ?? [];
-        $mergedFilters = [];
-
-        // Copy template filters, filtering out empty values
-        if (! empty($templateFilters)) {
-            if (! empty($templateFilters['customer_id'])) {
-                $mergedFilters['customer_id'] = (array) $templateFilters['customer_id'];
-            }
-            if (! empty($templateFilters['product_id'])) {
-                $mergedFilters['product_id'] = (array) $templateFilters['product_id'];
-            }
-            if (! empty($templateFilters['date_from'])) {
-                $mergedFilters['date_from'] = $templateFilters['date_from'];
-            }
-            if (! empty($templateFilters['date_to'])) {
-                $mergedFilters['date_to'] = $templateFilters['date_to'];
-            }
-            if (! empty($templateFilters['status'])) {
-                $mergedFilters['status'] = (array) $templateFilters['status'];
-            }
-        }
-
-        // Override with request filters (runtime filters can override template filters)
-        if ($request->has('customer_id') && $request->input('customer_id') !== null) {
-            $mergedFilters['customer_id'] = (array) $request->input('customer_id');
-        }
-        if ($request->has('product_id') && $request->input('product_id') !== null) {
-            $mergedFilters['product_id'] = (array) $request->input('product_id');
-        }
-        if ($request->has('date_from') && $request->input('date_from') !== null && $request->input('date_from') !== '') {
-            $mergedFilters['date_from'] = $request->input('date_from');
-        }
-        if ($request->has('date_to') && $request->input('date_to') !== null && $request->input('date_to') !== '') {
-            $mergedFilters['date_to'] = $request->input('date_to');
-        }
-        if ($request->has('status') && $request->input('status') !== null) {
-            $mergedFilters['status'] = (array) $request->input('status');
-        }
+        $mergedFilters = $reportFiltersService->mergeTemplateAndRequestFilters($report, $request);
 
         $data = $this->getReportData($report, $mergedFilters, $request->input('page', 1));
-
-        // Get customers and products for filters
-        $customers = \App\Models\Customer::where('company_id', $currentCompany->id)
-            ->orderBy('name')
-            ->get(['id', 'name']);
-
-        $products = \App\Models\Product::where('company_id', $currentCompany->id)
-            ->orderBy('name')
-            ->get(['id', 'name', 'sku']);
+        $filterOptions = $reportFiltersService->resolveFilterOptions($currentCompany->id);
 
         return Inertia::render('reports/Show', [
             'report' => $report,
             'data' => $data,
             'currentCompany' => $currentCompany,
-            'customers' => $customers,
-            'products' => $products,
+            'customers' => $filterOptions['customers'],
+            'products' => $filterOptions['products'],
             'filters' => [
                 'customer_id' => $request->input('customer_id') ?? $mergedFilters['customer_id'] ?? null,
                 'product_id' => $request->input('product_id') ?? $mergedFilters['product_id'] ?? null,
@@ -265,54 +211,11 @@ class ReportController extends Controller
     /**
      * Get report data based on filters and config
      */
-    public function getData(Request $request, Report $report)
+    public function getData(Request $request, Report $report, ReportFiltersService $reportFiltersService)
     {
         $this->authorize('view', $report);
-
-        $currentCompany = auth()->user()->getCurrentCompany();
-
-        // Load template
         $report->load('template');
-
-        // Start with template filters (if template exists)
-        $templateFilters = $report->template?->filters ?? [];
-        $mergedFilters = [];
-
-        // Copy template filters, filtering out empty values
-        if (! empty($templateFilters)) {
-            if (! empty($templateFilters['customer_id'])) {
-                $mergedFilters['customer_id'] = (array) $templateFilters['customer_id'];
-            }
-            if (! empty($templateFilters['product_id'])) {
-                $mergedFilters['product_id'] = (array) $templateFilters['product_id'];
-            }
-            if (! empty($templateFilters['date_from'])) {
-                $mergedFilters['date_from'] = $templateFilters['date_from'];
-            }
-            if (! empty($templateFilters['date_to'])) {
-                $mergedFilters['date_to'] = $templateFilters['date_to'];
-            }
-            if (! empty($templateFilters['status'])) {
-                $mergedFilters['status'] = (array) $templateFilters['status'];
-            }
-        }
-
-        // Override with request filters
-        if ($request->has('customer_id') && $request->input('customer_id') !== null) {
-            $mergedFilters['customer_id'] = (array) $request->input('customer_id');
-        }
-        if ($request->has('product_id') && $request->input('product_id') !== null) {
-            $mergedFilters['product_id'] = (array) $request->input('product_id');
-        }
-        if ($request->has('date_from') && $request->input('date_from') !== null && $request->input('date_from') !== '') {
-            $mergedFilters['date_from'] = $request->input('date_from');
-        }
-        if ($request->has('date_to') && $request->input('date_to') !== null && $request->input('date_to') !== '') {
-            $mergedFilters['date_to'] = $request->input('date_to');
-        }
-        if ($request->has('status') && $request->input('status') !== null) {
-            $mergedFilters['status'] = (array) $request->input('status');
-        }
+        $mergedFilters = $reportFiltersService->mergeTemplateAndRequestFilters($report, $request);
 
         $data = $this->getReportData($report, $mergedFilters, $request->input('page', 1));
 
@@ -1095,54 +998,14 @@ class ReportController extends Controller
     /**
      * Export report data to CSV/Excel
      */
-    public function export(Request $request, Report $report)
+    public function export(Request $request, Report $report, ReportFiltersService $reportFiltersService)
     {
         $this->authorize('export', $report);
 
         $currentCompany = auth()->user()->getCurrentCompany();
 
-        // Load template with filters
         $report->load(['template']);
-
-        // Merge filters (template + request)
-        $templateFilters = $report->template?->filters ?? [];
-        $mergedFilters = [];
-
-        // Copy template filters, filtering out empty values
-        if (! empty($templateFilters)) {
-            if (! empty($templateFilters['customer_id'])) {
-                $mergedFilters['customer_id'] = (array) $templateFilters['customer_id'];
-            }
-            if (! empty($templateFilters['product_id'])) {
-                $mergedFilters['product_id'] = (array) $templateFilters['product_id'];
-            }
-            if (! empty($templateFilters['date_from'])) {
-                $mergedFilters['date_from'] = $templateFilters['date_from'];
-            }
-            if (! empty($templateFilters['date_to'])) {
-                $mergedFilters['date_to'] = $templateFilters['date_to'];
-            }
-            if (! empty($templateFilters['status'])) {
-                $mergedFilters['status'] = (array) $templateFilters['status'];
-            }
-        }
-
-        // Override with request filters if provided
-        if ($request->filled('customer_id')) {
-            $mergedFilters['customer_id'] = (array) $request->customer_id;
-        }
-        if ($request->filled('product_id')) {
-            $mergedFilters['product_id'] = (array) $request->product_id;
-        }
-        if ($request->filled('date_from')) {
-            $mergedFilters['date_from'] = $request->date_from;
-        }
-        if ($request->filled('date_to')) {
-            $mergedFilters['date_to'] = $request->date_to;
-        }
-        if ($request->filled('status')) {
-            $mergedFilters['status'] = (array) $request->status;
-        }
+        $mergedFilters = $reportFiltersService->mergeTemplateAndRequestFilters($report, $request, true);
 
         // Get all report data for export (not paginated)
         // For grouped reports, getReportData already returns all data

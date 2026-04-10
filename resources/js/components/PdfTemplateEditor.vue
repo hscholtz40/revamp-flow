@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { getCsrfToken } from '@/lib/csrf';
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import grapesjs from 'grapesjs';
 import 'grapesjs/dist/css/grapes.min.css';
@@ -26,6 +27,60 @@ const emit = defineEmits<{
 const editorContainer = ref<HTMLElement | null>(null);
 let editor: any = null;
 const isClassesPanelCollapsed = ref(false);
+const CUSTOM_STYLE_ID = 'gjs-custom-style';
+const STYLES_PANEL_ID = 'styles-panel';
+const CLASSES_PANEL_SELECTOR = '.gjs-clm-tags';
+const TOGGLE_ICON_SELECTOR = '.toggle-icon';
+const FALLBACK_EDITOR_IMAGE_SELECTOR = 'img[data-gjs-type="image"]';
+
+function getEditorFrameDocument(): Document | null {
+    const frame = editor?.Canvas?.getFrameEl?.();
+    if (!frame) {
+        return null;
+    }
+
+    return frame.contentDocument || (frame as any).contentWindow?.document || null;
+}
+
+function replaceFrameCustomStyle(css: string): void {
+    const frameDoc = getEditorFrameDocument();
+    if (!frameDoc) {
+        return;
+    }
+
+    frameDoc.getElementById(CUSTOM_STYLE_ID)?.remove();
+
+    const style = frameDoc.createElement('style');
+    style.id = CUSTOM_STYLE_ID;
+    style.textContent = css;
+    frameDoc.head.appendChild(style);
+}
+
+function findFrameImageElement(src: string): Element | null {
+    const frameDoc = getEditorFrameDocument();
+    if (!frameDoc) {
+        return null;
+    }
+
+    return (src ? frameDoc.querySelector(`img[src="${src}"]`) : null)
+        || frameDoc.querySelector(FALLBACK_EDITOR_IMAGE_SELECTOR);
+}
+
+function markFrameImageAsUploaded(src: string): void {
+    const imgEl = findFrameImageElement(src);
+    if (!imgEl) {
+        return;
+    }
+
+    imgEl.setAttribute('data-uploaded-image', 'true');
+    if (src) {
+        imgEl.setAttribute('src', src);
+    }
+}
+
+function getStylesPanelElement(): HTMLElement | null {
+    return document.getElementById(STYLES_PANEL_ID);
+}
 
 // Define available variables per module
 const moduleVariables: Record<string, Array<{ label: string; value: string; category: string }>> = {
@@ -2241,28 +2296,8 @@ function importDefaultTemplate() {
         
         // Wait a bit for the frame to be ready, then inject CSS
         setTimeout(() => {
-            const canvas = editor.Canvas;
-            const frame = canvas.getFrameEl();
-            
-            if (frame) {
-                const frameDoc = frame.contentDocument || (frame as any).contentWindow?.document;
-                if (frameDoc) {
-                    // Remove existing custom style tag if any
-                    const existingStyle = frameDoc.getElementById('gjs-custom-style');
-                    if (existingStyle) {
-                        existingStyle.remove();
-                    }
-                    
-                    // Add new style tag to the frame's head
-                    const style = frameDoc.createElement('style');
-                    style.id = 'gjs-custom-style';
-                    style.textContent = template.css;
-                    frameDoc.head.appendChild(style);
-                    
-                    // Force a refresh to apply styles
-                    editor.refresh();
-                }
-            }
+            replaceFrameCustomStyle(template.css);
+            editor.refresh();
         }, 100);
         
         // Emit updates (restore Handlebars from data attributes)
@@ -2320,7 +2355,7 @@ onMounted(async () => {
             appendTo: '#layers-panel',
         },
         styleManager: {
-            appendTo: '#styles-panel',
+            appendTo: `#${STYLES_PANEL_ID}`,
             sectors: [
                 {
                     name: 'Typography',
@@ -2427,7 +2462,7 @@ onMounted(async () => {
                 },
                 {
                     id: 'styles',
-                    el: '#styles-panel',
+                    el: `#${STYLES_PANEL_ID}`,
                     resizable: false, // Disable resizing to prevent overlap
                 },
                 {
@@ -2445,7 +2480,7 @@ onMounted(async () => {
             uploadName: 'image',
             multiUpload: false,
             headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                'X-CSRF-TOKEN': getCsrfToken(),
             },
         } as any,
     });
@@ -2489,7 +2524,7 @@ onMounted(async () => {
                                 name: 'asset-manager',
                                 label: 'Upload Image',
                                 text: 'Select Image',
-                                command: (editor: any, trait: any) => {
+                                command: (editor: any) => {
                                     editor.AssetManager.open({
                                         select: (asset: any) => {
                                             const selected = editor.getSelected();
@@ -2512,19 +2547,7 @@ onMounted(async () => {
                                                 
                                                 // Also update the DOM element in the frame immediately
                                                 setTimeout(() => {
-                                                    const canvas = editor.Canvas;
-                                                    const frame = canvas.getFrameEl();
-                                                    if (frame) {
-                                                        const frameDoc = frame.contentDocument || (frame as any).contentWindow?.document;
-                                                        if (frameDoc) {
-                                                            const imgEl = frameDoc.querySelector(`img[src="${assetSrc}"]`) || 
-                                                                          frameDoc.querySelector('img[data-gjs-type="image"]');
-                                                            if (imgEl) {
-                                                                imgEl.setAttribute('data-uploaded-image', 'true');
-                                                                imgEl.setAttribute('src', assetSrc);
-                                                            }
-                                                        }
-                                                    }
+                                                    markFrameImageAsUploaded(assetSrc);
                                                 }, 100);
                                             }
                                         },
@@ -2566,18 +2589,7 @@ onMounted(async () => {
                 
                 // Also update DOM element
                 setTimeout(() => {
-                    const canvas = editor.Canvas;
-                    const frame = canvas.getFrameEl();
-                    if (frame) {
-                        const frameDoc = frame.contentDocument || (frame as any).contentWindow?.document;
-                        if (frameDoc) {
-                            const imgEl = frameDoc.querySelector(`img[src="${srcValue}"]`) || 
-                                          frameDoc.querySelector('img[data-gjs-type="image"]');
-                            if (imgEl) {
-                                imgEl.setAttribute('data-uploaded-image', 'true');
-                            }
-                        }
-                    }
+                    markFrameImageAsUploaded(srcValue);
                 }, 50);
             }
         }
@@ -2601,7 +2613,7 @@ onMounted(async () => {
                     existingTraits.forEach((trait: any) => {
                         try {
                             component.removeTrait(trait.id || trait.name || trait.get('name'));
-                        } catch (e) {
+                        } catch {
                             // Ignore errors
                         }
                     });
@@ -2612,7 +2624,7 @@ onMounted(async () => {
                         name: 'asset-manager',
                         label: 'Upload Image',
                         text: 'Select Image',
-                        command: (editor: any, trait: any) => {
+                        command: (editor: any) => {
                             editor.AssetManager.open({
                                 select: (asset: any) => {
                                     const selected = editor.getSelected();
@@ -2635,19 +2647,7 @@ onMounted(async () => {
                                         
                                         // Also update the DOM element in the frame immediately
                                         setTimeout(() => {
-                                            const canvas = editor.Canvas;
-                                            const frame = canvas.getFrameEl();
-                                            if (frame) {
-                                                const frameDoc = frame.contentDocument || (frame as any).contentWindow?.document;
-                                                if (frameDoc) {
-                                                    const imgEl = frameDoc.querySelector(`img[src="${assetSrc}"]`) || 
-                                                                  frameDoc.querySelector('img[data-gjs-type="image"]');
-                                                    if (imgEl) {
-                                                        imgEl.setAttribute('data-uploaded-image', 'true');
-                                                        imgEl.setAttribute('src', assetSrc);
-                                                    }
-                                                }
-                                            }
+                                            markFrameImageAsUploaded(assetSrc);
                                         }, 100);
                                     }
                                 },
@@ -2825,19 +2825,12 @@ onMounted(async () => {
         
         // Also get CSS from the iframe if it exists
         try {
-            const canvas = editor.Canvas;
-            const frame = canvas.getFrameEl();
-            if (frame) {
-                const frameDoc = frame.contentDocument || (frame as any).contentWindow?.document;
-                if (frameDoc) {
-                    const customStyle = frameDoc.getElementById('gjs-custom-style');
-                    if (customStyle && customStyle.textContent) {
-                        // Merge GrapeJS CSS with custom injected CSS
-                        const customCss = customStyle.textContent.trim();
-                        if (customCss && !css.includes(customCss)) {
-                            css = css ? `${css}\n\n${customCss}` : customCss;
-                        }
-                    }
+            const customStyle = getEditorFrameDocument()?.getElementById(CUSTOM_STYLE_ID);
+            if (customStyle && customStyle.textContent) {
+                // Merge GrapeJS CSS with custom injected CSS
+                const customCss = customStyle.textContent.trim();
+                if (customCss && !css.includes(customCss)) {
+                    css = css ? `${css}\n\n${customCss}` : customCss;
                 }
             }
         } catch (e) {
@@ -2851,25 +2844,7 @@ onMounted(async () => {
     // Load CSS if provided - inject into frame
     if (props.cssStyles) {
         setTimeout(() => {
-            const canvas = editor.Canvas;
-            const frame = canvas.getFrameEl();
-            
-            if (frame) {
-                const frameDoc = frame.contentDocument || (frame as any).contentWindow?.document;
-                if (frameDoc) {
-                    // Remove existing custom style tag if any
-                    const existingStyle = frameDoc.getElementById('gjs-custom-style');
-                    if (existingStyle) {
-                        existingStyle.remove();
-                    }
-                    
-                    // Add style tag to the frame's head
-                    const style = frameDoc.createElement('style');
-                    style.id = 'gjs-custom-style';
-                    style.textContent = props.cssStyles;
-                    frameDoc.head.appendChild(style);
-                }
-            }
+            replaceFrameCustomStyle(props.cssStyles);
         }, 100);
     }
 
@@ -3002,11 +2977,11 @@ function setupCollapsibleClassesPanel() {
 
     // Wait for the style manager to be rendered
     setTimeout(() => {
-        const stylesPanel = document.getElementById('styles-panel');
+        const stylesPanel = getStylesPanelElement();
         if (!stylesPanel) return;
 
         // Find the classes panel container
-        const classesPanel = stylesPanel.querySelector('.gjs-clm-tags') as HTMLElement;
+        const classesPanel = stylesPanel.querySelector(CLASSES_PANEL_SELECTOR) as HTMLElement;
         if (!classesPanel) return;
 
         // Create toggle button
@@ -3030,12 +3005,12 @@ function setupCollapsibleClassesPanel() {
                 
                 if (isCollapsed) {
                     classesPanel.style.display = 'none';
-                    const icon = toggleButton.querySelector('.toggle-icon');
+                    const icon = toggleButton.querySelector(TOGGLE_ICON_SELECTOR);
                     if (icon) icon.textContent = '▶';
                     toggleButton.classList.add('collapsed');
                 } else {
                     classesPanel.style.display = '';
-                    const icon = toggleButton.querySelector('.toggle-icon');
+                    const icon = toggleButton.querySelector(TOGGLE_ICON_SELECTOR);
                     if (icon) icon.textContent = '▼';
                     toggleButton.classList.remove('collapsed');
                 }

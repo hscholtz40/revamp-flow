@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { router, usePage } from '@inertiajs/vue3';
+import { getCsrfToken } from '@/lib/csrf';
 import { GripVertical, Settings2, X } from 'lucide-vue-next';
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue';
 
@@ -27,7 +28,7 @@ const pageUrl = computed(() => String((page as any).url ?? ''));
 const isIndexView = computed(() => pageKey.value.endsWith('/Index'));
 
 function getMainTable(): HTMLTableElement | null {
-    return document.querySelector('main table') as HTMLTableElement | null;
+    return document.querySelector('[data-list-view-table="true"]') as HTMLTableElement | null;
 }
 
 function normalizeFilterKey(input: string): string {
@@ -325,16 +326,13 @@ async function savePreferences() {
     if (!isIndexView.value || !hasTable.value) return;
     isSaving.value = true;
     try {
-        const token = document
-            .querySelector('meta[name="csrf-token"]')
-            ?.getAttribute('content') ?? '';
         await fetch('/list-view-preferences', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 Accept: 'application/json',
                 'X-Requested-With': 'XMLHttpRequest',
-                'X-CSRF-TOKEN': token,
+                'X-CSRF-TOKEN': getCsrfToken(),
             },
             body: JSON.stringify({
                 page_key: pageKey.value,

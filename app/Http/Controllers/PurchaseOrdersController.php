@@ -11,6 +11,7 @@ use App\Models\Supplier;
 use App\Models\TaxRate;
 use App\Models\Jobcard;
 use App\Services\StockService;
+use App\Support\ColumnFilters;
 use App\Support\CompanyScopedRules;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -51,14 +52,7 @@ class PurchaseOrdersController extends Controller
                 $query->where('po_number', 'like', "%{$search}%");
             });
 
-        $columnFilters = collect($request->query())
-            ->filter(fn ($value, $key) => str_starts_with((string) $key, 'colf_'))
-            ->mapWithKeys(function ($value, $key) {
-                $trimmed = trim((string) $value);
-
-                return [substr((string) $key, 5) => $trimmed];
-            })
-            ->filter(fn ($value) => $value !== '');
+        $columnFilters = ColumnFilters::fromRequest($request);
 
         foreach ($columnFilters as $filterKey => $filterValue) {
             switch ($filterKey) {

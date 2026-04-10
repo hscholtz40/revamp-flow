@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Jobcards\StoreJobcardRequest;
+use App\Http\Requests\Jobcards\UpdateJobcardRequest;
 use App\Models\ChartOfAccount;
 use App\Models\Customer;
 use App\Models\EmailActivity;
@@ -17,6 +19,7 @@ use App\Models\Team;
 use App\Models\User;
 use App\Services\ReminderService;
 use App\Services\StockService;
+use App\Support\ColumnFilters;
 use App\Support\CompanyScopedRules;
 use App\Support\SafeLog;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -88,14 +91,7 @@ class JobcardController extends Controller
             });
         }
 
-        $columnFilters = collect($request->query())
-            ->filter(fn ($value, $key) => str_starts_with((string) $key, 'colf_'))
-            ->mapWithKeys(function ($value, $key) {
-                $trimmed = trim((string) $value);
-
-                return [substr((string) $key, 5) => $trimmed];
-            })
-            ->filter(fn ($value) => $value !== '');
+        $columnFilters = ColumnFilters::fromRequest($request);
 
         foreach ($columnFilters as $filterKey => $filterValue) {
             switch ($filterKey) {
@@ -351,44 +347,10 @@ class JobcardController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request): RedirectResponse
+    public function store(StoreJobcardRequest $request): RedirectResponse
     {
         $currentCompany = auth()->user()->getCurrentCompany();
-        $cid = $currentCompany->id;
-
-        $validated = $request->validate([
-            'customer_id' => ['required', CompanyScopedRules::customer($cid)],
-            'contact_id' => ['nullable', CompanyScopedRules::contactForRequest($cid)],
-            'email' => ['nullable', 'email', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:255'],
-            'source_type' => ['nullable', 'in:quote'],
-            'source_id' => ['nullable', 'integer', 'required_with:source_type'],
-            'assigned_to_user_id' => ['nullable', CompanyScopedRules::staffUser($cid)],
-            'assigned_to_team_id' => ['nullable', CompanyScopedRules::team($cid)],
-            'order_number' => ['nullable', 'string', 'max:255'],
-            'title' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string'],
-            'status' => ['required', 'in:draft,pending,in_progress,completed,cancelled'],
-            'start_date' => ['nullable', 'date'],
-            'due_date' => ['nullable', 'date'],
-            'tax_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'discount_amount' => ['nullable', 'numeric', 'min:0'],
-            'discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'notes' => ['nullable', 'string'],
-            'terms_conditions' => ['nullable', 'string'],
-            'line_groups' => ['nullable', 'array', 'min:1'],
-            'line_groups.*.id' => ['nullable', 'integer'],
-            'line_groups.*.name' => ['required_with:line_groups', 'string', 'max:255'],
-            'line_items' => ['required', 'array', 'min:1'],
-            'line_items.*.product_id' => ['nullable', CompanyScopedRules::product($cid)],
-            'line_items.*.description' => ['required', 'string', 'max:255'],
-            'line_items.*.quantity' => ['required', 'integer', 'min:1'],
-            'line_items.*.unit_price' => ['required', 'numeric'],
-            'line_items.*.discount_amount' => ['nullable', 'numeric', 'min:0'],
-            'line_items.*.discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'line_items.*.tax_rate_id' => ['nullable', CompanyScopedRules::taxRate($cid)],
-            'line_items.*.line_group_id' => ['nullable', 'integer'],
-        ]);
+        $validated = $request->validated();
 
         if (($validated['source_type'] ?? null) === 'quote' && ! empty($validated['source_id'])) {
             $sourceQuote = Quote::where('company_id', $currentCompany->id)->find($validated['source_id']);
@@ -744,44 +706,9 @@ class JobcardController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Jobcard $jobcard): RedirectResponse
+    public function update(UpdateJobcardRequest $request, Jobcard $jobcard): RedirectResponse
     {
-        $cid = $jobcard->company_id;
-
-        $validated = $request->validate([
-            'customer_id' => ['required', CompanyScopedRules::customer($cid)],
-            'contact_id' => ['nullable', CompanyScopedRules::contactForRequest($cid)],
-            'email' => ['nullable', 'email', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:255'],
-            'assigned_to_user_id' => ['nullable', CompanyScopedRules::staffUser($cid)],
-            'assigned_to_team_id' => ['nullable', CompanyScopedRules::team($cid)],
-            'order_number' => ['nullable', 'string', 'max:255'],
-            'title' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string'],
-            'status' => ['required', 'in:draft,pending,in_progress,completed,cancelled'],
-            'start_date' => ['nullable', 'date'],
-            'due_date' => ['nullable', 'date'],
-            'completed_date' => ['nullable', 'date'],
-            'tax_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'discount_amount' => ['nullable', 'numeric', 'min:0'],
-            'discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'notes' => ['nullable', 'string'],
-            'terms_conditions' => ['nullable', 'string'],
-            'line_groups' => ['nullable', 'array', 'min:1'],
-            'line_groups.*.id' => ['nullable', 'integer'],
-            'line_groups.*.name' => ['required_with:line_groups', 'string', 'max:255'],
-            'line_items' => ['required', 'array', 'min:1'],
-            'line_items.*.id' => ['nullable', CompanyScopedRules::jobcardLineItemForJobcard($jobcard->id)],
-            'line_items.*.product_id' => ['nullable', CompanyScopedRules::product($cid)],
-            'line_items.*.description' => ['required', 'string', 'max:255'],
-            'line_items.*.quantity' => ['required', 'integer', 'min:1'],
-            'line_items.*.unit_price' => ['required', 'numeric'],
-            'line_items.*.discount_amount' => ['nullable', 'numeric', 'min:0'],
-            'line_items.*.discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'line_items.*.tax_rate_id' => ['nullable', CompanyScopedRules::taxRate($cid)],
-            'line_items.*.account_id' => ['nullable', CompanyScopedRules::chartOfAccount($cid)],
-            'line_items.*.line_group_id' => ['nullable', 'integer'],
-        ]);
+        $validated = $request->validated();
 
         $validated['tax_rate'] = $validated['tax_rate'] ?? 0;
         $groupPayload = $validated['line_groups'] ?? [['name' => 'Items']];
