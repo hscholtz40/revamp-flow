@@ -603,17 +603,12 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import ContactSelector from '@/components/ContactSelector.vue';
 import { matchesProductSearch } from '@/composables/productSearch';
+import { useCustomerLookup } from '@/composables/useCustomerLookup';
+import type { CustomerLookupCustomer } from '@/types/customers';
+import type { DocumentLineGroup, DocumentLineItem } from '@/types/documents';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import quotes from '@/routes/quotes';
 import { computed, ref, watch } from 'vue';
-
-interface Customer {
-    id: number;
-    name: string;
-    email?: string;
-    phone?: string;
-    account_code?: string;
-}
 
 interface Product {
     id: number;
@@ -628,28 +623,16 @@ interface Company {
     name: string;
 }
 
-interface LineItem {
+type LineItem = DocumentLineItem & {
     _uid: string;
     product_id: string | null;
-    line_group_id?: number | null;
-    description: string;
-    quantity: number;
-    unit_price: number;
-    discount_amount?: number;
-    discount_percentage?: number;
-    tax_rate_id?: number | null;
-    account_id?: number | null;
     total: number;
-}
+};
 
-interface LineGroup {
-    id?: number;
-    name: string;
-    sort_order: number;
-}
+type LineGroup = DocumentLineGroup;
 
 const props = defineProps<{
-    customers: Customer[];
+    customers: CustomerLookupCustomer[];
     products: Product[];
     currentCompany: Company;
     defaultTerms?: string;
@@ -705,25 +688,6 @@ const dragOverItemIndex = ref<number | null>(null);
 const dragOverGroupId = ref<number | null>(null);
 const activeDragIndex = ref<number | null>(null);
 
-// Customer search
-const customerSearchQuery = ref('');
-const customerSearchFocused = ref(false);
-const filteredCustomers = ref<Customer[]>([]);
-const selectedCustomer = ref<Customer | null>(null);
-const showQuickCreateModal = ref(false);
-const quickCreateForm = useForm({
-    name: '',
-    email: '',
-    phone: '',
-});
-
-// Update quick create form name when search query changes
-watch(customerSearchQuery, (newQuery) => {
-    if (!showQuickCreateModal.value) {
-        quickCreateForm.name = newQuery;
-    }
-});
-
 // Calculate default expiry date (30 days from today)
 const getDefaultExpiryDate = () => {
     const date = new Date();
@@ -768,14 +732,42 @@ const form = useForm({
     ] as LineItem[],
 });
 
-if (props.defaultSalesCustomerId) {
+const initialCustomerId = props.prefill?.customer_id ?? props.defaultSalesCustomerId ?? null;
+const {
+    clearCustomer,
+    customerSearchFocused,
+    customerSearchQuery,
+    filteredCustomers,
+    handleCustomerBlur,
+    handleCustomerSearch,
+    quickCreateCustomer,
+    quickCreateForm,
+    selectCustomer,
+    selectedCustomer,
+    setSelectedCustomer,
+    showQuickCreateModal,
+} = useCustomerLookup({
+    customers: props.customers,
+    initialCustomerId,
+    onCustomerSelected: (customer) => {
+        form.customer_id = customer.id.toString();
+        form.contact_id = null;
+        form.email = customer.email || '';
+        form.phone = customer.phone || '';
+        form.title = customer.name;
+    },
+    onCustomerCleared: () => {
+        form.customer_id = '';
+        form.contact_id = null;
+        form.email = '';
+        form.phone = '';
+    },
+});
+
+if (props.defaultSalesCustomerId && !props.prefill) {
     const defaultCustomer = props.customers.find(c => c.id === props.defaultSalesCustomerId);
     if (defaultCustomer) {
-        selectedCustomer.value = defaultCustomer;
-        customerSearchQuery.value = defaultCustomer.name;
-        form.email = defaultCustomer.email || '';
-        form.phone = defaultCustomer.phone || '';
-        form.title = defaultCustomer.name;
+        selectCustomer(defaultCustomer);
     }
 }
 
@@ -836,8 +828,7 @@ if (props.prefill) {
 
     const prefillCustomer = props.customers.find((customer) => customer.id === Number(source.customer_id));
     if (prefillCustomer) {
-        selectedCustomer.value = prefillCustomer;
-        customerSearchQuery.value = prefillCustomer.name;
+        setSelectedCustomer(prefillCustomer);
     }
 
     form.line_items.forEach((item, index) => {
@@ -1187,7 +1178,7 @@ const roundCurrency = (amount: number): number => {
 };
 
 const taxAmount = computed(() => {
-    return form.line_items.reduce((sum: number, item: any) => {
+    return form.line_items.reduce((sum: number, item: LineItem) => {
         if (isRoundingAdjustmentLine(item)) {
             return sum;
         }
@@ -1195,7 +1186,7 @@ const taxAmount = computed(() => {
         const price = Number(item.unit_price) || 0;
         let discAmt = Number(item.discount_amount) || 0;
         const discPct = Number(item.discount_percentage) || 0;
-        let lineSubtotal = qty * price;
+        const lineSubtotal = qty * price;
         if (discPct > 0) {
             discAmt = lineSubtotal * (discPct / 100);
         }
@@ -1258,101 +1249,10 @@ const ensureRoundingAdjustmentLine = () => {
     }
 };
 
-const calculateTotals = () => {
-    // This is handled by computed properties
-};
-
-// Customer search functions
-const handleCustomerSearch = async () => {
-    if (!customerSearchQuery.value.trim()) {
-        filteredCustomers.value = [];
-        return;
-    }
-    
-    try {
-        const response = await fetch(`/customers/search?q=${encodeURIComponent(customerSearchQuery.value)}`, {
-            headers: {
-                'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
-            },
-        });
-        
-        if (response.ok) {
-            filteredCustomers.value = await response.json();
-        } else {
-            filteredCustomers.value = [];
-        }
-    } catch (error) {
-        console.error('Error searching customers:', error);
-        filteredCustomers.value = [];
-    }
-};
-
-const handleCustomerBlur = () => {
-    setTimeout(() => {
-        customerSearchFocused.value = false;
-    }, 200);
-};
-
-const selectCustomer = (customer: Customer) => {
-    selectedCustomer.value = customer;
-    form.customer_id = customer.id.toString();
-    form.contact_id = null;
-    form.email = customer.email || '';
-    form.phone = customer.phone || '';
-    customerSearchQuery.value = customer.name;
-    customerSearchFocused.value = false;
-    
-    // Update title
-    form.title = customer.name;
-};
-
 const onContactSelect = (contact: { email?: string | null; phone?: string | null } | null) => {
     if (contact) {
         form.email = contact.email || '';
         form.phone = contact.phone || '';
-    }
-};
-
-const clearCustomer = () => {
-    selectedCustomer.value = null;
-    form.customer_id = '';
-    form.contact_id = null;
-    form.email = '';
-    form.phone = '';
-    customerSearchQuery.value = '';
-    filteredCustomers.value = [];
-};
-
-const quickCreateCustomer = async () => {
-    try {
-        const response = await fetch('/customers/quick-create', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-            },
-            body: JSON.stringify(quickCreateForm.data()),
-        });
-        
-        if (response.ok) {
-            const data = await response.json();
-            if (data.success && data.customer) {
-                selectCustomer(data.customer);
-                showQuickCreateModal.value = false;
-                quickCreateForm.reset();
-                quickCreateForm.name = customerSearchQuery.value;
-            }
-        } else {
-            const errorData = await response.json();
-            if (errorData.errors) {
-                quickCreateForm.setError(errorData.errors);
-            }
-        }
-    } catch (error) {
-        console.error('Error creating customer:', error);
     }
 };
 
@@ -1404,6 +1304,7 @@ const submit = () => {
         })),
         line_items: data.line_items.map((item) => {
             const { _uid, ...rest } = item as LineItem;
+            void _uid;
             return {
                 ...rest,
                 line_group_id: item.line_group_id ?? 1,

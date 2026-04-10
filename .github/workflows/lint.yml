@@ -22,7 +22,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.4'
+          php-version: '8.2'
 
       - name: Install PHP Dependencies
         run: composer install -q --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
@@ -31,16 +31,19 @@ jobs:
         run: npm ci --legacy-peer-deps
 
       - name: Run Pint (PHP Linter)
-        continue-on-error: true
         run: vendor/bin/pint --test
 
-      - name: Format Frontend
-        continue-on-error: true
-        run: npm run format
+      - name: Check Frontend Formatting
+        run: npm run format:check
 
       - name: Lint Frontend
-        continue-on-error: true
         run: npm run lint
+
+      - name: Typecheck Frontend
+        run: npm run typecheck
+
+      - name: Run PHPStan
+        run: composer analyse
 
       # - name: Commit Changes
       #   uses: stefanzweifel/git-auto-commit-action@v5

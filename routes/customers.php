@@ -5,7 +5,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/customers', [CustomersController::class, 'index'])->middleware('module.permission:customers,list')->name('customers.index');
-    Route::get('/customers/search', [CustomersController::class, 'search'])->name('customers.search');
+    Route::get('/customers/search', [CustomersController::class, 'search'])->middleware('module.permission:customers,list')->name('customers.search');
     Route::get('/customers/create', [CustomersController::class, 'create'])->middleware('module.permission:customers,create')->name('customers.create');
     Route::post('/customers', [CustomersController::class, 'store'])->middleware('module.permission:customers,create')->name('customers.store');
     Route::post('/customers/quick-create', [CustomersController::class, 'quickCreate'])->middleware('module.permission:customers,create')->name('customers.quickCreate');

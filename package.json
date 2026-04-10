@@ -8,7 +8,9 @@
         "dev": "vite",
         "format": "prettier --write resources/",
         "format:check": "prettier --check resources/",
-        "lint": "eslint . --fix",
+        "lint": "eslint .",
+        "lint:fix": "eslint . --fix",
+        "typecheck": "vue-tsc --noEmit",
         "release": "npm run build:ssr && powershell -NoProfile -ExecutionPolicy Bypass -File ./release.ps1"
     },
     "devDependencies": {

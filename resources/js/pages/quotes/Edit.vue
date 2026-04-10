@@ -194,8 +194,8 @@
                         <div v-if="form.customer_id && canEdit">
                             <ContactSelector
                                 v-model="form.contact_id"
-                                :customer-id="form.customer_id ? parseInt(form.customer_id) : null"
-                                :initial-contact="(props.quote as any).contact ?? null"
+                                :customer-id="form.customer_id ? parseInt(String(form.customer_id)) : null"
+                                :initial-contact="props.quote.contact ? { customer_id: Number(form.customer_id || 0), name: '', ...props.quote.contact } : null"
                                 label="Contact"
                                 :error="form.errors.contact_id"
                                 @select="onContactSelect"
@@ -624,18 +624,13 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import { matchesProductSearch } from '@/composables/productSearch';
+import { useCustomerLookup } from '@/composables/useCustomerLookup';
 import ContactSelector from '@/components/ContactSelector.vue';
+import type { CustomerLookupCustomer } from '@/types/customers';
+import type { DocumentLineGroup, DocumentLineItem } from '@/types/documents';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import quotes from '@/routes/quotes';
 import { computed, ref, watch } from 'vue';
-
-interface Customer {
-    id: number;
-    name: string;
-    email?: string;
-    phone?: string;
-    account_code?: string;
-}
 
 interface Product {
     id: number;
@@ -650,30 +645,24 @@ interface Company {
     name: string;
 }
 
-interface LineItem {
-    id?: number;
+type LineItem = DocumentLineItem & {
     _uid: string;
     product_id: string | null;
-    line_group_id?: number | null;
-    description: string;
-    quantity: number;
-    unit_price: number;
-    discount_amount?: number;
-    discount_percentage?: number;
-    tax_rate_id?: number | null;
-    account_id?: number | null;
     total: number;
-}
+};
 
-interface LineGroup {
+type LineGroup = DocumentLineGroup;
+
+interface QuoteLineItemPayload extends Partial<DocumentLineItem> {
     id?: number;
-    name: string;
-    sort_order: number;
+    total?: number;
 }
 
-interface Quote {
+interface QuoteDocument {
     id: number;
     customer_id: number;
+    contact_id?: number | null;
+    contact?: { id?: number; email?: string | null; phone?: string | null } | null;
     email?: string | null;
     phone?: string | null;
     quote_number: string;
@@ -687,15 +676,15 @@ interface Quote {
     discount_percentage?: number;
     notes?: string;
     terms_conditions?: string;
-    line_items?: LineItem[];
-    lineItems?: LineItem[];
+    line_items?: QuoteLineItemPayload[];
+    lineItems?: QuoteLineItemPayload[];
     line_groups?: LineGroup[];
     lineGroups?: LineGroup[];
 }
 
 const props = defineProps<{
-    quote: Quote;
-    customers: Customer[];
+    quote: QuoteDocument;
+    customers: CustomerLookupCustomer[];
     products: Product[];
     currentCompany: Company;
     canEditCompleted: boolean;
@@ -726,35 +715,9 @@ const dragOverItemIndex = ref<number | null>(null);
 const dragOverGroupId = ref<number | null>(null);
 const activeDragIndex = ref<number | null>(null);
 
-// Customer search
-const customerSearchQuery = ref('');
-const customerSearchFocused = ref(false);
-const filteredCustomers = ref<Customer[]>([]);
-const selectedCustomer = ref<Customer | null>(null);
-const showQuickCreateModal = ref(false);
-const quickCreateForm = useForm({
-    name: '',
-    email: '',
-    phone: '',
-});
-
-// Initialize selected customer
-const currentCustomer = props.customers.find(c => c.id === props.quote.customer_id);
-if (currentCustomer) {
-    selectedCustomer.value = currentCustomer;
-    customerSearchQuery.value = currentCustomer.name;
-}
-
-// Update quick create form name when search query changes
-watch(customerSearchQuery, (newQuery) => {
-    if (!showQuickCreateModal.value) {
-        quickCreateForm.name = newQuery;
-    }
-});
-
 const form = useForm({
     customer_id: props.quote.customer_id || '',
-    contact_id: (props.quote as any).contact_id ?? null,
+    contact_id: props.quote.contact_id ?? null,
     email: props.quote.email || '',
     phone: props.quote.phone || '',
     order_number: props.quote.order_number || '',
@@ -767,12 +730,12 @@ const form = useForm({
     discount_percentage: props.quote.discount_percentage || 0,
     notes: props.quote.notes || '',
     terms_conditions: props.quote.terms_conditions || '',
-    line_groups: ((props.quote.line_groups ?? props.quote.lineGroups ?? []) as any[]).map((group: any, index: number) => ({
+    line_groups: (props.quote.line_groups ?? props.quote.lineGroups ?? []).map((group, index: number) => ({
         id: group.id,
         name: group.name || `Group ${index + 1}`,
         sort_order: Number(group.sort_order ?? index),
     })),
-    line_items: (props.quote.line_items ?? props.quote.lineItems ?? []).map((item: any) => ({
+    line_items: (props.quote.line_items ?? props.quote.lineItems ?? []).map((item) => ({
         id: item.id,
         _uid: item.id ? `line-${item.id}` : createLineItemUid(),
         product_id: item.product_id?.toString() || null,
@@ -788,12 +751,42 @@ const form = useForm({
     })) as LineItem[],
 });
 
+const {
+    clearCustomer,
+    customerSearchFocused,
+    customerSearchQuery,
+    filteredCustomers,
+    handleCustomerBlur,
+    handleCustomerSearch,
+    quickCreateCustomer,
+    quickCreateForm,
+    selectCustomer,
+    selectedCustomer,
+    showQuickCreateModal,
+} = useCustomerLookup({
+    customers: props.customers,
+    initialCustomerId: props.quote.customer_id,
+    onCustomerSelected: (customer) => {
+        form.customer_id = customer.id.toString();
+        form.contact_id = null;
+        form.email = customer.email || '';
+        form.phone = customer.phone || '';
+        form.title = customer.name;
+    },
+    onCustomerCleared: () => {
+        form.customer_id = '';
+        form.contact_id = null;
+        form.email = '';
+        form.phone = '';
+    },
+});
+
 if (form.line_groups.length === 0) {
-    form.line_groups = [{ name: 'Items', sort_order: 0 }];
+    form.line_groups = [{ id: undefined, name: 'Items', sort_order: 0 }];
 }
 
 // Initialize discount types from existing line items
-(props.quote.line_items ?? props.quote.lineItems ?? []).forEach((item: any, index: number) => {
+(props.quote.line_items ?? props.quote.lineItems ?? []).forEach((item, index: number) => {
     if (item.discount_percentage && item.discount_percentage > 0) {
         discountTypes.value[index] = 'percentage';
     } else {
@@ -1146,7 +1139,7 @@ const roundCurrency = (amount: number): number => {
 };
 
 const taxAmount = computed(() => {
-    return form.line_items.reduce((sum: number, item: any) => {
+    return form.line_items.reduce((sum: number, item: LineItem) => {
         if (isRoundingAdjustmentLine(item)) {
             return sum;
         }
@@ -1154,7 +1147,7 @@ const taxAmount = computed(() => {
         const price = Number(item.unit_price) || 0;
         let discAmt = Number(item.discount_amount) || 0;
         const discPct = Number(item.discount_percentage) || 0;
-        let lineSubtotal = qty * price;
+        const lineSubtotal = qty * price;
         if (discPct > 0) {
             discAmt = lineSubtotal * (discPct / 100);
         }
@@ -1218,101 +1211,10 @@ const ensureRoundingAdjustmentLine = () => {
     }
 };
 
-const calculateTotals = () => {
-    // This is handled by computed properties
-};
-
-// Customer search functions
-const handleCustomerSearch = async () => {
-    if (!customerSearchQuery.value.trim()) {
-        filteredCustomers.value = [];
-        return;
-    }
-    
-    try {
-        const response = await fetch(`/customers/search?q=${encodeURIComponent(customerSearchQuery.value)}`, {
-            headers: {
-                'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
-            },
-        });
-        
-        if (response.ok) {
-            filteredCustomers.value = await response.json();
-        } else {
-            filteredCustomers.value = [];
-        }
-    } catch (error) {
-        console.error('Error searching customers:', error);
-        filteredCustomers.value = [];
-    }
-};
-
-const handleCustomerBlur = () => {
-    setTimeout(() => {
-        customerSearchFocused.value = false;
-    }, 200);
-};
-
 const onContactSelect = (contact: { email?: string | null; phone?: string | null } | null) => {
     if (contact) {
         form.email = contact.email || '';
         form.phone = contact.phone || '';
-    }
-};
-
-const selectCustomer = (customer: Customer) => {
-    selectedCustomer.value = customer;
-    form.customer_id = customer.id.toString();
-    form.contact_id = null;
-    form.email = customer.email || '';
-    form.phone = customer.phone || '';
-    customerSearchQuery.value = customer.name;
-    customerSearchFocused.value = false;
-    
-    // Update title
-    form.title = customer.name;
-};
-
-const clearCustomer = () => {
-    selectedCustomer.value = null;
-    form.customer_id = '';
-    form.contact_id = null;
-    form.email = '';
-    form.phone = '';
-    customerSearchQuery.value = '';
-    filteredCustomers.value = [];
-};
-
-const quickCreateCustomer = async () => {
-    try {
-        const response = await fetch('/customers/quick-create', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-            },
-            body: JSON.stringify(quickCreateForm.data()),
-        });
-        
-        if (response.ok) {
-            const data = await response.json();
-            if (data.success && data.customer) {
-                selectCustomer(data.customer);
-                showQuickCreateModal.value = false;
-                quickCreateForm.reset();
-                quickCreateForm.name = customerSearchQuery.value;
-            }
-        } else {
-            const errorData = await response.json();
-            if (errorData.errors) {
-                quickCreateForm.setError(errorData.errors);
-            }
-        }
-    } catch (error) {
-        console.error('Error creating customer:', error);
     }
 };
 
@@ -1363,6 +1265,7 @@ const submit = () => {
         })),
         line_items: data.line_items.map((item) => {
             const { _uid, ...rest } = item as LineItem;
+            void _uid;
             return {
                 ...rest,
                 line_group_id: item.line_group_id ?? getDefaultGroupId(),

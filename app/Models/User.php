@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -112,6 +113,28 @@ class User extends Authenticatable
     public function approvedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function scopeExcludeClientUsers(Builder $query): Builder
+    {
+        return $query->where(function (Builder $userQuery) {
+            $userQuery->whereNull('users.user_type')
+                ->orWhere('users.user_type', '!=', 'client');
+        });
+    }
+
+    public function scopeStaffSelectableForCompany(Builder $query, int $companyId, bool $includeUnassigned = true): Builder
+    {
+        return $query->excludeClientUsers()
+            ->where(function (Builder $companyQuery) use ($companyId, $includeUnassigned) {
+                $companyQuery->whereHas('companies', function (Builder $companyMembershipQuery) use ($companyId) {
+                    $companyMembershipQuery->where('company_id', $companyId);
+                });
+
+                if ($includeUnassigned) {
+                    $companyQuery->orWhereDoesntHave('companies');
+                }
+            });
     }
 
     public function customerUpdateRequests(): HasMany

@@ -22,6 +22,7 @@ use App\Support\SafeLog;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
@@ -178,9 +179,10 @@ class JobcardController extends Controller
 
         $jobcards = $query->paginate(15)->withQueryString();
         $customers = Customer::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name', 'email', 'phone', 'account_code']);
-        $users = User::whereHas('companies', function ($q) use ($currentCompany) {
-            $q->where('company_id', $currentCompany->id);
-        })->orWhereDoesntHave('companies')->orderBy('name')->get(['id', 'name']);
+        $users = User::query()
+            ->staffSelectableForCompany($currentCompany->id)
+            ->orderBy('name')
+            ->get(['id', 'name']);
         $teams = Team::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name']);
         $recurringSourceOptions = Jobcard::query()
             ->where('company_id', $currentCompany->id)
@@ -243,9 +245,10 @@ class JobcardController extends Controller
             ->where('is_active', true)
             ->orderBy('name')
             ->get(['id', 'name', 'sku', 'price', 'type']);
-        $users = User::whereHas('companies', function ($q) use ($currentCompany) {
-            $q->where('company_id', $currentCompany->id);
-        })->orWhereDoesntHave('companies')->orderBy('name')->get(['id', 'name']);
+        $users = User::query()
+            ->staffSelectableForCompany($currentCompany->id)
+            ->orderBy('name')
+            ->get(['id', 'name']);
         $teams = Team::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name']);
         $taxRates = TaxRate::where('company_id', $currentCompany->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'rate', 'is_default_sales']);
         $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
@@ -360,7 +363,7 @@ class JobcardController extends Controller
             'phone' => ['nullable', 'string', 'max:255'],
             'source_type' => ['nullable', 'in:quote'],
             'source_id' => ['nullable', 'integer', 'required_with:source_type'],
-            'assigned_to_user_id' => ['nullable', 'exists:users,id'],
+            'assigned_to_user_id' => ['nullable', CompanyScopedRules::staffUser($cid)],
             'assigned_to_team_id' => ['nullable', CompanyScopedRules::team($cid)],
             'order_number' => ['nullable', 'string', 'max:255'],
             'title' => ['required', 'string', 'max:255'],
@@ -407,63 +410,63 @@ class JobcardController extends Controller
         $lineItemsPayload = $validated['line_items'] ?? [];
         unset($validated['line_groups'], $validated['line_items']);
 
-        $jobcard = Jobcard::create($validated);
+        $jobcard = DB::transaction(function () use ($validated, $groupPayload, $lineItemsPayload) {
+            $jobcard = Jobcard::create($validated);
 
-        $groupMap = [];
-        foreach (array_values($groupPayload) as $groupIndex => $groupData) {
-            $group = $jobcard->lineGroups()->create([
-                'name' => $groupData['name'] ?: 'Items',
-                'sort_order' => $groupIndex,
-            ]);
-            $groupMap[(string) ($groupData['id'] ?? ($groupIndex + 1))] = $group->id;
-        }
-        $defaultGroupId = reset($groupMap);
+            $groupMap = [];
+            foreach (array_values($groupPayload) as $groupIndex => $groupData) {
+                $group = $jobcard->lineGroups()->create([
+                    'name' => $groupData['name'] ?: 'Items',
+                    'sort_order' => $groupIndex,
+                ]);
+                $groupMap[(string) ($groupData['id'] ?? ($groupIndex + 1))] = $group->id;
+            }
+            $defaultGroupId = reset($groupMap);
 
-        // Create line items and deduct stock
-        $stockService = new StockService;
-        foreach ($lineItemsPayload as $index => $lineItemData) {
-            $lineItem = new JobcardLineItem([
-                'line_group_id' => $groupMap[(string) ($lineItemData['line_group_id'] ?? '')] ?? $defaultGroupId,
-                'product_id' => $lineItemData['product_id'] ?? null,
-                'description' => $lineItemData['description'],
-                'quantity' => $lineItemData['quantity'],
-                'unit_price' => $lineItemData['unit_price'],
-                'discount_amount' => $lineItemData['discount_amount'] ?? 0,
-                'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
-                'tax_rate_id' => $lineItemData['tax_rate_id'] ?? null,
-                'sort_order' => $index,
-            ]);
-            $lineItem->calculateTotal();
-            $jobcard->lineItems()->save($lineItem);
+            $stockService = new StockService;
+            foreach ($lineItemsPayload as $index => $lineItemData) {
+                $lineItem = new JobcardLineItem([
+                    'line_group_id' => $groupMap[(string) ($lineItemData['line_group_id'] ?? '')] ?? $defaultGroupId,
+                    'product_id' => $lineItemData['product_id'] ?? null,
+                    'description' => $lineItemData['description'],
+                    'quantity' => $lineItemData['quantity'],
+                    'unit_price' => $lineItemData['unit_price'],
+                    'discount_amount' => $lineItemData['discount_amount'] ?? 0,
+                    'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
+                    'tax_rate_id' => $lineItemData['tax_rate_id'] ?? null,
+                    'sort_order' => $index,
+                ]);
+                $lineItem->calculateTotal();
+                $jobcard->lineItems()->save($lineItem);
 
-            // Deduct stock if product is tracked
-            if ($lineItemData['product_id']) {
-                try {
-                    $product = Product::find($lineItemData['product_id']);
-                    if ($product && $product->track_stock) {
-                        $stockService->removeStock(
-                            $product,
-                            $lineItemData['quantity'],
-                            "Jobcard: {$jobcard->job_number}",
-                            'jobcard',
-                            $jobcard->id,
-                            "Stock deducted for jobcard {$jobcard->job_number}"
-                        );
+                if ($lineItemData['product_id']) {
+                    try {
+                        $product = Product::find($lineItemData['product_id']);
+                        if ($product && $product->track_stock) {
+                            $stockService->removeStock(
+                                $product,
+                                $lineItemData['quantity'],
+                                "Jobcard: {$jobcard->job_number}",
+                                'jobcard',
+                                $jobcard->id,
+                                "Stock deducted for jobcard {$jobcard->job_number}"
+                            );
+                        }
+                    } catch (\Exception $e) {
+                        Log::warning('Stock deduction skipped for jobcard line item', [
+                            'jobcard_id' => $jobcard->id,
+                            'product_id' => $lineItemData['product_id'],
+                            'quantity' => $lineItemData['quantity'],
+                            'error' => $e->getMessage(),
+                        ]);
                     }
-                } catch (\Exception $e) {
-                    Log::warning('Stock deduction skipped for jobcard line item', [
-                        'jobcard_id' => $jobcard->id,
-                        'product_id' => $lineItemData['product_id'],
-                        'quantity' => $lineItemData['quantity'],
-                        'error' => $e->getMessage(),
-                    ]);
-                    // Continue even if stock deduction fails
                 }
             }
-        }
 
-        // Calculate totals
-        $jobcard->calculateTotals();
+            $jobcard->calculateTotals();
+
+            return $jobcard->fresh();
+        });
 
         // Send automated reminder if enabled
         try {
@@ -583,6 +586,88 @@ class JobcardController extends Controller
         ]);
     }
 
+    private function syncJobcardStockAdjustments(
+        int $companyId,
+        iterable $previousLineItems,
+        iterable $nextLineItems,
+        string $reference,
+        string $notes,
+        int $jobcardId
+    ): void {
+        $stockService = new StockService;
+        $previousQuantities = $this->getTrackedJobcardProductQuantities($previousLineItems);
+        $nextQuantities = $this->getTrackedJobcardProductQuantities($nextLineItems);
+        $productIds = array_values(array_unique(array_merge(
+            array_keys($previousQuantities),
+            array_keys($nextQuantities)
+        )));
+
+        foreach ($productIds as $productId) {
+            $previousQuantity = (int) ($previousQuantities[$productId] ?? 0);
+            $nextQuantity = (int) ($nextQuantities[$productId] ?? 0);
+            $quantityChange = $nextQuantity - $previousQuantity;
+
+            if ($quantityChange === 0) {
+                continue;
+            }
+
+            $product = Product::where('company_id', $companyId)->find($productId);
+            if (! $product || ! $product->track_stock) {
+                continue;
+            }
+
+            try {
+                if ($quantityChange > 0) {
+                    $stockService->removeStock(
+                        $product,
+                        $quantityChange,
+                        $reference,
+                        'jobcard',
+                        $jobcardId,
+                        $notes
+                    );
+                } else {
+                    $stockService->addStock(
+                        $product,
+                        abs($quantityChange),
+                        null,
+                        $reference,
+                        'jobcard',
+                        $jobcardId,
+                        $notes
+                    );
+                }
+            } catch (\Exception $e) {
+                Log::warning('Jobcard stock sync skipped for product delta', [
+                    'jobcard_id' => $jobcardId,
+                    'product_id' => $productId,
+                    'previous_quantity' => $previousQuantity,
+                    'next_quantity' => $nextQuantity,
+                    'quantity_change' => $quantityChange,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+    }
+
+    private function getTrackedJobcardProductQuantities(iterable $lineItems): array
+    {
+        $quantities = [];
+
+        foreach ($lineItems as $lineItem) {
+            $productId = (int) (is_array($lineItem) ? ($lineItem['product_id'] ?? 0) : ($lineItem->product_id ?? 0));
+            $quantity = (int) (is_array($lineItem) ? ($lineItem['quantity'] ?? 0) : ($lineItem->quantity ?? 0));
+
+            if ($productId <= 0 || $quantity <= 0) {
+                continue;
+            }
+
+            $quantities[$productId] = (int) ($quantities[$productId] ?? 0) + $quantity;
+        }
+
+        return $quantities;
+    }
+
     /**
      * Format minutes into a human-readable duration with days, hours, minutes.
      */
@@ -627,9 +712,10 @@ class JobcardController extends Controller
             ->where('is_active', true)
             ->orderBy('name')
             ->get(['id', 'name', 'sku', 'price', 'type']);
-        $users = User::whereHas('companies', function ($q) use ($currentCompany) {
-            $q->where('company_id', $currentCompany->id);
-        })->orWhereDoesntHave('companies')->orderBy('name')->get(['id', 'name']);
+        $users = User::query()
+            ->staffSelectableForCompany($currentCompany->id)
+            ->orderBy('name')
+            ->get(['id', 'name']);
         $teams = Team::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name']);
         $taxRates = TaxRate::where('company_id', $currentCompany->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'rate', 'is_default_sales']);
         $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
@@ -667,7 +753,7 @@ class JobcardController extends Controller
             'contact_id' => ['nullable', CompanyScopedRules::contactForRequest($cid)],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:255'],
-            'assigned_to_user_id' => ['nullable', 'exists:users,id'],
+            'assigned_to_user_id' => ['nullable', CompanyScopedRules::staffUser($cid)],
             'assigned_to_team_id' => ['nullable', CompanyScopedRules::team($cid)],
             'order_number' => ['nullable', 'string', 'max:255'],
             'title' => ['required', 'string', 'max:255'],
@@ -702,65 +788,71 @@ class JobcardController extends Controller
         $lineItemsPayload = $validated['line_items'] ?? [];
         unset($validated['line_groups'], $validated['line_items']);
 
-        $jobcard->update($validated);
-        $jobcard->lineGroups()->delete();
-        $groupMap = [];
-        foreach (array_values($groupPayload) as $groupIndex => $groupData) {
-            $group = $jobcard->lineGroups()->create([
-                'name' => $groupData['name'] ?: 'Items',
-                'sort_order' => $groupIndex,
-            ]);
-            $groupMap[(string) ($groupData['id'] ?? ($groupIndex + 1))] = $group->id;
-        }
-        $defaultGroupId = reset($groupMap);
+        DB::transaction(function () use ($jobcard, $validated, $groupPayload, $lineItemsPayload) {
+            $previousLineItems = $jobcard->lineItems()->get();
 
-        // Update line items
-        $existingLineItemIds = [];
-        foreach ($lineItemsPayload as $index => $lineItemData) {
-            if (isset($lineItemData['id'])) {
-                // Update existing line item
-                $lineItem = JobcardLineItem::find($lineItemData['id']);
-                $groupId = $groupMap[(string) ($lineItemData['line_group_id'] ?? '')] ?? $defaultGroupId;
-                $lineItem->update([
-                    'line_group_id' => $groupId,
-                    'product_id' => $lineItemData['product_id'] ?? null,
-                    'description' => $lineItemData['description'],
-                    'quantity' => $lineItemData['quantity'],
-                    'unit_price' => $lineItemData['unit_price'],
-                    'discount_amount' => $lineItemData['discount_amount'] ?? 0,
-                    'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
-                    'tax_rate_id' => $lineItemData['tax_rate_id'] ?? null,
-                    'account_id' => $lineItemData['account_id'] ?? null,
-                    'sort_order' => $index,
+            $jobcard->update($validated);
+            $jobcard->lineGroups()->delete();
+            $groupMap = [];
+            foreach (array_values($groupPayload) as $groupIndex => $groupData) {
+                $group = $jobcard->lineGroups()->create([
+                    'name' => $groupData['name'] ?: 'Items',
+                    'sort_order' => $groupIndex,
                 ]);
-                $lineItem->calculateTotal();
-                $lineItem->save();
-                $existingLineItemIds[] = $lineItem->id;
-            } else {
-                // Create new line item
-                $lineItem = new JobcardLineItem([
-                    'line_group_id' => $groupMap[(string) ($lineItemData['line_group_id'] ?? '')] ?? $defaultGroupId,
-                    'product_id' => $lineItemData['product_id'] ?? null,
-                    'description' => $lineItemData['description'],
-                    'quantity' => $lineItemData['quantity'],
-                    'unit_price' => $lineItemData['unit_price'],
-                    'discount_amount' => $lineItemData['discount_amount'] ?? 0,
-                    'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
-                    'tax_rate_id' => $lineItemData['tax_rate_id'] ?? null,
-                    'account_id' => $lineItemData['account_id'] ?? null,
-                    'sort_order' => $index,
-                ]);
-                $lineItem->calculateTotal();
-                $jobcard->lineItems()->save($lineItem);
-                $existingLineItemIds[] = $lineItem->id;
+                $groupMap[(string) ($groupData['id'] ?? ($groupIndex + 1))] = $group->id;
             }
-        }
+            $defaultGroupId = reset($groupMap);
 
-        // Delete removed line items
-        $jobcard->lineItems()->whereNotIn('id', $existingLineItemIds)->delete();
+            $existingLineItemIds = [];
+            foreach ($lineItemsPayload as $index => $lineItemData) {
+                if (isset($lineItemData['id'])) {
+                    $lineItem = JobcardLineItem::find($lineItemData['id']);
+                    $groupId = $groupMap[(string) ($lineItemData['line_group_id'] ?? '')] ?? $defaultGroupId;
+                    $lineItem->update([
+                        'line_group_id' => $groupId,
+                        'product_id' => $lineItemData['product_id'] ?? null,
+                        'description' => $lineItemData['description'],
+                        'quantity' => $lineItemData['quantity'],
+                        'unit_price' => $lineItemData['unit_price'],
+                        'discount_amount' => $lineItemData['discount_amount'] ?? 0,
+                        'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
+                        'tax_rate_id' => $lineItemData['tax_rate_id'] ?? null,
+                        'account_id' => $lineItemData['account_id'] ?? null,
+                        'sort_order' => $index,
+                    ]);
+                    $lineItem->calculateTotal();
+                    $lineItem->save();
+                    $existingLineItemIds[] = $lineItem->id;
+                } else {
+                    $lineItem = new JobcardLineItem([
+                        'line_group_id' => $groupMap[(string) ($lineItemData['line_group_id'] ?? '')] ?? $defaultGroupId,
+                        'product_id' => $lineItemData['product_id'] ?? null,
+                        'description' => $lineItemData['description'],
+                        'quantity' => $lineItemData['quantity'],
+                        'unit_price' => $lineItemData['unit_price'],
+                        'discount_amount' => $lineItemData['discount_amount'] ?? 0,
+                        'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
+                        'tax_rate_id' => $lineItemData['tax_rate_id'] ?? null,
+                        'account_id' => $lineItemData['account_id'] ?? null,
+                        'sort_order' => $index,
+                    ]);
+                    $lineItem->calculateTotal();
+                    $jobcard->lineItems()->save($lineItem);
+                    $existingLineItemIds[] = $lineItem->id;
+                }
+            }
 
-        // Calculate totals
-        $jobcard->calculateTotals();
+            $jobcard->lineItems()->whereNotIn('id', $existingLineItemIds)->delete();
+            $this->syncJobcardStockAdjustments(
+                $jobcard->company_id,
+                $previousLineItems,
+                $lineItemsPayload,
+                "Jobcard Updated: {$jobcard->job_number}",
+                'Stock synced for jobcard update',
+                $jobcard->id
+            );
+            $jobcard->calculateTotals();
+        });
 
         return redirect()->route('jobcards.show', $jobcard)
             ->with('success', 'Jobcard updated successfully');

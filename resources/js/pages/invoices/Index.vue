@@ -1,7 +1,7 @@
 <template>
     <Head title="Invoices" />
 
-    <AppLayout :breadcrumbs="[{ title: 'Invoices', href: invoices.index().url }]">
+    <AppLayout :breadcrumbs="[{ title: 'Invoices', href: invoicesRoute.index().url }]">
         <!-- Company Context -->
         <div class="bg-blue-50 border-b border-blue-200 px-4 py-3">
             <div class="flex items-center gap-2 text-sm text-blue-700">
@@ -18,7 +18,7 @@
                     <Link v-if="props.canCreateInvoices && props.isPosEnabled" href="/invoices/pos" class="rounded bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700">
                         POS
                     </Link>
-                    <Link v-if="props.canCreateInvoices" :href="invoices.create().url" class="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">
+                    <Link v-if="props.canCreateInvoices" :href="invoicesRoute.create().url" class="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">
                         New Invoice
                     </Link>
                 </div>
@@ -41,7 +41,7 @@
                 </button>
             </div>
 
-            <template v-if="activeTab === 'documents'">
+            <div v-show="activeTab === 'documents'">
 
             <!-- Filters -->
             <div class="bg-white rounded-lg border p-4 mb-6">
@@ -189,9 +189,9 @@
                                 class="cursor-pointer hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
                                 tabindex="0"
                                 role="link"
-                                @click="router.visit(invoices.show(invoice.id).url)"
-                                @keydown.enter.prevent="router.visit(invoices.show(invoice.id).url)"
-                                @keydown.space.prevent="router.visit(invoices.show(invoice.id).url)"
+                                @click="router.visit(invoicesRoute.show(invoice.id).url)"
+                                @keydown.enter.prevent="router.visit(invoicesRoute.show(invoice.id).url)"
+                                @keydown.space.prevent="router.visit(invoicesRoute.show(invoice.id).url)"
                             >
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div>
@@ -261,7 +261,7 @@
                                     <div class="flex items-center gap-2">
                                         <Link
                                             v-if="canEditInvoice(invoice)"
-                                            :href="invoices.edit(invoice.id).url"
+                                            :href="invoicesRoute.edit(invoice.id).url"
                                             class="inline-flex items-center justify-center px-2 py-1.5 md:px-3 md:py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                                         >
                                             <ListTableActionLabel label="Edit">
@@ -321,14 +321,15 @@
                                         <Link
                                             v-if="link.url"
                                             :href="link.url"
-                                            v-html="link.label"
                                             :class="[
                                                 'relative inline-flex items-center px-4 py-2 border text-sm font-medium',
                                                 link.active
                                                     ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
                                                     : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
                                             ]"
-                                        />
+                                        >
+                                            <span v-html="link.label" />
+                                        </Link>
                                         <span
                                             v-else
                                             v-html="link.label"
@@ -341,9 +342,9 @@
                     </div>
                 </div>
             </div>
-            </template>
+            </div>
 
-            <div v-else class="space-y-4">
+            <div v-show="activeTab === 'recurring'" class="space-y-4">
                 <div class="bg-white rounded-lg border p-4">
                     <h2 class="mb-3 text-lg font-semibold text-gray-900">Add Recurring Invoice</h2>
                     <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
@@ -405,7 +406,7 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import { Edit, Trash2 } from 'lucide-vue-next';
 import { ref, watch } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
-import invoices from '@/routes/invoices';
+import invoicesRoute from '@/routes/invoices';
 
 interface Invoice {
     id: number;
@@ -534,7 +535,7 @@ const canDeleteInvoice = (invoice: Invoice) => {
 
 // Watch for filter changes and update URL
 watch([search, status, customerId, showPaid], () => {
-    router.get(invoices.index().url, {
+    router.get(invoicesRoute.index().url, {
         search: search.value,
         status: status.value,
         customer_id: customerId.value,
@@ -562,7 +563,7 @@ const toggleSort = (field: string) => {
         sortDir.value = 'asc';
     }
 
-    router.get(invoices.index().url, {
+    router.get(invoicesRoute.index().url, {
         search: search.value,
         status: status.value,
         customer_id: customerId.value,
@@ -597,7 +598,7 @@ const getStatusBadgeClass = (status: string) => {
 
 const deleteInvoice = (id: number) => {
     if (confirm('Are you sure you want to delete this invoice?')) {
-        router.delete(invoices.destroy(id).url);
+        router.delete(invoicesRoute.destroy(id).url);
     }
 };
 

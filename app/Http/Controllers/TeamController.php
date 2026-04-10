@@ -29,9 +29,10 @@ class TeamController extends Controller
     {
         $currentCompany = auth()->user()->getCurrentCompany();
 
-        $users = User::whereHas('companies', function ($q) use ($currentCompany) {
-            $q->where('company_id', $currentCompany->id);
-        })->orWhereDoesntHave('companies')->orderBy('name')->get(['id', 'name']);
+        $users = User::query()
+            ->staffSelectableForCompany($currentCompany->id)
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
         return Inertia::render('administration/Teams/Create', [
             'users' => $users,
@@ -46,7 +47,7 @@ class TeamController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'user_ids' => ['nullable', 'array'],
-            'user_ids.*' => ['exists:users,id'],
+            'user_ids.*' => [\App\Support\CompanyScopedRules::staffUser($currentCompany->id)],
         ]);
 
         $team = Team::create([
@@ -55,7 +56,7 @@ class TeamController extends Controller
             'description' => $validated['description'] ?? null,
         ]);
 
-        if (!empty($validated['user_ids'])) {
+        if (! empty($validated['user_ids'])) {
             $team->users()->sync($validated['user_ids']);
         }
 
@@ -79,9 +80,10 @@ class TeamController extends Controller
 
         $team->load('users');
 
-        $users = User::whereHas('companies', function ($q) use ($currentCompany) {
-            $q->where('company_id', $currentCompany->id);
-        })->orWhereDoesntHave('companies')->orderBy('name')->get(['id', 'name']);
+        $users = User::query()
+            ->staffSelectableForCompany($currentCompany->id)
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
         return Inertia::render('administration/Teams/Edit', [
             'team' => $team,
@@ -91,11 +93,13 @@ class TeamController extends Controller
 
     public function update(Request $request, Team $team): RedirectResponse
     {
+        $currentCompany = auth()->user()->getCurrentCompany();
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'user_ids' => ['nullable', 'array'],
-            'user_ids.*' => ['exists:users,id'],
+            'user_ids.*' => [\App\Support\CompanyScopedRules::staffUser($currentCompany->id)],
         ]);
 
         $team->update([

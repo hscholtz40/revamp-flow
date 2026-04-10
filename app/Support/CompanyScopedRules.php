@@ -67,6 +67,37 @@ final class CompanyScopedRules
         return Rule::exists('teams', 'id')->where('company_id', $companyId);
     }
 
+    public static function staffUser(?int $companyId = null, bool $allowWithoutCompany = true)
+    {
+        return Rule::exists('users', 'id')->where(function ($query) use ($companyId, $allowWithoutCompany) {
+            $query->where(function ($userTypeQuery) {
+                $userTypeQuery->whereNull('users.user_type')
+                    ->orWhere('users.user_type', '!=', 'client');
+            });
+
+            if ($companyId === null) {
+                return;
+            }
+
+            $query->where(function ($companyQuery) use ($companyId, $allowWithoutCompany) {
+                $companyQuery->whereExists(function ($membershipQuery) use ($companyId) {
+                    $membershipQuery->select(DB::raw(1))
+                        ->from('user_companies')
+                        ->whereColumn('user_companies.user_id', 'users.id')
+                        ->where('user_companies.company_id', $companyId);
+                });
+
+                if ($allowWithoutCompany) {
+                    $companyQuery->orWhereNotExists(function ($membershipQuery) {
+                        $membershipQuery->select(DB::raw(1))
+                            ->from('user_companies')
+                            ->whereColumn('user_companies.user_id', 'users.id');
+                    });
+                }
+            });
+        });
+    }
+
     public static function emailTemplate(int $companyId)
     {
         return Rule::exists('email_templates', 'id')->where('company_id', $companyId);

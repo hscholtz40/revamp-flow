@@ -9,6 +9,7 @@ use App\Services\XeroService;
 use App\Support\CompanyScopedRules;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class PaymentsController extends Controller
@@ -37,26 +38,43 @@ class PaymentsController extends Controller
 
         $invoice = Invoice::findOrFail($validated['invoice_id']);
         $this->authorize('view', $invoice);
-
-        // Check if payment amount exceeds remaining balance
-        $remainingBalance = $invoice->remaining_balance;
-        if ($validated['amount'] > $remainingBalance) {
-            return redirect()->back()->with('error', 'Payment amount cannot exceed the remaining balance of '.number_format($remainingBalance, 2));
-        }
-
         $validated['company_id'] = $currentCompany->id;
+        $payment = null;
 
-        $payment = Payment::create($validated);
+        try {
+            DB::beginTransaction();
 
-        // Refresh invoice to reload payments relationship for accurate calculations
-        $invoice->refresh();
-        $invoice->load('payments');
+            $invoice = Invoice::query()
+                ->whereKey($validated['invoice_id'])
+                ->lockForUpdate()
+                ->firstOrFail();
+            $invoice->load('payments');
 
-        $payment->load('invoice.customer', 'invoice.company');
+            $remainingBalance = $invoice->remaining_balance;
+            if ($validated['amount'] > $remainingBalance) {
+                DB::rollBack();
 
-        // Update invoice status if fully paid
-        if ($invoice->isFullyPaid()) {
-            $invoice->update(['status' => 'paid']);
+                return redirect()->back()->with('error', 'Payment amount cannot exceed the remaining balance of '.number_format($remainingBalance, 2));
+            }
+
+            $payment = Payment::create($validated);
+
+            $invoice->refresh();
+            $invoice->load('payments');
+
+            if ($invoice->isFullyPaid()) {
+                $invoice->update(['status' => 'paid']);
+            }
+
+            $payment->load('invoice.customer', 'invoice.company');
+
+            DB::commit();
+        } catch (\Throwable $e) {
+            if (DB::transactionLevel() > 0) {
+                DB::rollBack();
+            }
+
+            throw $e;
         }
 
         // Sync payment to Xero if invoice is synced to Xero

@@ -83,9 +83,7 @@ class TimeEntryController extends Controller
 
         $users = $isLimited
             ? User::query()->whereKey($user->id)->get(['id', 'name'])
-            : User::whereHas('companies', function ($q) use ($currentCompany) {
-                $q->where('company_id', $currentCompany->id);
-            })->orWhereDoesntHave('companies')
+            : User::query()->staffSelectableForCompany($currentCompany->id)
                 ->orderBy('name')
                 ->get(['id', 'name']);
 

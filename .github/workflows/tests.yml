@@ -37,7 +37,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: 8.4
+          php-version: '8.2'
           tools: composer:v2
           coverage: xdebug
           extensions: mbstring, xml, ctype, json, fileinfo, pdo, pdo_mysql
@@ -93,6 +93,9 @@ jobs:
 
       - name: Build Assets
         run: npm run build
+
+      - name: Typecheck Frontend
+        run: npm run typecheck
 
       - name: Run Tests
         run: ./vendor/bin/pest

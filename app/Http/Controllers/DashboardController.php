@@ -3,20 +3,20 @@
 namespace App\Http\Controllers;
 
 use App\Models\Company;
+use App\Models\Contact;
 use App\Models\Customer;
 use App\Models\Invoice;
-use App\Models\Quote;
 use App\Models\Jobcard;
 use App\Models\Product;
-use App\Models\Contact;
+use App\Models\Quote;
 use App\Models\User;
-use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
-use Inertia\Inertia;
-use Inertia\Response;
 use Carbon\Carbon;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Inertia\Inertia;
+use Inertia\Response;
 
 class DashboardController extends Controller
 {
@@ -60,7 +60,7 @@ class DashboardController extends Controller
         $currentCompany = auth()->user()?->getCurrentCompany();
 
         // If the user has no accessible/active company, return a safe dashboard with zeroed metrics
-        if (!$currentCompany) {
+        if (! $currentCompany) {
             $stats = [
                 'invoices_count' => 0,
                 'contacts_count' => 0,
@@ -129,10 +129,10 @@ class DashboardController extends Controller
                 'stats' => $stats,
                 'revenueStats' => $revenueStats,
                 'userMonthlyRevenue' => $userMonthlyRevenue,
-            'userMonthlyJobcards' => $userMonthlyJobcards,
-            'jobcardsPerUser' => [],
-            'currentMonthCompletedJobcards' => 0,
-            'recentActivity' => $recentActivity,
+                'userMonthlyJobcards' => $userMonthlyJobcards,
+                'jobcardsPerUser' => [],
+                'currentMonthCompletedJobcards' => 0,
+                'recentActivity' => $recentActivity,
                 'overdueItems' => $overdueItems,
                 'lowStockProducts' => $lowStockProducts,
                 'topCustomers' => $topCustomers,
@@ -144,7 +144,7 @@ class DashboardController extends Controller
                 'warning' => 'No active company access is configured for your user. Please contact an administrator.',
             ]);
         }
-        
+
         // Basic counts
         $stats = [
             'invoices_count' => Invoice::where('company_id', $currentCompany->id)->count(),
@@ -170,10 +170,10 @@ class DashboardController extends Controller
                 $date,
                 auth()->id()
             );
-            
+
             $userMonthlyRevenue[] = [
                 'month' => $monthName,
-                'revenue' => $revenue
+                'revenue' => $revenue,
             ];
         }
 
@@ -192,7 +192,7 @@ class DashboardController extends Controller
                     ->whereMonth('completed_date', $date->month)
                     ->whereYear('completed_date', $date->year)
                     ->count();
-                
+
                 $userMonthlyJobcards[] = [
                     'month' => $monthName,
                     'count' => $count,
@@ -209,9 +209,12 @@ class DashboardController extends Controller
             // Standard users: show completed jobcards per user
             $userMonthlyJobcards = [];
 
-            $companyUserIds = User::whereHas('companies', function ($query) use ($currentCompany) {
-                $query->where('companies.id', $currentCompany->id);
-            })->pluck('id', 'name');
+            $companyUserIds = User::query()
+                ->excludeClientUsers()
+                ->whereHas('companies', function ($query) use ($currentCompany) {
+                    $query->where('companies.id', $currentCompany->id);
+                })
+                ->pluck('id', 'name');
 
             foreach ($companyUserIds as $userName => $userId) {
                 $count = Jobcard::where('company_id', $currentCompany->id)
@@ -226,7 +229,7 @@ class DashboardController extends Controller
             }
 
             // Sort descending by count
-            usort($jobcardsPerUser, fn($a, $b) => $b['count'] <=> $a['count']);
+            usort($jobcardsPerUser, fn ($a, $b) => $b['count'] <=> $a['count']);
 
             $currentMonthCompletedJobcards = Jobcard::where('company_id', $currentCompany->id)
                 ->where('status', 'completed')
@@ -280,6 +283,7 @@ class DashboardController extends Controller
             ->get()
             ->filter(function ($product) {
                 $threshold = $product->low_stock_threshold ?? $product->min_stock_level ?? 10;
+
                 return $product->stock_quantity <= $threshold;
             })
             ->sortBy('stock_quantity')
@@ -302,7 +306,7 @@ class DashboardController extends Controller
                 ->whereMonth('created_at', $date->month)
                 ->whereYear('created_at', $date->year)
                 ->sum('total');
-            
+
             $monthlyRevenue[] = [
                 'month' => $date->format('M Y'),
                 'revenue' => $revenue,

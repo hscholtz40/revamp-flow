@@ -194,8 +194,10 @@ class JobcardReportController extends Controller
 
         // Lookup data for filters
         $customers = Customer::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name']);
-        $users = User::whereHas('companies', fn ($q) => $q->where('company_id', $currentCompany->id))
-            ->orWhereDoesntHave('companies')->orderBy('name')->get(['id', 'name']);
+        $users = User::query()
+            ->staffSelectableForCompany($currentCompany->id)
+            ->orderBy('name')
+            ->get(['id', 'name']);
         $teams = Team::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('reports/JobcardDetail', [
@@ -272,7 +274,7 @@ class JobcardReportController extends Controller
 
         $jobcards = $query->orderByDesc('created_at')->get();
 
-        $filename = 'Jobcards_Detailed_Report_' . date('Y-m-d_His') . '.csv';
+        $filename = 'Jobcards_Detailed_Report_'.date('Y-m-d_His').'.csv';
 
         $headers = [
             'Content-Type' => 'text/csv; charset=UTF-8',
@@ -281,7 +283,7 @@ class JobcardReportController extends Controller
 
         $callback = function () use ($jobcards, $includeStatusTrackers) {
             $file = fopen('php://output', 'w');
-            fprintf($file, chr(0xEF) . chr(0xBB) . chr(0xBF));
+            fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
 
             // Jobcard header row
             $headerRow = [
@@ -321,16 +323,16 @@ class JobcardReportController extends Controller
                     $jc->assignedUser?->name ?? '',
                     $jc->assignedTeam?->name ?? '',
                     $jc->invoice?->invoice_number ?? '',
-                    'R' . number_format($jc->subtotal ?? 0, 2),
-                    'R' . number_format($jc->discount_amount ?? 0, 2),
-                    ($jc->tax_rate ?? 0) . '%',
-                    'R' . number_format($jc->tax_amount ?? 0, 2),
-                    'R' . number_format($jc->total ?? 0, 2),
+                    'R'.number_format($jc->subtotal ?? 0, 2),
+                    'R'.number_format($jc->discount_amount ?? 0, 2),
+                    ($jc->tax_rate ?? 0).'%',
+                    'R'.number_format($jc->tax_amount ?? 0, 2),
+                    'R'.number_format($jc->total ?? 0, 2),
                     $jc->lineItems->count(),
                     $jc->timeEntries->count(),
                     round($totalMin / 60, 2),
                     round($billableMin / 60, 2),
-                    'R' . number_format($billableAmt, 2),
+                    'R'.number_format($billableAmt, 2),
                 ];
 
                 if ($includeStatusTrackers) {
@@ -351,12 +353,12 @@ class JobcardReportController extends Controller
                     fputcsv($file, ['', '  LINE ITEMS:', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
                     foreach ($jc->lineItems as $li) {
                         fputcsv($file, [
-                            '', '    ' . ($li->product?->name ?? $li->description ?? 'Item'),
+                            '', '    '.($li->product?->name ?? $li->description ?? 'Item'),
                             $li->description ?? '',
                             '', '', '', '', '', '', '',
-                            'Qty: ' . ($li->quantity ?? 0),
-                            'R' . number_format($li->unit_price ?? 0, 2),
-                            '', '', 'R' . number_format($li->total ?? 0, 2),
+                            'Qty: '.($li->quantity ?? 0),
+                            'R'.number_format($li->unit_price ?? 0, 2),
+                            '', '', 'R'.number_format($li->total ?? 0, 2),
                             '', '', '', '', '',
                         ]);
                     }
@@ -369,13 +371,13 @@ class JobcardReportController extends Controller
                         $teAmt = ($te->is_billable && $te->hourly_rate && $te->duration_minutes)
                             ? round(($te->duration_minutes / 60) * $te->hourly_rate, 2) : 0;
                         fputcsv($file, [
-                            '', '    ' . ($te->user?->name ?? 'Unknown'),
+                            '', '    '.($te->user?->name ?? 'Unknown'),
                             $te->description ?? '',
                             $te->is_billable ? 'Billable' : 'Non-billable',
                             $te->date?->format('Y-m-d') ?? '',
                             '', '', '', '', '',
-                            '', $te->hourly_rate ? 'R' . number_format($te->hourly_rate, 2) . '/hr' : '',
-                            '', '', $teAmt > 0 ? 'R' . number_format($teAmt, 2) : '',
+                            '', $te->hourly_rate ? 'R'.number_format($te->hourly_rate, 2).'/hr' : '',
+                            '', '', $teAmt > 0 ? 'R'.number_format($teAmt, 2) : '',
                             '', '',
                             $te->formatted_duration, '', '',
                         ]);
@@ -396,8 +398,13 @@ class JobcardReportController extends Controller
     {
         $h = floor(abs($minutes) / 60);
         $m = abs($minutes) % 60;
-        if ($h > 0 && $m > 0) return "{$h}h {$m}m";
-        if ($h > 0) return "{$h}h";
+        if ($h > 0 && $m > 0) {
+            return "{$h}h {$m}m";
+        }
+        if ($h > 0) {
+            return "{$h}h";
+        }
+
         return "{$m}m";
     }
 
@@ -406,16 +413,24 @@ class JobcardReportController extends Controller
      */
     private function formatDuration(int $minutes): string
     {
-        if ($minutes <= 0) return '0m';
+        if ($minutes <= 0) {
+            return '0m';
+        }
 
         $d = floor($minutes / 1440);
         $h = floor(($minutes % 1440) / 60);
         $m = $minutes % 60;
 
         $parts = [];
-        if ($d > 0) $parts[] = "{$d}d";
-        if ($h > 0) $parts[] = "{$h}h";
-        if ($m > 0) $parts[] = "{$m}m";
+        if ($d > 0) {
+            $parts[] = "{$d}d";
+        }
+        if ($h > 0) {
+            $parts[] = "{$h}h";
+        }
+        if ($m > 0) {
+            $parts[] = "{$m}m";
+        }
 
         return implode(' ', $parts);
     }

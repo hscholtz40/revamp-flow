@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Quotes\StoreQuoteRequest;
+use App\Http\Requests\Quotes\UpdateQuoteRequest;
 use App\Models\ChartOfAccount;
 use App\Models\Customer;
 use App\Models\EmailActivity;
@@ -10,16 +12,13 @@ use App\Models\Note;
 use App\Models\Product;
 use App\Models\PurchaseOrder;
 use App\Models\Quote;
-use App\Models\QuoteLineItem;
 use App\Models\TaxRate;
+use App\Services\QuoteUpsertService;
 use App\Services\ReminderService;
-use App\Support\CompanyScopedRules;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Validator;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -276,104 +275,15 @@ class QuotesController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request): RedirectResponse
+    public function store(StoreQuoteRequest $request, QuoteUpsertService $quoteUpsertService): RedirectResponse
     {
-        $this->authorize('create', Quote::class);
-
         $currentCompany = auth()->user()->getCurrentCompany();
-        $cid = $currentCompany->id;
+        $quote = $quoteUpsertService->createForCompany(
+            $request->validated(),
+            $currentCompany->id,
+            (int) auth()->id()
+        );
 
-        $validator = Validator::make($request->all(), [
-            'customer_id' => ['required', CompanyScopedRules::customer($cid)],
-            'contact_id' => ['nullable', CompanyScopedRules::contactForRequest($cid)],
-            'email' => ['nullable', 'email', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:255'],
-            'source_type' => ['nullable', 'in:jobcard'],
-            'source_id' => ['nullable', 'integer', 'required_with:source_type'],
-            'order_number' => ['nullable', 'string', 'max:255'],
-            'title' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string'],
-            'status' => ['required', 'in:draft,sent,accepted,rejected,expired'],
-            'expiry_date' => ['nullable', 'date'],
-            'tax_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'discount_amount' => ['nullable', 'numeric', 'min:0'],
-            'discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'notes' => ['nullable', 'string'],
-            'terms_conditions' => ['nullable', 'string'],
-            'line_groups' => ['nullable', 'array', 'min:1'],
-            'line_groups.*.id' => ['nullable', 'integer'],
-            'line_groups.*.name' => ['required_with:line_groups', 'string', 'max:255'],
-            'line_items' => ['required', 'array', 'min:1'],
-            'line_items.*.description' => ['required', 'string', 'max:255'],
-            'line_items.*.quantity' => ['required', 'integer', 'min:1'],
-            'line_items.*.unit_price' => ['required', 'numeric'],
-            'line_items.*.discount_amount' => ['nullable', 'numeric', 'min:0'],
-            'line_items.*.discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'line_items.*.product_id' => ['nullable', CompanyScopedRules::product($cid)],
-            'line_items.*.tax_rate_id' => ['nullable', CompanyScopedRules::taxRate($cid)],
-            'line_items.*.account_id' => ['nullable', CompanyScopedRules::chartOfAccount($cid)],
-            'line_items.*.line_group_id' => ['nullable', 'integer'],
-        ]);
-        $validator->after(CompanyScopedRules::afterSourceJobcardInCompany($cid));
-        $validated = $validator->validate();
-
-        // Create the quote
-        $quote = Quote::create([
-            'company_id' => $currentCompany->id,
-            'customer_id' => $validated['customer_id'],
-            'salesperson_id' => auth()->id(),
-            'contact_id' => $validated['contact_id'] ?? null,
-            'email' => $validated['email'] ?? null,
-            'phone' => $validated['phone'] ?? null,
-            'source_type' => $validated['source_type'] ?? null,
-            'source_id' => $validated['source_id'] ?? null,
-            'quote_number' => Quote::generateQuoteNumber($currentCompany->id),
-            'order_number' => $validated['order_number'] ?? null,
-            'title' => $validated['title'],
-            'description' => $validated['description'],
-            'status' => $validated['status'],
-            'expiry_date' => $validated['expiry_date'],
-            'tax_rate' => $validated['tax_rate'] ?? 0,
-            'discount_amount' => $validated['discount_amount'] ?? 0,
-            'discount_percentage' => $validated['discount_percentage'] ?? 0,
-            'notes' => $validated['notes'],
-            'terms_conditions' => $validated['terms_conditions'],
-        ]);
-
-        $groupPayload = $validated['line_groups'] ?? [['name' => 'Items']];
-        $groupMap = [];
-        foreach (array_values($groupPayload) as $groupIndex => $groupData) {
-            $group = $quote->lineGroups()->create([
-                'name' => $groupData['name'] ?: 'Items',
-                'sort_order' => $groupIndex,
-            ]);
-            $groupMap[(string) ($groupData['id'] ?? ($groupIndex + 1))] = $group->id;
-        }
-        $defaultGroupId = reset($groupMap);
-
-        // Create line items
-        $defaultSalesAccountId = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id)?->id;
-        foreach ($validated['line_items'] as $index => $lineItemData) {
-            $lineItem = new QuoteLineItem([
-                'quote_id' => $quote->id,
-                'line_group_id' => $groupMap[(string) ($lineItemData['line_group_id'] ?? '')] ?? $defaultGroupId,
-                'product_id' => $lineItemData['product_id'] ?? null,
-                'description' => $lineItemData['description'],
-                'quantity' => $lineItemData['quantity'],
-                'unit_price' => $lineItemData['unit_price'],
-                'discount_amount' => $lineItemData['discount_amount'] ?? 0,
-                'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
-                'tax_rate_id' => $lineItemData['tax_rate_id'] ?? null,
-                'account_id' => $lineItemData['account_id'] ?? $defaultSalesAccountId,
-                'sort_order' => $index,
-            ]);
-            $lineItem->calculateTotal();
-            $lineItem->save();
-        }
-
-        // Calculate totals
-        $quote->calculateTotals();
-        $quote->refresh();
         $quote->load('customer', 'company');
 
         // Send automated reminder if enabled
@@ -494,96 +404,9 @@ class QuotesController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Quote $quote): RedirectResponse
+    public function update(UpdateQuoteRequest $request, Quote $quote, QuoteUpsertService $quoteUpsertService): RedirectResponse
     {
-        $this->authorize('update', $quote);
-
-        $cid = $quote->company_id;
-
-        $validated = $request->validate([
-            'customer_id' => ['required', CompanyScopedRules::customer($cid)],
-            'contact_id' => ['nullable', CompanyScopedRules::contactForRequest($cid)],
-            'email' => ['nullable', 'email', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:255'],
-            'order_number' => ['nullable', 'string', 'max:255'],
-            'title' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string'],
-            'status' => ['required', 'in:draft,sent,accepted,rejected,expired'],
-            'expiry_date' => ['nullable', 'date'],
-            'tax_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'discount_amount' => ['nullable', 'numeric', 'min:0'],
-            'discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'notes' => ['nullable', 'string'],
-            'terms_conditions' => ['nullable', 'string'],
-            'line_groups' => ['nullable', 'array', 'min:1'],
-            'line_groups.*.id' => ['nullable', 'integer'],
-            'line_groups.*.name' => ['required_with:line_groups', 'string', 'max:255'],
-            'line_items' => ['required', 'array', 'min:1'],
-            'line_items.*.description' => ['required', 'string', 'max:255'],
-            'line_items.*.quantity' => ['required', 'integer', 'min:1'],
-            'line_items.*.unit_price' => ['required', 'numeric'],
-            'line_items.*.discount_amount' => ['nullable', 'numeric', 'min:0'],
-            'line_items.*.discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'line_items.*.product_id' => ['nullable', CompanyScopedRules::product($cid)],
-            'line_items.*.tax_rate_id' => ['nullable', CompanyScopedRules::taxRate($cid)],
-            'line_items.*.account_id' => ['nullable', CompanyScopedRules::chartOfAccount($cid)],
-            'line_items.*.line_group_id' => ['nullable', 'integer'],
-        ]);
-
-        // Update the quote
-        $quote->update([
-            'customer_id' => $validated['customer_id'],
-            'contact_id' => $validated['contact_id'] ?? null,
-            'email' => $validated['email'] ?? null,
-            'phone' => $validated['phone'] ?? null,
-            'order_number' => $validated['order_number'] ?? null,
-            'title' => $validated['title'],
-            'description' => $validated['description'],
-            'status' => $validated['status'],
-            'expiry_date' => $validated['expiry_date'],
-            'tax_rate' => $validated['tax_rate'] ?? 0,
-            'discount_amount' => $validated['discount_amount'] ?? 0,
-            'discount_percentage' => $validated['discount_percentage'] ?? 0,
-            'notes' => $validated['notes'],
-            'terms_conditions' => $validated['terms_conditions'],
-        ]);
-
-        // Delete existing line items
-        $quote->lineItems()->delete();
-        $quote->lineGroups()->delete();
-        $groupPayload = $validated['line_groups'] ?? [['name' => 'Items']];
-        $groupMap = [];
-        foreach (array_values($groupPayload) as $groupIndex => $groupData) {
-            $group = $quote->lineGroups()->create([
-                'name' => $groupData['name'] ?: 'Items',
-                'sort_order' => $groupIndex,
-            ]);
-            $groupMap[(string) ($groupData['id'] ?? ($groupIndex + 1))] = $group->id;
-        }
-        $defaultGroupId = reset($groupMap);
-
-        // Create new line items
-        $defaultSalesAccountId = ChartOfAccount::getDefaultSalesForCompany($quote->company_id)?->id;
-        foreach ($validated['line_items'] as $index => $lineItemData) {
-            $lineItem = new QuoteLineItem([
-                'quote_id' => $quote->id,
-                'line_group_id' => $groupMap[(string) ($lineItemData['line_group_id'] ?? '')] ?? $defaultGroupId,
-                'product_id' => $lineItemData['product_id'] ?? null,
-                'description' => $lineItemData['description'],
-                'quantity' => $lineItemData['quantity'],
-                'unit_price' => $lineItemData['unit_price'],
-                'discount_amount' => $lineItemData['discount_amount'] ?? 0,
-                'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
-                'tax_rate_id' => $lineItemData['tax_rate_id'] ?? null,
-                'account_id' => $lineItemData['account_id'] ?? $defaultSalesAccountId,
-                'sort_order' => $index,
-            ]);
-            $lineItem->calculateTotal();
-            $lineItem->save();
-        }
-
-        // Calculate totals
-        $quote->calculateTotals();
+        $quoteUpsertService->update($quote, $request->validated());
 
         return redirect()->route('quotes.show', $quote)
             ->with('success', 'Quote updated successfully');

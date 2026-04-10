@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Customers\QuickCreateCustomerRequest;
+use App\Http\Requests\Customers\StoreCustomerRequest;
+use App\Http\Requests\Customers\UpdateCustomerRequest;
 use App\Models\CreditNote;
 use App\Models\Customer;
 use App\Models\EmailActivity;
@@ -14,6 +17,7 @@ use App\Models\SMSSettings;
 use App\Services\BulkSMSService;
 use App\Services\CustomerAccountBalanceCalculator;
 use App\Services\CustomerStatementService;
+use App\Services\CustomerUpsertService;
 use App\Support\CompanyScopedRules;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -89,53 +93,15 @@ class CustomersController extends Controller
 
     public function create(): Response
     {
+        $this->authorize('create', Customer::class);
+
         return Inertia::render('customers/Create');
     }
 
-    public function store(Request $request): RedirectResponse|JsonResponse
+    public function store(StoreCustomerRequest $request, CustomerUpsertService $customerUpsertService): RedirectResponse|JsonResponse
     {
         $currentCompany = auth()->user()->getCurrentCompany();
-
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', 'unique:customers,email,NULL,id,company_id,'.$currentCompany->id],
-            'phone' => ['nullable', 'string', 'max:50'],
-            'address' => ['nullable', 'string', 'max:255'],
-            'city' => ['nullable', 'string', 'max:100'],
-            'country' => ['nullable', 'string', 'max:100'],
-            'terms' => ['nullable', 'string', 'max:50'],
-            'vat_number' => ['nullable', 'string', 'max:50'],
-            'account_code' => ['nullable', 'string', 'max:50'],
-            'notes' => ['nullable', 'string'],
-            'is_default_sales' => ['boolean'],
-        ]);
-
-        $validated['company_id'] = $currentCompany->id;
-        $validated['terms'] = ! empty($validated['terms']) ? trim($validated['terms']) : 'COD';
-
-        // Auto-generate account code if not provided
-        if (empty($validated['account_code'])) {
-            $validated['account_code'] = Customer::generateAccountCode($validated['name'], $currentCompany->id);
-        } else {
-            // Validate uniqueness if manually provided
-            $exists = Customer::where('company_id', $currentCompany->id)
-                ->where('account_code', $validated['account_code'])
-                ->exists();
-
-            if ($exists) {
-                return redirect()->back()
-                    ->withErrors(['account_code' => 'This account code is already in use.'])
-                    ->withInput();
-            }
-        }
-
-        if ($validated['is_default_sales'] ?? false) {
-            Customer::where('company_id', $currentCompany->id)
-                ->where('is_default_sales', true)
-                ->update(['is_default_sales' => false]);
-        }
-
-        $customer = Customer::create($validated);
+        $customer = $customerUpsertService->createForCompany($request->validated(), $currentCompany->id);
 
         // If this is a non-Inertia JSON request (quick create from jobcard forms), return JSON
         if ($request->wantsJson() && ! $request->header('X-Inertia')) {
@@ -176,24 +142,10 @@ class CustomersController extends Controller
     /**
      * Quick create customer (for inline creation in forms)
      */
-    public function quickCreate(Request $request)
+    public function quickCreate(QuickCreateCustomerRequest $request, CustomerUpsertService $customerUpsertService)
     {
         $currentCompany = auth()->user()->getCurrentCompany();
-
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', 'unique:customers,email,NULL,id,company_id,'.$currentCompany->id],
-            'phone' => ['nullable', 'string', 'max:50'],
-            'terms' => ['nullable', 'string', 'max:50'],
-        ]);
-
-        $validated['company_id'] = $currentCompany->id;
-        $validated['terms'] = ! empty($validated['terms']) ? trim($validated['terms']) : 'COD';
-
-        // Auto-generate account code
-        $validated['account_code'] = Customer::generateAccountCode($validated['name'], $currentCompany->id);
-
-        $customer = Customer::create($validated);
+        $customer = $customerUpsertService->quickCreateForCompany($request->validated(), $currentCompany->id);
 
         return response()->json([
             'success' => true,
@@ -203,6 +155,8 @@ class CustomersController extends Controller
 
     public function edit(Customer $customer): Response
     {
+        $this->authorize('update', $customer);
+
         $currentCompany = auth()->user()->getCurrentCompany();
 
         return Inertia::render('customers/Edit', [
@@ -369,53 +323,17 @@ class CustomersController extends Controller
         ]);
     }
 
-    public function update(Request $request, Customer $customer): RedirectResponse
+    public function update(UpdateCustomerRequest $request, Customer $customer, CustomerUpsertService $customerUpsertService): RedirectResponse
     {
-        $currentCompany = auth()->user()->getCurrentCompany();
-
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', 'unique:customers,email,'.$customer->id.',id,company_id,'.$currentCompany->id],
-            'phone' => ['nullable', 'string', 'max:50'],
-            'address' => ['nullable', 'string', 'max:255'],
-            'city' => ['nullable', 'string', 'max:100'],
-            'country' => ['nullable', 'string', 'max:100'],
-            'terms' => ['nullable', 'string', 'max:50'],
-            'vat_number' => ['nullable', 'string', 'max:50'],
-            'account_code' => ['nullable', 'string', 'max:50'],
-            'notes' => ['nullable', 'string'],
-            'is_default_sales' => ['boolean'],
-        ]);
-
-        // Validate account code uniqueness if changed
-        if (! empty($validated['account_code']) && $validated['account_code'] !== $customer->account_code) {
-            $exists = Customer::where('company_id', $currentCompany->id)
-                ->where('account_code', $validated['account_code'])
-                ->where('id', '!=', $customer->id)
-                ->exists();
-
-            if ($exists) {
-                return redirect()->back()
-                    ->withErrors(['account_code' => 'This account code is already in use.'])
-                    ->withInput();
-            }
-        }
-
-        if ($validated['is_default_sales'] ?? false) {
-            Customer::where('company_id', $currentCompany->id)
-                ->where('is_default_sales', true)
-                ->where('id', '!=', $customer->id)
-                ->update(['is_default_sales' => false]);
-        }
-
-        $validated['terms'] = ! empty($validated['terms']) ? trim($validated['terms']) : 'COD';
-        $customer->update($validated);
+        $customerUpsertService->update($customer, $request->validated());
 
         return redirect()->route('customers.index')->with('success', 'Customer updated');
     }
 
     public function destroy(Customer $customer): RedirectResponse
     {
+        $this->authorize('delete', $customer);
+
         $customer->delete();
 
         return redirect()->route('customers.index')->with('success', 'Customer deleted');

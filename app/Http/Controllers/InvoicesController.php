@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\ChartOfAccount;
-use App\Models\Customer;
 use App\Models\CreditNoteAllocation;
+use App\Models\Customer;
 use App\Models\EmailActivity;
 use App\Models\Invoice;
 use App\Models\InvoiceLineItem;
@@ -252,7 +252,10 @@ class InvoicesController extends Controller
                 ];
             });
 
-        $users = User::orderBy('name')->get();
+        $users = User::query()
+            ->excludeClientUsers()
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
         // Pre-fill customer if provided
         $selectedCustomer = null;
@@ -621,7 +624,7 @@ class InvoicesController extends Controller
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:255',
             'order_number' => 'nullable|string|max:255',
-            'salesperson_id' => 'nullable|exists:users,id',
+            'salesperson_id' => ['nullable', CompanyScopedRules::staffUser()],
             'invoice_date' => 'required|date',
             'due_date' => 'nullable|date|after_or_equal:invoice_date',
             'tax_rate' => 'required|numeric|min:0|max:100',
@@ -657,6 +660,11 @@ class InvoicesController extends Controller
         $invoiceDate = Carbon::parse($validated['invoice_date'])->startOfDay();
         $dueDate = $this->resolveInvoiceDueDateFromCustomerTerms($customer, $invoiceDate);
         $defaultAccountId = $this->resolveInvoiceFallbackAccountId($currentCompany->id);
+        $sourceJobcard = $this->resolveSourceJobcardForInvoiceSource(
+            $currentCompany->id,
+            $validated['source_type'] ?? null,
+            $validated['source_id'] ?? null
+        );
 
         // Set default salesperson to current user if not provided
         $salespersonId = $validated['salesperson_id'] ?? auth()->id();
@@ -666,7 +674,7 @@ class InvoicesController extends Controller
             'invoice_number' => $invoiceNumber,
             'order_number' => $validated['order_number'] ?? null,
             'title' => ! empty(trim((string) ($validated['title'] ?? ''))) ? trim((string) $validated['title']) : $invoiceNumber,
-            'description' => $validated['description'],
+            'description' => $validated['description'] ?? null,
             'customer_id' => $validated['customer_id'],
             'contact_id' => $validated['contact_id'] ?? null,
             'email' => $validated['email'] ?? null,
@@ -678,8 +686,8 @@ class InvoicesController extends Controller
             'tax_rate' => $validated['tax_rate'],
             'discount_amount' => $validated['discount_amount'] ?? 0,
             'discount_percentage' => $validated['discount_percentage'] ?? 0,
-            'notes' => $validated['notes'],
-            'terms' => $validated['terms'],
+            'notes' => $validated['notes'] ?? null,
+            'terms' => $validated['terms'] ?? null,
             'terms_conditions' => $validated['terms_conditions'] ?? null,
             'source_type' => $validated['source_type'] ?? null,
             'source_id' => $validated['source_id'] ?? null,
@@ -696,8 +704,7 @@ class InvoicesController extends Controller
         }
         $defaultGroupId = reset($groupMap);
 
-        // Create line items and deduct stock
-        $stockService = new StockService;
+        // Create line items
         foreach ($validated['line_items'] as $index => $lineItemData) {
             // Calculate total before creating
             $quantity = $lineItemData['quantity'] ?? 0;
@@ -761,32 +768,17 @@ class InvoicesController extends Controller
                 }
             }
 
-            // Deduct stock if product is tracked
-            if ($lineItemData['product_id']) {
-                try {
-                    $product = Product::find($lineItemData['product_id']);
-                    if ($product && $product->track_stock) {
-                        $stockService->removeStock(
-                            $product,
-                            $lineItemData['quantity'],
-                            "Invoice: {$invoiceNumber}",
-                            'invoice',
-                            $invoice->id,
-                            "Stock deducted for invoice {$invoiceNumber}",
-                            $lineItemData['serial_number_ids'] ?? null
-                        );
-                    }
-                } catch (\Exception $e) {
-                    Log::warning('Stock deduction skipped for invoice line item', [
-                        'invoice_id' => $invoice->id,
-                        'product_id' => $lineItemData['product_id'],
-                        'quantity' => $lineItemData['quantity'],
-                        'error' => $e->getMessage(),
-                    ]);
-                    // Continue even if stock deduction fails
-                }
-            }
         }
+
+        $this->syncInvoiceStockAdjustments(
+            $currentCompany->id,
+            $sourceJobcard,
+            null,
+            $validated['line_items'],
+            "Invoice: {$invoiceNumber}",
+            "Stock synced for invoice {$invoiceNumber}",
+            $invoice->id
+        );
 
         $this->ensureConvertedInvoiceRoundingLine($invoice, $defaultAccountId);
 
@@ -977,7 +969,10 @@ class InvoicesController extends Controller
                 ];
             });
 
-        $users = User::orderBy('name')->get();
+        $users = User::query()
+            ->excludeClientUsers()
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
         // Convert invoice to array and ensure serial_number_ids are included in line items
         $invoiceData = $invoice->toArray();
@@ -1031,7 +1026,7 @@ class InvoicesController extends Controller
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:255',
             'order_number' => 'nullable|string|max:255',
-            'salesperson_id' => 'nullable|exists:users,id',
+            'salesperson_id' => ['nullable', CompanyScopedRules::staffUser()],
             'invoice_date' => 'required|date',
             'due_date' => 'required|date|after_or_equal:invoice_date',
             'tax_rate' => 'required|numeric|min:0|max:100',
@@ -1065,7 +1060,7 @@ class InvoicesController extends Controller
         // Prepare update data
         $updateData = [
             'title' => ! empty(trim((string) ($validated['title'] ?? ''))) ? trim((string) $validated['title']) : $invoice->invoice_number,
-            'description' => $validated['description'],
+            'description' => $validated['description'] ?? null,
             'customer_id' => $validated['customer_id'],
             'contact_id' => $validated['contact_id'] ?? null,
             'email' => $validated['email'] ?? null,
@@ -1074,8 +1069,8 @@ class InvoicesController extends Controller
             'invoice_date' => $validated['invoice_date'],
             'due_date' => $validated['due_date'],
             'tax_rate' => $validated['tax_rate'],
-            'notes' => $validated['notes'],
-            'terms' => $validated['terms'],
+            'notes' => $validated['notes'] ?? null,
+            'terms' => $validated['terms'] ?? null,
             'terms_conditions' => $validated['terms_conditions'] ?? null,
         ];
 
@@ -1084,20 +1079,18 @@ class InvoicesController extends Controller
             $updateData['salesperson_id'] = $validated['salesperson_id'];
         }
 
+        $wasCancelled = $invoice->status === 'cancelled';
+        $sourceJobcard = $this->resolveSourceJobcardForInvoice($invoice);
+        $oldLineItems = $invoice->lineItems()->with('product')->get();
+
         // Update invoice
         $invoice->update($updateData);
         $defaultAccountId = $this->resolveInvoiceFallbackAccountId($invoice->company_id);
 
-        // Handle stock adjustments for invoice updates
-        // Only adjust stock if invoice is not cancelled (cancelled invoices don't affect stock)
-        $stockService = new StockService;
-        $invoice->load('lineItems.product');
-        $wasCancelled = $invoice->status === 'cancelled';
-
         // Restore stock and serial numbers for old line items (if invoice was not cancelled)
         // Stock was already restored when invoice was cancelled, so skip if it was cancelled
         if (! $wasCancelled) {
-            foreach ($invoice->lineItems as $oldLineItem) {
+            foreach ($oldLineItems as $oldLineItem) {
                 // Restore serial numbers to available status
                 if (! empty($oldLineItem->serial_number_ids)) {
                     try {
@@ -1114,28 +1107,6 @@ class InvoicesController extends Controller
                             'line_item_id' => $oldLineItem->id,
                             'error' => $e->getMessage(),
                         ]);
-                    }
-                }
-
-                if ($oldLineItem->product_id && $oldLineItem->product && $oldLineItem->product->track_stock) {
-                    try {
-                        $stockService->addStock(
-                            $oldLineItem->product,
-                            $oldLineItem->quantity,
-                            null,
-                            "Invoice Updated: {$invoice->invoice_number}",
-                            'invoice',
-                            $invoice->id,
-                            'Stock restored due to invoice line item update'
-                        );
-                    } catch (\Exception $e) {
-                        Log::error('Failed to restore stock for updated invoice line item', [
-                            'invoice_id' => $invoice->id,
-                            'product_id' => $oldLineItem->product_id,
-                            'quantity' => $oldLineItem->quantity,
-                            'error' => $e->getMessage(),
-                        ]);
-                        // Continue even if stock restoration fails
                     }
                 }
             }
@@ -1155,7 +1126,7 @@ class InvoicesController extends Controller
         }
         $defaultGroupId = reset($groupMap);
 
-        // Create new line items and deduct stock (if invoice is not cancelled)
+        // Create new line items
         foreach ($validated['line_items'] as $index => $lineItemData) {
             // Calculate total before creating
             $quantity = $lineItemData['quantity'] ?? 0;
@@ -1219,32 +1190,17 @@ class InvoicesController extends Controller
                 }
             }
 
-            // Deduct stock if product is tracked and invoice is not cancelled
-            if ($lineItemData['product_id'] && ! $wasCancelled) {
-                try {
-                    $product = Product::find($lineItemData['product_id']);
-                    if ($product && $product->track_stock) {
-                        $stockService->removeStock(
-                            $product,
-                            $lineItemData['quantity'],
-                            "Invoice Updated: {$invoice->invoice_number}",
-                            'invoice',
-                            $invoice->id,
-                            'Stock deducted for invoice line item update',
-                            $lineItemData['serial_number_ids'] ?? null
-                        );
-                    }
-                } catch (\Exception $e) {
-                    Log::error('Failed to deduct stock for updated invoice line item', [
-                        'invoice_id' => $invoice->id,
-                        'product_id' => $lineItemData['product_id'],
-                        'quantity' => $lineItemData['quantity'],
-                        'error' => $e->getMessage(),
-                    ]);
-                    // Continue even if stock deduction fails
-                }
-            }
         }
+
+        $this->syncInvoiceStockAdjustments(
+            $invoice->company_id,
+            $sourceJobcard,
+            $wasCancelled ? null : $oldLineItems,
+            $wasCancelled ? null : $validated['line_items'],
+            "Invoice Updated: {$invoice->invoice_number}",
+            'Stock synced for invoice line item update',
+            $invoice->id
+        );
 
         $this->ensureConvertedInvoiceRoundingLine($invoice, $defaultAccountId);
 
@@ -1264,10 +1220,11 @@ class InvoicesController extends Controller
 
         $currentCompany = auth()->user()->getCurrentCompany();
 
-        // Restore stock and serial numbers for all line items before deleting
-        // Skip if invoice is cancelled (stock was already restored when cancelled)
+        $sourceJobcard = $this->resolveSourceJobcardForInvoice($invoice);
+
+        // Restore serial numbers for all line items before deleting
+        // Skip if invoice is cancelled (serials were already restored when cancelled)
         if ($invoice->status !== 'cancelled') {
-            $stockService = new StockService;
             $invoice->load('lineItems.product');
 
             foreach ($invoice->lineItems as $lineItem) {
@@ -1289,30 +1246,18 @@ class InvoicesController extends Controller
                         ]);
                     }
                 }
-
-                if ($lineItem->product_id && $lineItem->product && $lineItem->product->track_stock) {
-                    try {
-                        $stockService->addStock(
-                            $lineItem->product,
-                            $lineItem->quantity,
-                            null, // No unit cost for restoration
-                            "Invoice Deleted: {$invoice->invoice_number}",
-                            'invoice',
-                            $invoice->id,
-                            'Stock restored due to invoice deletion'
-                        );
-                    } catch (\Exception $e) {
-                        Log::error('Failed to restore stock for deleted invoice line item', [
-                            'invoice_id' => $invoice->id,
-                            'product_id' => $lineItem->product_id,
-                            'quantity' => $lineItem->quantity,
-                            'error' => $e->getMessage(),
-                        ]);
-                        // Continue even if stock restoration fails
-                    }
-                }
             }
         }
+
+        $this->syncInvoiceStockAdjustments(
+            $invoice->company_id,
+            $sourceJobcard,
+            $invoice->status !== 'cancelled' ? $invoice->lineItems : null,
+            null,
+            "Invoice Deleted: {$invoice->invoice_number}",
+            'Stock synced due to invoice deletion',
+            $invoice->id
+        );
 
         $invoice->delete();
 
@@ -1337,7 +1282,7 @@ class InvoicesController extends Controller
         $newStatus = $validated['status'];
 
         // Handle stock adjustments based on status changes
-        $stockService = new StockService;
+        $sourceJobcard = $this->resolveSourceJobcardForInvoice($invoice);
         $invoice->load('lineItems.product');
 
         // If changing TO cancelled, restore stock and serial numbers
@@ -1362,54 +1307,30 @@ class InvoicesController extends Controller
                     }
                 }
 
-                if ($lineItem->product_id && $lineItem->product && $lineItem->product->track_stock) {
-                    try {
-                        $stockService->addStock(
-                            $lineItem->product,
-                            $lineItem->quantity,
-                            null, // No unit cost for restoration
-                            "Invoice Cancelled: {$invoice->invoice_number}",
-                            'invoice',
-                            $invoice->id,
-                            'Stock restored due to invoice cancellation'
-                        );
-                    } catch (\Exception $e) {
-                        Log::error('Failed to restore stock for cancelled invoice line item', [
-                            'invoice_id' => $invoice->id,
-                            'product_id' => $lineItem->product_id,
-                            'quantity' => $lineItem->quantity,
-                            'error' => $e->getMessage(),
-                        ]);
-                        // Continue even if stock restoration fails
-                    }
-                }
             }
+
+            $this->syncInvoiceStockAdjustments(
+                $invoice->company_id,
+                $sourceJobcard,
+                $invoice->lineItems,
+                null,
+                "Invoice Cancelled: {$invoice->invoice_number}",
+                'Stock synced due to invoice cancellation',
+                $invoice->id
+            );
         }
 
         // If changing FROM cancelled TO another status, deduct stock again
         if ($oldStatus === 'cancelled' && $newStatus !== 'cancelled') {
-            foreach ($invoice->lineItems as $lineItem) {
-                if ($lineItem->product_id && $lineItem->product && $lineItem->product->track_stock) {
-                    try {
-                        $stockService->removeStock(
-                            $lineItem->product,
-                            $lineItem->quantity,
-                            "Invoice Status Changed: {$invoice->invoice_number}",
-                            'invoice',
-                            $invoice->id,
-                            "Stock deducted - invoice status changed from cancelled to {$newStatus}"
-                        );
-                    } catch (\Exception $e) {
-                        Log::error('Failed to deduct stock when invoice status changed from cancelled', [
-                            'invoice_id' => $invoice->id,
-                            'product_id' => $lineItem->product_id,
-                            'quantity' => $lineItem->quantity,
-                            'error' => $e->getMessage(),
-                        ]);
-                        // Continue even if stock deduction fails
-                    }
-                }
-            }
+            $this->syncInvoiceStockAdjustments(
+                $invoice->company_id,
+                $sourceJobcard,
+                null,
+                $invoice->lineItems,
+                "Invoice Status Changed: {$invoice->invoice_number}",
+                "Stock synced - invoice status changed from cancelled to {$newStatus}",
+                $invoice->id
+            );
         }
 
         $invoice->update(['status' => $newStatus]);
@@ -1809,6 +1730,150 @@ class InvoicesController extends Controller
         } finally {
             $invoice->unsetRelation('lineItems');
         }
+    }
+
+    private function resolveSourceJobcardForInvoice(Invoice $invoice): ?Jobcard
+    {
+        return $this->resolveSourceJobcardForInvoiceSource(
+            $invoice->company_id,
+            $invoice->source_type,
+            $invoice->source_id
+        );
+    }
+
+    private function resolveSourceJobcardForInvoiceSource(int $companyId, ?string $sourceType, ?int $sourceId): ?Jobcard
+    {
+        if (! $sourceType || ! $sourceId) {
+            return null;
+        }
+
+        if ($sourceType === 'jobcard') {
+            return Jobcard::where('company_id', $companyId)
+                ->with('lineItems')
+                ->find($sourceId);
+        }
+
+        if ($sourceType !== 'quote') {
+            return null;
+        }
+
+        $sourceQuote = Quote::where('company_id', $companyId)->find($sourceId);
+        if (! $sourceQuote || $sourceQuote->source_type !== 'jobcard' || ! $sourceQuote->source_id) {
+            return null;
+        }
+
+        return Jobcard::where('company_id', $companyId)
+            ->with('lineItems')
+            ->find($sourceQuote->source_id);
+    }
+
+    private function syncInvoiceStockAdjustments(
+        int $companyId,
+        ?Jobcard $sourceJobcard,
+        ?iterable $previousLineItems,
+        ?iterable $nextLineItems,
+        string $reference,
+        string $notes,
+        int $invoiceId
+    ): void {
+        $stockService = new StockService;
+        $baselineQuantities = $this->getTrackedProductQuantities($sourceJobcard?->lineItems ?? []);
+        $previousExtraQuantities = $previousLineItems === null
+            ? []
+            : $this->getInvoiceExtraStockQuantities($previousLineItems, $baselineQuantities);
+        $nextExtraQuantities = $nextLineItems === null
+            ? []
+            : $this->getInvoiceExtraStockQuantities($nextLineItems, $baselineQuantities);
+
+        $productIds = array_values(array_unique(array_merge(
+            array_keys($previousExtraQuantities),
+            array_keys($nextExtraQuantities)
+        )));
+
+        foreach ($productIds as $productId) {
+            $previousExtra = (int) ($previousExtraQuantities[$productId] ?? 0);
+            $nextExtra = (int) ($nextExtraQuantities[$productId] ?? 0);
+            $quantityChange = $nextExtra - $previousExtra;
+
+            if ($quantityChange === 0) {
+                continue;
+            }
+
+            $product = Product::where('company_id', $companyId)->find($productId);
+            if (! $product || ! $product->track_stock) {
+                continue;
+            }
+
+            try {
+                if ($quantityChange > 0) {
+                    $stockService->removeStock(
+                        $product,
+                        $quantityChange,
+                        $reference,
+                        'invoice',
+                        $invoiceId,
+                        $notes
+                    );
+                } else {
+                    $stockService->addStock(
+                        $product,
+                        abs($quantityChange),
+                        null,
+                        $reference,
+                        'invoice',
+                        $invoiceId,
+                        $notes
+                    );
+                }
+            } catch (\Exception $e) {
+                Log::warning('Invoice stock sync skipped for product delta', [
+                    'invoice_id' => $invoiceId,
+                    'product_id' => $productId,
+                    'baseline_quantity' => (int) ($baselineQuantities[$productId] ?? 0),
+                    'previous_extra_quantity' => $previousExtra,
+                    'next_extra_quantity' => $nextExtra,
+                    'quantity_change' => $quantityChange,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+    }
+
+    private function getInvoiceExtraStockQuantities(iterable $lineItems, array $baselineQuantities): array
+    {
+        $invoiceQuantities = $this->getTrackedProductQuantities($lineItems);
+        $productIds = array_values(array_unique(array_merge(
+            array_keys($invoiceQuantities),
+            array_keys($baselineQuantities)
+        )));
+        $extraQuantities = [];
+
+        foreach ($productIds as $productId) {
+            $extraQuantity = (int) ($invoiceQuantities[$productId] ?? 0) - (int) ($baselineQuantities[$productId] ?? 0);
+            if ($extraQuantity !== 0) {
+                $extraQuantities[$productId] = $extraQuantity;
+            }
+        }
+
+        return $extraQuantities;
+    }
+
+    private function getTrackedProductQuantities(iterable $lineItems): array
+    {
+        $quantities = [];
+
+        foreach ($lineItems as $lineItem) {
+            $productId = (int) (is_array($lineItem) ? ($lineItem['product_id'] ?? 0) : ($lineItem->product_id ?? 0));
+            $quantity = (int) (is_array($lineItem) ? ($lineItem['quantity'] ?? 0) : ($lineItem->quantity ?? 0));
+
+            if ($productId <= 0 || $quantity <= 0) {
+                continue;
+            }
+
+            $quantities[$productId] = (int) ($quantities[$productId] ?? 0) + $quantity;
+        }
+
+        return $quantities;
     }
 
     private function calculateInvoiceLineTaxAmount(float $lineTotal, $taxRateId): float

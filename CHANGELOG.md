@@ -2,6 +2,11 @@
 
 ## 2026-04-10
 
+- **Code quality hardening:** Moved quote and customer validation into dedicated Form Requests, extracted transactional quote/customer write services, added safer transaction boundaries to quote/jobcard/payment flows, and aligned customer/contact helper routes with module permissions to reduce partial writes and authorization drift without changing user-facing features.
+- **Frontend form reuse + CI gates:** Shared customer lookup/quick-create logic across quote and invoice forms via a reusable composable, centralized customer/document TypeScript types, and strengthened CI with frontend typechecking, non-mutating lint/format checks, and PHPStan/Larastan analysis. Release builds now also support tag-triggered packaging.
+- **Staff user selectors + jobcard invoice stock deltas:** Staff-facing user pickers and validations now exclude Client Zone users so client accounts cannot be assigned as internal staff or salespeople, and jobcard-origin invoices now adjust stock only for quantity deltas beyond what the source jobcard already consumed, including restoring stock when invoiced quantities are reduced below the jobcard quantities.
+- **Document list state + jobcard stock edits:** Invoice and jobcard document tables now keep the user’s selected list columns/order when switching between the main list and recurring tabs, and editing a jobcard now restores or deducts stock only for the net product quantity changes introduced by that edit.
+
 - **Client update approval email sync:** Approving a Client Zone information update now also updates the linked client user's sign-in email when the customer email changes, and approval is blocked cleanly if that new email is already in use by another user. Added focused approval-flow regression coverage.
 
 - **Client Zone security hardening:** Portal access is now bound to the linked `customer_id` instead of mutable email matching, client users can no longer change their sign-in email from profile settings, shared Inertia company props no longer expose all active companies to client accounts, Client Zone now rejects non-client sessions explicitly, client registration uses neutralized error messaging with throttling, and client document signing is enforced server-side only when the company has document signing enabled. Added focused feature coverage for these regressions.

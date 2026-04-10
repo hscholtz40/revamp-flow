@@ -237,8 +237,10 @@ class ContactController extends Controller
      */
     public function edit(Contact $contact): Response
     {
+        $this->authorize('update', $contact);
+
         $contact->load('customer');
-        $customers = Customer::orderBy('name')->get();
+        $customers = Customer::where('company_id', $contact->company_id)->orderBy('name')->get();
 
         return Inertia::render('contacts/Edit', [
             'contact' => $contact,
@@ -251,6 +253,8 @@ class ContactController extends Controller
      */
     public function update(Request $request, Contact $contact): RedirectResponse
     {
+        $this->authorize('update', $contact);
+
         $cid = $contact->company_id;
 
         $validated = $request->validate([
@@ -282,6 +286,8 @@ class ContactController extends Controller
      */
     public function destroy(Contact $contact): RedirectResponse
     {
+        $this->authorize('delete', $contact);
+
         $customerId = $contact->customer_id;
         $contact->delete();
 

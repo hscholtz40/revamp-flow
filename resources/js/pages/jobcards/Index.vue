@@ -1,7 +1,7 @@
 <template>
     <Head title="Jobcards" />
 
-    <AppLayout :breadcrumbs="[{ title: 'Jobcards', href: jobcards.index().url }]">
+    <AppLayout :breadcrumbs="[{ title: 'Jobcards', href: jobcardsRoute.index().url }]">
         <!-- Company Context -->
         <div class="bg-blue-50 border-b border-blue-200 px-4 py-3">
             <div class="flex items-center gap-2 text-sm text-blue-700">
@@ -16,7 +16,7 @@
                 <h1 class="text-2xl font-bold text-gray-900">Jobcards</h1>
                 <Link
                     v-if="!isLimitedUser && canJobcardsCreate"
-                    :href="jobcards.create().url"
+                    :href="jobcardsRoute.create().url"
                     class="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
                 >
                     New Jobcard
@@ -40,7 +40,7 @@
                 </button>
             </div>
 
-            <template v-if="activeTab === 'documents'">
+            <div v-show="activeTab === 'documents'">
 
             <!-- Filters -->
             <div class="bg-white rounded-lg border p-4 mb-6">
@@ -180,9 +180,9 @@
                                 class="cursor-pointer hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
                                 tabindex="0"
                                 role="link"
-                                @click="router.visit(jobcards.show(jobcard.id).url)"
-                                @keydown.enter.prevent="router.visit(jobcards.show(jobcard.id).url)"
-                                @keydown.space.prevent="router.visit(jobcards.show(jobcard.id).url)"
+                                @click="router.visit(jobcardsRoute.show(jobcard.id).url)"
+                                @keydown.enter.prevent="router.visit(jobcardsRoute.show(jobcard.id).url)"
+                                @keydown.space.prevent="router.visit(jobcardsRoute.show(jobcard.id).url)"
                             >
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="text-sm font-medium text-gray-900">{{ jobcard.job_number }}</div>
@@ -196,7 +196,7 @@
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <Link
                                         v-if="jobcard.invoice"
-                                        :href="invoices.show(jobcard.invoice.id).url"
+                                        :href="invoicesRoute.show(jobcard.invoice.id).url"
                                         @click.stop
                                         class="text-sm text-blue-600 hover:text-blue-800 hover:underline"
                                     >
@@ -266,7 +266,7 @@
                                         <template v-if="!isLimitedUser">
                                             <Link
                                                 v-if="canEditJobcard(jobcard)"
-                                                :href="jobcards.edit(jobcard.id).url"
+                                                :href="jobcardsRoute.edit(jobcard.id).url"
                                                 class="inline-flex items-center justify-center px-2 py-1.5 md:px-3 md:py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                                             >
                                                 <ListTableActionLabel label="Edit">
@@ -301,7 +301,6 @@
                                 v-for="link in props.jobcards.links"
                                 :key="link.label"
                                 :href="link.url || '#'"
-                                v-html="link.label"
                                 :class="[
                                     'px-3 py-2 text-sm border rounded',
                                     link.active
@@ -309,14 +308,16 @@
                                         : 'border-gray-300 text-gray-700 hover:bg-gray-50',
                                     !link.url ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
                                 ]"
-                            />
+                            >
+                                <span v-html="link.label" />
+                            </Link>
                         </div>
                     </div>
                 </div>
             </div>
-            </template>
+            </div>
 
-            <div v-else class="space-y-4">
+            <div v-show="activeTab === 'recurring'" class="space-y-4">
                 <div class="bg-white rounded-lg border p-4">
                     <h2 class="mb-3 text-lg font-semibold text-gray-900">Add Recurring Jobcard</h2>
                     <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
@@ -377,8 +378,8 @@ import { useAuthAbility } from '@/composables/useAuthAbilities';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { Edit, Trash2 } from 'lucide-vue-next';
 import { ref, computed, watch, nextTick } from 'vue';
-import jobcards from '@/routes/jobcards';
-import invoices from '@/routes/invoices';
+import jobcardsRoute from '@/routes/jobcards';
+import invoicesRoute from '@/routes/invoices';
 
 const page = usePage();
 const isLimitedUser = computed(() => (page.props.auth as any)?.user?.user_type === 'limited');
@@ -503,7 +504,7 @@ const clearFilters = () => {
     showClosed.value = false;
     
     // Navigate to clean URL without filters
-    router.get(jobcards.index().url, {}, {
+    router.get(jobcardsRoute.index().url, {}, {
         preserveState: true,
         replace: true,
     });
@@ -527,7 +528,7 @@ const toggleSort = (field: string) => {
     params.sort_by = sortBy.value;
     params.sort_dir = sortDir.value;
 
-    router.get(jobcards.index().url, params, {
+    router.get(jobcardsRoute.index().url, params, {
         preserveState: true,
         replace: true,
     });
@@ -566,7 +567,7 @@ const deleteJobcard = (jobcard: Jobcard) => {
     
     const jobNumber = jobcard.job_number || `#${jobcard.id}`;
     if (confirm(`Are you sure you want to delete jobcard ${jobNumber}?`)) {
-        router.delete(jobcards.destroy(jobcard.id).url, {
+        router.delete(jobcardsRoute.destroy(jobcard.id).url, {
             onSuccess: () => {
             },
             onError: (errors) => {
@@ -632,7 +633,7 @@ watch([search, status, customerId, assignedToUserId, assignedToTeamId, showClose
     params.sort_by = sortBy.value;
     params.sort_dir = sortDir.value;
     
-    router.get(jobcards.index().url, params, {
+    router.get(jobcardsRoute.index().url, params, {
         preserveState: true,
         replace: true,
     });

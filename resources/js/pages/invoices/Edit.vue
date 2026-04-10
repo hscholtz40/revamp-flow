@@ -213,7 +213,7 @@
                             <ContactSelector
                                 v-model="form.contact_id"
                                 :customer-id="form.customer_id ? parseInt(String(form.customer_id)) : null"
-                                :initial-contact="(props.invoice as any).contact ?? null"
+                                :initial-contact="props.invoice.contact ? { customer_id: Number(form.customer_id || 0), name: '', ...props.invoice.contact } : null"
                                 label="Contact"
                                 :error="form.errors.contact_id"
                                 @select="onContactSelect"
@@ -539,14 +539,14 @@
                             </div>
 
                             <!-- Serial Number Selection (preserved from original) -->
-                            <div v-if="item.product_id && props.products.find(p => p.id === parseInt(item.product_id))?.track_serial_numbers" class="mt-3 ml-14 border-l-2 border-blue-200 pl-3">
+                            <div v-if="item.product_id && props.products.find(p => p.id === Number(item.product_id))?.track_serial_numbers" class="mt-3 ml-14 border-l-2 border-blue-200 pl-3">
                                 <label class="block text-xs font-medium text-gray-500 mb-1">
                                     Serial Numbers
                                     <span class="text-gray-400">(Select {{ item.quantity || 0 }})</span>
                                 </label>
                                 <div class="max-h-32 space-y-1 overflow-y-auto rounded border border-gray-200 p-1.5 bg-gray-50">
                                     <label
-                                        v-for="serial in props.products.find(p => p.id === parseInt(item.product_id))?.serialNumbers || []"
+                                        v-for="serial in props.products.find(p => p.id === Number(item.product_id))?.serialNumbers || []"
                                         :key="serial.id"
                                         class="flex items-center gap-2 rounded px-2 py-0.5 hover:bg-white text-sm"
                                         :class="{ 'bg-blue-50': serial.status === 'sold' }"
@@ -563,7 +563,7 @@
                                             <span v-if="serial.status === 'sold'" class="text-xs text-gray-500 ml-1">(selected)</span>
                                         </span>
                                     </label>
-                                    <div v-if="!props.products.find(p => p.id === parseInt(item.product_id))?.serialNumbers?.length" class="text-xs text-gray-400 px-1">
+                                    <div v-if="!props.products.find(p => p.id === Number(item.product_id))?.serialNumbers?.length" class="text-xs text-gray-400 px-1">
                                         No serial numbers available.
                                     </div>
                                 </div>
@@ -704,21 +704,15 @@
 
 <script setup lang="ts">
 import ContactSelector from '@/components/ContactSelector.vue';
+import { useCustomerLookup } from '@/composables/useCustomerLookup';
 import { useNumberFormat } from '@/composables/useNumberFormat';
 import { matchesProductSearch } from '@/composables/productSearch';
+import type { CustomerLookupCustomer } from '@/types/customers';
+import type { DocumentLineGroup, DocumentLineItem } from '@/types/documents';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, watch, ref } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import invoices from '@/routes/invoices';
-
-interface Customer {
-    id: number;
-    name: string;
-    email?: string;
-    phone?: string;
-    account_code?: string;
-    terms?: string;
-}
 
 interface SerialNumber {
     id: number;
@@ -747,26 +741,19 @@ interface Company {
     name: string;
 }
 
-interface LineItem {
+type LineItem = DocumentLineItem & {
     _uid: string;
     product_id: string | null;
-    line_group_id?: number | null;
-    description: string;
-    quantity: number;
-    unit_price: number;
-    discount_amount?: number;
-    discount_percentage?: number;
     total: number;
-    serial_number_ids?: number[];
-    tax_rate_id?: number | null;
-    account_id?: number | null;
     is_rounding_adjustment?: boolean;
-}
+};
 
-interface LineGroup {
+type LineGroup = DocumentLineGroup;
+
+interface InvoiceLineItemPayload extends Partial<DocumentLineItem> {
     id?: number;
-    name: string;
-    sort_order: number;
+    total?: number;
+    is_rounding_adjustment?: boolean;
 }
 
 interface Invoice {
@@ -776,23 +763,28 @@ interface Invoice {
     title: string;
     description?: string;
     customer_id: number;
+    contact_id?: number | null;
+    contact?: { id?: number; email?: string | null; phone?: string | null } | null;
     email?: string | null;
     phone?: string | null;
     salesperson_id?: number;
+    status?: string;
     invoice_date: string;
     due_date: string;
     tax_rate: number;
+    discount_amount?: number;
+    discount_percentage?: number;
     notes?: string;
     terms?: string;
     terms_conditions?: string | null;
-    line_items: LineItem[];
+    line_items: InvoiceLineItemPayload[];
     line_groups?: LineGroup[];
     lineGroups?: LineGroup[];
 }
 
 interface Props {
     invoice: Invoice;
-    customers: Customer[];
+    customers: CustomerLookupCustomer[];
     products: Product[];
     users: User[];
     currentCompany: Company;
@@ -821,32 +813,6 @@ const dragOverItemIndex = ref<number | null>(null);
 const dragOverGroupId = ref<number | null>(null);
 const activeDragIndex = ref<number | null>(null);
 
-// Customer search
-const customerSearchQuery = ref('');
-const customerSearchFocused = ref(false);
-const filteredCustomers = ref<Customer[]>([]);
-const selectedCustomer = ref<Customer | null>(null);
-const showQuickCreateModal = ref(false);
-const quickCreateForm = useForm({
-    name: '',
-    email: '',
-    phone: '',
-});
-
-// Initialize selected customer
-const currentCustomer = props.customers.find(c => c.id === props.invoice.customer_id);
-if (currentCustomer) {
-    selectedCustomer.value = currentCustomer;
-    customerSearchQuery.value = currentCustomer.name;
-}
-
-// Update quick create form name when search query changes
-watch(customerSearchQuery, (newQuery) => {
-    if (!showQuickCreateModal.value) {
-        quickCreateForm.name = newQuery;
-    }
-});
-
 // Use the permission passed from backend
 const canEditSalesperson = computed(() => props.canEditSalesperson);
 const canEditCompleted = computed(() => props.canEditCompleted);
@@ -861,8 +827,8 @@ const canEdit = computed(() => canEditInvoices.value && (!isCompleted.value || c
 const form = useForm({
     title: props.invoice.title,
     description: props.invoice.description || '',
-    customer_id: props.invoice.customer_id,
-    contact_id: (props.invoice as any).contact_id ?? null,
+    customer_id: props.invoice.customer_id.toString(),
+    contact_id: props.invoice.contact_id ?? null,
     email: props.invoice.email || '',
     phone: props.invoice.phone || '',
     order_number: props.invoice.order_number || '',
@@ -875,34 +841,74 @@ const form = useForm({
     notes: props.invoice.notes || '',
     terms: props.invoice.terms || '',
     terms_conditions: props.invoice.terms_conditions || '',
-    line_groups: ((props.invoice.line_groups ?? props.invoice.lineGroups ?? []) as any[]).map((group: any, index: number) => ({
+    line_groups: (props.invoice.line_groups ?? props.invoice.lineGroups ?? []).map((group, index: number) => ({
         id: group.id,
         name: group.name || `Group ${index + 1}`,
         sort_order: Number(group.sort_order ?? index),
     })),
     line_items: props.invoice.line_items.map(item => ({
-        _uid: (item as any).id ? `line-${(item as any).id}` : createLineItemUid(),
+        _uid: item.id ? `line-${item.id}` : createLineItemUid(),
         product_id: item.product_id?.toString() || null,
-        line_group_id: (item as any).line_group_id != null ? Number((item as any).line_group_id) : 1,
+        line_group_id: item.line_group_id != null ? Number(item.line_group_id) : 1,
         description: item.description,
         quantity: Number(item.quantity) || 0,
         unit_price: Number(item.unit_price) || 0,
-        discount_amount: Number((item as any).discount_amount) || 0,
-        discount_percentage: Number((item as any).discount_percentage) || 0,
+        discount_amount: Number(item.discount_amount) || 0,
+        discount_percentage: Number(item.discount_percentage) || 0,
         total: Number(item.total) || 0,
-        serial_number_ids: Array.isArray((item as any).serial_number_ids) ? (item as any).serial_number_ids : [],
-        tax_rate_id: (item as any).tax_rate_id != null ? Number((item as any).tax_rate_id) : null,
-        account_id: (item as any).account_id != null ? Number((item as any).account_id) : null,
+        serial_number_ids: Array.isArray(item.serial_number_ids) ? item.serial_number_ids : [],
+        tax_rate_id: item.tax_rate_id != null ? Number(item.tax_rate_id) : null,
+        account_id: item.account_id != null ? Number(item.account_id) : null,
         is_rounding_adjustment: (item.description || '').trim().toLowerCase() === ROUNDING_LINE_DESCRIPTION.toLowerCase(),
     })) as LineItem[],
 });
 
+const {
+    clearCustomer,
+    customerSearchFocused,
+    customerSearchQuery,
+    filteredCustomers,
+    handleCustomerBlur,
+    handleCustomerSearch,
+    quickCreateCustomer,
+    quickCreateForm,
+    selectCustomer,
+    selectedCustomer,
+    setSelectedCustomer,
+    showQuickCreateModal,
+} = useCustomerLookup({
+    customers: props.customers,
+    initialCustomerId: props.invoice.customer_id,
+    onCustomerSelected: (customer) => {
+        form.customer_id = customer.id.toString();
+        form.contact_id = null;
+        form.email = customer.email || '';
+        form.phone = customer.phone || '';
+        form.title = `Invoice for ${customer.name}`;
+        applyDueDateFromTerms(true);
+    },
+    onCustomerCleared: () => {
+        form.customer_id = '';
+        form.contact_id = null;
+        form.email = '';
+        form.phone = '';
+        applyDueDateFromTerms(true);
+    },
+});
+
+if (props.invoice.customer_id) {
+    const currentCustomer = props.customers.find(c => c.id === props.invoice.customer_id);
+    if (currentCustomer) {
+        setSelectedCustomer(currentCustomer);
+    }
+}
+
 if (form.line_groups.length === 0) {
-    form.line_groups = [{ name: 'Items', sort_order: 0 }];
+    form.line_groups = [{ id: undefined, name: 'Items', sort_order: 0 }];
 }
 
 // Initialize discount types from existing line items
-props.invoice.line_items.forEach((item: any, index: number) => {
+props.invoice.line_items.forEach((item, index: number) => {
     if (item.discount_percentage && item.discount_percentage > 0) {
         discountTypes.value[index] = 'percentage';
     } else {
@@ -996,7 +1002,7 @@ const roundCurrency = (amount: number): number => {
 };
 
 const taxAmount = computed(() => {
-    return form.line_items.reduce((sum: number, item: any) => {
+    return form.line_items.reduce((sum: number, item: LineItem) => {
         if (isRoundingAdjustmentLine(item)) {
             return sum;
         }
@@ -1004,7 +1010,7 @@ const taxAmount = computed(() => {
         const price = Number(item.unit_price) || 0;
         let discAmt = Number(item.discount_amount) || 0;
         const discPct = Number(item.discount_percentage) || 0;
-        let lineSubtotal = qty * price;
+        const lineSubtotal = qty * price;
         if (discPct > 0) {
             discAmt = lineSubtotal * (discPct / 100);
         }
@@ -1040,99 +1046,10 @@ const baseTotalBeforeRounding = computed(() => subtotal.value + taxAmount.value)
 const roundedTargetTotal = computed(() => roundToNearestTenCents(baseTotalBeforeRounding.value));
 const roundingAdjustment = computed(() => roundedTargetTotal.value - baseTotalBeforeRounding.value);
 
-// Customer search functions
-const handleCustomerSearch = async () => {
-    if (!customerSearchQuery.value.trim()) {
-        filteredCustomers.value = [];
-        return;
-    }
-    
-    try {
-        const response = await fetch(`/customers/search?q=${encodeURIComponent(customerSearchQuery.value)}`, {
-            headers: {
-                'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
-            },
-        });
-        
-        if (response.ok) {
-            filteredCustomers.value = await response.json();
-        } else {
-            filteredCustomers.value = [];
-        }
-    } catch (error) {
-        console.error('Error searching customers:', error);
-        filteredCustomers.value = [];
-    }
-};
-
-const handleCustomerBlur = () => {
-    setTimeout(() => {
-        customerSearchFocused.value = false;
-    }, 200);
-};
-
 const onContactSelect = (contact: { email?: string | null; phone?: string | null } | null) => {
     if (contact) {
         form.email = contact.email || '';
         form.phone = contact.phone || '';
-    }
-};
-
-const selectCustomer = (customer: Customer) => {
-    selectedCustomer.value = customer;
-    form.customer_id = customer.id;
-    form.contact_id = null;
-    form.email = customer.email || '';
-    form.phone = customer.phone || '';
-    customerSearchQuery.value = customer.name;
-    customerSearchFocused.value = false;
-    
-    // Update title
-    form.title = `Invoice for ${customer.name}`;
-    applyDueDateFromTerms(true);
-};
-
-const clearCustomer = () => {
-    selectedCustomer.value = null;
-    form.customer_id = 0;
-    form.contact_id = null;
-    form.email = '';
-    form.phone = '';
-    customerSearchQuery.value = '';
-    filteredCustomers.value = [];
-    applyDueDateFromTerms(true);
-};
-
-const quickCreateCustomer = async () => {
-    try {
-        const response = await fetch('/customers/quick-create', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-            },
-            body: JSON.stringify(quickCreateForm.data()),
-        });
-        
-        if (response.ok) {
-            const data = await response.json();
-            if (data.success && data.customer) {
-                selectCustomer(data.customer);
-                showQuickCreateModal.value = false;
-                quickCreateForm.reset();
-                quickCreateForm.name = customerSearchQuery.value;
-            }
-        } else {
-            const errorData = await response.json();
-            if (errorData.errors) {
-                quickCreateForm.setError(errorData.errors);
-            }
-        }
-    } catch (error) {
-        console.error('Error creating customer:', error);
     }
 };
 
@@ -1460,7 +1377,7 @@ const selectProductSuggestion = (index: number, product: Product) => {
 
 const getProductName = (productId: string | null) => {
     if (!productId) return '';
-    const product = props.products.find(p => p.id === parseInt(productId));
+    const product = props.products.find(p => p.id === Number(String(productId)));
     return product ? product.name : '';
 };
 
@@ -1522,6 +1439,7 @@ const submit = () => {
         })),
         line_items: data.line_items.map((item) => {
             const { _uid, ...rest } = item as LineItem;
+            void _uid;
             return {
                 ...rest,
                 product_id: item.product_id,

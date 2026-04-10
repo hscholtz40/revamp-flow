@@ -24,6 +24,7 @@
 !/storage/framework/testing/.gitignore
 !/storage/framework/views/.gitignore
 !/storage/app/public
+/storage/phpstan
 
 # Public build artifacts
 /public/hot
