@@ -134,8 +134,17 @@ class HandleInertiaRequests extends Middleware
             try {
                 $currentCompany = $user->getCurrentCompany();
 
-                // Get companies the user has access to
-                if ($user->companies()->count() === 0) {
+                if ($user->isClientUser()) {
+                    $companies = $currentCompany
+                        ? collect([[
+                            'id' => $currentCompany->id,
+                            'name' => $currentCompany->name,
+                            'logo_path' => $currentCompany->logo_path,
+                            'is_default' => $currentCompany->is_default,
+                        ]])
+                        : collect();
+                } elseif ($user->companies()->count() === 0) {
+                    // Get companies the user has access to
                     // User has access to all companies - show all active companies
                     $companies = Company::where('is_active', true)
                         ->orderBy('is_default', 'desc')
@@ -334,9 +343,20 @@ class HandleInertiaRequests extends Middleware
                     'edit' => $user->hasModulePermission('timesheet', 'edit'),
                     'delete' => $user->hasModulePermission('timesheet', 'delete'),
                 ],
+                'registered-users' => [
+                    'list' => $user->hasModulePermission('registered-users', 'list'),
+                    'view' => $user->hasModulePermission('registered-users', 'view'),
+                    'approve' => $user->hasModulePermission('registered-users', 'approve'),
+                ],
+                'customer-update-requests' => [
+                    'list' => $user->hasModulePermission('customer-update-requests', 'list'),
+                    'view' => $user->hasModulePermission('customer-update-requests', 'view'),
+                    'approve' => $user->hasModulePermission('customer-update-requests', 'approve'),
+                ],
             ];
-        } catch (\Exception $e) {
-            // If database connection fails, return null
+        } catch (\Throwable $e) {
+            report($e);
+
             return null;
         }
     }

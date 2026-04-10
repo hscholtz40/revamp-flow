@@ -261,7 +261,8 @@ const filteredNavItems = computed(() => {
             return !!page.props.auth?.abilities?.timesheet?.view;
         }
         if (item.title === 'Registered Users') {
-            return isAdministrator.value;
+            const abilities = page.props.auth?.abilities as Record<string, { list?: boolean } | undefined> | undefined;
+            return !!(abilities?.['registered-users']?.list || abilities?.['customer-update-requests']?.list);
         }
         if (item.title === 'Users') {
             return !!page.props.auth?.abilities?.users?.list;

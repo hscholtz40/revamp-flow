@@ -1,67 +1,89 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, Link } from '@inertiajs/vue3';
+import { Building2, ClipboardList, UserPlus } from 'lucide-vue-next';
 
-const props = defineProps<{
-    pendingClients: Array<any>;
-    approvedClients: Array<any>;
-    pendingUpdateRequests: Array<any>;
+defineProps<{
+    showRegisteredUsers: boolean;
+    showUpdateRequests: boolean;
+    counts: {
+        registered: number;
+        pending: number;
+        deactivated: number;
+        update_requests: number;
+        pending_update_requests: number;
+    };
 }>();
-
-const approveUser = (id: number) => router.post(`/registered-users/${id}/approve`);
-const rejectUser = (id: number) => router.post(`/registered-users/${id}/reject`);
-const approveUpdate = (id: number) => router.post(`/registered-users/update-requests/${id}/approve`);
-const rejectUpdate = (id: number) => router.post(`/registered-users/update-requests/${id}/reject`);
 </script>
 
 <template>
-    <Head title="Registered Users" />
+    <Head title="Client zone — registered users" />
     <AppLayout :breadcrumbs="[{ title: 'Registered Users', href: '/registered-users' }]">
         <div class="space-y-6 p-4">
-            <h1 class="text-2xl font-semibold">Registered Users</h1>
+            <div>
+                <h1 class="text-2xl font-semibold text-gray-900">Client zone administration</h1>
+                <p class="mt-1 text-sm text-gray-600">
+                    Review approved client logins, pending registrations, and customer information update requests (based on your group permissions).
+                </p>
+            </div>
 
-            <section class="rounded border p-4">
-                <h2 class="mb-3 text-lg font-medium">Pending Client Registrations</h2>
-                <div class="space-y-2">
-                    <div v-for="user in props.pendingClients" :key="user.id" class="flex items-center justify-between rounded border p-3">
+            <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <Link
+                    v-if="showRegisteredUsers"
+                    href="/registered-users/registered"
+                    class="group flex flex-col rounded-lg border border-gray-200 bg-white p-5 shadow-sm transition hover:border-blue-300 hover:shadow"
+                >
+                    <div class="flex items-center gap-3">
+                        <span class="rounded-lg bg-blue-50 p-2 text-blue-700">
+                            <Building2 class="h-5 w-5" />
+                        </span>
                         <div>
-                            <div class="font-medium">{{ user.name }}</div>
-                            <div class="text-sm text-gray-600">{{ user.email }}</div>
-                            <div class="text-sm text-gray-600">Customer: {{ user.customer?.name || 'Unlinked' }}</div>
-                        </div>
-                        <div class="flex gap-2">
-                            <button class="rounded bg-green-600 px-3 py-1.5 text-white" @click="approveUser(user.id)">Approve</button>
-                            <button class="rounded bg-red-600 px-3 py-1.5 text-white" @click="rejectUser(user.id)">Reject</button>
+                            <h2 class="font-medium text-gray-900 group-hover:text-blue-700">Registered users</h2>
+                            <p class="text-sm text-gray-500">Active and deactivated client accounts</p>
                         </div>
                     </div>
-                </div>
-            </section>
+                    <p class="mt-4 text-3xl font-semibold tabular-nums text-gray-900">{{ counts.registered }}</p>
+                    <p v-if="counts.deactivated > 0" class="mt-1 text-sm text-gray-600">
+                        {{ counts.deactivated }} deactivated
+                    </p>
+                </Link>
 
-            <section class="rounded border p-4">
-                <h2 class="mb-3 text-lg font-medium">Pending Customer Update Requests</h2>
-                <div class="space-y-2">
-                    <div v-for="request in props.pendingUpdateRequests" :key="request.id" class="rounded border p-3">
-                        <div class="mb-2 text-sm">
-                            <strong>{{ request.customer?.name }}</strong> requested by {{ request.user?.name }} ({{ request.user?.email }})
-                        </div>
-                        <pre class="mb-2 overflow-x-auto rounded bg-gray-50 p-2 text-xs">{{ request.requested_changes }}</pre>
-                        <div class="flex gap-2">
-                            <button class="rounded bg-green-600 px-3 py-1.5 text-white" @click="approveUpdate(request.id)">Approve</button>
-                            <button class="rounded bg-red-600 px-3 py-1.5 text-white" @click="rejectUpdate(request.id)">Reject</button>
+                <Link
+                    v-if="showRegisteredUsers"
+                    href="/registered-users/pending"
+                    class="group flex flex-col rounded-lg border border-gray-200 bg-white p-5 shadow-sm transition hover:border-amber-300 hover:shadow"
+                >
+                    <div class="flex items-center gap-3">
+                        <span class="rounded-lg bg-amber-50 p-2 text-amber-700">
+                            <UserPlus class="h-5 w-5" />
+                        </span>
+                        <div>
+                            <h2 class="font-medium text-gray-900 group-hover:text-amber-800">Awaiting approval</h2>
+                            <p class="text-sm text-gray-500">New registrations to review</p>
                         </div>
                     </div>
-                </div>
-            </section>
+                    <p class="mt-4 text-3xl font-semibold tabular-nums text-gray-900">{{ counts.pending }}</p>
+                </Link>
 
-            <section class="rounded border p-4">
-                <h2 class="mb-3 text-lg font-medium">Approved Client Accounts</h2>
-                <div class="space-y-2">
-                    <div v-for="user in props.approvedClients" :key="user.id" class="rounded border p-3">
-                        <div class="font-medium">{{ user.name }}</div>
-                        <div class="text-sm text-gray-600">{{ user.email }}</div>
+                <Link
+                    v-if="showUpdateRequests"
+                    href="/registered-users/update-requests"
+                    class="group flex flex-col rounded-lg border border-gray-200 bg-white p-5 shadow-sm transition hover:border-violet-300 hover:shadow"
+                >
+                    <div class="flex items-center gap-3">
+                        <span class="rounded-lg bg-violet-50 p-2 text-violet-700">
+                            <ClipboardList class="h-5 w-5" />
+                        </span>
+                        <div>
+                            <h2 class="font-medium text-gray-900 group-hover:text-violet-800">Update requests</h2>
+                            <p class="text-sm text-gray-500">
+                                {{ counts.pending_update_requests }} pending of {{ counts.update_requests }} total
+                            </p>
+                        </div>
                     </div>
-                </div>
-            </section>
+                    <p class="mt-4 text-3xl font-semibold tabular-nums text-gray-900">{{ counts.update_requests }}</p>
+                </Link>
+            </div>
         </div>
     </AppLayout>
 </template>

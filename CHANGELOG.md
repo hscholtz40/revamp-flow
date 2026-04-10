@@ -1,5 +1,37 @@
 # Changelog
 
+## 2026-04-10
+
+- **Client update approval email sync:** Approving a Client Zone information update now also updates the linked client user's sign-in email when the customer email changes, and approval is blocked cleanly if that new email is already in use by another user. Added focused approval-flow regression coverage.
+
+- **Client Zone security hardening:** Portal access is now bound to the linked `customer_id` instead of mutable email matching, client users can no longer change their sign-in email from profile settings, shared Inertia company props no longer expose all active companies to client accounts, Client Zone now rejects non-client sessions explicitly, client registration uses neutralized error messaging with throttling, and client document signing is enforced server-side only when the company has document signing enabled. Added focused feature coverage for these regressions.
+
+- **Customer account balance & statements:** Customer **Show** and **Edit** display a read-only **account balance** derived in-app from open invoice balances minus **unapplied credit** on credit notes (JCO-only, not synced with Xero). Staff with customer **view** and invoice **view** can **download the same ageing statement PDF** as Client Zone from the customer page. The statement PDF **includes the company logo** when configured. **Client Zone dashboard** lists **net balance per company** for the signed-in client (same calculation).
+
+- **Account statement PDF — credit notes:** The ageing statement now lists **unapplied credit notes** (non-voided with remaining credit), adds an **overall position** block (invoice outstanding, unapplied credit, net due), and renames the invoice-only totals section for clarity.
+
+- **Customers list:** The customers index table includes a **Balance (JCO)** column (net balance for the current company, same rules as the customer detail screen). The column is **sortable** (server-side, same calculation as the displayed balance).
+
+- **Information update request emails:** When staff **approve** or **reject** a Client Zone information update request, the **customer** is emailed at their customer record email (after approval, the record is refreshed so a changed email receives the message). Rejection emails include the **optional reason** when provided. Invalid or missing customer email and SMTP failures are logged without blocking the review action.
+
+- **Information update request (show):** Reworked the pending **Approve / Reject** block so the optional rejection note is full-width above the actions, and both buttons share the same height and alignment (no flex stretch on the approve control).
+
+- **Client Zone signature pad:** Pointer coordinates are mapped using the canvas element’s **display size** vs its **bitmap size** (`width`/`height`), so drawing aligns with the cursor when the pad is CSS-scaled (e.g. `w-full`). Stroke segments are drawn once per move (no cumulative re-stroke), line thickness scales with display scale, and `touch-action: none` reduces scroll interference while signing on touch devices.
+
+- **Client Zone email notifications:** When a client signs a **quote**, **invoice**, or **job card** in Client Zone, staff are notified by email (SMTP): **salesperson** on quotes/invoices, **assigned user** on job cards, with a link to the document; if there is no assignee or they have no email (e.g. older records), the mail goes to the **company email** instead. When a client submits an **information update request**, the **company email** receives a notification with a link to review the request. Failures are logged without blocking the client action.
+
+- **Quotes — salesperson:** Added optional `salesperson_id` on quotes (nullable FK to users), populated for new quotes from the creating staff user, and carried through to invoices created via **Convert quote to invoice** when present.
+
+- **Client Zone document view:** Invoice, quote, and jobcard screens now show line groups (when present) with **per-group subtotals**, plus a **Totals** block (subtotal excl. rounding, discount, tax, rounding adjustment, and total) with currency formatting aligned to company number settings.
+
+- **Client zone user deactivation:** Staff with registered-users **Approve / reject** permission can **deactivate** active client accounts (`approval_status` = `deactivated`) or **reactivate** them. Deactivated clients cannot sign in or use Client Zone (clear messages on client login and middleware). Registered-users list adds **Active** / **Deactivated** tabs; hub shows deactivated count when non-zero.
+
+- **Client zone admin permissions (fix):** `hasModulePermission(..., 'approve')` no longer runs SQL against `can_approve` when that column is missing (e.g. before migrations), so `auth.abilities` is not wiped and the sidebar / Administration buttons stay available. Run `php artisan migrate` to enable approve checks fully.
+
+- **Client zone admin permissions:** Added group-permission controls (List, View, Approve/reject) for **Registered users (Client Zone)** and **Information update requests**, a new `can_approve` flag on `group_permissions`, and route enforcement via module middleware (replacing administrator-only access). Sidebar and hub respect these permissions.
+
+- **Client zone admin lists:** Replaced the single **Registered Users** page with an overview hub and separate paginated list + detail views for approved client accounts, pending registrations, and customer information update requests (search/sort on lists; approve/reject on detail where applicable).
+
 ## 2026-04-08
 
 - **Security hardening (critical remediation):** Sanitized `.env.example` placeholders, restricted Administration license read route to admin-only, removed insecure cPanel HTTP web-exec fallback, and added stronger license API request signing with nonce-based anti-replay protection.

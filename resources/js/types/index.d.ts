@@ -108,6 +108,16 @@ export interface Auth {
                     edit?: boolean;
                     delete?: boolean;
                 };
+        'registered-users'?: {
+            list?: boolean;
+            view?: boolean;
+            approve?: boolean;
+        };
+        'customer-update-requests'?: {
+            list?: boolean;
+            view?: boolean;
+            approve?: boolean;
+        };
     };
 }
 

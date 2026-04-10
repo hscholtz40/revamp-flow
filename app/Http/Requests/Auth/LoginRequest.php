@@ -64,8 +64,15 @@ class LoginRequest extends FormRequest
         if ($user->isClientUser() && ! $user->isClientApproved()) {
             RateLimiter::hit($this->throttleKey());
 
+            $message = match ($user->approval_status) {
+                'pending' => 'Your client account is still pending administrator approval.',
+                'deactivated' => 'Your client account has been deactivated. Please contact the company if you need access restored.',
+                'rejected' => 'Your client registration was not approved.',
+                default => 'Your client account cannot sign in at this time.',
+            };
+
             throw ValidationException::withMessages([
-                'email' => 'Your client account is still pending administrator approval.',
+                'email' => $message,
             ]);
         }
 

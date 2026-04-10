@@ -2,7 +2,7 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import groups from '@/routes/groups';
-import { modules } from '@/lib/modules';
+import { allModulesForGroupPermissions, clientZoneAdminModules, modules } from '@/lib/modules';
 
 const props = defineProps<{
     group: {
@@ -24,7 +24,7 @@ const form = useForm({
     payment_method_card: props.group.payment_method_card !== false,
     payment_method_cash: props.group.payment_method_cash !== false,
     payment_method_eft: props.group.payment_method_eft !== false,
-    permissions: modules.map((m) => {
+    permissions: allModulesForGroupPermissions.map((m) => {
         const existing = props.group.permissions.find((p: any) => p.module === m.key) || {};
         return {
             module: m.key,
@@ -35,6 +35,7 @@ const form = useForm({
             can_delete: !!existing.can_delete,
             can_edit_completed: !!existing.can_edit_completed,
             can_edit_salesperson: !!existing.can_edit_salesperson,
+            can_approve: !!existing.can_approve,
         };
     }),
 });
@@ -99,7 +100,12 @@ function savePermissions() {
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-for="(perm, i) in form.permissions" :key="perm.module" class="border-t">
+                            <tr
+                                v-for="(perm, i) in form.permissions"
+                                v-show="!clientZoneAdminModules.some((c) => c.key === perm.module)"
+                                :key="perm.module"
+                                class="border-t"
+                            >
                                 <td class="p-2">{{ modules.find(m => m.key === perm.module)?.label }}</td>
                                 <td class="p-2"><input type="checkbox" v-model="form.permissions[i].can_list" /></td>
                                 <td class="p-2"><input type="checkbox" v-model="form.permissions[i].can_view" /></td>
@@ -125,6 +131,43 @@ function savePermissions() {
                             </tr>
                         </tbody>
                     </table>
+
+                    <div class="mt-6 border-t pt-4">
+                        <div class="mb-2 font-medium text-gray-900">Client Zone user management</div>
+                        <p class="mb-3 text-xs text-gray-600">
+                            Control staff access to client self-registration approvals and customer information update requests submitted from Client Zone.
+                        </p>
+                        <table class="min-w-full">
+                            <thead>
+                                <tr class="text-left">
+                                    <th class="p-2">Module</th>
+                                    <th class="p-2">List</th>
+                                    <th class="p-2">View</th>
+                                    <th class="p-2">Approve / reject</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr
+                                    v-for="(perm, i) in form.permissions"
+                                    v-show="clientZoneAdminModules.some((c) => c.key === perm.module)"
+                                    :key="perm.module"
+                                    class="border-t"
+                                >
+                                    <td class="p-2">{{ clientZoneAdminModules.find((c) => c.key === perm.module)?.label }}</td>
+                                    <td class="p-2">
+                                        <input type="checkbox" v-model="form.permissions[i].can_list" />
+                                    </td>
+                                    <td class="p-2">
+                                        <input type="checkbox" v-model="form.permissions[i].can_view" />
+                                    </td>
+                                    <td class="p-2">
+                                        <input type="checkbox" v-model="form.permissions[i].can_approve" />
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
                     <div class="mt-4 rounded border border-gray-200 bg-gray-50 p-3">
                         <div class="mb-2 text-sm font-medium text-gray-800">Payment methods (invoice payments, POS, refunds)</div>
                         <p class="mb-3 text-xs text-gray-600">

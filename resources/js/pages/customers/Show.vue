@@ -67,6 +67,7 @@ const canJobcardsList = useAuthAbility('jobcards', 'list');
 const canQuotesView = useAuthAbility('quotes', 'view');
 const canInvoicesView = useAuthAbility('invoices', 'view');
 const canCreditNotesList = useAuthAbility('credit-notes', 'list');
+const statementPdfHref = computed(() => customers.statement.downloadPdf.url(props.customer.id));
 const showAccountHistoryPanel = computed(
     () =>
         canJobcardsList.value ||
@@ -77,6 +78,11 @@ const showAccountHistoryPanel = computed(
 const { formatCurrency } = useNumberFormat();
 
 const props = defineProps<{
+    accountBalance: {
+        outstanding_invoices: number
+        unapplied_credit: number
+        account_balance: number
+    }
     customer: {
         id: number
         name: string
@@ -386,6 +392,38 @@ watch([contactSearch, contactsPerPage, smsSearch, smsStatus, smsPerPage, emailPe
                         </div>
 
                         <div class="space-y-4">
+                            <div>
+                                <h3 class="text-sm font-medium text-gray-900 mb-3 flex items-center">
+                                    <svg class="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                    Account balance (JCO)
+                                </h3>
+                                <p class="text-xs text-gray-500 mb-2">
+                                    From open invoices and credit notes in this app only — not synced with Xero.
+                                </p>
+                                <div class="space-y-2 text-sm">
+                                    <div class="flex justify-between gap-4">
+                                        <span class="text-gray-600">Outstanding on invoices</span>
+                                        <span class="font-medium text-gray-900">{{ formatCurrency(props.accountBalance.outstanding_invoices) }}</span>
+                                    </div>
+                                    <div class="flex justify-between gap-4">
+                                        <span class="text-gray-600">Unapplied credit</span>
+                                        <span class="font-medium text-gray-900">{{ formatCurrency(props.accountBalance.unapplied_credit) }}</span>
+                                    </div>
+                                    <div class="flex justify-between gap-4 border-t border-gray-100 pt-2">
+                                        <span class="font-medium text-gray-900">Net balance</span>
+                                        <span class="font-semibold text-gray-900">{{ formatCurrency(props.accountBalance.account_balance) }}</span>
+                                    </div>
+                                </div>
+                                <a
+                                    v-if="canInvoicesView"
+                                    :href="statementPdfHref"
+                                    class="mt-3 inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-500"
+                                >
+                                    Download account statement (PDF)
+                                </a>
+                            </div>
                             <div>
                                 <h3 class="text-sm font-medium text-gray-900 mb-3 flex items-center">
                                     <svg class="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

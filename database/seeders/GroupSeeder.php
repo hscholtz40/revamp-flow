@@ -31,11 +31,30 @@ class GroupSeeder extends Seeder
             ]),
         ];
 
-        $modules = ['customers', 'users', 'groups', 'contacts', 'products', 'suppliers', 'stock-movements', 'purchase-orders', 'jobcards', 'quotes', 'invoices', 'credit-notes', 'timesheet'];
+        $modules = ['customers', 'users', 'groups', 'contacts', 'products', 'suppliers', 'stock-movements', 'purchase-orders', 'jobcards', 'quotes', 'invoices', 'credit-notes', 'timesheet', 'registered-users', 'customer-update-requests'];
 
         // Add permissions for all groups
         foreach ($groups as $groupName => $group) {
             foreach ($modules as $module) {
+                if (in_array($module, ['registered-users', 'customer-update-requests'], true)) {
+                    $grant = (bool) $group->is_administrator;
+                    GroupPermission::updateOrCreate(
+                        ['group_id' => $group->id, 'module' => $module],
+                        [
+                            'can_list' => $grant,
+                            'can_view' => $grant,
+                            'can_create' => false,
+                            'can_edit' => false,
+                            'can_delete' => false,
+                            'can_edit_completed' => false,
+                            'can_edit_salesperson' => false,
+                            'can_approve' => $grant,
+                        ]
+                    );
+
+                    continue;
+                }
+
                 $permissions = [
                     'can_view' => true,
                     'can_list' => true,

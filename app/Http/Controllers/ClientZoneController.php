@@ -2,22 +2,25 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\CreditNote;
 use App\Models\Company;
+use App\Models\CreditNote;
 use App\Models\Customer;
 use App\Models\CustomerUpdateRequest;
 use App\Models\Invoice;
 use App\Models\Jobcard;
+use App\Models\ProductSerialNumber;
 use App\Models\Quote;
 use App\Models\User;
-use App\Models\ProductSerialNumber;
+use App\Services\CustomerAccountBalanceCalculator;
+use App\Services\CustomerStatementService;
 use App\Services\PdfGenerationService;
-use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response as HttpResponse;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -29,16 +32,11 @@ class ClientZoneController extends Controller
 
     private function getScopedCustomerIds(Request $request, Customer $customer): \Illuminate\Support\Collection
     {
-        $customerEmail = strtolower((string) ($request->user()?->email ?: $customer->email));
-        $customerIds = Customer::query()
-            ->whereRaw('LOWER(email) = ?', [$customerEmail])
-            ->pluck('id');
-
-        return $customerIds->isEmpty() ? collect([$customer->id]) : $customerIds;
+        return collect([$customer->id]);
     }
 
     /**
-     * @param \Illuminate\Support\Collection<int, int> $customerIds
+     * @param  \Illuminate\Support\Collection<int, int>  $customerIds
      * @return \Illuminate\Support\Collection<int, array{id:int,name:string}>
      */
     private function getAvailableCompaniesForCustomerIds(\Illuminate\Support\Collection $customerIds): \Illuminate\Support\Collection
@@ -83,11 +81,13 @@ class ClientZoneController extends Controller
 
         if ($company && $documentType === 'jobcard') {
             $map = collect($company->getJobcardStatusOptions())->pluck('label', 'value');
+
             return $map[$status] ?? ucfirst(str_replace('_', ' ', $status));
         }
 
         if ($company && $documentType === 'quote') {
             $map = collect($company->getQuoteStatusOptions())->pluck('label', 'value');
+
             return $map[$status] ?? ucfirst(str_replace('_', ' ', $status));
         }
 
@@ -103,20 +103,25 @@ class ClientZoneController extends Controller
         }
 
         ksort($counts);
+
         return $counts;
     }
 
     private function assertClientOwnsDocument(Request $request, int $customerId): void
     {
         $customer = $this->getClientCustomer($request);
-        $userEmail = strtolower((string) ($request->user()?->email ?: $customer->email));
-
-        $allowed = Customer::query()
-            ->where('id', $customerId)
-            ->whereRaw('LOWER(email) = ?', [$userEmail])
-            ->exists();
+        $allowed = $this->getScopedCustomerIds($request, $customer)
+            ->contains(fn ($authorizedCustomerId) => (int) $authorizedCustomerId === $customerId);
 
         abort_if(! $allowed, 403);
+    }
+
+    private function ensureDocumentSigningEnabled(int $companyId): void
+    {
+        $company = Company::query()->find($companyId);
+
+        abort_if(! $company, 404);
+        abort_if(! $company->enable_document_signing, 403);
     }
 
     private function getClientCustomer(Request $request): Customer
@@ -139,6 +144,7 @@ class ClientZoneController extends Controller
             'email' => ['required', 'string', 'email', 'max:255'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
         ]);
+        $genericRegistrationError = 'We could not complete registration with those details. Please contact the company if you need access.';
 
         $customer = Customer::query()
             ->whereRaw('LOWER(email) = ?', [strtolower($validated['email'])])
@@ -146,14 +152,14 @@ class ClientZoneController extends Controller
 
         if (! $customer) {
             return back()->withErrors([
-                'email' => 'No customer account was found for this email address. Please contact the company.',
-            ])->withInput();
+                'email' => $genericRegistrationError,
+            ])->withInput($request->except(['password', 'password_confirmation']));
         }
 
         if (User::whereRaw('LOWER(email) = ?', [strtolower($validated['email'])])->exists()) {
             return back()->withErrors([
-                'email' => 'An account with this email already exists. Please sign in instead.',
-            ])->withInput();
+                'email' => $genericRegistrationError,
+            ])->withInput($request->except(['password', 'password_confirmation']));
         }
 
         User::create([
@@ -198,8 +204,23 @@ class ClientZoneController extends Controller
             ->groupBy('company_id', 'status')
             ->get();
 
+        $availableCompanies = $this->getAvailableCompaniesForCustomerIds($customerIds);
+        $accountBalances = $availableCompanies->map(function (array $row) use ($customerIds) {
+            $companyId = (int) $row['id'];
+            $breakdown = CustomerAccountBalanceCalculator::forCustomersInCompany($customerIds, $companyId);
+
+            return [
+                'company_id' => $companyId,
+                'company_name' => $row['name'],
+                'outstanding_invoices' => $breakdown['outstanding_invoices'],
+                'unapplied_credit' => $breakdown['unapplied_credit'],
+                'account_balance' => $breakdown['account_balance'],
+            ];
+        })->values();
+
         return Inertia::render('client-zone/Dashboard', [
             'customer' => $customer->only(['id', 'name', 'email', 'phone', 'address', 'city', 'country', 'vat_number', 'notes']),
+            'accountBalances' => $accountBalances,
             'summary' => [
                 'jobcards' => [
                     'total' => (int) Jobcard::query()->whereIn('customer_id', $customerIds)->count(),
@@ -390,12 +411,14 @@ class ClientZoneController extends Controller
             'notes' => ['nullable', 'string'],
         ]);
 
-        CustomerUpdateRequest::create([
+        $updateRequest = CustomerUpdateRequest::create([
             'customer_id' => $customer->id,
             'user_id' => $user->id,
             'requested_changes' => $validated,
             'status' => 'pending',
         ]);
+
+        $this->notifyCompanyOfClientInformationUpdateRequest($customer, $updateRequest, $user);
 
         return back()->with('success', 'Your update request was submitted and is awaiting approval.');
     }
@@ -404,7 +427,7 @@ class ClientZoneController extends Controller
     {
         $invoice = Invoice::query()->findOrFail($invoiceId);
         $this->assertClientOwnsDocument($request, (int) $invoice->customer_id);
-        $invoice->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'company', 'signatures.user']);
+        $invoice->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company', 'signatures.user']);
 
         return Inertia::render('client-zone/DocumentView', [
             'documentType' => 'invoice',
@@ -421,7 +444,7 @@ class ClientZoneController extends Controller
     {
         $quote = Quote::query()->findOrFail($quoteId);
         $this->assertClientOwnsDocument($request, (int) $quote->customer_id);
-        $quote->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'company', 'signatures.user']);
+        $quote->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company', 'signatures.user']);
 
         return Inertia::render('client-zone/DocumentView', [
             'documentType' => 'quote',
@@ -438,7 +461,7 @@ class ClientZoneController extends Controller
     {
         $jobcard = Jobcard::query()->findOrFail($jobcardId);
         $this->assertClientOwnsDocument($request, (int) $jobcard->customer_id);
-        $jobcard->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'company', 'signatures.user']);
+        $jobcard->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company', 'signatures.user']);
 
         return Inertia::render('client-zone/DocumentView', [
             'documentType' => 'jobcard',
@@ -529,63 +552,14 @@ class ClientZoneController extends Controller
 
         abort_if(! $selectedCompany, 422, 'Please select a valid company before generating a statement.');
 
-        $invoices = Invoice::query()
-            ->with(['company:id,name', 'payments'])
-            ->whereIn('customer_id', $customerIds)
-            ->where('company_id', $selectedCompanyId)
-            ->whereNotIn('status', ['paid', 'cancelled'])
-            ->orderBy('due_date')
-            ->get();
-
-        $rows = $invoices->map(function (Invoice $invoice) {
-            $total = (float) ($invoice->total ?? 0);
-            $payments = (float) $invoice->payments->sum('amount');
-            $balance = (float) $invoice->remaining_balance;
-            $daysOverdue = $invoice->due_date ? now()->startOfDay()->diffInDays($invoice->due_date->startOfDay(), false) * -1 : 0;
-
-            $bucket = 'current';
-            if ($daysOverdue > 0 && $daysOverdue <= 30) {
-                $bucket = 'days_30';
-            } elseif ($daysOverdue > 30 && $daysOverdue <= 60) {
-                $bucket = 'days_60';
-            } elseif ($daysOverdue > 60) {
-                $bucket = 'days_90_plus';
-            }
-
-            return [
-                'invoice_number' => $invoice->invoice_number,
-                'invoice_date' => $invoice->invoice_date,
-                'due_date' => $invoice->due_date,
-                'status' => ucfirst(str_replace('_', ' ', (string) $invoice->status)),
-                'total' => $total,
-                'payments' => $payments,
-                'balance' => $balance,
-                'bucket' => $bucket,
-            ];
-        })->filter(fn (array $row) => $row['balance'] > 0.0001)->values();
-
-        $totals = [
-            'current' => (float) $rows->where('bucket', 'current')->sum('balance'),
-            'days_30' => (float) $rows->where('bucket', 'days_30')->sum('balance'),
-            'days_60' => (float) $rows->where('bucket', 'days_60')->sum('balance'),
-            'days_90_plus' => (float) $rows->where('bucket', 'days_90_plus')->sum('balance'),
-            'total_balance' => (float) $rows->sum('balance'),
-            'invoice_total' => (float) $rows->sum('total'),
-            'payments_total' => (float) $rows->sum('payments'),
-        ];
-
         $company = Company::query()->find($selectedCompanyId);
         if (! $company) {
             abort(404);
         }
 
-        $pdf = Pdf::loadView('pdf.client-statement', [
-            'customer' => $customer,
-            'company' => $company,
-            'rows' => $rows,
-            'totals' => $totals,
-            'generatedAt' => now(),
-        ]);
+        $statementService = new CustomerStatementService;
+        ['rows' => $rows, 'creditNoteRows' => $creditNoteRows, 'totals' => $totals] = $statementService->buildAgeingStatement($customerIds, $selectedCompanyId);
+        $pdf = $statementService->makeStatementPdf($customer, $company, $rows, $creditNoteRows, $totals);
 
         $filename = 'statement-'.$customer->id.'-'.$selectedCompanyId.'-'.now()->format('Ymd').'.pdf';
 
@@ -621,6 +595,8 @@ class ClientZoneController extends Controller
 
     private function handleClientSignature(Request $request, string $signableType, int $signableId, int $companyId): RedirectResponse
     {
+        $this->ensureDocumentSigningEnabled($companyId);
+
         $validated = $request->validate([
             'signer_name' => ['required', 'string', 'max:255'],
             'signature_data' => ['required', 'string'],
@@ -661,6 +637,218 @@ class ClientZoneController extends Controller
             'signed_at' => now(),
         ]);
 
+        $signerName = trim($validated['signer_name']);
+        match (true) {
+            $signableModel instanceof Quote => $this->notifyQuoteAssigneeOfClientZoneSignature($signableModel, $signerName),
+            $signableModel instanceof Invoice => $this->notifyInvoiceAssigneeOfClientZoneSignature($signableModel, $signerName),
+            $signableModel instanceof Jobcard => $this->notifyJobcardAssigneeOfClientZoneSignature($signableModel, $signerName),
+            default => null,
+        };
+
         return back()->with('success', 'Signature captured successfully.');
+    }
+
+    /**
+     * Prefer assignee email; if none, use company email (covers older quotes/invoices/jobcards without an assignee).
+     *
+     * @return array{email: string, name: string|null}|null
+     */
+    private function resolveClientZoneSignatureRecipient(Company $company, ?User $assignee): ?array
+    {
+        if ($assignee && filter_var((string) $assignee->email, FILTER_VALIDATE_EMAIL)) {
+            return ['email' => $assignee->email, 'name' => $assignee->name];
+        }
+
+        if (! empty($company->email) && filter_var((string) $company->email, FILTER_VALIDATE_EMAIL)) {
+            return ['email' => $company->email, 'name' => $company->name];
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $noRecipientContext
+     * @param  array<string, mixed>  $errorContext
+     */
+    private function sendClientZoneDocumentSignedMail(
+        Company $company,
+        ?User $assignee,
+        string $subject,
+        string $bodyHtml,
+        string $noRecipientLogMessage,
+        array $noRecipientContext,
+        string $errorLogMessage,
+        array $errorContext,
+    ): void {
+        $recipient = $this->resolveClientZoneSignatureRecipient($company, $assignee);
+        if ($recipient === null) {
+            Log::warning($noRecipientLogMessage, $noRecipientContext);
+
+            return;
+        }
+
+        try {
+            $fromName = $company->name ?: config('mail.from.name');
+
+            Mail::mailer('smtp')->send([], [], function ($message) use ($recipient, $subject, $bodyHtml, $fromName, $company) {
+                $message->to($recipient['email'], $recipient['name'])
+                    ->subject($subject)
+                    ->from(config('mail.from.address'), $fromName)
+                    ->html($bodyHtml);
+
+                if (! empty($company->email) && filter_var((string) $company->email, FILTER_VALIDATE_EMAIL)) {
+                    $message->replyTo($company->email, $company->name ?? null);
+                }
+            });
+        } catch (\Throwable $e) {
+            Log::error($errorLogMessage, array_merge($errorContext, [
+                'message' => $e->getMessage(),
+            ]));
+        }
+    }
+
+    private function notifyQuoteAssigneeOfClientZoneSignature(Quote $quote, string $signerName): void
+    {
+        $quote->loadMissing(['company', 'customer', 'salesperson']);
+        $company = $quote->company;
+        if ($company === null) {
+            return;
+        }
+
+        $quoteNumber = e($quote->quote_number);
+        $customerLabel = e($quote->customer?->name ?? 'Customer');
+        $signerLabel = e($signerName);
+        $companyLabel = e($company->name ?? 'Company');
+        $quoteUrl = e(route('quotes.show', $quote));
+
+        $subject = "Quote {$quote->quote_number} signed in Client Zone";
+        $body = <<<HTML
+<p>A client signed quote <strong>{$quoteNumber}</strong> in Client Zone.</p>
+<p><strong>Customer:</strong> {$customerLabel}<br>
+<strong>Signer name:</strong> {$signerLabel}</p>
+<p><a href="{$quoteUrl}">Open quote in {$companyLabel}</a></p>
+HTML;
+
+        $this->sendClientZoneDocumentSignedMail(
+            $company,
+            $quote->salesperson,
+            $subject,
+            $body,
+            'Client Zone quote signed: no notification recipient (missing assignee and company email)',
+            ['quote_id' => $quote->id, 'company_id' => $quote->company_id],
+            'Client Zone quote signed: failed to send notification',
+            ['quote_id' => $quote->id],
+        );
+    }
+
+    private function notifyInvoiceAssigneeOfClientZoneSignature(Invoice $invoice, string $signerName): void
+    {
+        $invoice->loadMissing(['company', 'customer', 'salesperson']);
+        $company = $invoice->company;
+        if ($company === null) {
+            return;
+        }
+
+        $invoiceNumber = e($invoice->invoice_number);
+        $customerLabel = e($invoice->customer?->name ?? 'Customer');
+        $signerLabel = e($signerName);
+        $companyLabel = e($company->name ?? 'Company');
+        $invoiceUrl = e(route('invoices.show', $invoice));
+
+        $subject = "Invoice {$invoice->invoice_number} signed in Client Zone";
+        $body = <<<HTML
+<p>A client signed invoice <strong>{$invoiceNumber}</strong> in Client Zone.</p>
+<p><strong>Customer:</strong> {$customerLabel}<br>
+<strong>Signer name:</strong> {$signerLabel}</p>
+<p><a href="{$invoiceUrl}">Open invoice in {$companyLabel}</a></p>
+HTML;
+
+        $this->sendClientZoneDocumentSignedMail(
+            $company,
+            $invoice->salesperson,
+            $subject,
+            $body,
+            'Client Zone invoice signed: no notification recipient (missing assignee and company email)',
+            ['invoice_id' => $invoice->id, 'company_id' => $invoice->company_id],
+            'Client Zone invoice signed: failed to send notification',
+            ['invoice_id' => $invoice->id],
+        );
+    }
+
+    private function notifyJobcardAssigneeOfClientZoneSignature(Jobcard $jobcard, string $signerName): void
+    {
+        $jobcard->loadMissing(['company', 'customer', 'assignedUser']);
+        $company = $jobcard->company;
+        if ($company === null) {
+            return;
+        }
+
+        $jobNumber = e($jobcard->job_number);
+        $customerLabel = e($jobcard->customer?->name ?? 'Customer');
+        $signerLabel = e($signerName);
+        $companyLabel = e($company->name ?? 'Company');
+        $jobcardUrl = e(route('jobcards.show', $jobcard));
+
+        $subject = "Job card {$jobcard->job_number} signed in Client Zone";
+        $body = <<<HTML
+<p>A client signed job card <strong>{$jobNumber}</strong> in Client Zone.</p>
+<p><strong>Customer:</strong> {$customerLabel}<br>
+<strong>Signer name:</strong> {$signerLabel}</p>
+<p><a href="{$jobcardUrl}">Open job card in {$companyLabel}</a></p>
+HTML;
+
+        $this->sendClientZoneDocumentSignedMail(
+            $company,
+            $jobcard->assignedUser,
+            $subject,
+            $body,
+            'Client Zone job card signed: no notification recipient (missing assignee and company email)',
+            ['jobcard_id' => $jobcard->id, 'company_id' => $jobcard->company_id],
+            'Client Zone job card signed: failed to send notification',
+            ['jobcard_id' => $jobcard->id],
+        );
+    }
+
+    private function notifyCompanyOfClientInformationUpdateRequest(Customer $customer, CustomerUpdateRequest $updateRequest, User $clientUser): void
+    {
+        try {
+            $customer->loadMissing('company');
+            $company = $customer->company;
+            if ($company === null || empty($company->email) || ! filter_var((string) $company->email, FILTER_VALIDATE_EMAIL)) {
+                Log::warning('Client Zone information update: company has no valid email for notification', [
+                    'customer_id' => $customer->id,
+                    'company_id' => $customer->company_id,
+                    'update_request_id' => $updateRequest->id,
+                ]);
+
+                return;
+            }
+
+            $customerLabel = e($customer->name);
+            $clientLabel = e($clientUser->name);
+            $reviewUrl = e(route('registered-users.update-requests.show', $updateRequest));
+
+            $subject = 'Client Zone: information update request';
+            $body = <<<HTML
+<p>A client submitted a request to update their information.</p>
+<p><strong>Customer:</strong> {$customerLabel}<br>
+<strong>Client account:</strong> {$clientLabel}</p>
+<p><a href="{$reviewUrl}">Review request</a></p>
+HTML;
+
+            $fromName = $company->name ?: config('mail.from.name');
+
+            Mail::mailer('smtp')->send([], [], function ($message) use ($company, $subject, $body, $fromName) {
+                $message->to($company->email, $company->name)
+                    ->subject($subject)
+                    ->from(config('mail.from.address'), $fromName)
+                    ->html($body);
+            });
+        } catch (\Throwable $e) {
+            Log::error('Client Zone information update: failed to send company notification', [
+                'update_request_id' => $updateRequest->id,
+                'message' => $e->getMessage(),
+            ]);
+        }
     }
 }

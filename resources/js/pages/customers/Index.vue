@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useAuthAbility } from '@/composables/useAuthAbilities';
+import { useNumberFormat } from '@/composables/useNumberFormat';
 import AppLayout from '@/layouts/AppLayout.vue';
 import EmailComposerModal from '@/components/EmailComposerModal.vue';
 import ListTableActionLabel from '@/components/ListTableActionLabel.vue';
@@ -15,6 +16,7 @@ interface Customer {
     phone?: string | null;
     account_code?: string | null;
     is_default_sales?: boolean;
+    account_balance?: number;
 }
 
 interface Company {
@@ -25,6 +27,8 @@ interface Company {
 const canCustomersCreate = useAuthAbility('customers', 'create');
 const canCustomersEdit = useAuthAbility('customers', 'edit');
 const canCustomersDelete = useAuthAbility('customers', 'delete');
+
+const { formatCurrency } = useNumberFormat();
 
 const props = defineProps<{
     customers: {
@@ -234,6 +238,16 @@ const deleteCustomer = (customer: Customer) => {
                                         Account # {{ sortIndicator('account_code') }}
                                     </button>
                                 </th>
+                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    <button
+                                        type="button"
+                                        title="Net balance from invoices and credit notes in this app only (not Xero)"
+                                        class="inline-flex w-full items-center justify-end gap-1 hover:text-gray-700"
+                                        @click="toggleSort('account_balance')"
+                                    >
+                                        Balance (JCO) {{ sortIndicator('account_balance') }}
+                                    </button>
+                                </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Actions
                                 </th>
@@ -264,6 +278,9 @@ const deleteCustomer = (customer: Customer) => {
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     {{ c.account_code || '-' }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm tabular-nums text-gray-900">
+                                    {{ formatCurrency(c.account_balance ?? 0) }}
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" @click.stop>
                                     <div class="flex items-center gap-2">

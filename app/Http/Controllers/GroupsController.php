@@ -32,12 +32,14 @@ class GroupsController extends Controller
             'is_administrator' => ['boolean'],
         ]);
         Group::create($validated);
+
         return to_route('groups.index')->with('success', 'Group created');
     }
 
     public function edit(Group $group): Response
     {
         $group->load('permissions');
+
         return Inertia::render('groups/Edit', [
             'group' => $group,
         ]);
@@ -46,11 +48,12 @@ class GroupsController extends Controller
     public function update(Request $request, Group $group): RedirectResponse
     {
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:100', 'unique:groups,name,' . $group->id],
+            'name' => ['required', 'string', 'max:100', 'unique:groups,name,'.$group->id],
             'description' => ['nullable', 'string', 'max:255'],
             'is_administrator' => ['boolean'],
         ]);
         $group->update($validated);
+
         return to_route('groups.index')->with('success', 'Group updated');
     }
 
@@ -66,6 +69,7 @@ class GroupsController extends Controller
             'permissions.*.can_delete' => ['boolean'],
             'permissions.*.can_edit_completed' => ['boolean'],
             'permissions.*.can_edit_salesperson' => ['boolean'],
+            'permissions.*.can_approve' => ['boolean'],
             'payment_method_card' => ['required', 'boolean'],
             'payment_method_cash' => ['required', 'boolean'],
             'payment_method_eft' => ['required', 'boolean'],
@@ -94,6 +98,7 @@ class GroupsController extends Controller
                     'can_delete' => $perm['can_delete'] ?? false,
                     'can_edit_completed' => $perm['can_edit_completed'] ?? false,
                     'can_edit_salesperson' => $perm['can_edit_salesperson'] ?? false,
+                    'can_approve' => $perm['can_approve'] ?? false,
                 ]
             );
         }
@@ -101,5 +106,3 @@ class GroupsController extends Controller
         return back()->with('success', 'Permissions updated');
     }
 }
-
-

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\CustomerAccountBalanceCalculator;
 use App\Traits\Auditable;
 use App\Traits\ScopedToCurrentCompanyRouteBinding;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -80,6 +81,16 @@ class Customer extends Model
     public function updateRequests(): HasMany
     {
         return $this->hasMany(CustomerUpdateRequest::class);
+    }
+
+    /**
+     * JCO-only AR balance for this customer in a company (open invoice balances minus unapplied credit).
+     *
+     * @return array{outstanding_invoices: float, unapplied_credit: float, account_balance: float}
+     */
+    public function accountBalanceBreakdownForCompany(int $companyId): array
+    {
+        return CustomerAccountBalanceCalculator::forCustomersInCompany([$this->id], $companyId);
     }
 
     /**

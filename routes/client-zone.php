@@ -5,7 +5,9 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function () {
     Route::get('/client-zone/register', [ClientZoneController::class, 'showRegistrationForm'])->name('client-zone.register');
-    Route::post('/client-zone/register', [ClientZoneController::class, 'register'])->name('client-zone.register.store');
+    Route::post('/client-zone/register', [ClientZoneController::class, 'register'])
+        ->middleware('throttle:5,1')
+        ->name('client-zone.register.store');
 });
 
 Route::middleware(['auth', 'approved.client'])->group(function () {

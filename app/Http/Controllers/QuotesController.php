@@ -321,6 +321,7 @@ class QuotesController extends Controller
         $quote = Quote::create([
             'company_id' => $currentCompany->id,
             'customer_id' => $validated['customer_id'],
+            'salesperson_id' => auth()->id(),
             'contact_id' => $validated['contact_id'] ?? null,
             'email' => $validated['email'] ?? null,
             'phone' => $validated['phone'] ?? null,

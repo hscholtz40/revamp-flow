@@ -11,7 +11,7 @@ class GroupPermission extends Model
     use HasFactory;
 
     protected $fillable = [
-        'group_id', 'module', 'can_view', 'can_list', 'can_create', 'can_edit', 'can_delete', 'can_edit_completed', 'can_edit_salesperson'
+        'group_id', 'module', 'can_view', 'can_list', 'can_create', 'can_edit', 'can_delete', 'can_edit_completed', 'can_edit_salesperson', 'can_approve',
     ];
 
     protected $casts = [
@@ -22,6 +22,7 @@ class GroupPermission extends Model
         'can_delete' => 'boolean',
         'can_edit_completed' => 'boolean',
         'can_edit_salesperson' => 'boolean',
+        'can_approve' => 'boolean',
     ];
 
     public function group(): BelongsTo
@@ -29,5 +30,3 @@ class GroupPermission extends Model
         return $this->belongsTo(Group::class);
     }
 }
-
-

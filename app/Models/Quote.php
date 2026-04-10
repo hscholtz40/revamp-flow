@@ -19,6 +19,7 @@ class Quote extends Model
     protected $fillable = [
         'company_id',
         'customer_id',
+        'salesperson_id',
         'contact_id',
         'email',
         'phone',
@@ -69,6 +70,11 @@ class Quote extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function salesperson(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'salesperson_id');
     }
 
     public function contact(): BelongsTo
@@ -306,7 +312,7 @@ class Quote extends Model
             'contact_id' => $this->contact_id,
             'email' => $this->email,
             'phone' => $this->phone,
-            'salesperson_id' => auth()->id(),
+            'salesperson_id' => $this->salesperson_id ?? auth()->id(),
             'invoice_number' => Invoice::generateInvoiceNumber($this->company_id),
             'order_number' => $this->order_number,
             'title' => $this->title,

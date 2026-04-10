@@ -9,12 +9,20 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Schema;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable, TwoFactorAuthenticatable;
+
+    /**
+     * Cached result for whether group_permissions has can_approve (avoids SQL errors before migrations run).
+     *
+     * @var bool|null null = unresolved
+     */
+    private static ?bool $groupPermissionsHasCanApproveColumn = null;
 
     /**
      * The attributes that are mass assignable.
@@ -114,9 +122,22 @@ class User extends Authenticatable
     public function hasModulePermission(string $module, string $ability): bool
     {
         $ability = match ($ability) {
-            'view', 'list', 'create', 'edit', 'delete', 'edit_completed', 'edit_salesperson' => $ability,
+            'view', 'list', 'create', 'edit', 'delete', 'edit_completed', 'edit_salesperson', 'approve' => $ability,
             default => 'view',
         };
+
+        if ($ability === 'approve') {
+            if (self::$groupPermissionsHasCanApproveColumn === null) {
+                try {
+                    self::$groupPermissionsHasCanApproveColumn = Schema::hasColumn('group_permissions', 'can_approve');
+                } catch (\Throwable) {
+                    self::$groupPermissionsHasCanApproveColumn = false;
+                }
+            }
+            if (! self::$groupPermissionsHasCanApproveColumn) {
+                return false;
+            }
+        }
 
         return $this->groups()
             ->whereHas('permissions', function ($q) use ($module, $ability) {
@@ -229,8 +250,38 @@ class User extends Authenticatable
         return $this->approval_status === 'approved';
     }
 
+    public function isClientDeactivated(): bool
+    {
+        return $this->isClientUser() && $this->approval_status === 'deactivated';
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function getClientAccessibleCompanyIds(): array
+    {
+        $companyIds = $this->companies()
+            ->pluck('companies.id')
+            ->map(fn ($companyId) => (int) $companyId)
+            ->all();
+
+        if ($this->current_company_id) {
+            $companyIds[] = (int) $this->current_company_id;
+        }
+
+        if ($this->customer?->company_id) {
+            $companyIds[] = (int) $this->customer->company_id;
+        }
+
+        return array_values(array_unique(array_filter($companyIds, fn ($companyId) => $companyId > 0)));
+    }
+
     public function hasAccessToCompany(int $companyId): bool
     {
+        if ($this->isClientUser()) {
+            return in_array($companyId, $this->getClientAccessibleCompanyIds(), true);
+        }
+
         // If user has no companies assigned, they have access to all companies
         if ($this->companies()->count() === 0) {
             return true;
@@ -241,6 +292,27 @@ class User extends Authenticatable
 
     public function getCurrentCompany(): ?Company
     {
+        if ($this->isClientUser()) {
+            if ($this->current_company_id) {
+                $currentCompany = $this->currentCompany;
+                if ($currentCompany && $this->hasAccessToCompany($currentCompany->id) && $currentCompany->is_active) {
+                    return $currentCompany;
+                }
+            }
+
+            $clientCompanyIds = $this->getClientAccessibleCompanyIds();
+            if ($clientCompanyIds === []) {
+                return null;
+            }
+
+            return Company::query()
+                ->whereIn('id', $clientCompanyIds)
+                ->where('is_active', true)
+                ->orderByDesc('is_default')
+                ->orderBy('name')
+                ->first();
+        }
+
         // If user has a current company set, check if they still have access to it
         if ($this->current_company_id) {
             $currentCompany = $this->currentCompany;

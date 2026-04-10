@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Customer;
 use App\Models\CreditNote;
+use App\Models\Customer;
 use App\Models\EmailActivity;
 use App\Models\EmailTemplate;
 use App\Models\Invoice;
@@ -12,6 +12,8 @@ use App\Models\Quote;
 use App\Models\SMSActivity;
 use App\Models\SMSSettings;
 use App\Services\BulkSMSService;
+use App\Services\CustomerAccountBalanceCalculator;
+use App\Services\CustomerStatementService;
 use App\Support\CompanyScopedRules;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -28,7 +30,7 @@ class CustomersController extends Controller
         $currentCompany = auth()->user()->getCurrentCompany();
         $sortBy = $request->input('sort_by', 'name');
         $sortDir = $request->input('sort_dir', 'asc') === 'desc' ? 'desc' : 'asc';
-        $sortableFields = ['name', 'email', 'phone', 'account_code', 'is_default_sales', 'created_at'];
+        $sortableFields = ['name', 'email', 'phone', 'account_code', 'is_default_sales', 'created_at', 'account_balance'];
         if (! in_array($sortBy, $sortableFields, true)) {
             $sortBy = 'name';
         }
@@ -43,10 +45,31 @@ class CustomersController extends Controller
                 });
             });
 
+        if ($sortBy === 'account_balance') {
+            CustomerAccountBalanceCalculator::applyAccountBalanceSort($customersQuery, $currentCompany->id, $sortDir);
+        } else {
+            $customersQuery->orderBy($sortBy, $sortDir);
+        }
+
         $customers = $customersQuery
-            ->orderBy($sortBy, $sortDir)
             ->paginate(10)
             ->withQueryString();
+
+        $balanceMap = CustomerAccountBalanceCalculator::balancesKeyedByCustomerId(
+            $customers->getCollection()->pluck('id'),
+            $currentCompany->id
+        );
+
+        $customers->setCollection(
+            $customers->getCollection()->map(function (Customer $customer) use ($balanceMap) {
+                $customer->setAttribute(
+                    'account_balance',
+                    $balanceMap[$customer->id]['account_balance'] ?? 0.0
+                );
+
+                return $customer;
+            })
+        );
 
         return Inertia::render('customers/Index', [
             'customers' => $customers,
@@ -180,8 +203,11 @@ class CustomersController extends Controller
 
     public function edit(Customer $customer): Response
     {
+        $currentCompany = auth()->user()->getCurrentCompany();
+
         return Inertia::render('customers/Edit', [
             'customer' => $customer,
+            'accountBalance' => $customer->accountBalanceBreakdownForCompany($currentCompany->id),
         ]);
     }
 
@@ -298,6 +324,7 @@ class CustomersController extends Controller
 
         return Inertia::render('customers/Show', [
             'customer' => $customer,
+            'accountBalance' => $customer->accountBalanceBreakdownForCompany($currentCompany->id),
             'contacts' => $contacts,
             'smsActivities' => $smsActivities,
             'emailActivities' => $emailActivities,
@@ -316,6 +343,29 @@ class CustomersController extends Controller
                 'email_per_page' => $emailPerPage,
                 'account_history_per_page' => $accountHistoryPerPage,
             ],
+        ]);
+    }
+
+    public function downloadStatement(Customer $customer, Request $request): \Illuminate\Http\Response
+    {
+        $this->authorize('view', $customer);
+
+        $user = $request->user();
+        abort_if(! $user, 403);
+
+        $currentCompany = $user->getCurrentCompany();
+        abort_unless((int) $customer->company_id === (int) $currentCompany->id, 404);
+
+        $statementService = new CustomerStatementService;
+        ['rows' => $rows, 'creditNoteRows' => $creditNoteRows, 'totals' => $totals] = $statementService->buildAgeingStatement([$customer->id], $currentCompany->id);
+        $pdf = $statementService->makeStatementPdf($customer, $currentCompany, $rows, $creditNoteRows, $totals);
+
+        $safeSlug = preg_replace('/[^A-Za-z0-9_-]+/', '-', (string) $customer->account_code) ?: (string) $customer->id;
+        $filename = 'statement-'.$safeSlug.'-'.now()->format('Ymd').'.pdf';
+
+        return response($pdf->output(), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
         ]);
     }
 

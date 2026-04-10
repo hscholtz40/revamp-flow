@@ -1,11 +1,21 @@
 <script setup lang="ts">
+import { useNumberFormat } from '@/composables/useNumberFormat';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import customers from '@/routes/customers';
 
 const paymentTermsOptions = ['COD', 'Net 7 Days', 'Net 14 Days', 'Net 30 Days', 'Net 60 Days'];
 
-const props = defineProps<{ customer: any }>();
+const props = defineProps<{
+    customer: any
+    accountBalance: {
+        outstanding_invoices: number
+        unapplied_credit: number
+        account_balance: number
+    }
+}>();
+
+const { formatCurrency } = useNumberFormat();
 
 interface CustomerFormData {
     name: string;
@@ -88,6 +98,24 @@ function submit() {
                     <input v-model="form.account_code" class="w-full rounded border px-3 py-2" />
                     <div v-if="form.errors.account_code" class="text-sm text-red-600">{{ form.errors.account_code }}</div>
                 </label>
+                <div class="block md:col-span-2 rounded border border-dashed border-gray-200 bg-gray-50 p-4">
+                    <span class="mb-2 block text-sm font-medium text-gray-700">Account balance (read-only, JCO only)</span>
+                    <p class="mb-3 text-xs text-gray-500">Calculated from open invoices and unapplied credit notes in this app — not synced with Xero.</p>
+                    <div class="grid gap-2 text-sm sm:grid-cols-3">
+                        <div>
+                            <div class="text-gray-500">Outstanding invoices</div>
+                            <div class="font-medium">{{ formatCurrency(props.accountBalance.outstanding_invoices) }}</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-500">Unapplied credit</div>
+                            <div class="font-medium">{{ formatCurrency(props.accountBalance.unapplied_credit) }}</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-500">Net balance</div>
+                            <div class="font-semibold">{{ formatCurrency(props.accountBalance.account_balance) }}</div>
+                        </div>
+                    </div>
+                </div>
             </div>
             <label class="block">
                 <span class="mb-1 block">Notes</span>
