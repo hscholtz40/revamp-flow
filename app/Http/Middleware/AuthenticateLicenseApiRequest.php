@@ -75,7 +75,7 @@ class AuthenticateLicenseApiRequest
 
         if (! $signatureValid) {
             $primaryPayloadHash = $payloadHashCandidates[0] ?? hash('sha256', $rawBody);
-            Log::warning('License API signature mismatch (no candidate matched)', SafeLog::redactContext(array_merge(
+            Log::channel('license')->warning('License API signature mismatch (no candidate matched)', SafeLog::redactContext(array_merge(
                 $this->diagnosticContext($request, $rawBody),
                 [
                     'path_from_full_url' => LicenseApiSigning::pathForSignatureFromUrl($request->fullUrl()),
@@ -96,17 +96,26 @@ class AuthenticateLicenseApiRequest
             ->whereRaw('LOWER(license_key) = ?', [strtolower($licenseKey)])
             ->exists();
         if (! $licenseExists) {
+            Log::channel('license')->warning('License API HMAC valid but license_key not found in database', SafeLog::redactContext([
+                'license_key_length' => strlen($licenseKey),
+                'client_ip' => $request->ip(),
+            ]));
+
             return $this->unauthorized('License authentication failed.');
         }
 
         $nonceTtlSeconds = max((int) config('app.license_api_nonce_ttl', 300), 60);
         $nonceCacheKey = 'license-api-nonce:' . sha1(strtolower($licenseKey) . '|' . $timestamp . '|' . $nonce);
-        if (!Cache::add($nonceCacheKey, true, now()->addSeconds($nonceTtlSeconds))) {
+        if (! Cache::add($nonceCacheKey, true, now()->addSeconds($nonceTtlSeconds))) {
+            Log::channel('license')->notice('License API replay nonce rejected', [
+                'client_ip' => $request->ip(),
+            ]);
+
             return $this->unauthorized('Replay request detected.');
         }
 
         if (config('app.license_api_debug_log')) {
-            Log::info('License API request authenticated', SafeLog::redactContext($this->diagnosticContext($request, $rawBody)));
+            Log::channel('license')->info('License API request authenticated', SafeLog::redactContext($this->diagnosticContext($request, $rawBody)));
         }
 
         return $next($request);

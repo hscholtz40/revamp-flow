@@ -127,6 +127,24 @@ return [
             'path' => storage_path('logs/laravel.log'),
         ],
 
+        /*
+        |--------------------------------------------------------------------------
+        | License API (customer ↔ licensing server)
+        |--------------------------------------------------------------------------
+        |
+        | Written independently of LOG_LEVEL so validation issues are visible even
+        | when the default stack only logs errors. Check storage/logs/license.log
+        | on both instances. Level: LICENSE_LOG_LEVEL (default: debug).
+        |
+        */
+
+        'license' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/license.log'),
+            'level' => env('LICENSE_LOG_LEVEL', 'debug'),
+            'replace_placeholders' => true,
+        ],
+
     ],
 
 ];

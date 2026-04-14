@@ -54,9 +54,21 @@ class InstanceLicenseService
         }
 
         $cacheKey = $this->cacheKey($settings->license_key);
-        if (!$forceRefresh) {
+        if (! $forceRefresh) {
             $cached = Cache::get($cacheKey);
             if (is_array($cached)) {
+                if (! ($cached['valid'] ?? false)) {
+                    $throttleKey = 'license-log:cached-failure:'.sha1($cacheKey);
+                    if (Cache::add($throttleKey, true, now()->addMinutes(5))) {
+                        Log::channel('license')->notice(
+                            'License validation: serving cached failure result (no HTTP request this time). Run `php artisan cache:clear` or validate with force refresh to retry.',
+                            [
+                                'message' => $cached['message'] ?? '',
+                            ]
+                        );
+                    }
+                }
+
                 return $cached;
             }
         }
@@ -79,7 +91,7 @@ class InstanceLicenseService
             if (!$response->ok()) {
                 $message = $this->messageFromLicenseServerResponse($response);
 
-                Log::warning('License validation request failed (customer instance — compare request_body_sha256_hex to licensing server raw_body_sha256_hex on failed HMAC)', [
+                Log::channel('license')->warning('License validation HTTP error (customer instance — compare request_body_sha256_hex to licensing server raw_body_sha256_hex)', [
                     'status' => $response->status(),
                     'message' => $message,
                     'license_server_host' => parse_url($serverUrl, PHP_URL_HOST) ?: $serverUrl,
@@ -129,6 +141,12 @@ class InstanceLicenseService
 
             return $result;
         } catch (\Throwable $e) {
+            Log::channel('license')->error('License validation exception (customer instance — no HTTP response)', [
+                'exception' => $e::class,
+                'message' => $e->getMessage(),
+                'license_server_host' => parse_url($serverUrl, PHP_URL_HOST) ?: $serverUrl,
+            ]);
+
             $result = [
                 'valid' => false,
                 'message' => 'Could not connect to the license server.',
