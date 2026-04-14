@@ -3,7 +3,7 @@
         <div class="container mx-auto px-4 py-6">
             <div class="flex flex-col items-center justify-center space-y-2 text-center text-sm text-muted-foreground">
                 <p>&copy; {{ currentYear }} Nexora Software (Pty) Ltd. All rights reserved.</p>
-                <p>Version {{ $page.props.app.version }}</p>
+                <p>Version {{ $page.props.app?.version ?? 'unknown' }}</p>
             </div>
         </div>
     </footer>

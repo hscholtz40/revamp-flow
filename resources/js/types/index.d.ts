@@ -139,6 +139,9 @@ export type AppPageProps<
     name: string;
     quote: { message: string; author: string };
     auth: Auth;
+    app?: {
+        version?: string | null;
+    };
     flash?: {
         success?: string | null;
         error?: string | null;

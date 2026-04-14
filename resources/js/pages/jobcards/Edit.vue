@@ -182,7 +182,7 @@
                         <div v-if="form.customer_id">
                             <ContactSelector
                                 v-model="form.contact_id"
-                                :customer-id="form.customer_id ? parseInt(form.customer_id) : null"
+                                :customer-id="form.customer_id != null ? Number(form.customer_id) : null"
                                 :initial-contact="(props.jobcard as any).contact ?? null"
                                 label="Contact"
                                 :error="form.errors.contact_id"
@@ -756,9 +756,12 @@ interface Jobcard {
     due_date: string | null;
     completed_date: string | null;
     tax_rate: number;
+    discount_amount?: number | null;
+    discount_percentage?: number | null;
     notes: string | null;
     terms_conditions: string | null;
     line_items: LineItem[];
+    lineItems?: LineItem[];
     line_groups?: LineGroup[];
     lineGroups?: LineGroup[];
 }
@@ -874,7 +877,7 @@ const form = useForm({
 });
 
 if (form.line_groups.length === 0) {
-    form.line_groups = [{ name: 'Items', sort_order: 0 }];
+    form.line_groups = [{ id: undefined, name: 'Items', sort_order: 0 }];
 }
 
 // Initialize discount types from existing line items
@@ -899,7 +902,7 @@ const normalizeLineItemOrder = () => {
         return !form.line_groups.some((_, idx) => (item.line_group_id ?? fallbackGroupId) === getGroupValueByIndex(idx));
     });
     ordered.push(...ungroupedItems.map((item) => ({ ...item, line_group_id: fallbackGroupId })));
-    form.line_items = ordered;
+    form.line_items = ordered as typeof form.line_items;
 };
 
 const groupedLineItems = computed(() =>
@@ -943,6 +946,7 @@ normalizeLineItemOrder();
 const addLineGroup = () => {
     const nextSortOrder = form.line_groups.length;
     form.line_groups.push({
+        id: undefined,
         name: `Group ${nextSortOrder + 1}`,
         sort_order: nextSortOrder,
     });
@@ -1386,12 +1390,14 @@ const ensureRoundingAdjustmentLine = () => {
     };
 
     if (roundingIndex >= 0) {
+        const gid = Number(roundingLine.line_group_id ?? getGroupValueByIndex(0));
         form.line_items[roundingIndex] = {
             ...form.line_items[roundingIndex],
             ...roundingLine,
+            line_group_id: gid,
         };
     } else {
-        form.line_items.push(roundingLine);
+        form.line_items.push(roundingLine as (typeof form.line_items)[number]);
     }
 };
 

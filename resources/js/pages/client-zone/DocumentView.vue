@@ -80,7 +80,7 @@ const resolvedLineGroups = computed((): ResolvedGroup[] => {
 });
 
 const roundingAdjustment = computed(() => {
-    return lineItemsRaw.value.reduce((sum, item) => {
+    return lineItemsRaw.value.reduce((sum: number, item: any) => {
         if (!isRoundingLine(item)) {
             return sum;
         }
@@ -93,7 +93,7 @@ const roundingAdjustment = computed(() => {
 });
 
 const subtotalExcludingRounding = computed(() => {
-    return lineItemsRaw.value.reduce((sum, item) => {
+    return lineItemsRaw.value.reduce((sum: number, item: any) => {
         if (isRoundingLine(item)) {
             return sum;
         }

@@ -6,6 +6,7 @@ import { ref } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import type { BadgeVariant } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { 
     Database, 
@@ -85,7 +86,7 @@ const scheduleForm = ref({
     time: '02:00',
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     day_of_week: '',
-    day_of_month: null,
+    day_of_month: undefined as number | undefined,
     retention_days: 30,
 });
 
@@ -108,7 +109,7 @@ function createSchedule() {
                 time: '02:00',
                 timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
                 day_of_week: '',
-                day_of_month: null,
+                day_of_month: undefined,
                 retention_days: 30,
             };
         },
@@ -154,8 +155,8 @@ function deleteSchedule(scheduleId: number) {
     router.delete(`/backups/schedules/${scheduleId}`);
 }
 
-function getStatusBadgeVariant(status: string): string {
-    const variants: Record<string, string> = {
+function getStatusBadgeVariant(status: string): BadgeVariant {
+    const variants: Record<string, BadgeVariant> = {
         completed: 'default',
         in_progress: 'secondary',
         failed: 'destructive',

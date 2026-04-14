@@ -29,6 +29,9 @@ interface Props {
         data: License[];
         links: any[];
         meta: any;
+        from?: number;
+        to?: number;
+        total?: number;
     };
     filters?: {
         search?: string;

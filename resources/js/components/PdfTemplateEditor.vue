@@ -2328,7 +2328,7 @@ onMounted(async () => {
         width: '100%',
         plugins: [gjsPresetWebpage],
         pluginsOpts: {
-            [gjsPresetWebpage]: {
+            [gjsPresetWebpage as unknown as string]: {
                 modalImportTitle: 'Import Template',
                 modalImportLabel: '<div style="margin-bottom: 10px; font-size: 13px;">Paste here your HTML/CSS and click Import</div>',
                 modalImportContent: (editor: any) => {
@@ -2420,7 +2420,7 @@ onMounted(async () => {
                             property: 'border-width',
                             type: 'integer',
                             units: ['px'],
-                            defaults: 0,
+                            defaults: '0',
                             min: 0,
                         },
                         {
@@ -2446,12 +2446,12 @@ onMounted(async () => {
                             property: 'border-radius',
                             type: 'integer',
                             units: ['px', '%'],
-                            defaults: 0,
+                            defaults: '0',
                             min: 0,
                         },
                     ],
                 },
-            ],
+            ] as any,
         },
         panels: {
             defaults: [

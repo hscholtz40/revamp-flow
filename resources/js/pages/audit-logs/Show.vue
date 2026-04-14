@@ -2,6 +2,7 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { Badge } from '@/components/ui/badge';
+import type { BadgeVariant } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Calendar, Globe, User, FileText } from 'lucide-vue-next';
@@ -36,8 +37,8 @@ const props = defineProps<{
     auditLog: AuditLog;
 }>();
 
-function getEventBadgeVariant(event: string): string {
-    const variants: Record<string, string> = {
+function getEventBadgeVariant(event: string): BadgeVariant {
+    const variants: Record<string, BadgeVariant> = {
         created: 'default',
         updated: 'secondary',
         deleted: 'destructive',

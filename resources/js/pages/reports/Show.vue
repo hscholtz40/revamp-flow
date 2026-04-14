@@ -55,6 +55,7 @@ interface ReportData {
 interface Customer {
     id: number;
     name: string;
+    account_code?: string | null;
 }
 
 interface Product {
@@ -126,6 +127,18 @@ const productSearchQuery = ref('');
 const productSearchFocused = ref(false);
 const filteredProducts = ref<Product[]>([]);
 const selectedProduct = ref<Product | null>(null);
+
+const hideCustomerSearch = () => {
+    window.setTimeout(() => {
+        customerSearchFocused.value = false;
+    }, 200);
+};
+
+const hideProductSearch = () => {
+    window.setTimeout(() => {
+        productSearchFocused.value = false;
+    }, 200);
+};
 
 // Initialize selected customer/product from template filters or request filters
 if (filterCustomerId.value) {
@@ -472,7 +485,7 @@ const printReport = () => {
                                 v-model="customerSearchQuery"
                                 @input="handleCustomerSearch"
                                 @focus="customerSearchFocused = true"
-                                @blur="() => setTimeout(() => customerSearchFocused = false, 200)"
+                                @blur="hideCustomerSearch"
                                 type="text"
                                 placeholder="Search customer..."
                                 class="w-full rounded border px-3 py-2"
@@ -510,7 +523,7 @@ const printReport = () => {
                                 v-model="productSearchQuery"
                                 @input="handleProductSearch"
                                 @focus="productSearchFocused = true"
-                                @blur="() => setTimeout(() => productSearchFocused = false, 200)"
+                                @blur="hideProductSearch"
                                 type="text"
                                 placeholder="Search product..."
                                 class="w-full rounded border px-3 py-2"

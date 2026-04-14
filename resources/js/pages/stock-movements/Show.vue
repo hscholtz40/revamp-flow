@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
+import { computed } from 'vue';
 import { ArrowLeft, ArrowUp, ArrowDown, Settings, Package, User, Calendar, FileText, DollarSign, Hash } from 'lucide-vue-next';
 import stockMovements from '@/routes/stock-movements';
 
@@ -39,10 +40,10 @@ interface StockMovement {
     unit_cost: number | null;
     stock_before: number;
     stock_after: number;
-    reference: string | null;
+    /** DB free-text or polymorphic model payload when relation is loaded */
+    reference: string | Reference | null;
     reference_type: string | null;
     reference_id: number | null;
-    reference?: Reference | null;
     to_company_id: number | null;
     to_company?: Company | null;
     serial_number?: SerialNumber | null;
@@ -108,22 +109,38 @@ function getReferenceLink(): string | null {
 }
 
 function getReferenceDisplayName(): string {
-    if (!props.movement.reference_type || !props.movement.reference) {
-        return props.movement.reference || 'N/A';
-    }
-    
-    const ref = props.movement.reference;
+    const raw = props.movement.reference;
     const type = props.movement.reference_type;
-    
-    // Try to get a display name from the reference object
-    if (ref.po_number) return `PO-${ref.po_number}`;
-    if (ref.invoice_number) return ref.invoice_number;
-    if (ref.quote_number) return ref.quote_number;
-    if (ref.job_number) return ref.job_number;
-    if (ref.title) return ref.title;
-    
-    return props.movement.reference || `${type} #${props.movement.reference_id}`;
+    const refId = props.movement.reference_id;
+
+    if (!type) {
+        if (raw === null || raw === undefined) return 'N/A';
+        return typeof raw === 'string' ? raw : displayFromReferenceObject(raw);
+    }
+
+    if (raw === null || raw === undefined) {
+        return refId != null ? `${type} #${refId}` : 'N/A';
+    }
+
+    if (typeof raw === 'string') {
+        return raw || (refId != null ? `${type} #${refId}` : 'N/A');
+    }
+
+    return displayFromReferenceObject(raw);
 }
+
+function displayFromReferenceObject(ref: Reference): string {
+    const type = props.movement.reference_type;
+    const refId = props.movement.reference_id;
+    if (ref.po_number) return `PO-${ref.po_number}`;
+    if (ref.invoice_number) return String(ref.invoice_number);
+    if (ref.quote_number) return String(ref.quote_number);
+    if (ref.job_number) return String(ref.job_number);
+    if (ref.title) return String(ref.title);
+    return type && refId != null ? `${type} #${refId}` : 'N/A';
+}
+
+const referenceLinkHref = computed(() => getReferenceLink());
 </script>
 
 <template>
@@ -282,8 +299,8 @@ function getReferenceDisplayName(): string {
                                 <div class="text-sm font-medium text-gray-500">Reference</div>
                                 <div class="mt-1">
                                     <Link
-                                        v-if="getReferenceLink()"
-                                        :href="getReferenceLink()"
+                                        v-if="referenceLinkHref"
+                                        :href="referenceLinkHref"
                                         class="text-sm font-medium text-blue-600 hover:text-blue-800"
                                     >
                                         {{ getReferenceDisplayName() }}

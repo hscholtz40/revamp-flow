@@ -415,7 +415,7 @@ interface Props {
             tax_amount: number;
             total: number;
             line_group_id?: number | null;
-            product: { id: number; name: string; sku: string } | null;
+            product: { id: number; name: string; sku: string; barcode?: string | null } | null;
             tax_rate: { id: number; name: string; rate: number } | null;
         }>;
         line_groups?: Array<{ id: number; name: string; sort_order?: number }>;

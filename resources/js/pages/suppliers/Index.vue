@@ -25,6 +25,9 @@ interface Props {
         data: Supplier[];
         links: any[];
         meta: any;
+        from?: number;
+        to?: number;
+        total?: number;
     };
     filters?: {
         search?: string;

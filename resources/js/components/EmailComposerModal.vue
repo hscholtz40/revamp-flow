@@ -33,6 +33,7 @@ const form = useForm({
     subject: '',
     body: '',
 });
+const formMessageError = () => (form.errors as Record<string, string | undefined>).message;
 
 const unwrapDesignMarker = (input: string) => {
     if (!input?.startsWith(DESIGN_MARKER_PREFIX)) {
@@ -142,7 +143,7 @@ const submit = () => {
                             image-upload-url="/administration/email-templates/upload-image"
                         />
                         <div v-if="form.errors.body" class="mt-1 text-sm text-red-600">{{ form.errors.body }}</div>
-                        <div v-if="form.errors.message" class="mt-1 text-sm text-red-600">{{ form.errors.message }}</div>
+                        <div v-if="formMessageError()" class="mt-1 text-sm text-red-600">{{ formMessageError() }}</div>
                     </div>
                 </div>
 

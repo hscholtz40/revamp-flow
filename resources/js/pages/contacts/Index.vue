@@ -26,15 +26,20 @@ interface Company {
     name: string;
 }
 
+interface PaginatedContacts {
+    data: Contact[];
+    links: { url: string | null; label: string; active: boolean }[];
+    from?: number;
+    to?: number;
+    total?: number;
+}
+
 const canContactsCreate = useAuthAbility('contacts', 'create');
 const canContactsEdit = useAuthAbility('contacts', 'edit');
 const canContactsDelete = useAuthAbility('contacts', 'delete');
 
 const props = defineProps<{
-    contacts: {
-        data: Contact[];
-        links: { url: string | null; label: string; active: boolean }[];
-    };
+    contacts: PaginatedContacts;
     filters: { search?: string; sort_by?: string; sort_dir?: 'asc' | 'desc' };
     currentCompany: Company;
     emailTemplates: {

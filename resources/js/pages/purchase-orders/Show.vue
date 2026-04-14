@@ -14,6 +14,7 @@ interface Product {
     id: number;
     name: string;
     sku: string | null;
+    barcode?: string | null;
     track_stock: boolean;
     track_batches: boolean;
     track_serial_numbers: boolean;
@@ -50,6 +51,7 @@ interface PurchaseOrderItem {
 interface Supplier {
     id: number;
     name: string;
+    email?: string | null;
 }
 
 interface User {
@@ -171,11 +173,11 @@ const emailResult = ref({
 });
 
 const receiveForm = useForm({
-    items: props.purchaseOrder.items.map(item => ({
+    items: props.purchaseOrder.items.map((item) => ({
         id: item.id,
         quantity_received: 0, // Start with 0 for new receiving
-        product_batch_id: null, // Don't pre-select batch
-        serial_number_ids: [], // Don't pre-select serial numbers
+        product_batch_id: null as number | null, // Don't pre-select batch
+        serial_number_ids: [] as number[], // Don't pre-select serial numbers
         custom_serial_numbers: [] as string[],
     })),
 });
@@ -192,17 +194,17 @@ const emailForm = useForm({
 
 function updateStatus(newStatus: string) {
     if (confirm(`Are you sure you want to change the status to "${newStatus}"?`)) {
-        statusForm.status = newStatus;
+        statusForm.status = newStatus as PurchaseOrder['status'];
         statusForm.put(purchaseOrders.updateStatus(props.purchaseOrder.id).url);
     }
 }
 
 function openReceiveModal() {
-    receiveForm.items = props.purchaseOrder.items.map(item => ({
+    receiveForm.items = props.purchaseOrder.items.map((item) => ({
         id: item.id,
         quantity_received: 0, // Always start with 0 for new receiving
-        product_batch_id: null, // Don't pre-select batch
-        serial_number_ids: [], // Don't pre-select serial numbers
+        product_batch_id: null as number | null, // Don't pre-select batch
+        serial_number_ids: [] as number[], // Don't pre-select serial numbers
         custom_serial_numbers: [] as string[],
     }));
     showReceiveModal.value = true;

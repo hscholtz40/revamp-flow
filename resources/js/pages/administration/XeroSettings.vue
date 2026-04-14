@@ -505,7 +505,7 @@
                     <button
                         v-if="form.sync_customers_to_xero"
                         @click="syncCustomers"
-                        :disabled="syncing"
+                        :disabled="isSyncing"
                         class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
                     >
                         {{ syncing === 'customers' ? 'Syncing...' : 'Sync Customers to Xero' }}
@@ -513,7 +513,7 @@
                     <button
                         v-if="form.sync_products_to_xero"
                         @click="syncProducts"
-                        :disabled="syncing"
+                        :disabled="isSyncing"
                         class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
                     >
                         {{ syncing === 'products' ? 'Syncing...' : 'Sync Products to Xero' }}
@@ -521,7 +521,7 @@
                     <button
                         v-if="form.sync_suppliers_to_xero"
                         @click="syncSuppliers"
-                        :disabled="syncing"
+                        :disabled="isSyncing"
                         class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
                     >
                         {{ syncing === 'suppliers' ? 'Syncing...' : 'Sync Suppliers to Xero' }}
@@ -529,7 +529,7 @@
                     <button
                         v-if="form.sync_quotes_to_xero"
                         @click="syncQuotes"
-                        :disabled="syncing"
+                        :disabled="isSyncing"
                         class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
                     >
                         {{ syncing === 'quotes' ? 'Syncing...' : 'Sync Quotes to Xero' }}
@@ -537,7 +537,7 @@
                     <button
                         v-if="form.sync_invoices_to_xero"
                         @click="syncInvoices"
-                        :disabled="syncing"
+                        :disabled="isSyncing"
                         class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
                     >
                         {{ syncing === 'invoices' ? 'Syncing...' : 'Sync Invoices to Xero' }}
@@ -545,7 +545,7 @@
                     <button
                         v-if="form.sync_credit_notes_to_xero"
                         @click="syncCreditNotes"
-                        :disabled="syncing"
+                        :disabled="isSyncing"
                         class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
                     >
                         {{ syncing === 'credit-notes' ? 'Syncing...' : 'Sync Credit Notes to Xero' }}
@@ -553,7 +553,7 @@
                     <button
                         v-if="form.sync_purchase_orders_to_xero"
                         @click="syncPurchaseOrders"
-                        :disabled="syncing"
+                        :disabled="isSyncing"
                         class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
                     >
                         {{ syncing === 'purchase-orders' ? 'Syncing...' : 'Sync Purchase Orders to Xero' }}
@@ -570,7 +570,7 @@
                         <button
                             v-if="form.sync_customers_from_xero"
                             @click="syncCustomersFromXero"
-                            :disabled="syncing"
+                            :disabled="isSyncing"
                             class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
                         >
                             {{ syncing === 'customers-from-xero' ? 'Importing...' : 'Import Customers from Xero' }}
@@ -578,7 +578,7 @@
                         <button
                             v-if="form.sync_customers_from_xero"
                             @click="resyncCustomersFromXero"
-                            :disabled="syncing"
+                            :disabled="isSyncing"
                             class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 disabled:opacity-50"
                         >
                             {{ syncing === 'customers-resync-from-xero' ? 'Resyncing...' : 'Resync All Customers from Xero' }}
@@ -586,7 +586,7 @@
                         <button
                             v-if="form.sync_products_from_xero"
                             @click="syncProductsFromXero"
-                            :disabled="syncing"
+                            :disabled="isSyncing"
                             class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
                         >
                             {{ syncing === 'products-from-xero' ? 'Importing...' : 'Import Products from Xero' }}
@@ -594,7 +594,7 @@
                         <button
                             v-if="form.sync_suppliers_from_xero"
                             @click="syncSuppliersFromXero"
-                            :disabled="syncing"
+                            :disabled="isSyncing"
                             class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
                         >
                             {{ syncing === 'suppliers-from-xero' ? 'Importing...' : 'Import Suppliers from Xero' }}
@@ -602,7 +602,7 @@
                         <button
                             v-if="form.sync_quotes_from_xero"
                             @click="syncQuotesFromXero"
-                            :disabled="syncing"
+                            :disabled="isSyncing"
                             class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
                         >
                             {{ syncing === 'quotes-from-xero' ? 'Importing...' : 'Import Quotes from Xero' }}
@@ -610,7 +610,7 @@
                         <button
                             v-if="form.sync_invoices_from_xero"
                             @click="syncInvoicesFromXero"
-                            :disabled="syncing"
+                            :disabled="isSyncing"
                             class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
                         >
                             {{ syncing === 'invoices-from-xero' ? 'Importing...' : 'Import Invoices from Xero' }}
@@ -618,7 +618,7 @@
                         <button
                             v-if="form.sync_credit_notes_from_xero"
                             @click="syncCreditNotesFromXero"
-                            :disabled="syncing"
+                            :disabled="isSyncing"
                             class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
                         >
                             {{ syncing === 'credit-notes-from-xero' ? 'Importing...' : 'Import Credit Notes from Xero' }}
@@ -626,7 +626,7 @@
                         <button
                             v-if="form.sync_purchase_orders_from_xero"
                             @click="syncPurchaseOrdersFromXero"
-                            :disabled="syncing"
+                            :disabled="isSyncing"
                             class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
                         >
                             {{ syncing === 'purchase-orders-from-xero' ? 'Importing...' : 'Import Purchase Orders from Xero' }}
@@ -634,7 +634,7 @@
                         <button
                             v-if="form.sync_tax_rates_from_xero"
                             @click="syncTaxRatesFromXero"
-                            :disabled="syncing"
+                            :disabled="isSyncing"
                             class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
                         >
                             {{ syncing === 'tax-rates-from-xero' ? 'Importing...' : 'Import Tax Rates from Xero' }}
@@ -642,7 +642,7 @@
                         <button
                             v-if="form.sync_bank_accounts_from_xero"
                             @click="syncBankAccountsFromXero"
-                            :disabled="syncing"
+                            :disabled="isSyncing"
                             class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
                         >
                             {{ syncing === 'bank-accounts-from-xero' ? 'Importing...' : 'Import Bank Accounts from Xero' }}
@@ -650,7 +650,7 @@
                         <button
                             v-if="form.sync_chart_of_accounts_from_xero"
                             @click="syncChartOfAccountsFromXero"
-                            :disabled="syncing"
+                            :disabled="isSyncing"
                             class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
                         >
                             {{ syncing === 'chart-of-accounts-from-xero' ? 'Importing...' : 'Import Chart of Accounts from Xero' }}
@@ -663,34 +663,34 @@
                             Use this if you want to re-run a module's initial import flow from scratch.
                         </p>
                         <div class="flex flex-wrap gap-3">
-                            <button @click="resetInitialSyncStatus('customer', 'Customers')" :disabled="syncing" class="bg-white border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50 text-sm">
+                            <button @click="resetInitialSyncStatus('customer', 'Customers')" :disabled="isSyncing" class="bg-white border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50 text-sm">
                                 {{ syncing === 'reset-customer' ? 'Resetting...' : 'Reset Customers Initial Sync' }}
                             </button>
-                            <button @click="resetInitialSyncStatus('product', 'Products')" :disabled="syncing" class="bg-white border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50 text-sm">
+                            <button @click="resetInitialSyncStatus('product', 'Products')" :disabled="isSyncing" class="bg-white border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50 text-sm">
                                 {{ syncing === 'reset-product' ? 'Resetting...' : 'Reset Products Initial Sync' }}
                             </button>
-                            <button @click="resetInitialSyncStatus('supplier', 'Suppliers')" :disabled="syncing" class="bg-white border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50 text-sm">
+                            <button @click="resetInitialSyncStatus('supplier', 'Suppliers')" :disabled="isSyncing" class="bg-white border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50 text-sm">
                                 {{ syncing === 'reset-supplier' ? 'Resetting...' : 'Reset Suppliers Initial Sync' }}
                             </button>
-                            <button @click="resetInitialSyncStatus('quote', 'Quotes')" :disabled="syncing" class="bg-white border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50 text-sm">
+                            <button @click="resetInitialSyncStatus('quote', 'Quotes')" :disabled="isSyncing" class="bg-white border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50 text-sm">
                                 {{ syncing === 'reset-quote' ? 'Resetting...' : 'Reset Quotes Initial Sync' }}
                             </button>
-                            <button @click="resetInitialSyncStatus('invoice', 'Invoices')" :disabled="syncing" class="bg-white border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50 text-sm">
+                            <button @click="resetInitialSyncStatus('invoice', 'Invoices')" :disabled="isSyncing" class="bg-white border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50 text-sm">
                                 {{ syncing === 'reset-invoice' ? 'Resetting...' : 'Reset Invoices Initial Sync' }}
                             </button>
-                            <button @click="resetInitialSyncStatus('credit_note', 'Credit Notes')" :disabled="syncing" class="bg-white border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50 text-sm">
+                            <button @click="resetInitialSyncStatus('credit_note', 'Credit Notes')" :disabled="isSyncing" class="bg-white border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50 text-sm">
                                 {{ syncing === 'reset-credit_note' ? 'Resetting...' : 'Reset Credit Notes Initial Sync' }}
                             </button>
-                            <button @click="resetInitialSyncStatus('purchase_order', 'Purchase Orders')" :disabled="syncing" class="bg-white border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50 text-sm">
+                            <button @click="resetInitialSyncStatus('purchase_order', 'Purchase Orders')" :disabled="isSyncing" class="bg-white border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50 text-sm">
                                 {{ syncing === 'reset-purchase_order' ? 'Resetting...' : 'Reset Purchase Orders Initial Sync' }}
                             </button>
-                            <button @click="resetInitialSyncStatus('tax_rate', 'Tax Rates')" :disabled="syncing" class="bg-white border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50 text-sm">
+                            <button @click="resetInitialSyncStatus('tax_rate', 'Tax Rates')" :disabled="isSyncing" class="bg-white border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50 text-sm">
                                 {{ syncing === 'reset-tax_rate' ? 'Resetting...' : 'Reset Tax Rates Initial Sync' }}
                             </button>
-                            <button @click="resetInitialSyncStatus('bank_account', 'Bank Accounts')" :disabled="syncing" class="bg-white border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50 text-sm">
+                            <button @click="resetInitialSyncStatus('bank_account', 'Bank Accounts')" :disabled="isSyncing" class="bg-white border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50 text-sm">
                                 {{ syncing === 'reset-bank_account' ? 'Resetting...' : 'Reset Bank Accounts Initial Sync' }}
                             </button>
-                            <button @click="resetInitialSyncStatus('chart_of_account', 'Chart of Accounts')" :disabled="syncing" class="bg-white border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50 text-sm">
+                            <button @click="resetInitialSyncStatus('chart_of_account', 'Chart of Accounts')" :disabled="isSyncing" class="bg-white border border-blue-300 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50 text-sm">
                                 {{ syncing === 'reset-chart_of_account' ? 'Resetting...' : 'Reset Chart of Accounts Initial Sync' }}
                             </button>
                         </div>
@@ -773,6 +773,7 @@ interface Props {
 const props = defineProps<Props>();
 
 const syncing = ref<string | null>(null);
+const isSyncing = computed(() => syncing.value !== null);
 const availableTenants = ref<XeroTenant[]>(props.xeroTenants || []);
 const selectedTenantId = ref<string>(props.settings.tenant_id || '');
 const changingTenant = ref(false);

@@ -276,6 +276,7 @@
 import ListTableActionLabel from '@/components/ListTableActionLabel.vue';
 import { useAuthAbility } from '@/composables/useAuthAbilities';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { watchDebounced } from '@vueuse/core';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { Edit, Trash2 } from 'lucide-vue-next';
 import quotes from '@/routes/quotes';
@@ -285,6 +286,7 @@ interface Quote {
     id: number;
     quote_number: string;
     title: string;
+    description?: string | null;
     order_number?: string | null;
     email?: string | null;
     phone?: string | null;
@@ -405,7 +407,7 @@ const formatDate = (dateString: string) => {
 };
 
 // Watch for filter changes and update URL
-watch([search, status, customerId, showClosed], () => {
+watchDebounced([search, status, customerId, showClosed], () => {
     router.get(quotes.index().url, {
         search: search.value,
         status: status.value,

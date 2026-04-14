@@ -625,6 +625,8 @@ interface Customer {
 interface Product {
     id: number;
     name: string;
+    sku?: string | null;
+    barcode?: string | null;
 }
 
 interface LineItem {
@@ -638,6 +640,9 @@ interface LineItem {
     formatted_total: string;
     line_group_id?: number | null;
     product?: Product | null;
+    discount_amount?: number;
+    discount_percentage?: number;
+    tax_rate?: { id: number; name: string; rate: number } | null;
 }
 
 interface Quote {

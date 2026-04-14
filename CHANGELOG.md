@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-04-14
+
+- **Frontend typecheck stabilization:** Tightened shared page/component typings for app metadata, nullable auth users, badge variants, backup/Xero control states, and email/version helper components so the Vue TypeScript pass can fail on real model-shape issues instead of repeated UI-level typing noise.
+- **Frontend typecheck (follow-up):** Aligned document and list page interfaces (products, discounts, tax rates, customer address, polymorphic references) with Inertia payloads; fixed GrapesJS `PdfTemplateEditor` style-manager typing; normalized stock movement `reference` as string-or-loaded-model; hardened credit-note edit form error accessors to avoid runaway template inference; and tightened purchase-order receive rows and status updates for strict `vue-tsc`. `npm run typecheck` completes cleanly.
+
 ## 2026-04-10
 
 - **Coverage program foundation:** Added backend/frontend coverage commands, Vitest reporting outputs and baseline thresholds, CI artifact publication and summaries, SQLite-backed PHPUnit defaults for local repeatability, focused backend coverage across reports/quotes/purchase orders/credit notes/services/policies, focused frontend composable/component tests, and a coverage governance document with ratchet rules and intentional gap tracking.

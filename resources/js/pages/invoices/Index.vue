@@ -255,7 +255,7 @@
                                     <div class="text-sm text-gray-900">{{ formatCurrency(invoice.tax_amount || 0) }}</div>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap" style="display: none;">
-                                    <div class="text-sm text-gray-900">{{ formatDate(invoice.updated_at) }}</div>
+                                    <div class="text-sm text-gray-900">{{ formatDate(invoice.updated_at ?? '') }}</div>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" @click.stop>
                                     <div class="flex items-center gap-2">

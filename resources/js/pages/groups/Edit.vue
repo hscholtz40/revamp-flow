@@ -40,6 +40,9 @@ const form = useForm({
     }),
 });
 
+const paymentMethodsError = () =>
+    (form.errors as Record<string, string | undefined>).payment_methods;
+
 function saveDetails() { form.put(groups.update(props.group.id).url, { preserveScroll: true }); }
 function savePermissions() {
     form
@@ -187,7 +190,7 @@ function savePermissions() {
                                 EFT
                             </label>
                         </div>
-                        <p v-if="form.errors.payment_methods" class="mt-2 text-sm text-red-600">{{ form.errors.payment_methods }}</p>
+                        <p v-if="paymentMethodsError()" class="mt-2 text-sm text-red-600">{{ paymentMethodsError() }}</p>
                     </div>
                     <div>
                         <button :disabled="form.processing" class="rounded bg-blue-600 px-4 py-2 text-white">Save Permissions</button>

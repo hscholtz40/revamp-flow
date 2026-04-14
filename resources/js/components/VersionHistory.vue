@@ -29,7 +29,8 @@ const props = defineProps<{
 const versions = ref<ModelVersion[]>([]);
 const loading = ref(true);
 
-onMounted(async () => {
+async function loadVersions() {
+    loading.value = true;
     try {
         const response = await fetch(
             `/audit-logs/model/${props.modelType}/${props.modelId}/versions`
@@ -41,6 +42,10 @@ onMounted(async () => {
     } finally {
         loading.value = false;
     }
+}
+
+onMounted(() => {
+    void loadVersions();
 });
 
 function restoreVersion(versionId: number) {
@@ -48,8 +53,7 @@ function restoreVersion(versionId: number) {
         router.post(`/audit-logs/versions/${versionId}/restore`, {}, {
             preserveScroll: true,
             onSuccess: () => {
-                // Reload versions
-                onMounted();
+                void loadVersions();
             },
         });
     }

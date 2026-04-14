@@ -362,7 +362,7 @@
                                 </div>
                                 <div v-if="(Number(props.invoice.discount_amount) || 0) > 0" class="flex justify-between">
                                     <span class="text-gray-600">Discount:</span>
-                                    <span class="font-medium text-red-600">-{{ formatCurrency(props.invoice.discount_amount) }}</span>
+                                    <span class="font-medium text-red-600">-{{ formatCurrency(Number(props.invoice.discount_amount ?? 0)) }}</span>
                                 </div>
                                 <div class="flex justify-between">
                                     <span class="text-gray-600">Tax:</span>
@@ -400,7 +400,7 @@
                                         <p class="text-xs text-gray-500">{{ new Date(cn.credit_note_date).toLocaleDateString('en-ZA') }}</p>
                                     </div>
                                     <div class="text-right">
-                                        <span class="text-sm font-medium text-orange-600">-{{ formatCurrency(cn.allocated_amount ?? cn.total) }}</span>
+                                        <span class="text-sm font-medium text-orange-600">-{{ formatCurrency(Number(cn.allocated_amount ?? cn.total ?? 0)) }}</span>
                                         <p class="text-xs text-gray-500 capitalize">{{ cn.status }}</p>
                                     </div>
                                 </div>
@@ -485,6 +485,7 @@
                                 <div><span class="font-medium">Type:</span> {{ props.invoice.source_type }}</div>
                                 <div v-if="props.invoice.source_type === 'quote'">
                                     <Link
+                                        v-if="props.invoice.source_id != null"
                                         :href="quotes.show(props.invoice.source_id).url"
                                         class="text-blue-600 hover:text-blue-800"
                                     >
@@ -507,6 +508,7 @@
                                 </div>
                                 <div v-else-if="props.invoice.source_type === 'jobcard'">
                                     <Link
+                                        v-if="props.invoice.source_id != null"
                                         :href="jobcards.show(props.invoice.source_id).url"
                                         class="text-blue-600 hover:text-blue-800"
                                     >
@@ -811,6 +813,8 @@ interface SerialNumber {
 interface Product {
     id: number;
     name: string;
+    sku?: string | null;
+    barcode?: string | null;
 }
 
 interface LineItem {
@@ -826,6 +830,7 @@ interface LineItem {
     serial_number_ids?: number[];
     serialNumbers?: SerialNumber[];
     line_group_id?: number | null;
+    tax_rate?: { id: number; name: string; rate: number } | null;
 }
 
 interface LineGroup {
@@ -839,6 +844,7 @@ interface Customer {
     name: string;
     email?: string;
     phone?: string;
+    address?: string | null;
 }
 
 interface Salesperson {
@@ -877,6 +883,7 @@ interface Invoice {
     tax_rate: number;
     tax_amount: number;
     total: number;
+    discount_amount?: number;
     total_paid?: number;
     total_credited?: number;
     remaining_balance?: number;

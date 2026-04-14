@@ -172,7 +172,7 @@ const quickCreateForm = ref({
 });
 
 watch(
-    () => [props.modelValue, props.initialContact],
+    () => [props.modelValue, props.initialContact] as const,
     ([val, initial]) => {
         if (!val) {
             selectedContact.value = null;

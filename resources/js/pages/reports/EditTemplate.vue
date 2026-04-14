@@ -43,6 +43,13 @@ interface Company {
     name: string;
 }
 
+interface ReportColumn {
+    value: string;
+    label: string;
+    groupable?: boolean;
+    sortable?: boolean;
+}
+
 interface Props {
     template: ReportTemplate;
     currentCompany: Company;
@@ -56,7 +63,7 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 // Available columns for each entity type
-const availableColumns = {
+const availableColumns: Record<'invoice' | 'quote' | 'jobcard', ReportColumn[]> = {
     invoice: [
         { value: 'invoice_number', label: 'Invoice Number' },
         { value: 'customer.name', label: 'Customer' },
@@ -248,6 +255,18 @@ const removeProduct = (productId: number) => {
     productFilter.value = selectedProducts.value.map(p => p.id);
 };
 
+const hideCustomerSearch = () => {
+    window.setTimeout(() => {
+        customerSearchFocused.value = false;
+    }, 200);
+};
+
+const hideProductSearch = () => {
+    window.setTimeout(() => {
+        productSearchFocused.value = false;
+    }, 200);
+};
+
 // Watch for filter changes
 watch([dateFrom, dateTo, statusFilter, customerFilter, productFilter], () => {
     form.filters = {
@@ -428,7 +447,7 @@ const submit = () => {
                                     v-model="customerSearchQuery"
                                     @input="handleCustomerSearch"
                                     @focus="customerSearchFocused = true"
-                                    @blur="() => setTimeout(() => customerSearchFocused = false, 200)"
+                                    @blur="hideCustomerSearch"
                                     type="text"
                                     placeholder="Search customer..."
                                     class="w-full rounded border px-3 py-2"
@@ -475,7 +494,7 @@ const submit = () => {
                                     v-model="productSearchQuery"
                                     @input="handleProductSearch"
                                     @focus="productSearchFocused = true"
-                                    @blur="() => setTimeout(() => productSearchFocused = false, 200)"
+                                    @blur="hideProductSearch"
                                     type="text"
                                     placeholder="Search product..."
                                     class="w-full rounded border px-3 py-2"

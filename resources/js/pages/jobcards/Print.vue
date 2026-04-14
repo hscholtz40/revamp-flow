@@ -127,6 +127,7 @@ interface Jobcard {
         quantity: number;
         unit_price: number;
         total: number;
+        product?: { sku?: string | null; barcode?: string | null } | null;
     }>;
 }
 

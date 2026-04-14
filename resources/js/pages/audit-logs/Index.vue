@@ -5,6 +5,7 @@ import { ref } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import type { BadgeVariant } from '@/components/ui/badge';
 import { Calendar, Download, Eye, Search } from 'lucide-vue-next';
 
 interface AuditLog {
@@ -97,8 +98,8 @@ function exportLogs() {
     window.location.href = `/audit-logs/export?${params.toString()}`;
 }
 
-function getEventBadgeVariant(event: string): string {
-    const variants: Record<string, string> = {
+function getEventBadgeVariant(event: string): BadgeVariant {
+    const variants: Record<string, BadgeVariant> = {
         created: 'default',
         updated: 'secondary',
         deleted: 'destructive',

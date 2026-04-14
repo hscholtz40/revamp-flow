@@ -391,22 +391,25 @@ function handleProductBlur(index: number) {
 }
 
 // Select product from search results
+const createSelectEvent = (value: string) =>
+    ({ target: { value } } as unknown as Event);
+
 function selectProductFromSearch(index: number, product: Product) {
-    selectProduct(index, { target: { value: product.id.toString() } } as Event);
+    selectProduct(index, createSelectEvent(product.id.toString()));
     productSearchQueries.value[index] = '';
     productSearchFocused.value[index] = false;
 }
 
 // Select custom item (no product)
 function selectCustomItem(index: number) {
-    selectProduct(index, { target: { value: '' } } as Event);
+    selectProduct(index, createSelectEvent(''));
     productSearchQueries.value[index] = '';
     productSearchFocused.value[index] = false;
 }
 
 // Clear product selection
 function clearProduct(index: number) {
-    selectProduct(index, { target: { value: '' } } as Event);
+    selectProduct(index, createSelectEvent(''));
     productSearchQueries.value[index] = '';
 }
 

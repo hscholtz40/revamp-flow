@@ -110,7 +110,7 @@
                                 Convert to Quote
                             </button>
                             <Link
-                                v-else
+                                v-else-if="props.convertedQuoteId != null"
                                 :href="quotes.show(props.convertedQuoteId).url"
                                 class="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
                             >
@@ -124,7 +124,7 @@
                                 Convert to Invoice
                             </button>
                             <Link
-                                v-else
+                                v-else-if="props.jobcard.invoice_id != null"
                                 :href="invoices.show(props.jobcard.invoice_id).url"
                                 class="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
                             >
@@ -791,6 +791,8 @@ const hasPurchaseOrdersList = useAuthAbility('purchase-orders', 'list');
 interface Product {
     id: number;
     name: string;
+    sku?: string | null;
+    barcode?: string | null;
 }
 
 interface LineItem {
@@ -804,6 +806,9 @@ interface LineItem {
     product?: Product | null;
     formatted_unit_price: string;
     formatted_total: string;
+    discount_amount?: number;
+    discount_percentage?: number;
+    tax_rate?: { id: number; name: string; rate: number } | null;
 }
 
 interface Customer {
@@ -865,6 +870,7 @@ interface Jobcard {
     tax_rate: number | null;
     tax_amount: number | null;
     total: number | null;
+    discount_amount?: number | null;
     formatted_total: string;
     notes: string | null;
     terms_conditions: string | null;

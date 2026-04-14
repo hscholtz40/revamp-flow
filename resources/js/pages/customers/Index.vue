@@ -24,6 +24,14 @@ interface Company {
     name: string;
 }
 
+interface PaginatedCustomers {
+    data: Customer[];
+    links: { url: string | null; label: string; active: boolean }[];
+    from?: number;
+    to?: number;
+    total?: number;
+}
+
 const canCustomersCreate = useAuthAbility('customers', 'create');
 const canCustomersEdit = useAuthAbility('customers', 'edit');
 const canCustomersDelete = useAuthAbility('customers', 'delete');
@@ -31,10 +39,7 @@ const canCustomersDelete = useAuthAbility('customers', 'delete');
 const { formatCurrency } = useNumberFormat();
 
 const props = defineProps<{
-    customers: {
-        data: Customer[];
-        links: { url: string | null; label: string; active: boolean }[];
-    };
+    customers: PaginatedCustomers;
     filters: { search?: string; sort_by?: string; sort_dir?: 'asc' | 'desc' };
     currentCompany: Company;
     emailTemplates: {

@@ -2,6 +2,7 @@
 import { Link } from '@inertiajs/vue3';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import type { BadgeVariant } from '@/components/ui/badge';
 import { Calendar, User, Eye } from 'lucide-vue-next';
 
 interface AuditLog {
@@ -21,8 +22,8 @@ const props = defineProps<{
     modelId?: number;
 }>();
 
-function getEventBadgeVariant(event: string): string {
-    const variants: Record<string, string> = {
+function getEventBadgeVariant(event: string): BadgeVariant {
+    const variants: Record<string, BadgeVariant> = {
         created: 'default',
         updated: 'secondary',
         deleted: 'destructive',

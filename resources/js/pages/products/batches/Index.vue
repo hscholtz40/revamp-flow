@@ -131,7 +131,7 @@ function isExpiringSoon(expiryDate: string | null, days: number = 30): boolean {
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="text-sm text-gray-900">
-                                        {{ batch.unit_cost ? 'R' + parseFloat(batch.unit_cost).toFixed(2) : 'N/A' }}
+                                        {{ batch.unit_cost ? 'R' + Number(batch.unit_cost).toFixed(2) : 'N/A' }}
                                     </div>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">

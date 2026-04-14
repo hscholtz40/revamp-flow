@@ -35,7 +35,7 @@
                                     type="text"
                                     :placeholder="selectedCustomer ? selectedCustomer.name : 'Search customer by name, email, phone, or account code'"
                                     class="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                                    :class="{ 'border-red-500': form.errors.customer_id }"
+                                    :class="{ 'border-red-500': cnHasFormFieldError('customer_id') }"
                                     required
                                 />
                                 <button
@@ -77,8 +77,8 @@
                                     </div>
                                 </div>
                             </div>
-                            <div v-if="form.errors.customer_id" class="text-red-500 text-sm mt-1">
-                                {{ form.errors.customer_id }}
+                            <div v-if="cnFormFieldError('customer_id')" class="text-red-500 text-sm mt-1">
+                                {{ cnFormFieldError('customer_id') }}
                             </div>
                         </div>
 
@@ -128,7 +128,7 @@
                                     type="text"
                                     :placeholder="selectedInvoiceOption ? selectedInvoiceLabel(selectedInvoiceOption) : 'Search invoice by number or title...'"
                                     class="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                                    :class="{ 'border-red-500': form.errors.invoice_id }"
+                                    :class="{ 'border-red-500': cnHasFormFieldError('invoice_id') }"
                                 />
                                 <button
                                     v-if="form.invoice_id"
@@ -159,7 +159,7 @@
                                     <div class="text-xs text-gray-500">{{ inv.title || 'No title' }} • {{ formatCurrency(inv.total) }}</div>
                                 </div>
                             </div>
-                            <div v-if="form.errors.invoice_id" class="text-red-500 text-sm mt-1">{{ form.errors.invoice_id }}</div>
+                            <div v-if="cnFormFieldError('invoice_id')" class="text-red-500 text-sm mt-1">{{ cnFormFieldError('invoice_id') }}</div>
 
                             <div class="mt-2 flex items-center justify-between gap-2">
                                 <button
@@ -170,7 +170,7 @@
                                 >
                                     Add allocation
                                 </button>
-                                <div v-if="form.errors.allocations" class="text-red-500 text-sm">{{ form.errors.allocations }}</div>
+                                <div v-if="cnFormFieldError('allocations')" class="text-red-500 text-sm">{{ cnFormFieldError('allocations') }}</div>
                             </div>
 
                             <div v-if="(form as any).allocations?.length" class="mt-3 space-y-2">
@@ -208,27 +208,27 @@
 
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Title</label>
-                            <input v-model="form.title" type="text" class="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" :class="{ 'border-red-500': form.errors.title }" />
-                            <div v-if="form.errors.title" class="text-red-500 text-sm mt-1">{{ form.errors.title }}</div>
+                            <input v-model="form.title" type="text" class="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" :class="{ 'border-red-500': cnHasFormFieldError('title') }" />
+                            <div v-if="cnFormFieldError('title')" class="text-red-500 text-sm mt-1">{{ cnFormFieldError('title') }}</div>
                         </div>
 
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Credit Note Date *</label>
-                            <input v-model="form.credit_note_date" type="date" class="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" :class="{ 'border-red-500': form.errors.credit_note_date }" required />
-                            <div v-if="form.errors.credit_note_date" class="text-red-500 text-sm mt-1">{{ form.errors.credit_note_date }}</div>
+                            <input v-model="form.credit_note_date" type="date" class="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" :class="{ 'border-red-500': cnHasFormFieldError('credit_note_date') }" required />
+                            <div v-if="cnFormFieldError('credit_note_date')" class="text-red-500 text-sm mt-1">{{ cnFormFieldError('credit_note_date') }}</div>
                         </div>
 
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Reference</label>
-                            <input v-model="form.reference" type="text" class="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" :class="{ 'border-red-500': form.errors.reference }" />
-                            <div v-if="form.errors.reference" class="text-red-500 text-sm mt-1">{{ form.errors.reference }}</div>
+                            <input v-model="form.reference" type="text" class="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" :class="{ 'border-red-500': cnHasFormFieldError('reference') }" />
+                            <div v-if="cnFormFieldError('reference')" class="text-red-500 text-sm mt-1">{{ cnFormFieldError('reference') }}</div>
                         </div>
                     </div>
 
                     <div class="mt-6">
                         <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                        <textarea v-model="form.description" rows="3" class="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" :class="{ 'border-red-500': form.errors.description }"></textarea>
-                        <div v-if="form.errors.description" class="text-red-500 text-sm mt-1">{{ form.errors.description }}</div>
+                        <textarea v-model="form.description" rows="3" class="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" :class="{ 'border-red-500': cnHasFormFieldError('description') }"></textarea>
+                        <div v-if="cnFormFieldError('description')" class="text-red-500 text-sm mt-1">{{ cnFormFieldError('description') }}</div>
                     </div>
                 </div>
 
@@ -237,7 +237,7 @@
                     <div class="flex items-center justify-between mb-4">
                         <h2 class="text-lg font-semibold text-gray-900">Line Items</h2>
                     </div>
-                    <div v-if="form.errors.line_items" class="text-red-500 text-sm mb-4">{{ form.errors.line_items }}</div>
+                    <div v-if="cnFormFieldError('line_items')" class="text-red-500 text-sm mb-4">{{ cnFormFieldError('line_items') }}</div>
 
                     <div class="mb-4 rounded border border-gray-200 p-3">
                         <div class="mb-2 flex items-center justify-between">
@@ -324,7 +324,7 @@
                                             type="text"
                                             placeholder="Type description or search products..."
                                             class="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                                            :class="{ 'border-red-500': form.errors[`line_items.${index}.description`] }"
+                                            :class="{ 'border-red-500': cnHasFormFieldError(`line_items.${index}.description`) }"
                                             required
                                         />
                                         <span v-if="item.product_id" class="flex-shrink-0 inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700 border border-blue-200" :title="item.description">
@@ -343,7 +343,7 @@
                                             </div>
                                         </div>
                                     </div>
-                                    <div v-if="form.errors[`line_items.${index}.description`]" class="text-red-500 text-xs mt-0.5">{{ form.errors[`line_items.${index}.description`] }}</div>
+                                    <div v-if="cnFormFieldError(`line_items.${index}.description`)" class="text-red-500 text-xs mt-0.5">{{ cnFormFieldError(`line_items.${index}.description`) }}</div>
                                 </div>
 
                                 <div>
@@ -457,8 +457,8 @@
                     <h2 class="text-lg font-semibold text-gray-900 mb-4">Additional Information</h2>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                        <textarea v-model="form.notes" rows="4" class="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" :class="{ 'border-red-500': form.errors.notes }"></textarea>
-                        <div v-if="form.errors.notes" class="text-red-500 text-sm mt-1">{{ form.errors.notes }}</div>
+                        <textarea v-model="form.notes" rows="4" class="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" :class="{ 'border-red-500': cnHasFormFieldError('notes') }"></textarea>
+                        <div v-if="cnFormFieldError('notes')" class="text-red-500 text-sm mt-1">{{ cnFormFieldError('notes') }}</div>
                     </div>
                 </div>
 
@@ -601,6 +601,16 @@ const form = useForm({
           ],
 });
 
+function cnFormFieldError(key: string): string | undefined {
+    const raw = (form as any).errors[key];
+    if (raw === undefined || raw === null) return undefined;
+    if (Array.isArray(raw)) return String(raw[0]);
+    return String(raw);
+}
+function cnHasFormFieldError(key: string): boolean {
+    return Boolean(cnFormFieldError(key));
+}
+
 if ((form as any).line_groups.length === 0) {
     (form as any).line_groups = [{ name: 'Items', sort_order: 0 }];
 }
@@ -637,8 +647,8 @@ const filteredInvoiceOptions = computed(() => invoiceSearchResults.value);
 const allocationInvoices = ref<Record<number, InvoiceOption>>({});
 
 onMounted(() => {
-    form.line_items.forEach((item, index) => {
-        discountTypes.value[index] = (item.discount_percentage ?? 0) > 0 ? 'percentage' : 'amount';
+    form.line_items.forEach((item: Record<string, unknown>, index: number) => {
+        discountTypes.value[index] = (Number(item.discount_percentage) || 0) > 0 ? 'percentage' : 'amount';
     });
     if (form.invoice_id) {
         handleInvoiceSearch();
@@ -872,8 +882,8 @@ const groupedLineItems = computed(() => {
     return groups.map((group, groupIndex) => {
         const groupId = getGroupValueByIndex(groupIndex);
         const items = form.line_items
-            .map((item, index) => ({ item, index }))
-            .filter(({ item }: any) => (item.line_group_id ?? getGroupValueByIndex(0)) === groupId);
+            .map((item: Record<string, unknown>, index: number) => ({ item, index }))
+            .filter(({ item }: { item: Record<string, unknown> }) => ((item.line_group_id as number | null | undefined) ?? getGroupValueByIndex(0)) === groupId);
         return { group, groupIndex, groupId, items };
     });
 });
@@ -1016,8 +1026,8 @@ function onDropInGroup(groupId: number) {
     (moved as any).line_group_id = groupId;
 
     const fallbackGroupId = getGroupValueByIndex(0);
-    const lastIndexInGroup = form.line_items.reduce((lastIndex, item: any, idx) => {
-        return (item.line_group_id ?? fallbackGroupId) === groupId ? idx : lastIndex;
+    const lastIndexInGroup = form.line_items.reduce((lastIndex: number, item: Record<string, unknown>, idx: number) => {
+        return ((item.line_group_id as number | null | undefined) ?? fallbackGroupId) === groupId ? idx : lastIndex;
     }, -1);
     const insertIndex = lastIndexInGroup >= 0 ? lastIndexInGroup + 1 : form.line_items.length;
     form.line_items.splice(insertIndex, 0, moved);
@@ -1102,26 +1112,27 @@ function handleDiscountTypeChange(index: number, e: Event) {
     }
 }
 
-function calculateLineTotalValue(item: (typeof form.line_items)[0]) {
-    const qty = item.quantity || 0;
-    const price = item.unit_price || 0;
+function calculateLineTotalValue(item: Record<string, unknown>) {
+    const qty = Number(item.quantity) || 0;
+    const price = Number(item.unit_price) || 0;
     const sub = qty * price;
-    let disc = item.discount_amount ?? 0;
-    if ((item.discount_percentage ?? 0) > 0) disc = sub * (item.discount_percentage! / 100);
+    let disc = Number(item.discount_amount) || 0;
+    const discPct = Number(item.discount_percentage) || 0;
+    if (discPct > 0) disc = sub * (discPct / 100);
     return sub - disc;
 }
 
 const subtotalBeforeDiscount = computed(() =>
-    form.line_items.reduce((s, i) => s + (Number(i.quantity) || 0) * (Number(i.unit_price) || 0), 0)
+    form.line_items.reduce((s: number, i: Record<string, unknown>) => s + (Number(i.quantity) || 0) * (Number(i.unit_price) || 0), 0)
 );
 
 const lineItemDiscountsTotal = computed(() =>
-    form.line_items.reduce((s, i) => {
+    form.line_items.reduce((s: number, i: Record<string, unknown>) => {
         const q = Number(i.quantity) || 0;
         const p = Number(i.unit_price) || 0;
         const sub = q * p;
         let d = Number(i.discount_amount) || 0;
-        if ((Number(i.discount_percentage) || 0) > 0) d = sub * (Number(i.discount_percentage) / 100);
+        if ((Number(i.discount_percentage) || 0) > 0) d = sub * ((Number(i.discount_percentage) || 0) / 100);
         return s + d;
     }, 0)
 );
@@ -1134,7 +1145,7 @@ const roundCurrency = (amount: number): number => {
 };
 
 const taxAmount = computed(() =>
-    form.line_items.reduce((sum, item) => {
+    form.line_items.reduce((sum: number, item: Record<string, unknown>) => {
         const qty = Number(item.quantity) || 0;
         const price = Number(item.unit_price) || 0;
         let discAmt = Number(item.discount_amount) || 0;
@@ -1142,7 +1153,7 @@ const taxAmount = computed(() =>
         let lineSub = qty * price;
         if (discPct > 0) discAmt = lineSub * (discPct / 100);
         const lineTotal = lineSub - discAmt;
-        const tr = props.taxRates.find(t => t.id === item.tax_rate_id);
+        const tr = props.taxRates.find(t => t.id === (item.tax_rate_id as number | null | undefined));
         if (tr) {
             const lineTax = roundCurrency(lineTotal * (tr.rate / 100));
             return roundCurrency(sum + lineTax);
@@ -1154,8 +1165,8 @@ const taxAmount = computed(() =>
 const total = computed(() => subtotal.value + taxAmount.value);
 
 const roundingAdjustment = computed(() =>
-    form.line_items.reduce((sum, item) => {
-        if ((item.description || '').trim().toLowerCase() !== 'rounding adjustment') {
+    form.line_items.reduce((sum: number, item: Record<string, unknown>) => {
+        if (String(item.description ?? '').trim().toLowerCase() !== 'rounding adjustment') {
             return sum;
         }
         return sum + calculateLineTotalValue(item);

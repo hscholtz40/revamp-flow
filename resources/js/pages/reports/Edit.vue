@@ -32,6 +32,13 @@ interface Company {
     name: string;
 }
 
+interface ReportColumn {
+    value: string;
+    label: string;
+    groupable?: boolean;
+    sortable?: boolean;
+}
+
 interface Props {
     report: Report;
     templates: ReportTemplate[];
@@ -41,7 +48,7 @@ interface Props {
 const props = defineProps<Props>();
 
 // Available columns for each entity type
-const availableColumns = {
+const availableColumns: Record<'invoice' | 'quote' | 'jobcard', ReportColumn[]> = {
     invoice: [
         { value: 'invoice_number', label: 'Invoice Number' },
         { value: 'customer.name', label: 'Customer' },

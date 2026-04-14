@@ -213,7 +213,7 @@
                             <ContactSelector
                                 v-model="form.contact_id"
                                 :customer-id="form.customer_id ? parseInt(String(form.customer_id)) : null"
-                                :initial-contact="props.invoice.contact ? { customer_id: Number(form.customer_id || 0), name: '', ...props.invoice.contact } : null"
+                                :initial-contact="invoiceContactInitial"
                                 label="Contact"
                                 :error="form.errors.contact_id"
                                 @select="onContactSelect"
@@ -856,6 +856,19 @@ const form = useForm({
     })) as LineItem[],
 });
 
+const invoiceContactInitial = computed(() => {
+    const c = props.invoice.contact;
+    if (!c) return null;
+    const customerId = Number(form.customer_id) || props.invoice.customer_id;
+    return {
+        id: Number(c.id ?? 0),
+        customer_id: customerId,
+        name: (c as { name?: string }).name ?? '',
+        email: c.email ?? null,
+        phone: c.phone ?? null,
+    };
+});
+
 const {
     clearCustomer,
     customerSearchFocused,
@@ -1188,6 +1201,7 @@ normalizeLineItemOrder();
 const addLineGroup = () => {
     const nextSortOrder = form.line_groups.length;
     form.line_groups.push({
+        id: undefined,
         name: `Group ${nextSortOrder + 1}`,
         sort_order: nextSortOrder,
     });
