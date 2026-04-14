@@ -19,7 +19,8 @@ class LicenseValidationController extends Controller
     {
         $request->validate([
             'license_key' => ['required', 'string'],
-            'url' => ['nullable', 'string', 'max:255'],
+            // APP_URL / canonical site URL can exceed 255 characters (paths, ports, subpaths).
+            'url' => ['nullable', 'string', 'max:2048'],
         ]);
 
         $license = License::with('customer:id,name')
@@ -77,7 +78,7 @@ class LicenseValidationController extends Controller
     {
         $request->validate([
             'license_key' => ['required', 'string'],
-            'url' => ['required', 'string', 'max:255'],
+            'url' => ['required', 'string', 'max:2048'],
             'version' => ['required', 'string', 'max:64'],
         ]);
 

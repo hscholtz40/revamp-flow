@@ -4,6 +4,7 @@
 
 - **Frontend typecheck stabilization:** Tightened shared page/component typings for app metadata, nullable auth users, badge variants, backup/Xero control states, and email/version helper components so the Vue TypeScript pass can fail on real model-shape issues instead of repeated UI-level typing noise.
 - **Frontend typecheck (follow-up):** Aligned document and list page interfaces (products, discounts, tax rates, customer address, polymorphic references) with Inertia payloads; fixed GrapesJS `PdfTemplateEditor` style-manager typing; normalized stock movement `reference` as string-or-loaded-model; hardened credit-note edit form error accessors to avoid runaway template inference; and tightened purchase-order receive rows and status updates for strict `vue-tsc`. `npm run typecheck` completes cleanly.
+- **License validation diagnostics:** When the remote license API returns a non-2xx response, the instance now surfaces the server JSON message (and logs status + a short body preview) instead of only a generic “could not validate” line. License API validation accepts longer `url` values (up to 2048 characters) so `APP_URL` longer than 255 characters no longer causes a 422 validation failure against the licensing server.
 
 ## 2026-04-10
 

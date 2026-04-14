@@ -7,6 +7,7 @@ use App\Models\InstanceLicense;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Http\Client\Response as HttpResponse;
 use Illuminate\Support\Str;
 
@@ -74,9 +75,17 @@ class InstanceLicenseService
             $response = $this->signedLicenseApiPost($response, $serverUrl . '/api/licenses/validate', $payload, $settings->license_key);
 
             if (!$response->ok()) {
+                $message = $this->messageFromLicenseServerResponse($response);
+
+                Log::warning('License validation request failed', [
+                    'status' => $response->status(),
+                    'message' => $message,
+                    'body_preview' => Str::limit((string) $response->body(), 500),
+                ]);
+
                 $result = [
                     'valid' => false,
-                    'message' => 'Could not validate license with the license server.',
+                    'message' => $message,
                     'license' => null,
                 ];
 
@@ -306,6 +315,39 @@ class InstanceLicenseService
         } catch (\Throwable $e) {
             // Best effort only: validation should not fail because version reporting failed.
         }
+    }
+
+    /**
+     * Prefer the license server's JSON message (401/404/422) instead of a generic string.
+     */
+    private function messageFromLicenseServerResponse(HttpResponse $response): string
+    {
+        $fallback = 'Could not validate license with the license server.';
+        $json = $response->json();
+
+        if (is_array($json)) {
+            if (isset($json['message']) && is_string($json['message']) && $json['message'] !== '') {
+                return $json['message'];
+            }
+
+            if (isset($json['errors']) && is_array($json['errors'])) {
+                foreach ($json['errors'] as $messages) {
+                    if (is_array($messages)) {
+                        $first = reset($messages);
+                        if (is_string($first) && $first !== '') {
+                            return $first;
+                        }
+                    }
+                }
+            }
+        }
+
+        return match ($response->status()) {
+            404 => 'License key not found on the license server.',
+            401 => $fallback . ' The license server rejected the request (check that the clock is correct, the key matches the licensing server, and the app version matches the server).',
+            422 => $fallback . ' The license server rejected the request payload (for example APP_URL may be too long).',
+            default => $fallback,
+        };
     }
 
     private function cacheKey(?string $licenseKey): string
