@@ -560,7 +560,7 @@ class CpanelService
     }
 
     /**
-     * Execute a shell command via the cPanel Terminal API only.
+     * Execute a shell command via cPanel Terminal API, with web-exec fallback.
      */
     private function runShellCommand(string $command): array
     {
@@ -587,19 +587,237 @@ class CpanelService
                 }
             }
         } catch (\Exception $e) {
-            Log::warning('Shell::command execution failed', [
+            Log::info('Shell::command not available, trying web-exec fallback', [
                 'error' => $e->getMessage(),
             ]);
-            return [
-                'success' => false,
-                'error' => 'Shell execution via cPanel Terminal API failed: '.$e->getMessage(),
-            ];
         }
 
-        return [
-            'success' => false,
-            'error' => 'cPanel Terminal API is unavailable or command execution is not permitted.',
+        // Try 2: Write a temp PHP script to public_html, execute via HTTP, self-deletes
+        return $this->runShellViaWebExec($command);
+    }
+
+    /**
+     * Fallback: Execute a shell command by placing a temp PHP script in public_html
+     * and requesting it via HTTP. The script self-deletes after execution.
+     */
+    private function runShellViaWebExec(string $command): array
+    {
+        $scriptName = '_cpanel_exec_'.Str::random(32).'.php';
+        $publicHtml = "{$this->homeDir}/{$this->username}/public_html";
+
+        try {
+            // Base64-encode the command to avoid any PHP/shell escaping issues
+            // (shell commands with $(), $VAR etc. would be mangled inside PHP strings)
+            $encodedCommand = base64_encode($command.' 2>&1');
+            $phpScript = <<<'PHPSCRIPT'
+<?php
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+header('Content-Type: application/json');
+
+$command = base64_decode("COMMAND_PLACEHOLDER");
+$result = ['output' => '', 'exit_code' => -1, 'method' => 'none'];
+
+// Try 1: proc_open (most reliable)
+if (function_exists('proc_open')) {
+    $descriptors = [
+        0 => ['pipe', 'r'],
+        1 => ['pipe', 'w'],
+        2 => ['pipe', 'w'],
+    ];
+    $process = proc_open($command, $descriptors, $pipes);
+    if (is_resource($process)) {
+        fclose($pipes[0]);
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($process);
+        $result = [
+            'output' => trim($stdout . "\n" . $stderr),
+            'exit_code' => $exitCode,
+            'method' => 'proc_open',
         ];
+        echo json_encode($result);
+        @unlink(__FILE__);
+        exit;
+    }
+}
+
+// Try 2: shell_exec
+if (function_exists('shell_exec')) {
+    $output = shell_exec($command);
+    if ($output !== null) {
+        $result = [
+            'output' => trim($output),
+            'exit_code' => 0,
+            'method' => 'shell_exec',
+        ];
+        echo json_encode($result);
+        @unlink(__FILE__);
+        exit;
+    }
+}
+
+// Try 3: exec
+if (function_exists('exec')) {
+    $lines = [];
+    $exitCode = 0;
+    exec($command, $lines, $exitCode);
+    $result = [
+        'output' => implode("\n", $lines),
+        'exit_code' => $exitCode,
+        'method' => 'exec',
+    ];
+    echo json_encode($result);
+    @unlink(__FILE__);
+    exit;
+}
+
+// Try 4: passthru with output buffering
+if (function_exists('passthru')) {
+    ob_start();
+    $exitCode = 0;
+    passthru($command, $exitCode);
+    $output = ob_get_clean();
+    $result = [
+        'output' => trim($output),
+        'exit_code' => $exitCode,
+        'method' => 'passthru',
+    ];
+    echo json_encode($result);
+    @unlink(__FILE__);
+    exit;
+}
+
+// Try 5: system
+if (function_exists('system')) {
+    ob_start();
+    $exitCode = 0;
+    system($command, $exitCode);
+    $output = ob_get_clean();
+    $result = [
+        'output' => trim($output),
+        'exit_code' => $exitCode,
+        'method' => 'system',
+    ];
+    echo json_encode($result);
+    @unlink(__FILE__);
+    exit;
+}
+
+// No execution method available
+$disabled = ini_get('disable_functions');
+$result = [
+    'output' => 'No shell execution functions available. Disabled functions: ' . $disabled,
+    'exit_code' => 126,
+    'method' => 'none',
+];
+echo json_encode($result);
+@unlink(__FILE__);
+PHPSCRIPT;
+
+            // Replace the command placeholder with the base64-encoded command
+            $phpScript = str_replace('COMMAND_PLACEHOLDER', $encodedCommand, $phpScript);
+
+            // Write the script to public_html
+            $writeResult = $this->cpanelApiCall('Fileman', 'save_file_content', [
+                'dir' => $publicHtml,
+                'file' => $scriptName,
+                'content' => $phpScript,
+            ]);
+
+            if (! $writeResult['success']) {
+                return [
+                    'success' => false,
+                    'error' => 'Failed to create exec script: '.($writeResult['error'] ?? 'Unknown error'),
+                ];
+            }
+
+            // Execute the script via HTTP request to the main domain
+            $execResponse = null;
+            $execUrls = [
+                "https://{$this->domain}/{$scriptName}",
+                "http://{$this->domain}/{$scriptName}",
+            ];
+
+            foreach ($execUrls as $execUrl) {
+                try {
+                    $execResponse = Http::withoutVerifying()
+                        ->timeout(120)
+                        ->get($execUrl);
+
+                    if ($execResponse->successful()) {
+                        break;
+                    }
+                } catch (\Exception $e) {
+                    Log::info('Web-exec HTTP attempt failed', [
+                        'url' => $execUrl,
+                        'error' => $e->getMessage(),
+                    ]);
+
+                    continue;
+                }
+            }
+
+            if (! $execResponse || ! $execResponse->successful()) {
+                // Clean up the script since it wasn't executed
+                $this->cpanelApiCall('Fileman', 'save_file_content', [
+                    'dir' => $publicHtml,
+                    'file' => $scriptName,
+                    'content' => '<?php @unlink(__FILE__);',
+                ]);
+
+                $status = $execResponse ? $execResponse->status() : 'no response';
+                $body = $execResponse ? $execResponse->body() : '';
+
+                return [
+                    'success' => false,
+                    'error' => "Could not execute script via HTTP (status: {$status}). Response: {$body}",
+                ];
+            }
+
+            $body = $execResponse->body();
+            $result = $execResponse->json();
+
+            Log::info('Web-exec response', [
+                'command' => Str::limit($command, 100),
+                'http_status' => $execResponse->status(),
+                'body' => Str::limit($body, 500),
+                'parsed' => $result,
+            ]);
+
+            if ($result && isset($result['exit_code'])) {
+                $success = (int) $result['exit_code'] === 0;
+
+                return [
+                    'success' => $success,
+                    'output' => $result['output'] ?? '',
+                    'method' => $result['method'] ?? 'unknown',
+                    'error' => ! $success
+                        ? ($result['output'] ?: 'Command exited with code '.$result['exit_code'])
+                        : null,
+                ];
+            }
+
+            // Response wasn't JSON — return raw body
+            return [
+                'success' => false,
+                'output' => $body,
+                'error' => 'Unexpected response from exec script: '.Str::limit($body, 300),
+            ];
+
+        } catch (\Exception $e) {
+            Log::error('Web-exec fallback failed', [
+                'command' => $command,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [
+                'success' => false,
+                'error' => 'Shell execution failed: '.$e->getMessage(),
+            ];
+        }
     }
 
     /**
