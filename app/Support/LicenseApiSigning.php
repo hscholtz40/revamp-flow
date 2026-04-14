@@ -74,7 +74,42 @@ final class LicenseApiSigning
             }
         }
 
+        // REQUEST_URI / PATH_INFO can differ from fullUrl() behind proxies, rewrites, or index.php routing.
+        $uriPath = parse_url((string) $request->server('REQUEST_URI', ''), PHP_URL_PATH);
+        if (is_string($uriPath) && $uriPath !== '' && $uriPath !== $rawPath) {
+            self::pushPathVariantsForRawRequestPath($uriPath, $push);
+        }
+        $pathInfo = $request->server('PATH_INFO');
+        if (is_string($pathInfo) && $pathInfo !== '' && $pathInfo !== $uriPath && $pathInfo !== $rawPath) {
+            self::pushPathVariantsForRawRequestPath($pathInfo, $push);
+        }
+
         return $candidates;
+    }
+
+    /**
+     * @param  callable(string): void  $push
+     */
+    private static function pushPathVariantsForRawRequestPath(string $path, callable $push): void
+    {
+        $path = $path === '' ? '/' : $path;
+        $fakeUrl = 'https://license.invalid'.(str_starts_with($path, '/') ? $path : '/'.$path);
+        $push(self::pathForSignatureFromUrl($fakeUrl));
+
+        $legacyLtrim = ltrim($path, '/');
+        $push($legacyLtrim === '' ? '/' : $legacyLtrim);
+        if ($legacyLtrim === '') {
+            $push('');
+        }
+
+        $decodedPath = rawurldecode($path);
+        if ($decodedPath !== $path) {
+            $legacyLtrimDecoded = ltrim($decodedPath, '/');
+            $push($legacyLtrimDecoded === '' ? '/' : $legacyLtrimDecoded);
+            if ($legacyLtrimDecoded === '') {
+                $push('');
+            }
+        }
     }
 
     /**
@@ -94,6 +129,30 @@ final class LicenseApiSigning
 
         $push('POST');
         $push($request->method());
+        // Extremely old or mistaken clients (unlikely but cheap to try).
+        $push('post');
+
+        return $candidates;
+    }
+
+    /**
+     * HMAC secret variants: some instances hashed with a normalized license key string.
+     *
+     * @return list<string>
+     */
+    public static function signingSecretCandidates(string $licenseKeyFromJsonBody): array
+    {
+        $candidates = [];
+        $push = function (string $s) use (&$candidates): void {
+            if ($s !== '' && ! in_array($s, $candidates, true)) {
+                $candidates[] = $s;
+            }
+        };
+
+        $push($licenseKeyFromJsonBody);
+        $push(trim($licenseKeyFromJsonBody));
+        $push(strtoupper($licenseKeyFromJsonBody));
+        $push(strtolower($licenseKeyFromJsonBody));
 
         return $candidates;
     }
@@ -143,6 +202,32 @@ final class LicenseApiSigning
             $encoded = json_encode($decoded, $flags);
             if ($encoded !== false) {
                 $pushBody($encoded);
+            }
+        }
+
+        // Alternate key orders / sorted keys (older json_encode insertion order or canonicalizers).
+        if (array_key_exists('license_key', $decoded) && array_key_exists('url', $decoded)) {
+            $lk = $decoded['license_key'];
+            $u = $decoded['url'];
+            $orderVariants = [
+                ['license_key' => $lk, 'url' => $u],
+                ['url' => $u, 'license_key' => $lk],
+            ];
+            foreach ($orderVariants as $ordered) {
+                foreach ($flagSets as $flags) {
+                    $encoded = json_encode($ordered, $flags);
+                    if ($encoded !== false) {
+                        $pushBody($encoded);
+                    }
+                }
+            }
+            $sorted = $decoded;
+            ksort($sorted);
+            foreach ($flagSets as $flags) {
+                $encoded = json_encode($sorted, $flags);
+                if ($encoded !== false) {
+                    $pushBody($encoded);
+                }
             }
         }
 

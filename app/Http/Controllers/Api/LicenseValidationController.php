@@ -24,7 +24,7 @@ class LicenseValidationController extends Controller
         ]);
 
         $license = License::with('customer:id,name')
-            ->where('license_key', $request->input('license_key'))
+            ->whereRaw('LOWER(license_key) = ?', [strtolower((string) $request->input('license_key'))])
             ->first();
 
         if (!$license) {
@@ -83,7 +83,7 @@ class LicenseValidationController extends Controller
         ]);
 
         $license = License::query()
-            ->where('license_key', $request->input('license_key'))
+            ->whereRaw('LOWER(license_key) = ?', [strtolower((string) $request->input('license_key'))])
             ->first();
 
         if (!$license) {

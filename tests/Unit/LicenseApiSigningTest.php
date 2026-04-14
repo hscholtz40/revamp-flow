@@ -87,4 +87,22 @@ class LicenseApiSigningTest extends TestCase
         $candidates = LicenseApiSigning::pathCandidatesForIncomingRequest($request);
         $this->assertContains('api/licenses/validate', $candidates);
     }
+
+    public function test_signing_secret_candidates_include_case_variants(): void
+    {
+        $c = LicenseApiSigning::signingSecretCandidates('AbC-12');
+        $this->assertContains('AbC-12', $c);
+        $this->assertContains('ABC-12', $c);
+        $this->assertContains('abc-12', $c);
+    }
+
+    public function test_payload_hash_includes_alternate_json_key_order(): void
+    {
+        $urlFirst = '{"url":"https://a.com","license_key":"X"}';
+        $keyFirst = '{"license_key":"X","url":"https://a.com"}';
+        $hUrl = LicenseApiSigning::payloadHashCandidatesForRawBody($urlFirst);
+        $hKey = LicenseApiSigning::payloadHashCandidatesForRawBody($keyFirst);
+        $this->assertContains(hash('sha256', $keyFirst), $hUrl);
+        $this->assertContains(hash('sha256', $urlFirst), $hKey);
+    }
 }

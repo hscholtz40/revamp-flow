@@ -52,17 +52,20 @@ class AuthenticateLicenseApiRequest
             return $this->unauthorized('Invalid nonce header.');
         }
 
+        $signingSecrets = LicenseApiSigning::signingSecretCandidates($licenseKey);
         $methodCandidates = LicenseApiSigning::methodCandidatesForIncomingRequest($request);
         $pathCandidates = LicenseApiSigning::pathCandidatesForIncomingRequest($request);
         $signatureValid = false;
-        foreach ($methodCandidates as $methodForSigning) {
-            foreach ($pathCandidates as $pathForSigning) {
-                foreach ($payloadHashCandidates as $payloadHash) {
-                    $toSign = $timestamp . '|' . $nonce . '|' . $methodForSigning . '|' . $pathForSigning . '|' . $payloadHash;
-                    $expectedSignature = hash_hmac('sha256', $toSign, $licenseKey);
-                    if (hash_equals($expectedSignature, $signature)) {
-                        $signatureValid = true;
-                        break 3;
+        foreach ($signingSecrets as $signingSecret) {
+            foreach ($methodCandidates as $methodForSigning) {
+                foreach ($pathCandidates as $pathForSigning) {
+                    foreach ($payloadHashCandidates as $payloadHash) {
+                        $toSign = $timestamp . '|' . $nonce . '|' . $methodForSigning . '|' . $pathForSigning . '|' . $payloadHash;
+                        $expectedSignature = hash_hmac('sha256', $toSign, $signingSecret);
+                        if (hash_equals($expectedSignature, $signature)) {
+                            $signatureValid = true;
+                            break 4;
+                        }
                     }
                 }
             }
@@ -73,6 +76,7 @@ class AuthenticateLicenseApiRequest
             Log::warning('License API signature mismatch (no candidate path matched)', [
                 'path' => $request->path(),
                 'path_from_full_url' => LicenseApiSigning::pathForSignatureFromUrl($request->fullUrl()),
+                'signing_secret_candidates' => count($signingSecrets),
                 'method_candidates' => $methodCandidates,
                 'path_candidates' => $pathCandidates,
                 'payload_hash_candidates' => count($payloadHashCandidates),
@@ -83,13 +87,16 @@ class AuthenticateLicenseApiRequest
         }
 
         // Ensure the license key exists so random signed requests cannot be used.
-        $licenseExists = License::query()->where('license_key', $licenseKey)->exists();
-        if (!$licenseExists) {
+        // Match case-insensitively: HMAC may have been computed with a different casing than stored in DB.
+        $licenseExists = License::query()
+            ->whereRaw('LOWER(license_key) = ?', [strtolower($licenseKey)])
+            ->exists();
+        if (! $licenseExists) {
             return $this->unauthorized('License authentication failed.');
         }
 
         $nonceTtlSeconds = max((int) config('app.license_api_nonce_ttl', 300), 60);
-        $nonceCacheKey = 'license-api-nonce:' . sha1($licenseKey . '|' . $timestamp . '|' . $nonce);
+        $nonceCacheKey = 'license-api-nonce:' . sha1(strtolower($licenseKey) . '|' . $timestamp . '|' . $nonce);
         if (!Cache::add($nonceCacheKey, true, now()->addSeconds($nonceTtlSeconds))) {
             return $this->unauthorized('Replay request detected.');
         }
