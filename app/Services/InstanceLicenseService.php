@@ -66,7 +66,8 @@ class InstanceLicenseService
 
         try {
             $response = Http::acceptJson()
-                ->timeout((int) config('app.license_validation_timeout'));
+                ->timeout((int) config('app.license_validation_timeout'))
+                ->withOptions(['allow_redirects' => false]);
 
             $payload = [
                 'license_key' => $settings->license_key,
@@ -300,7 +301,8 @@ class InstanceLicenseService
 
         try {
             $response = Http::acceptJson()
-                ->timeout((int) config('app.license_validation_timeout'));
+                ->timeout((int) config('app.license_validation_timeout'))
+                ->withOptions(['allow_redirects' => false]);
 
             $payload = [
                 'license_key' => $licenseKey,

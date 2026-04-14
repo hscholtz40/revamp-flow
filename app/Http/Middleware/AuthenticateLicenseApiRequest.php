@@ -16,12 +16,22 @@ class AuthenticateLicenseApiRequest
      */
     public function handle(Request $request, Closure $next): Response
     {
-        $licenseKey = (string) $request->input('license_key', '');
         $timestamp = (string) $request->header('X-License-Timestamp', '');
         $signature = (string) $request->header('X-License-Signature', '');
         $nonce = (string) $request->header('X-License-Nonce', '');
 
-        if ($licenseKey === '' || $timestamp === '' || $signature === '' || $nonce === '') {
+        if ($timestamp === '' || $signature === '' || $nonce === '') {
+            return $this->unauthorized('Missing license API authentication headers.');
+        }
+
+        // Hash raw body before any parsed input access so the digest matches outbound json_encode bytes.
+        $rawBody = (string) $request->getContent();
+        $payloadHash = hash('sha256', $rawBody);
+
+        $decoded = json_decode($rawBody, true);
+        $licenseKey = is_array($decoded) ? (string) ($decoded['license_key'] ?? '') : '';
+
+        if ($licenseKey === '') {
             return $this->unauthorized('Missing license API authentication headers.');
         }
 
@@ -40,7 +50,6 @@ class AuthenticateLicenseApiRequest
             return $this->unauthorized('Invalid nonce header.');
         }
 
-        $payloadHash = hash('sha256', (string) $request->getContent());
         $toSign = $timestamp . '|' . $nonce . '|' . strtoupper($request->method()) . '|' . $request->path() . '|' . $payloadHash;
         $expectedSignature = hash_hmac('sha256', $toSign, $licenseKey);
 

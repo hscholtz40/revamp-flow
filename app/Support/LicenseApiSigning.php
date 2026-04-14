@@ -21,6 +21,8 @@ final class LicenseApiSigning
         if ($path === null || $path === '') {
             $path = '/';
         }
+        // Match Symfony Request::getPathInfo() (decoded path segments).
+        $path = rawurldecode($path);
         $pattern = trim($path, '/');
 
         return $pattern === '' ? '/' : $pattern;
