@@ -69,6 +69,10 @@
             "@php artisan config:clear --ansi",
             "@php artisan test"
         ],
+        "test:coverage": [
+            "@php artisan config:clear --ansi",
+            "@php scripts/run-backend-coverage.php"
+        ],
         "analyse": [
             "@php artisan config:clear --ansi",
             "vendor/bin/phpstan analyse --memory-limit=1G"
