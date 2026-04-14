@@ -105,4 +105,22 @@ class LicenseApiSigningTest extends TestCase
         $this->assertContains(hash('sha256', $keyFirst), $hUrl);
         $this->assertContains(hash('sha256', $urlFirst), $hKey);
     }
+
+    /**
+     * Pre-nonce InstanceLicenseService: hash_hmac(sha256, timestamp|POST|ltrim(parse_url path)|sha256(body), license_key).
+     */
+    public function test_legacy_signature_payload_matches_old_instance_license_service(): void
+    {
+        $body = '{"license_key":"TEST-KEY","url":"https://app.example.com"}';
+        $timestamp = '1710000000';
+        $pathFromOldClient = 'api/licenses/validate';
+        $payloadHash = hash('sha256', $body);
+        $toSign = LicenseApiSigning::legacySignaturePayload($timestamp, $pathFromOldClient, $payloadHash);
+        $this->assertSame(
+            $timestamp . '|POST|' . $pathFromOldClient . '|' . $payloadHash,
+            $toSign
+        );
+        $expected = hash_hmac('sha256', $toSign, 'TEST-KEY');
+        $this->assertSame(64, strlen($expected));
+    }
 }

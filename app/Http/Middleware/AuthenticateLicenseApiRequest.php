@@ -23,8 +23,9 @@ class AuthenticateLicenseApiRequest
         $timestamp = (string) $request->header('X-License-Timestamp', '');
         $signature = (string) $request->header('X-License-Signature', '');
         $nonce = (string) $request->header('X-License-Nonce', '');
+        $legacyNonceless = ($nonce === '');
 
-        if ($timestamp === '' || $signature === '' || $nonce === '') {
+        if ($timestamp === '' || $signature === '') {
             return $this->unauthorized('Missing license API authentication headers.');
         }
 
@@ -39,7 +40,7 @@ class AuthenticateLicenseApiRequest
             return $this->unauthorized('Missing license API authentication headers.');
         }
 
-        if (!ctype_digit($timestamp)) {
+        if (! ctype_digit($timestamp)) {
             return $this->unauthorized('Invalid timestamp header.');
         }
 
@@ -50,23 +51,40 @@ class AuthenticateLicenseApiRequest
             return $this->unauthorized('Expired request signature.');
         }
 
-        if (!preg_match('/^[a-zA-Z0-9_-]{16,128}$/', $nonce)) {
+        if (! $legacyNonceless && ! preg_match('/^[a-zA-Z0-9_-]{16,128}$/', $nonce)) {
             return $this->unauthorized('Invalid nonce header.');
         }
 
         $signingSecrets = LicenseApiSigning::signingSecretCandidates($licenseKey);
-        $methodCandidates = LicenseApiSigning::methodCandidatesForIncomingRequest($request);
         $pathCandidates = LicenseApiSigning::pathCandidatesForIncomingRequest($request);
         $signatureValid = false;
-        foreach ($signingSecrets as $signingSecret) {
-            foreach ($methodCandidates as $methodForSigning) {
+
+        if ($legacyNonceless) {
+            // Older InstanceLicenseService: hash_hmac(sha256, timestamp|POST|ltrim(path)|payloadHash, key) — no nonce.
+            foreach ($signingSecrets as $signingSecret) {
                 foreach ($pathCandidates as $pathForSigning) {
                     foreach ($payloadHashCandidates as $payloadHash) {
-                        $toSign = $timestamp . '|' . $nonce . '|' . $methodForSigning . '|' . $pathForSigning . '|' . $payloadHash;
+                        $toSign = LicenseApiSigning::legacySignaturePayload($timestamp, $pathForSigning, $payloadHash);
                         $expectedSignature = hash_hmac('sha256', $toSign, $signingSecret);
                         if (hash_equals($expectedSignature, $signature)) {
                             $signatureValid = true;
-                            break 4;
+                            break 3;
+                        }
+                    }
+                }
+            }
+        } else {
+            $methodCandidates = LicenseApiSigning::methodCandidatesForIncomingRequest($request);
+            foreach ($signingSecrets as $signingSecret) {
+                foreach ($methodCandidates as $methodForSigning) {
+                    foreach ($pathCandidates as $pathForSigning) {
+                        foreach ($payloadHashCandidates as $payloadHash) {
+                            $toSign = $timestamp . '|' . $nonce . '|' . $methodForSigning . '|' . $pathForSigning . '|' . $payloadHash;
+                            $expectedSignature = hash_hmac('sha256', $toSign, $signingSecret);
+                            if (hash_equals($expectedSignature, $signature)) {
+                                $signatureValid = true;
+                                break 4;
+                            }
                         }
                     }
                 }
@@ -78,9 +96,9 @@ class AuthenticateLicenseApiRequest
             Log::channel('license')->warning('License API signature mismatch (no candidate matched)', SafeLog::redactContext(array_merge(
                 $this->diagnosticContext($request, $rawBody),
                 [
+                    'legacy_nonceless_client' => $legacyNonceless,
                     'path_from_full_url' => LicenseApiSigning::pathForSignatureFromUrl($request->fullUrl()),
                     'signing_secret_candidates' => count($signingSecrets),
-                    'method_candidates' => $methodCandidates,
                     'path_candidates' => $pathCandidates,
                     'payload_hash_candidates' => count($payloadHashCandidates),
                     'payload_hmac_primary_prefix' => substr($primaryPayloadHash, 0, 16),
@@ -105,17 +123,32 @@ class AuthenticateLicenseApiRequest
         }
 
         $nonceTtlSeconds = max((int) config('app.license_api_nonce_ttl', 300), 60);
-        $nonceCacheKey = 'license-api-nonce:' . sha1(strtolower($licenseKey) . '|' . $timestamp . '|' . $nonce);
-        if (! Cache::add($nonceCacheKey, true, now()->addSeconds($nonceTtlSeconds))) {
-            Log::channel('license')->notice('License API replay nonce rejected', [
-                'client_ip' => $request->ip(),
-            ]);
 
-            return $this->unauthorized('Replay request detected.');
+        if ($legacyNonceless) {
+            $replayKey = 'license-api-legacy-replay:' . sha1(strtolower($licenseKey) . '|' . $timestamp . '|' . hash('sha256', $rawBody));
+            if (! Cache::add($replayKey, true, now()->addSeconds($nonceTtlSeconds))) {
+                Log::channel('license')->notice('License API legacy replay rejected', [
+                    'client_ip' => $request->ip(),
+                ]);
+
+                return $this->unauthorized('Replay request detected.');
+            }
+        } else {
+            $nonceCacheKey = 'license-api-nonce:' . sha1(strtolower($licenseKey) . '|' . $timestamp . '|' . $nonce);
+            if (! Cache::add($nonceCacheKey, true, now()->addSeconds($nonceTtlSeconds))) {
+                Log::channel('license')->notice('License API replay nonce rejected', [
+                    'client_ip' => $request->ip(),
+                ]);
+
+                return $this->unauthorized('Replay request detected.');
+            }
         }
 
         if (config('app.license_api_debug_log')) {
-            Log::channel('license')->info('License API request authenticated', SafeLog::redactContext($this->diagnosticContext($request, $rawBody)));
+            Log::channel('license')->info('License API request authenticated', SafeLog::redactContext(array_merge(
+                $this->diagnosticContext($request, $rawBody),
+                ['legacy_nonceless_client' => $legacyNonceless]
+            )));
         }
 
         return $next($request);

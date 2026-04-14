@@ -13,6 +13,15 @@ use Illuminate\Http\Request;
 final class LicenseApiSigning
 {
     /**
+     * Legacy HMAC string (no nonce, no X-License-Nonce header) used by older InstanceLicenseService:
+     * timestamp|POST|ltrim(parse_url path)|payloadSha256Hex
+     */
+    public static function legacySignaturePayload(string $timestamp, string $pathForSigning, string $payloadHashHex): string
+    {
+        return $timestamp . '|POST|' . $pathForSigning . '|' . $payloadHashHex;
+    }
+
+    /**
      * Path segment used in the HMAC payload, derived from the full request URL.
      *
      * Mirrors Laravel's Request::path() for the same URI path.
