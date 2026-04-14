@@ -66,4 +66,54 @@ final class LicenseApiSigning
 
         return $candidates;
     }
+
+    /**
+     * SHA-256 digests of the license JSON body that an outbound client may have used when signing.
+     *
+     * Older instances always hash the bytes they send, but some builds used different json_encode
+     * flags than the bytes on the wire (or vice versa). We try the raw body plus stable re-encodings
+     * of the decoded payload so both behaviours verify.
+     *
+     * @return list<string> 32-byte hex sha256 values (deduplicated)
+     */
+    public static function payloadHashCandidatesForRawBody(string $rawBody): array
+    {
+        $hashes = [];
+        $pushBody = function (string $body) use (&$hashes): void {
+            $h = hash('sha256', $body);
+            if (! in_array($h, $hashes, true)) {
+                $hashes[] = $h;
+            }
+        };
+
+        $pushBody($rawBody);
+
+        if (str_starts_with($rawBody, "\xEF\xBB\xBF")) {
+            $pushBody(substr($rawBody, 3));
+        }
+
+        $trimmed = trim($rawBody);
+        if ($trimmed !== $rawBody) {
+            $pushBody($trimmed);
+        }
+
+        $decoded = json_decode($rawBody, true);
+        if (! is_array($decoded)) {
+            return $hashes;
+        }
+
+        $flagSets = [
+            JSON_UNESCAPED_SLASHES,
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
+            0,
+        ];
+        foreach ($flagSets as $flags) {
+            $encoded = json_encode($decoded, $flags);
+            if ($encoded !== false) {
+                $pushBody($encoded);
+            }
+        }
+
+        return $hashes;
+    }
 }

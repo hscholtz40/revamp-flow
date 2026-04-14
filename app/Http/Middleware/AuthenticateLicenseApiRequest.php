@@ -28,7 +28,7 @@ class AuthenticateLicenseApiRequest
 
         // Hash raw body before any parsed input access so the digest matches outbound json_encode bytes.
         $rawBody = (string) $request->getContent();
-        $payloadHash = hash('sha256', $rawBody);
+        $payloadHashCandidates = LicenseApiSigning::payloadHashCandidatesForRawBody($rawBody);
 
         $decoded = json_decode($rawBody, true);
         $licenseKey = is_array($decoded) ? (string) ($decoded['license_key'] ?? '') : '';
@@ -56,20 +56,24 @@ class AuthenticateLicenseApiRequest
         $pathCandidates = LicenseApiSigning::pathCandidatesForIncomingRequest($request);
         $signatureValid = false;
         foreach ($pathCandidates as $pathForSigning) {
-            $toSign = $timestamp . '|' . $nonce . '|' . $method . '|' . $pathForSigning . '|' . $payloadHash;
-            $expectedSignature = hash_hmac('sha256', $toSign, $licenseKey);
-            if (hash_equals($expectedSignature, $signature)) {
-                $signatureValid = true;
-                break;
+            foreach ($payloadHashCandidates as $payloadHash) {
+                $toSign = $timestamp . '|' . $nonce . '|' . $method . '|' . $pathForSigning . '|' . $payloadHash;
+                $expectedSignature = hash_hmac('sha256', $toSign, $licenseKey);
+                if (hash_equals($expectedSignature, $signature)) {
+                    $signatureValid = true;
+                    break 2;
+                }
             }
         }
 
         if (! $signatureValid) {
+            $primaryPayloadHash = $payloadHashCandidates[0] ?? hash('sha256', $rawBody);
             Log::warning('License API signature mismatch (no candidate path matched)', [
                 'path' => $request->path(),
                 'path_from_full_url' => LicenseApiSigning::pathForSignatureFromUrl($request->fullUrl()),
                 'path_candidates' => $pathCandidates,
-                'payload_hash_prefix' => substr($payloadHash, 0, 16),
+                'payload_hash_candidates' => count($payloadHashCandidates),
+                'payload_hash_prefix' => substr($primaryPayloadHash, 0, 16),
             ]);
 
             return $this->unauthorized('Invalid request signature.');

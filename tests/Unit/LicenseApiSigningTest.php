@@ -39,4 +39,22 @@ class LicenseApiSigningTest extends TestCase
         $candidates = LicenseApiSigning::pathCandidatesForIncomingRequest($request);
         $this->assertContains('api/licenses/validate', $candidates);
     }
+
+    public function test_payload_hash_candidates_include_raw_and_reencoded_json(): void
+    {
+        $raw = '{"license_key":"ABC","url":"https:\/\/app.example.com"}';
+        $hashes = LicenseApiSigning::payloadHashCandidatesForRawBody($raw);
+        $this->assertContains(hash('sha256', $raw), $hashes);
+        $canonical = json_encode(json_decode($raw, true), JSON_UNESCAPED_SLASHES);
+        $this->assertIsString($canonical);
+        $this->assertContains(hash('sha256', $canonical), $hashes);
+        $this->assertNotSame($raw, $canonical);
+    }
+
+    public function test_payload_hash_candidates_deduplicate_identical_forms(): void
+    {
+        $raw = '{"license_key":"X","url":"https://a.com"}';
+        $hashes = LicenseApiSigning::payloadHashCandidatesForRawBody($raw);
+        $this->assertSame(count($hashes), count(array_unique($hashes)));
+    }
 }
