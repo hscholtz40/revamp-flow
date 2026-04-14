@@ -2,6 +2,8 @@
 
 ## 2026-04-14
 
+- **License API signature (backward compatibility):** Incoming validation now tries **multiple HTTP method strings** (always including `POST`, matching legacy clients that hardcoded `POST` in the HMAC) in addition to `strtoupper(Request::method())`. Path candidates also include **`ltrim` after `rawurldecode`** when the URL path contains percent-encoding, so older signing behaviour matches. Payload hash variants still include alternate `json_encode` flag combinations (e.g. with `JSON_PRESERVE_ZERO_FRACTION`). Failure logs include `method_candidates` for support.
+
 - **cPanel license deploy/upgrade (no Shell module):** Zip extraction uses **cPanel API 2** `POST /json-api/cpanel` with **`Fileman::fileop` (extract/trash)** — there is **no** UAPI `fileop` (the `/execute/Fileman/fileop` call cannot work). Release zips with a single `jobcardonline-v*` root are **flattened locally** before upload so remote `find`/`cp`/`rm` are not required when Terminal API is missing. Deploy can merge **`.env.example` → `.env`** during flatten when `.env.example` is present. If `Shell::command` still fails for `php artisan`, the flow reports success with **manual** migrate/storage:link instructions. `Shell::command` errors continue to return the API message when the Shell module exists but returns an error.
 
 - **Frontend typecheck stabilization:** Tightened shared page/component typings for app metadata, nullable auth users, badge variants, backup/Xero control states, and email/version helper components so the Vue TypeScript pass can fail on real model-shape issues instead of repeated UI-level typing noise.

@@ -52,16 +52,18 @@ class AuthenticateLicenseApiRequest
             return $this->unauthorized('Invalid nonce header.');
         }
 
-        $method = strtoupper($request->method());
+        $methodCandidates = LicenseApiSigning::methodCandidatesForIncomingRequest($request);
         $pathCandidates = LicenseApiSigning::pathCandidatesForIncomingRequest($request);
         $signatureValid = false;
-        foreach ($pathCandidates as $pathForSigning) {
-            foreach ($payloadHashCandidates as $payloadHash) {
-                $toSign = $timestamp . '|' . $nonce . '|' . $method . '|' . $pathForSigning . '|' . $payloadHash;
-                $expectedSignature = hash_hmac('sha256', $toSign, $licenseKey);
-                if (hash_equals($expectedSignature, $signature)) {
-                    $signatureValid = true;
-                    break 2;
+        foreach ($methodCandidates as $methodForSigning) {
+            foreach ($pathCandidates as $pathForSigning) {
+                foreach ($payloadHashCandidates as $payloadHash) {
+                    $toSign = $timestamp . '|' . $nonce . '|' . $methodForSigning . '|' . $pathForSigning . '|' . $payloadHash;
+                    $expectedSignature = hash_hmac('sha256', $toSign, $licenseKey);
+                    if (hash_equals($expectedSignature, $signature)) {
+                        $signatureValid = true;
+                        break 3;
+                    }
                 }
             }
         }
@@ -71,6 +73,7 @@ class AuthenticateLicenseApiRequest
             Log::warning('License API signature mismatch (no candidate path matched)', [
                 'path' => $request->path(),
                 'path_from_full_url' => LicenseApiSigning::pathForSignatureFromUrl($request->fullUrl()),
+                'method_candidates' => $methodCandidates,
                 'path_candidates' => $pathCandidates,
                 'payload_hash_candidates' => count($payloadHashCandidates),
                 'payload_hash_prefix' => substr($primaryPayloadHash, 0, 16),

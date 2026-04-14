@@ -57,4 +57,34 @@ class LicenseApiSigningTest extends TestCase
         $hashes = LicenseApiSigning::payloadHashCandidatesForRawBody($raw);
         $this->assertSame(count($hashes), count(array_unique($hashes)));
     }
+
+    public function test_method_candidates_always_include_post_for_legacy_clients(): void
+    {
+        $request = Request::create(
+            'https://license.example.com/api/licenses/validate',
+            'POST',
+            [],
+            [],
+            [],
+            ['CONTENT_TYPE' => 'application/json'],
+            '{"license_key":"TEST","url":"https://app.test"}'
+        );
+        $methods = LicenseApiSigning::methodCandidatesForIncomingRequest($request);
+        $this->assertContains('POST', $methods);
+    }
+
+    public function test_path_candidates_include_decoded_ltrim_when_path_has_percent_encoding(): void
+    {
+        $request = Request::create(
+            'https://license.example.com/api%2Flicenses%2Fvalidate',
+            'POST',
+            [],
+            [],
+            [],
+            ['CONTENT_TYPE' => 'application/json'],
+            '{"license_key":"TEST","url":"https://app.test"}'
+        );
+        $candidates = LicenseApiSigning::pathCandidatesForIncomingRequest($request);
+        $this->assertContains('api/licenses/validate', $candidates);
+    }
 }

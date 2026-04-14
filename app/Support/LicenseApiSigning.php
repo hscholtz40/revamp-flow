@@ -64,6 +64,37 @@ final class LicenseApiSigning
             $push('');
         }
 
+        // Legacy: ltrim after rawurldecode(parse_url path) when %XX segments differ from raw ltrim.
+        $decodedPath = rawurldecode($rawPath);
+        if ($decodedPath !== $rawPath) {
+            $legacyLtrimDecoded = ltrim($decodedPath, '/');
+            $push($legacyLtrimDecoded === '' ? '/' : $legacyLtrimDecoded);
+            if ($legacyLtrimDecoded === '') {
+                $push('');
+            }
+        }
+
+        return $candidates;
+    }
+
+    /**
+     * HTTP methods to try when verifying the HMAC (legacy clients always used "POST" in the string).
+     *
+     * @return list<string>
+     */
+    public static function methodCandidatesForIncomingRequest(Request $request): array
+    {
+        $candidates = [];
+        $push = function (string $m) use (&$candidates): void {
+            $m = strtoupper($m);
+            if ($m !== '' && ! in_array($m, $candidates, true)) {
+                $candidates[] = $m;
+            }
+        };
+
+        $push('POST');
+        $push($request->method());
+
         return $candidates;
     }
 
@@ -105,6 +136,7 @@ final class LicenseApiSigning
         $flagSets = [
             JSON_UNESCAPED_SLASHES,
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
+            JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION,
             0,
         ];
         foreach ($flagSets as $flags) {
