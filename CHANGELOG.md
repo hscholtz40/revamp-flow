@@ -2,7 +2,8 @@
 
 ## 2026-04-14
 
-- **License API diagnostics:** Failed HMAC checks log a **warning** with redacted JSON excerpt, **`raw_body_sha256_hex`** (hash of exact request bytes), **`json_key_order`**, **`REQUEST_URI` / `PATH_INFO` / `SCRIPT_NAME`**, client IP, User-Agent, and signature/nonce metadata. Set **`LICENSE_API_DEBUG_LOG=true`** on the licensing instance to also **`Log::info`** each **successful** authenticated license API request with the same safe fields. Config: `config('app.license_api_debug_log')`.
+- **License API diagnostics:** On the **licensing server**, failed HMAC checks log a **warning** with redacted JSON excerpt, **`raw_body_sha256_hex`** (hash of exact request bytes), **`json_key_order`**, **`REQUEST_URI` / `PATH_INFO` / `SCRIPT_NAME`**, client IP, User-Agent, and signature/nonce metadata. Set **`LICENSE_API_DEBUG_LOG=true`** on the licensing instance to also **`Log::info`** each **successful** authenticated license API request with the same safe fields. Config: `config('app.license_api_debug_log')`.
+- **License validation (customer instance):** When validation fails, **`InstanceLicenseService`** logs **`request_body_sha256_hex`** and **`license_server_host`** so you can match the same **`raw_body_sha256_hex`** line on the licensing server (proves the HTTP request arrived and the body matches).
 
 - **License API signature (backward compatibility):** Verification tries **multiple HMAC secrets** (exact, trim, upper, lower), **HTTP methods** (`POST`, request method, `post`), **paths** from `fullUrl()`, **REQUEST_URI** / **PATH_INFO** when they differ (proxies/rewrites), **legacy ltrim** and **percent-decoded** path forms, and **payload SHA-256** variants (raw body, BOM/trim, `json_encode` flag sets, **`license_key`/`url` key order**, **ksort**). License rows are resolved with **case-insensitive** `license_key`; replay nonces use a **lowercased** key. Logs include candidate counts on failure.
 

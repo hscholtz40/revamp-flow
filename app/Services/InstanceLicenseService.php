@@ -79,9 +79,11 @@ class InstanceLicenseService
             if (!$response->ok()) {
                 $message = $this->messageFromLicenseServerResponse($response);
 
-                Log::warning('License validation request failed', [
+                Log::warning('License validation request failed (customer instance — compare request_body_sha256_hex to licensing server raw_body_sha256_hex on failed HMAC)', [
                     'status' => $response->status(),
                     'message' => $message,
+                    'license_server_host' => parse_url($serverUrl, PHP_URL_HOST) ?: $serverUrl,
+                    'request_body_sha256_hex' => hash('sha256', $this->encodeLicenseApiJsonBody($payload)),
                     'body_preview' => Str::limit((string) $response->body(), 500),
                 ]);
 
@@ -358,12 +360,19 @@ class InstanceLicenseService
         return 'instance-license-validation:' . sha1(($licenseKey ?? '') . '|' . (string) config('app.url'));
     }
 
-    private function signedLicenseApiPost($client, string $url, array $payload, string $licenseKey): HttpResponse
+    /**
+     * JSON body bytes for license API calls (must match signing and logging).
+     */
+    private function encodeLicenseApiJsonBody(array $payload): string
     {
         $body = json_encode($payload, JSON_UNESCAPED_SLASHES);
-        if ($body === false) {
-            $body = '{}';
-        }
+
+        return $body === false ? '{}' : $body;
+    }
+
+    private function signedLicenseApiPost($client, string $url, array $payload, string $licenseKey): HttpResponse
+    {
+        $body = $this->encodeLicenseApiJsonBody($payload);
         $timestamp = (string) now()->timestamp;
         $nonce = Str::random(32);
         $signingPath = LicenseApiSigning::pathForSignatureFromUrl($url);
