@@ -2,6 +2,8 @@
 
 namespace App\Support;
 
+use Illuminate\Http\Request;
+
 /**
  * HMAC signing helpers for license API calls.
  *
@@ -26,5 +28,42 @@ final class LicenseApiSigning
         $pattern = trim($path, '/');
 
         return $pattern === '' ? '/' : $pattern;
+    }
+
+    /**
+     * Possible path strings to verify for an incoming license API request.
+     *
+     * Outbound clients sign using the URL they POST to; proxies, subdirectory mounts, or
+     * legacy left-trim-only path logic can make that differ slightly from {@see Request::path()}.
+     * We accept a signature that matches any one candidate (same payload hash and secret).
+     *
+     * @return list<string>
+     */
+    public static function pathCandidatesForIncomingRequest(Request $request): array
+    {
+        $fullUrl = $request->fullUrl();
+        $candidates = [];
+
+        $push = function (string $p) use (&$candidates): void {
+            if (! in_array($p, $candidates, true)) {
+                $candidates[] = $p;
+            }
+        };
+
+        $push($request->path());
+        $push(self::pathForSignatureFromUrl($fullUrl));
+
+        $rawPath = parse_url($fullUrl, PHP_URL_PATH);
+        if ($rawPath === null || $rawPath === '') {
+            $rawPath = '/';
+        }
+        // Legacy outbound client used ltrim(path, '/') only (no trailing-slash trim, no decode).
+        $legacyLtrim = ltrim($rawPath, '/');
+        $push($legacyLtrim === '' ? '/' : $legacyLtrim);
+        if ($legacyLtrim === '') {
+            $push('');
+        }
+
+        return $candidates;
     }
 }

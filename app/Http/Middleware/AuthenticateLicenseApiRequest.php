@@ -3,10 +3,12 @@
 namespace App\Http\Middleware;
 
 use App\Models\License;
+use App\Support\LicenseApiSigning;
 use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
 class AuthenticateLicenseApiRequest
@@ -50,10 +52,26 @@ class AuthenticateLicenseApiRequest
             return $this->unauthorized('Invalid nonce header.');
         }
 
-        $toSign = $timestamp . '|' . $nonce . '|' . strtoupper($request->method()) . '|' . $request->path() . '|' . $payloadHash;
-        $expectedSignature = hash_hmac('sha256', $toSign, $licenseKey);
+        $method = strtoupper($request->method());
+        $pathCandidates = LicenseApiSigning::pathCandidatesForIncomingRequest($request);
+        $signatureValid = false;
+        foreach ($pathCandidates as $pathForSigning) {
+            $toSign = $timestamp . '|' . $nonce . '|' . $method . '|' . $pathForSigning . '|' . $payloadHash;
+            $expectedSignature = hash_hmac('sha256', $toSign, $licenseKey);
+            if (hash_equals($expectedSignature, $signature)) {
+                $signatureValid = true;
+                break;
+            }
+        }
 
-        if (!hash_equals($expectedSignature, $signature)) {
+        if (! $signatureValid) {
+            Log::warning('License API signature mismatch (no candidate path matched)', [
+                'path' => $request->path(),
+                'path_from_full_url' => LicenseApiSigning::pathForSignatureFromUrl($request->fullUrl()),
+                'path_candidates' => $pathCandidates,
+                'payload_hash_prefix' => substr($payloadHash, 0, 16),
+            ]);
+
             return $this->unauthorized('Invalid request signature.');
         }
 
