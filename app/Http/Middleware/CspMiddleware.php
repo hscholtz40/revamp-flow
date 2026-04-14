@@ -34,7 +34,7 @@ class CspMiddleware
                    "object-src 'none'; " .
                    "frame-ancestors 'self'; " .
                    "script-src 'self' 'nonce-{$nonce}' https://login.xero.com https://identity.xero.com; " .
-                   "style-src 'self' 'nonce-{$nonce}' https://fonts.bunny.net; " .
+                   "style-src 'self' 'nonce-{$nonce}' 'unsafe-inline' https://fonts.bunny.net; " .
                    "img-src 'self' data: https:; " .
                    "font-src 'self' data: https://fonts.bunny.net; " .
                    "connect-src 'self' https://api.xero.com https://identity.xero.com; " .

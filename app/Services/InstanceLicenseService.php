@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Helpers\Version;
 use App\Models\InstanceLicense;
 use App\Models\User;
+use App\Support\LicenseApiSigning;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -363,9 +364,9 @@ class InstanceLicenseService
         }
         $timestamp = (string) now()->timestamp;
         $nonce = Str::random(32);
-        $path = parse_url($url, PHP_URL_PATH) ?: '/';
+        $signingPath = LicenseApiSigning::pathForSignatureFromUrl($url);
         $payloadHash = hash('sha256', $body);
-        $toSign = $timestamp . '|' . $nonce . '|POST|' . ltrim($path, '/') . '|' . $payloadHash;
+        $toSign = $timestamp . '|' . $nonce . '|POST|' . $signingPath . '|' . $payloadHash;
         $signature = hash_hmac('sha256', $toSign, $licenseKey);
 
         return $client
