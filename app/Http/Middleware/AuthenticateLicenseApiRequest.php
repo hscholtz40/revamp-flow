@@ -4,11 +4,13 @@ namespace App\Http\Middleware;
 
 use App\Models\License;
 use App\Support\LicenseApiSigning;
+use App\Support\SafeLog;
 use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 
 class AuthenticateLicenseApiRequest
@@ -73,15 +75,17 @@ class AuthenticateLicenseApiRequest
 
         if (! $signatureValid) {
             $primaryPayloadHash = $payloadHashCandidates[0] ?? hash('sha256', $rawBody);
-            Log::warning('License API signature mismatch (no candidate path matched)', [
-                'path' => $request->path(),
-                'path_from_full_url' => LicenseApiSigning::pathForSignatureFromUrl($request->fullUrl()),
-                'signing_secret_candidates' => count($signingSecrets),
-                'method_candidates' => $methodCandidates,
-                'path_candidates' => $pathCandidates,
-                'payload_hash_candidates' => count($payloadHashCandidates),
-                'payload_hash_prefix' => substr($primaryPayloadHash, 0, 16),
-            ]);
+            Log::warning('License API signature mismatch (no candidate matched)', SafeLog::redactContext(array_merge(
+                $this->diagnosticContext($request, $rawBody),
+                [
+                    'path_from_full_url' => LicenseApiSigning::pathForSignatureFromUrl($request->fullUrl()),
+                    'signing_secret_candidates' => count($signingSecrets),
+                    'method_candidates' => $methodCandidates,
+                    'path_candidates' => $pathCandidates,
+                    'payload_hash_candidates' => count($payloadHashCandidates),
+                    'payload_hmac_primary_prefix' => substr($primaryPayloadHash, 0, 16),
+                ]
+            )));
 
             return $this->unauthorized('Invalid request signature.');
         }
@@ -101,7 +105,55 @@ class AuthenticateLicenseApiRequest
             return $this->unauthorized('Replay request detected.');
         }
 
+        if (config('app.license_api_debug_log')) {
+            Log::info('License API request authenticated', SafeLog::redactContext($this->diagnosticContext($request, $rawBody)));
+        }
+
         return $next($request);
+    }
+
+    /**
+     * Safe, high-signal fields for comparing old vs new client behaviour (license_key value is redacted).
+     *
+     * @return array<string, mixed>
+     */
+    private function diagnosticContext(Request $request, string $rawBody): array
+    {
+        $decoded = json_decode($rawBody, true);
+        $keyOrder = is_array($decoded) ? array_keys($decoded) : null;
+        $licenseKeyLen = is_array($decoded) && isset($decoded['license_key'])
+            ? strlen((string) $decoded['license_key'])
+            : null;
+
+        $redactedBody = preg_replace('/"license_key"\s*:\s*"[^"]*"/i', '"license_key":"[REDACTED]"', $rawBody);
+        if (! is_string($redactedBody)) {
+            $redactedBody = $rawBody;
+        }
+        $redactedBody = preg_replace('/"url"\s*:\s*"[^"]*"/i', '"url":"[REDACTED]"', $redactedBody);
+        if (! is_string($redactedBody)) {
+            $redactedBody = $rawBody;
+        }
+
+        return [
+            'client_ip' => $request->ip(),
+            'user_agent' => Str::limit((string) $request->userAgent(), 240),
+            'http_method' => $request->method(),
+            'request_uri' => $request->server('REQUEST_URI'),
+            'path_info' => $request->server('PATH_INFO'),
+            'script_name' => $request->server('SCRIPT_NAME'),
+            'laravel_path' => $request->path(),
+            'full_url' => $request->fullUrl(),
+            'query_string' => $request->getQueryString(),
+            'raw_body_length_bytes' => strlen($rawBody),
+            'raw_body_sha256_hex' => hash('sha256', $rawBody),
+            'json_key_order' => $keyOrder,
+            'license_key_length' => $licenseKeyLen,
+            'content_type' => $request->header('Content-Type'),
+            'body_redacted_excerpt' => Str::limit($redactedBody, 2000),
+            'x_license_timestamp' => $request->header('X-License-Timestamp'),
+            'x_license_nonce_length' => strlen((string) $request->header('X-License-Nonce', '')),
+            'x_license_signature_prefix' => Str::limit((string) $request->header('X-License-Signature', ''), 32),
+        ];
     }
 
     private function unauthorized(string $message): JsonResponse
