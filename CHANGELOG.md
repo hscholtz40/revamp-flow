@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-04-20
+
+- **Dispatch/messaging migration ordering fix:** Renamed the `conversations` migration to an earlier timestamp so it runs before `conversation_participants`, preventing MySQL foreign-key creation failure (`Failed to open the referenced table 'conversations'`) during `php artisan migrate`.
+- **Conversation participants migration recovery:** Updated the `conversation_participants` migration to drop any pre-existing partial table before create, allowing retries after an interrupted/failed first run that left the table without completed constraints.
+- **Dual-platform foundation (web + mobile):** Added Sanctum-backed `api/v1` mobile API authentication plus non-admin endpoints for profile, jobcards, messaging, dispatch, tracking, and tasks, all aligned with existing module permission checks and tenant company scoping.
+- **Messaging, GPS, dispatch, and tasks backbone:** Added new domains/migrations/models for conversations/messages, vehicles/location pings, route plans, tasks/task notes, and dispatch fields on jobcards, with realtime event scaffolding for message, dispatch, and location update broadcasts.
+- **Web module expansion for operations:** Added web-accessible Message Center, Dispatch, and Tasks pages with controllers/routes and sidebar navigation entries, providing initial in-app surfaces for cross-platform messaging and scheduling workflows.
+- **Routing and assignment infrastructure:** Introduced pluggable route optimization service interfaces with heuristic provider, plus assignment notifications for task/jobcard assignments to support push/broadcast fan-out paths.
+
 ## 2026-04-14
 
 - **License API (legacy clients without `X-License-Nonce`):** The licensing server now accepts the **pre-nonce** HMAC used by older `InstanceLicenseService` builds: `timestamp|POST|path|payloadSha256` with **no** nonce in the string and **no** `X-License-Nonce` header. Replay protection uses a cache key keyed by license key, timestamp, and body hash (same TTL as nonce replay). Modern clients that send a nonce are unchanged.

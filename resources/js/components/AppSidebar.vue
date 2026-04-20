@@ -27,7 +27,7 @@ import groups from '@/routes/groups';
 import administration from '@/routes/administration';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, Users, Settings, UserCheck, Package, Building2, ClipboardList, FileText, Receipt, Warehouse, ArrowUpDown, ShoppingCart, Clock, BarChart3, KeyRound, CreditCard } from 'lucide-vue-next';
+import { BookOpen, Folder, LayoutGrid, Users, Settings, UserCheck, Package, Building2, ClipboardList, FileText, Receipt, Warehouse, ArrowUpDown, ShoppingCart, Clock, BarChart3, KeyRound, CreditCard, MessageSquare, CalendarDays, CheckSquare } from 'lucide-vue-next';
 import licenses from '@/routes/licenses';
 import AppLogo from './AppLogo.vue';
 import { computed } from 'vue';
@@ -130,6 +130,21 @@ const mainNavItems: NavItem[] = [
         icon: Clock,
     },
     {
+        title: 'Messages',
+        href: '/messages',
+        icon: MessageSquare,
+    },
+    {
+        title: 'Dispatch',
+        href: '/dispatch',
+        icon: CalendarDays,
+    },
+    {
+        title: 'Tasks',
+        href: '/tasks',
+        icon: CheckSquare,
+    },
+    {
         title: 'Licensing',
         href: licenses.index().url,
         icon: KeyRound,
@@ -166,6 +181,9 @@ const moduleKeyMap: Record<string, string> = {
     'Credit Notes': 'credit-notes',
     'Reports': 'reports',
     'Timesheet': 'timesheet',
+    'Messages': 'jobcards',
+    'Dispatch': 'jobcards',
+    'Tasks': 'jobcards',
 };
 
 const userType = computed(() => (page.props.auth?.user as any)?.user_type ?? 'standard');
@@ -259,6 +277,9 @@ const filteredNavItems = computed(() => {
         }
         if (item.title === 'Timesheet') {
             return !!page.props.auth?.abilities?.timesheet?.view;
+        }
+        if (item.title === 'Messages' || item.title === 'Dispatch' || item.title === 'Tasks') {
+            return !!page.props.auth?.abilities?.jobcards?.list;
         }
         if (item.title === 'Registered Users') {
             const abilities = page.props.auth?.abilities as Record<string, { list?: boolean } | undefined> | undefined;

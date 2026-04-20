@@ -46,6 +46,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'licensing' => \App\Http\Middleware\EnsureLicensingInstance::class,
             'license.api.auth' => \App\Http\Middleware\AuthenticateLicenseApiRequest::class,
             'license.infrastructure' => EnsureLicenseInfrastructureAccess::class,
+            'api.module.permission' => \App\Http\Middleware\EnsureApiModulePermission::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
