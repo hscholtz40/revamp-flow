@@ -1,8 +1,7 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
 use App\Http\Middleware\EnsureNotInstalled;
+use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     if (auth()->check()) {
@@ -12,6 +11,7 @@ Route::get('/', function () {
 
         return redirect()->route('dashboard');
     }
+
     return redirect()->route('login');
 })->name('home');
 
@@ -53,6 +53,7 @@ require __DIR__.'/list-view-preferences.php';
 require __DIR__.'/notes.php';
 require __DIR__.'/client-zone.php';
 require __DIR__.'/registered-users.php';
+require __DIR__.'/user-notifications.php';
 
 // Installer routes (available only before first install)
 Route::middleware([EnsureNotInstalled::class])->group(function () {

@@ -3,9 +3,11 @@
 namespace App\Http\Middleware;
 
 use App\Models\Company;
+use App\Models\GoogleIntegrationSettings;
 use DateTimeZone;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -93,6 +95,8 @@ class HandleInertiaRequests extends Middleware
                 ],
                 'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
                 'isLicensingInstance' => config('app.is_licensing_instance'),
+                'unreadNotificationCount' => 0,
+                'google_maps_api_key' => '',
             ];
         }
 
@@ -178,8 +182,28 @@ class HandleInertiaRequests extends Middleware
         config(['app.timezone' => $resolvedTimezone]);
         date_default_timezone_set($resolvedTimezone);
 
+        $unreadNotificationCount = 0;
+        if ($user) {
+            try {
+                if (Schema::hasTable('notifications')) {
+                    $unreadNotificationCount = (int) $user->unreadNotifications()->count();
+                }
+            } catch (\Throwable) {
+                $unreadNotificationCount = 0;
+            }
+        }
+
         // Check if parent share already has auth data
         $parentAuth = $parentShare['auth'] ?? null;
+
+        $googleMapsApiKey = '';
+        try {
+            if (Schema::hasTable('google_integration_settings')) {
+                $googleMapsApiKey = GoogleIntegrationSettings::mapsApiKey();
+            }
+        } catch (\Throwable) {
+            $googleMapsApiKey = '';
+        }
 
         return [
             ...$parentShare,
@@ -231,6 +255,8 @@ class HandleInertiaRequests extends Middleware
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'isLicensingInstance' => config('app.is_licensing_instance'),
+            'unreadNotificationCount' => $unreadNotificationCount,
+            'google_maps_api_key' => $googleMapsApiKey,
         ];
     }
 
@@ -342,6 +368,27 @@ class HandleInertiaRequests extends Middleware
                     'create' => $user->hasModulePermission('timesheet', 'create'),
                     'edit' => $user->hasModulePermission('timesheet', 'edit'),
                     'delete' => $user->hasModulePermission('timesheet', 'delete'),
+                ],
+                'messages' => [
+                    'list' => $user->hasModulePermission('messages', 'list'),
+                    'view' => $user->hasModulePermission('messages', 'view'),
+                    'create' => $user->hasModulePermission('messages', 'create'),
+                    'edit' => $user->hasModulePermission('messages', 'edit'),
+                    'delete' => $user->hasModulePermission('messages', 'delete'),
+                ],
+                'dispatch' => [
+                    'list' => $user->hasModulePermission('dispatch', 'list'),
+                    'view' => $user->hasModulePermission('dispatch', 'view'),
+                    'create' => $user->hasModulePermission('dispatch', 'create'),
+                    'edit' => $user->hasModulePermission('dispatch', 'edit'),
+                    'delete' => $user->hasModulePermission('dispatch', 'delete'),
+                ],
+                'tasks' => [
+                    'list' => $user->hasModulePermission('tasks', 'list'),
+                    'view' => $user->hasModulePermission('tasks', 'view'),
+                    'create' => $user->hasModulePermission('tasks', 'create'),
+                    'edit' => $user->hasModulePermission('tasks', 'edit'),
+                    'delete' => $user->hasModulePermission('tasks', 'delete'),
                 ],
                 'registered-users' => [
                     'list' => $user->hasModulePermission('registered-users', 'list'),

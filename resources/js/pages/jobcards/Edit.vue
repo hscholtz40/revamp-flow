@@ -215,6 +215,18 @@
                                 {{ form.errors.phone }}
                             </div>
                         </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Service Address</label>
+                            <AddressAutocompleteInput
+                                v-model="form.service_address"
+                                placeholder="Service location for this jobcard"
+                                class="w-full rounded border px-3 py-2"
+                                :class="{ 'border-red-500': form.errors.service_address }"
+                            />
+                            <div v-if="form.errors.service_address" class="text-red-500 text-sm mt-1">
+                                {{ form.errors.service_address }}
+                            </div>
+                        </div>
 
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Status *</label>
@@ -230,6 +242,23 @@
                             </select>
                             <div v-if="form.errors.status" class="text-red-500 text-sm mt-1">
                                 {{ form.errors.status }}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                            <select
+                                v-model="form.priority"
+                                class="w-full rounded border px-3 py-2"
+                                :class="{ 'border-red-500': form.errors.priority }"
+                            >
+                                <option value="low">Low</option>
+                                <option value="normal">Normal</option>
+                                <option value="high">High</option>
+                                <option value="urgent">Urgent</option>
+                            </select>
+                            <div v-if="form.errors.priority" class="text-red-500 text-sm mt-1">
+                                {{ form.errors.priority }}
                             </div>
                         </div>
 
@@ -696,6 +725,7 @@
 </template>
 
 <script setup lang="ts">
+import AddressAutocompleteInput from '@/components/AddressAutocompleteInput.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { getCsrfToken } from '@/lib/csrf';
 import ContactSelector from '@/components/ContactSelector.vue';
@@ -710,6 +740,9 @@ interface Customer {
     email?: string;
     phone?: string;
     account_code?: string;
+    address?: string;
+    city?: string;
+    country?: string;
 }
 
 interface Product {
@@ -747,11 +780,13 @@ interface Jobcard {
     customer_id: number;
     email?: string | null;
     phone?: string | null;
+    service_address?: string | null;
     assigned_to_user_id: number | null;
     assigned_to_team_id: number | null;
     title: string;
     description: string | null;
     status: string;
+    priority?: string | null;
     start_date: string | null;
     due_date: string | null;
     completed_date: string | null;
@@ -836,18 +871,27 @@ watch(customerSearchQuery, (newQuery) => {
 const assignmentType = ref<'none' | 'user' | 'team'>(
     props.jobcard.assigned_to_team_id ? 'team' : props.jobcard.assigned_to_user_id ? 'user' : 'none'
 );
+const customerServiceAddress = (customer: Customer | null) => {
+    if (!customer) return '';
+    return [customer.address, customer.city, customer.country]
+        .map((value) => (value ?? '').trim())
+        .filter((value) => value.length > 0)
+        .join(', ');
+};
 
 const form = useForm({
     customer_id: props.jobcard.customer_id,
     contact_id: (props.jobcard as any).contact_id ?? null,
     email: props.jobcard.email || '',
     phone: props.jobcard.phone || '',
+    service_address: props.jobcard.service_address || '',
     assigned_to_user_id: props.jobcard.assigned_to_user_id,
     assigned_to_team_id: props.jobcard.assigned_to_team_id,
     order_number: props.jobcard.order_number || '',
     title: props.jobcard.title,
     description: props.jobcard.description || '',
     status: props.jobcard.status,
+    priority: props.jobcard.priority ?? 'normal',
     start_date: props.jobcard.start_date ? new Date(props.jobcard.start_date).toISOString().split('T')[0] : '',
     due_date: props.jobcard.due_date ? new Date(props.jobcard.due_date).toISOString().split('T')[0] : '',
     completed_date: props.jobcard.completed_date ? new Date(props.jobcard.completed_date).toISOString().split('T')[0] : '',
@@ -1191,6 +1235,7 @@ const selectCustomer = (customer: Customer) => {
     form.contact_id = null;
     form.email = customer.email || '';
     form.phone = customer.phone || '';
+    form.service_address = customerServiceAddress(customer);
     customerSearchQuery.value = customer.name;
     customerSearchFocused.value = false;
     
@@ -1204,6 +1249,7 @@ const clearCustomer = () => {
     form.contact_id = null;
     form.email = '';
     form.phone = '';
+    form.service_address = '';
     customerSearchQuery.value = '';
     filteredCustomers.value = [];
 };

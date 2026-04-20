@@ -5,10 +5,22 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/tasks', [TaskBoardController::class, 'index'])
-        ->middleware('module.permission:jobcards,list')
+        ->middleware('module.permission:tasks,list')
         ->name('tasks.index');
 
+    Route::get('/tasks/create', [TaskBoardController::class, 'create'])
+        ->middleware('module.permission:tasks,create')
+        ->name('tasks.create');
+
     Route::post('/tasks', [TaskBoardController::class, 'store'])
-        ->middleware('module.permission:jobcards,list')
+        ->middleware('module.permission:tasks,create')
         ->name('tasks.store');
+
+    Route::get('/tasks/{task}/edit', [TaskBoardController::class, 'edit'])
+        ->middleware('module.permission:tasks,edit')
+        ->name('tasks.edit');
+
+    Route::put('/tasks/{task}', [TaskBoardController::class, 'update'])
+        ->middleware('module.permission:tasks,edit')
+        ->name('tasks.update');
 });

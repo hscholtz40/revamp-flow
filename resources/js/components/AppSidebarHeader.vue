@@ -2,6 +2,7 @@
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
 import CompanySwitcher from '@/components/CompanySwitcher.vue';
 import ListViewColumnsEditor from '@/components/ListViewColumnsEditor.vue';
+import NotificationsBell from '@/components/NotificationsBell.vue';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import type { BreadcrumbItemType } from '@/types';
 import { usePage } from '@inertiajs/vue3';
@@ -44,6 +45,7 @@ const showCompanySwitcher = computed(() => userType.value !== 'client');
         
         <!-- Company Switcher -->
         <div class="flex items-center gap-2">
+            <NotificationsBell />
             <ListViewColumnsEditor />
             <CompanySwitcher
                 v-if="showCompanySwitcher"

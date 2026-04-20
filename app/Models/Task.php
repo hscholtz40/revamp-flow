@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Model;
 
 class Task extends Model
 {
@@ -41,5 +41,15 @@ class Task extends Model
     public function assignedTeam(): BelongsTo
     {
         return $this->belongsTo(Team::class, 'assigned_to_team_id');
+    }
+
+    public function createdBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function jobcard(): BelongsTo
+    {
+        return $this->belongsTo(Jobcard::class);
     }
 }

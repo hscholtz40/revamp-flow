@@ -4,7 +4,7 @@ namespace App\Services\Routing;
 
 class HeuristicRouteProvider implements RouteProviderInterface
 {
-    public function optimize(array $stops): array
+    public function optimize(array $stops, ?string $googleMapsApiKey = null): array
     {
         $ordered = array_values($stops);
 

@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Events\MessageCreated;
+use App\Http\Controllers\Controller;
 use App\Models\Conversation;
 use App\Models\ConversationParticipant;
 use App\Models\Message;
-use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -60,6 +60,8 @@ class MessagingController extends Controller
 
     public function show(Conversation $conversation)
     {
+        $this->assertConversationScope($conversation);
+
         return response()->json(
             $conversation->load(['participants.user:id,name', 'messages.sender:id,name'])
         );
@@ -67,6 +69,7 @@ class MessagingController extends Controller
 
     public function storeMessage(Request $request, Conversation $conversation)
     {
+        $this->assertConversationScope($conversation);
         $payload = $request->validate([
             'body' => ['required', 'string'],
         ]);
@@ -82,5 +85,27 @@ class MessagingController extends Controller
         event(new MessageCreated($message->load('sender:id,name')));
 
         return response()->json($message, 201);
+    }
+
+    public function markRead(Request $request, Conversation $conversation)
+    {
+        $this->assertConversationScope($conversation);
+
+        ConversationParticipant::query()
+            ->where('conversation_id', $conversation->id)
+            ->where('user_id', $request->user()->id)
+            ->update(['last_read_at' => now()]);
+
+        return response()->json(['message' => 'Conversation marked as read']);
+    }
+
+    private function assertConversationScope(Conversation $conversation): void
+    {
+        $companyId = (int) (request()->user()->getCurrentCompany()?->id ?? 0);
+        abort_unless((int) $conversation->company_id === $companyId, 404);
+        abort_unless(
+            $conversation->participants()->where('user_id', request()->user()->id)->exists(),
+            403
+        );
     }
 }

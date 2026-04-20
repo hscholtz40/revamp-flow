@@ -44,7 +44,7 @@
 
             <!-- Filters -->
             <div class="bg-white rounded-lg border p-4 mb-6">
-                <div class="grid grid-cols-1 md:grid-cols-7 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-4 xl:grid-cols-8 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Search</label>
                         <input
@@ -61,6 +61,16 @@
                             <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">
                                 {{ opt.label }}
                             </option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                        <select v-model="priority" class="w-full rounded border px-3 py-2">
+                            <option value="">All priorities</option>
+                            <option value="low">Low</option>
+                            <option value="normal">Normal</option>
+                            <option value="high">High</option>
+                            <option value="urgent">Urgent</option>
                         </select>
                     </div>
                     <div>
@@ -148,6 +158,12 @@
                                     </button>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    <button @click="toggleSort('priority')" class="inline-flex items-center gap-1 hover:text-gray-700">
+                                        Priority
+                                        <span>{{ sortIndicator('priority') }}</span>
+                                    </button>
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     <button @click="toggleSort('due_date')" class="inline-flex items-center gap-1 hover:text-gray-700">
                                         Due Date
                                         <span>{{ sortIndicator('due_date') }}</span>
@@ -226,6 +242,14 @@
                                         class="inline-flex px-2 py-1 text-xs font-semibold rounded-full"
                                     >
                                         {{ formatStatus(jobcard.status) }}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span
+                                        :class="getPriorityBadgeClass(jobcard.priority)"
+                                        class="inline-flex px-2 py-1 text-xs font-semibold rounded-full"
+                                    >
+                                        {{ formatPriorityLabel(jobcard.priority) }}
                                     </span>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -402,6 +426,7 @@ interface Jobcard {
     job_number: string;
     title: string;
     status: string;
+    priority?: string | null;
     description?: string | null;
     order_number?: string | null;
     email?: string | null;
@@ -440,6 +465,7 @@ interface Props {
     teams: TeamOption[];
     filters: {
         status?: string;
+        priority?: string;
         customer_id?: string;
         assigned_to_user_id?: string;
         assigned_to_team_id?: string;
@@ -473,6 +499,7 @@ const statusOptions = computed(() => props.statusOptions ?? []);
 
 const search = ref(props.filters?.search || '');
 const status = ref(props.filters?.status || '');
+const priority = ref(props.filters?.priority || '');
 const customerId = ref(props.filters?.customer_id || '');
 const assignedToUserId = ref(props.filters?.assigned_to_user_id || '');
 const assignedToTeamId = ref(props.filters?.assigned_to_team_id || '');
@@ -498,6 +525,7 @@ nextTick(() => {
 const clearFilters = () => {
     search.value = '';
     status.value = '';
+    priority.value = '';
     customerId.value = '';
     assignedToUserId.value = '';
     assignedToTeamId.value = '';
@@ -521,6 +549,7 @@ const toggleSort = (field: string) => {
     const params: Record<string, string> = {};
     if (search.value && search.value.trim()) params.search = search.value.trim();
     if (status.value && status.value.trim()) params.status = status.value.trim();
+    if (priority.value && priority.value.trim()) params.priority = priority.value.trim();
     if (customerId.value && customerId.value.trim()) params.customer_id = customerId.value.trim();
     if (assignedToUserId.value && assignedToUserId.value.trim()) params.assigned_to_user_id = assignedToUserId.value.trim();
     if (assignedToTeamId.value && assignedToTeamId.value.trim()) params.assigned_to_team_id = assignedToTeamId.value.trim();
@@ -581,13 +610,21 @@ const deleteJobcard = (jobcard: Jobcard) => {
 const getStatusBadgeClass = (status: string) => {
     if (!status) return 'bg-gray-100 text-gray-800';
     const classes = {
-        draft: 'bg-gray-100 text-gray-800',
-        pending: 'bg-yellow-100 text-yellow-800',
-        in_progress: 'bg-blue-100 text-blue-800',
+        new: 'bg-slate-100 text-slate-800',
+        needs_scheduling: 'bg-amber-100 text-amber-800',
+        scheduled: 'bg-blue-100 text-blue-800',
+        dispatched: 'bg-indigo-100 text-indigo-800',
+        accepted: 'bg-cyan-100 text-cyan-800',
+        en_route: 'bg-sky-100 text-sky-800',
+        on_site: 'bg-violet-100 text-violet-800',
+        paused: 'bg-orange-100 text-orange-800',
+        waiting_for_parts: 'bg-yellow-100 text-yellow-800',
+        needs_follow_up: 'bg-fuchsia-100 text-fuchsia-800',
+        emergency: 'bg-red-100 text-red-800',
         completed: 'bg-green-100 text-green-800',
         cancelled: 'bg-red-100 text-red-800',
     };
-    return classes[status as keyof typeof classes] || classes.draft;
+    return classes[status as keyof typeof classes] || classes.new;
 };
 
 const formatStatus = (code: string) => {
@@ -595,6 +632,28 @@ const formatStatus = (code: string) => {
     const opt = statusOptions.value.find((o) => o.value === code);
     if (opt) return opt.label;
     return code.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+};
+
+const getPriorityBadgeClass = (priority: string | null | undefined) => {
+    const p = priority || 'normal';
+    const classes: Record<string, string> = {
+        low: 'bg-slate-100 text-slate-800',
+        normal: 'bg-gray-100 text-gray-800',
+        high: 'bg-orange-100 text-orange-900',
+        urgent: 'bg-red-100 text-red-900',
+    };
+    return classes[p] ?? classes.normal;
+};
+
+const formatPriorityLabel = (priority: string | null | undefined) => {
+    const p = priority || 'normal';
+    const labels: Record<string, string> = {
+        low: 'Low',
+        normal: 'Normal',
+        high: 'High',
+        urgent: 'Urgent',
+    };
+    return labels[p] ?? p;
 };
 
 const formatDate = (date: string) => {
@@ -618,7 +677,7 @@ const deleteRecurringJobcard = (id: number) => {
 };
 
 // Watch for filter changes and update URL
-watch([search, status, customerId, assignedToUserId, assignedToTeamId, showClosed], () => {
+watch([search, status, priority, customerId, assignedToUserId, assignedToTeamId, showClosed], () => {
     // Skip if component is not fully initialized
     if (!isInitialized || !props.filters) return;
     
@@ -626,6 +685,7 @@ watch([search, status, customerId, assignedToUserId, assignedToTeamId, showClose
     
     if (search.value && search.value.trim()) params.search = search.value.trim();
     if (status.value && status.value.trim()) params.status = status.value.trim();
+    if (priority.value && priority.value.trim()) params.priority = priority.value.trim();
     if (customerId.value && customerId.value.trim()) params.customer_id = customerId.value.trim();
     if (assignedToUserId.value && assignedToUserId.value.trim()) params.assigned_to_user_id = assignedToUserId.value.trim();
     if (assignedToTeamId.value && assignedToTeamId.value.trim()) params.assigned_to_team_id = assignedToTeamId.value.trim();

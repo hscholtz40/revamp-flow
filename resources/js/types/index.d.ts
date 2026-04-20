@@ -108,6 +108,27 @@ export interface Auth {
                     edit?: boolean;
                     delete?: boolean;
                 };
+                messages?: {
+                    list?: boolean;
+                    view?: boolean;
+                    create?: boolean;
+                    edit?: boolean;
+                    delete?: boolean;
+                };
+                dispatch?: {
+                    list?: boolean;
+                    view?: boolean;
+                    create?: boolean;
+                    edit?: boolean;
+                    delete?: boolean;
+                };
+                tasks?: {
+                    list?: boolean;
+                    view?: boolean;
+                    create?: boolean;
+                    edit?: boolean;
+                    delete?: boolean;
+                };
         'registered-users'?: {
             list?: boolean;
             view?: boolean;
@@ -131,6 +152,9 @@ export interface NavItem {
     href: NonNullable<InertiaLinkProps['href']>;
     icon?: LucideIcon;
     isActive?: boolean;
+    /** When set on a child item, used for module permission checks in the sidebar filter. */
+    moduleKey?: string;
+    children?: NavItem[];
 }
 
 export type AppPageProps<
@@ -150,6 +174,10 @@ export type AppPageProps<
         status?: string | null;
     };
     sidebarOpen: boolean;
+    /** Count of unread database notifications for the signed-in user (shared via HandleInertiaRequests). */
+    unreadNotificationCount?: number;
+    /** Browser Maps JavaScript API key for Places Autocomplete (from Google integration settings). */
+    google_maps_api_key?: string;
 };
 
 export interface User {

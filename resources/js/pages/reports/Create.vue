@@ -295,7 +295,7 @@ const getStatusOptions = (type: string): string[] => {
         case 'quote':
             return ['draft', 'sent', 'accepted', 'rejected', 'expired'];
         case 'jobcard':
-            return ['pending', 'in_progress', 'completed', 'cancelled'];
+            return ['new', 'needs_scheduling', 'scheduled', 'dispatched', 'accepted', 'en_route', 'on_site', 'paused', 'waiting_for_parts', 'needs_follow_up', 'emergency', 'completed', 'cancelled'];
         default:
             return [];
     }

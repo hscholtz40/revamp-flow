@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AddressAutocompleteInput from '@/components/AddressAutocompleteInput.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed } from 'vue';
@@ -65,7 +66,7 @@ function submit() {
                 </label>
                 <label class="block">
                     <span class="mb-1 block">Address</span>
-                    <input v-model="form.address" class="w-full rounded border px-3 py-2" />
+                    <AddressAutocompleteInput v-model="form.address" class="w-full rounded border px-3 py-2" />
                 </label>
                 <label class="block">
                     <span class="mb-1 block">City</span>

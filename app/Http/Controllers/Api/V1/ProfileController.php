@@ -21,8 +21,19 @@ class ProfileController extends Controller
                     'edit' => $user?->hasModulePermission('jobcards', 'edit') ?? false,
                 ],
                 'tasks' => [
-                    'list' => $user?->hasModulePermission('jobcards', 'list') ?? false,
-                    'edit' => $user?->hasModulePermission('jobcards', 'edit') ?? false,
+                    'list' => $user?->hasModulePermission('tasks', 'list') ?? false,
+                    'create' => $user?->hasModulePermission('tasks', 'create') ?? false,
+                    'edit' => $user?->hasModulePermission('tasks', 'edit') ?? false,
+                ],
+                'messages' => [
+                    'list' => $user?->hasModulePermission('messages', 'list') ?? false,
+                    'view' => $user?->hasModulePermission('messages', 'view') ?? false,
+                    'create' => $user?->hasModulePermission('messages', 'create') ?? false,
+                ],
+                'dispatch' => [
+                    'list' => $user?->hasModulePermission('dispatch', 'list') ?? false,
+                    'create' => $user?->hasModulePermission('dispatch', 'create') ?? false,
+                    'edit' => $user?->hasModulePermission('dispatch', 'edit') ?? false,
                 ],
             ],
             'current_company' => $company ? [

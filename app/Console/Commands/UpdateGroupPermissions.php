@@ -28,21 +28,21 @@ class UpdateGroupPermissions extends Command
     public function handle()
     {
         $this->info('Updating group permissions...');
-        
+
         // Get all groups
         $groups = Group::all();
-        
-        $this->info('Found ' . $groups->count() . ' groups:');
+
+        $this->info('Found '.$groups->count().' groups:');
         foreach ($groups as $group) {
-            $this->line('- ' . $group->name . ' (ID: ' . $group->id . ')');
+            $this->line('- '.$group->name.' (ID: '.$group->id.')');
         }
-        
+
         // Define modules and their permissions
-        $modules = ['customers', 'users', 'groups', 'contacts', 'products', 'suppliers', 'stock-movements', 'purchase-orders', 'jobcards', 'quotes', 'invoices', 'credit-notes', 'reports', 'timesheet'];
-        
+        $modules = ['customers', 'users', 'groups', 'contacts', 'products', 'suppliers', 'stock-movements', 'purchase-orders', 'jobcards', 'quotes', 'invoices', 'credit-notes', 'reports', 'timesheet', 'messages', 'dispatch', 'tasks'];
+
         foreach ($groups as $group) {
-            $this->info('Updating permissions for group: ' . $group->name);
-            
+            $this->info('Updating permissions for group: '.$group->name);
+
             foreach ($modules as $module) {
                 $permission = GroupPermission::updateOrCreate(
                     ['group_id' => $group->id, 'module' => $module],
@@ -54,15 +54,15 @@ class UpdateGroupPermissions extends Command
                         'can_delete' => true,
                     ]
                 );
-                
-                $this->line('  ✓ Added/Updated ' . $module . ' permissions');
+
+                $this->line('  ✓ Added/Updated '.$module.' permissions');
             }
         }
-        
+
         $this->info('Group permissions updated successfully!');
-        
+
         // Show summary
         $totalPermissions = GroupPermission::count();
-        $this->info('Total permissions in database: ' . $totalPermissions);
+        $this->info('Total permissions in database: '.$totalPermissions);
     }
 }

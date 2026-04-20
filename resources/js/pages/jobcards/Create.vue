@@ -213,6 +213,18 @@
                                 {{ form.errors.phone }}
                             </div>
                         </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Service Address</label>
+                            <AddressAutocompleteInput
+                                v-model="form.service_address"
+                                placeholder="Service location for this jobcard"
+                                class="w-full rounded border px-3 py-2"
+                                :class="{ 'border-red-500': form.errors.service_address }"
+                            />
+                            <div v-if="form.errors.service_address" class="text-red-500 text-sm mt-1">
+                                {{ form.errors.service_address }}
+                            </div>
+                        </div>
 
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Status *</label>
@@ -228,6 +240,23 @@
                             </select>
                             <div v-if="form.errors.status" class="text-red-500 text-sm mt-1">
                                 {{ form.errors.status }}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                            <select
+                                v-model="form.priority"
+                                class="w-full rounded border px-3 py-2"
+                                :class="{ 'border-red-500': form.errors.priority }"
+                            >
+                                <option value="low">Low</option>
+                                <option value="normal">Normal</option>
+                                <option value="high">High</option>
+                                <option value="urgent">Urgent</option>
+                            </select>
+                            <div v-if="form.errors.priority" class="text-red-500 text-sm mt-1">
+                                {{ form.errors.priority }}
                             </div>
                         </div>
 
@@ -681,6 +710,7 @@
 </template>
 
 <script setup lang="ts">
+import AddressAutocompleteInput from '@/components/AddressAutocompleteInput.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import ContactSelector from '@/components/ContactSelector.vue';
 import { getCsrfToken } from '@/lib/csrf';
@@ -695,6 +725,9 @@ interface Customer {
     email?: string;
     phone?: string;
     account_code?: string;
+    address?: string;
+    city?: string;
+    country?: string;
 }
 
 interface Product {
@@ -756,10 +789,12 @@ interface Props {
         contact_id?: number | null;
         email?: string | null;
         phone?: string | null;
+        service_address?: string | null;
         order_number?: string | null;
         title?: string | null;
         description?: string | null;
         status?: string | null;
+        priority?: string | null;
         start_date?: string | null;
         due_date?: string | null;
         tax_rate?: number | null;
@@ -799,12 +834,20 @@ const dragOverGroupId = ref<number | null>(null);
 const activeDragIndex = ref<number | null>(null);
 
 const assignmentType = ref<'none' | 'user' | 'team'>('none');
+const customerServiceAddress = (customer: Customer | null) => {
+    if (!customer) return '';
+    return [customer.address, customer.city, customer.country]
+        .map((value) => (value ?? '').trim())
+        .filter((value) => value.length > 0)
+        .join(', ');
+};
 
 const form = useForm({
     customer_id: props.defaultSalesCustomerId ? props.defaultSalesCustomerId.toString() : '',
     contact_id: null as number | null,
     email: '',
     phone: '',
+    service_address: '',
     source_type: null as string | null,
     source_id: null as number | null,
     assigned_to_user_id: null as number | null,
@@ -812,7 +855,8 @@ const form = useForm({
     order_number: '',
     title: '',
     description: '',
-    status: 'draft',
+    status: 'new',
+    priority: 'normal',
     start_date: new Date().toISOString().split('T')[0], // Current date
     due_date: new Date().toISOString().split('T')[0], // Current date
     tax_rate: 15, // Default to 15%
@@ -858,6 +902,7 @@ if (props.defaultSalesCustomerId) {
         customerSearchQuery.value = defaultCustomer.name;
         form.email = defaultCustomer.email || '';
         form.phone = defaultCustomer.phone || '';
+        form.service_address = customerServiceAddress(defaultCustomer);
         form.title = defaultCustomer.name;
     }
 }
@@ -868,12 +913,14 @@ if (props.prefill) {
     form.contact_id = source.contact_id ?? null;
     form.email = source.email || '';
     form.phone = source.phone || '';
+    form.service_address = source.service_address || '';
     form.source_type = source.source_type || null;
     form.source_id = source.source_id ?? null;
     form.order_number = source.order_number || '';
     form.title = source.title || '';
     form.description = source.description || '';
-    form.status = source.status || 'draft';
+    form.status = source.status || 'new';
+    form.priority = source.priority || 'normal';
     form.start_date = source.start_date || form.start_date;
     form.due_date = source.due_date || form.due_date;
     form.tax_rate = Number(source.tax_rate ?? form.tax_rate) || 0;
@@ -974,6 +1021,7 @@ const selectCustomer = (customer: Customer) => {
     form.contact_id = null;
     form.email = customer.email || '';
     form.phone = customer.phone || '';
+    form.service_address = customerServiceAddress(customer);
     customerSearchQuery.value = customer.name;
     customerSearchFocused.value = false;
     
@@ -987,6 +1035,7 @@ const clearCustomer = () => {
     form.contact_id = null;
     form.email = '';
     form.phone = '';
+    form.service_address = '';
     customerSearchQuery.value = '';
     filteredCustomers.value = [];
 };

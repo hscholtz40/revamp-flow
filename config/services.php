@@ -107,4 +107,14 @@ return [
         'purchase_order_export_batch_delay_ms' => env('XERO_PURCHASE_ORDER_EXPORT_BATCH_DELAY_MS', 250),
     ],
 
+    'google_maps' => [
+        /** Map ID for Advanced Markers (Cloud Console); defaults to Google's demo ID for dev. Per-company Maps API keys are stored in Company Settings. */
+        'map_id' => env('GOOGLE_MAPS_MAP_ID', 'DEMO_MAP_ID'),
+    ],
+
+    'dispatch' => [
+        // Temporary test markers for Dispatch map (lat,lng|lat,lng|...).
+        'test_user_locations' => env('DISPATCH_TEST_USER_LOCATIONS', ''),
+    ],
+
 ];

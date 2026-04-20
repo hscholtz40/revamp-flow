@@ -20,7 +20,6 @@ use App\Models\User;
 use App\Services\ReminderService;
 use App\Services\StockService;
 use App\Support\ColumnFilters;
-use App\Support\CompanyScopedRules;
 use App\Support\SafeLog;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
@@ -66,6 +65,13 @@ class JobcardController extends Controller
         // Apply filters
         if ($request->filled('status')) {
             $query->where('status', $request->status);
+        }
+
+        if ($request->filled('priority')) {
+            $priority = (string) $request->input('priority');
+            if (in_array($priority, ['low', 'normal', 'high', 'urgent'], true)) {
+                $query->where('priority', $priority);
+            }
         }
 
         if ($request->filled('customer_id')) {
@@ -123,6 +129,9 @@ class JobcardController extends Controller
                 case 'status':
                     $query->where('status', 'like', "%{$filterValue}%");
                     break;
+                case 'priority':
+                    $query->where('priority', 'like', "%{$filterValue}%");
+                    break;
                 case 'due_date':
                     $query->where('due_date', 'like', "%{$filterValue}%");
                     break;
@@ -159,7 +168,7 @@ class JobcardController extends Controller
             }
         }
 
-        $sortableFields = ['job_number', 'title', 'customer_name', 'status', 'due_date', 'total', 'created_at'];
+        $sortableFields = ['job_number', 'title', 'customer_name', 'status', 'priority', 'due_date', 'total', 'created_at'];
         if (! in_array($sortBy, $sortableFields, true)) {
             $sortBy = 'created_at';
         }
@@ -174,7 +183,7 @@ class JobcardController extends Controller
         }
 
         $jobcards = $query->paginate(15)->withQueryString();
-        $customers = Customer::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name', 'email', 'phone', 'account_code']);
+        $customers = Customer::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name', 'email', 'phone', 'account_code', 'address', 'city', 'country']);
         $users = User::query()
             ->staffSelectableForCompany($currentCompany->id)
             ->orderBy('name')
@@ -216,6 +225,7 @@ class JobcardController extends Controller
             'statusOptions' => $currentCompany->getJobcardStatusOptions(),
             'filters' => [
                 'status' => $request->input('status', ''),
+                'priority' => $request->input('priority', ''),
                 'customer_id' => $request->input('customer_id', ''),
                 'assigned_to_user_id' => $request->input('assigned_to_user_id', ''),
                 'assigned_to_team_id' => $request->input('assigned_to_team_id', ''),
@@ -236,7 +246,7 @@ class JobcardController extends Controller
     public function create(Request $request): Response
     {
         $currentCompany = auth()->user()->getCurrentCompany();
-        $customers = Customer::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name']);
+        $customers = Customer::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name', 'email', 'phone', 'address', 'city', 'country']);
         $products = Product::where('company_id', $currentCompany->id)
             ->where('is_active', true)
             ->orderBy('name')
@@ -362,6 +372,7 @@ class JobcardController extends Controller
         }
 
         $validated['company_id'] = $currentCompany->id;
+        $validated['service_address'] = $validated['service_address'] ?? $this->resolveCustomerAddress((int) $validated['customer_id'], (int) $currentCompany->id);
         $validated['job_number'] = Jobcard::generateJobNumber($currentCompany->id);
         $validated['order_number'] = $validated['order_number'] ?? null;
         $validated['contact_id'] = $validated['contact_id'] ?? null;
@@ -669,7 +680,7 @@ class JobcardController extends Controller
         }
 
         $currentCompany = auth()->user()->getCurrentCompany();
-        $customers = Customer::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name', 'email', 'phone', 'account_code']);
+        $customers = Customer::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name', 'email', 'phone', 'account_code', 'address', 'city', 'country']);
         $products = Product::where('company_id', $currentCompany->id)
             ->where('is_active', true)
             ->orderBy('name')
@@ -709,6 +720,9 @@ class JobcardController extends Controller
     public function update(UpdateJobcardRequest $request, Jobcard $jobcard): RedirectResponse
     {
         $validated = $request->validated();
+        if (empty($validated['service_address'] ?? null)) {
+            $validated['service_address'] = $this->resolveCustomerAddress((int) $validated['customer_id'], (int) $jobcard->company_id);
+        }
 
         $validated['tax_rate'] = $validated['tax_rate'] ?? 0;
         $groupPayload = $validated['line_groups'] ?? [['name' => 'Items']];
@@ -793,7 +807,7 @@ class JobcardController extends Controller
         $this->authorize('updateStatus', $jobcard);
 
         $request->validate([
-            'status' => 'required|in:draft,pending,in_progress,completed,cancelled',
+            'status' => 'required|in:new,needs_scheduling,scheduled,dispatched,accepted,en_route,on_site,paused,waiting_for_parts,needs_follow_up,emergency,completed,cancelled',
         ]);
 
         $newStatus = $request->status;
@@ -1154,5 +1168,28 @@ class JobcardController extends Controller
 
         $note->noteable()->associate($jobcard);
         $note->save();
+    }
+
+    private function resolveCustomerAddress(int $customerId, int $companyId): ?string
+    {
+        if ($customerId <= 0 || $companyId <= 0) {
+            return null;
+        }
+
+        $customer = Customer::query()
+            ->where('company_id', $companyId)
+            ->find($customerId, ['address', 'city', 'country']);
+
+        if (! $customer) {
+            return null;
+        }
+
+        $parts = array_values(array_filter([
+            trim((string) ($customer->address ?? '')),
+            trim((string) ($customer->city ?? '')),
+            trim((string) ($customer->country ?? '')),
+        ]));
+
+        return $parts === [] ? null : implode(', ', $parts);
     }
 }

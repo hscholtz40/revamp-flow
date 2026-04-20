@@ -206,10 +206,35 @@ const printReport = () => {
 };
 
 const fmtCurrency = (v: number) => 'R' + v.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+const jobcardStatusOrder = [
+    'new',
+    'needs_scheduling',
+    'scheduled',
+    'dispatched',
+    'accepted',
+    'en_route',
+    'on_site',
+    'paused',
+    'waiting_for_parts',
+    'needs_follow_up',
+    'emergency',
+    'completed',
+    'cancelled',
+];
 
 const statusLabel = (s: string) => {
     const map: Record<string, string> = {
-        draft: 'Draft', pending: 'Pending', in_progress: 'In Progress',
+        new: 'New',
+        needs_scheduling: 'Needs scheduling',
+        scheduled: 'Scheduled',
+        dispatched: 'Dispatched',
+        accepted: 'Accepted',
+        en_route: 'En route',
+        on_site: 'On site',
+        paused: 'Paused',
+        waiting_for_parts: 'Waiting for parts',
+        needs_follow_up: 'Needs follow-up',
+        emergency: 'Emergency',
         completed: 'Completed', cancelled: 'Cancelled',
     };
     return map[s] ?? s;
@@ -217,9 +242,17 @@ const statusLabel = (s: string) => {
 
 const statusBadge = (s: string) => {
     const map: Record<string, string> = {
-        draft: 'bg-gray-100 text-gray-700',
-        pending: 'bg-yellow-100 text-yellow-700',
-        in_progress: 'bg-blue-100 text-blue-700',
+        new: 'bg-slate-100 text-slate-700',
+        needs_scheduling: 'bg-amber-100 text-amber-700',
+        scheduled: 'bg-blue-100 text-blue-700',
+        dispatched: 'bg-indigo-100 text-indigo-700',
+        accepted: 'bg-cyan-100 text-cyan-700',
+        en_route: 'bg-sky-100 text-sky-700',
+        on_site: 'bg-violet-100 text-violet-700',
+        paused: 'bg-orange-100 text-orange-700',
+        waiting_for_parts: 'bg-yellow-100 text-yellow-700',
+        needs_follow_up: 'bg-fuchsia-100 text-fuchsia-700',
+        emergency: 'bg-red-100 text-red-700',
         completed: 'bg-green-100 text-green-700',
         cancelled: 'bg-red-100 text-red-700',
     };
@@ -229,9 +262,17 @@ const statusBadge = (s: string) => {
 // Status bar colors for the stacked duration chart
 const statusBarColor = (s: string) => {
     const map: Record<string, string> = {
-        draft: '#9ca3af',
-        pending: '#f59e0b',
-        in_progress: '#3b82f6',
+        new: '#64748b',
+        needs_scheduling: '#d97706',
+        scheduled: '#3b82f6',
+        dispatched: '#4f46e5',
+        accepted: '#0891b2',
+        en_route: '#0284c7',
+        on_site: '#7c3aed',
+        paused: '#ea580c',
+        waiting_for_parts: '#ca8a04',
+        needs_follow_up: '#c026d3',
+        emergency: '#dc2626',
         completed: '#10b981',
         cancelled: '#ef4444',
     };
@@ -247,9 +288,8 @@ const totalDurationMinutes = (durations: Record<string, StatusDuration> | null):
 // Compact inline summary of status durations
 const durationSummary = (durations: Record<string, StatusDuration> | null): string => {
     if (!durations) return '-';
-    const order = ['draft', 'pending', 'in_progress', 'completed', 'cancelled'];
     const parts: string[] = [];
-    for (const s of order) {
+    for (const s of jobcardStatusOrder) {
         if (durations[s] && durations[s].minutes > 0) {
             parts.push(`${statusLabel(s)} ${durations[s].formatted}`);
         }
@@ -315,9 +355,17 @@ const colCount = computed(() => includeStatusTrackers.value ? 11 : 10);
                         <label class="block text-xs font-medium text-gray-500 mb-1">Status</label>
                         <select v-model="status" class="w-full rounded border px-3 py-2 text-sm">
                             <option value="">All Statuses</option>
-                            <option value="draft">Draft</option>
-                            <option value="pending">Pending</option>
-                            <option value="in_progress">In Progress</option>
+                            <option value="new">New</option>
+                            <option value="needs_scheduling">Needs scheduling</option>
+                            <option value="scheduled">Scheduled</option>
+                            <option value="dispatched">Dispatched</option>
+                            <option value="accepted">Accepted</option>
+                            <option value="en_route">En route</option>
+                            <option value="on_site">On site</option>
+                            <option value="paused">Paused</option>
+                            <option value="waiting_for_parts">Waiting for parts</option>
+                            <option value="needs_follow_up">Needs follow-up</option>
+                            <option value="emergency">Emergency</option>
                             <option value="completed">Completed</option>
                             <option value="cancelled">Cancelled</option>
                         </select>
@@ -544,7 +592,7 @@ const colCount = computed(() => includeStatusTrackers.value ? 11 : 10);
 
                                                 <!-- Stacked duration bar -->
                                                 <div class="flex h-6 rounded-full overflow-hidden shadow-sm mb-3">
-                                                    <template v-for="s in ['draft', 'pending', 'in_progress', 'completed', 'cancelled']" :key="s">
+                                                    <template v-for="s in jobcardStatusOrder" :key="s">
                                                         <div
                                                             v-if="jc.status_durations[s] && jc.status_durations[s].minutes > 0"
                                                             :style="{
@@ -566,7 +614,7 @@ const colCount = computed(() => includeStatusTrackers.value ? 11 : 10);
 
                                                 <!-- Duration legend -->
                                                 <div class="flex flex-wrap gap-3 mb-3">
-                                                    <template v-for="s in ['draft', 'pending', 'in_progress', 'completed', 'cancelled']" :key="'legend-' + s">
+                                                    <template v-for="s in jobcardStatusOrder" :key="'legend-' + s">
                                                         <div v-if="jc.status_durations[s] && jc.status_durations[s].minutes > 0" class="flex items-center gap-1.5 text-xs">
                                                             <span class="inline-block h-2.5 w-2.5 rounded-full" :style="{ backgroundColor: statusBarColor(s) }"></span>
                                                             <span class="text-gray-600 font-medium">{{ statusLabel(s) }}:</span>

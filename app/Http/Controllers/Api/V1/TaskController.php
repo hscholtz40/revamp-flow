@@ -3,11 +3,12 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Events\DispatchUpdated;
+use App\Http\Controllers\Controller;
 use App\Models\Task;
 use App\Models\TaskNote;
 use App\Models\User;
 use App\Notifications\AssignmentNotification;
-use App\Http\Controllers\Controller;
+use App\Support\CompanyScopedRules;
 use Illuminate\Http\Request;
 
 class TaskController extends Controller
@@ -27,19 +28,21 @@ class TaskController extends Controller
 
     public function store(Request $request)
     {
+        $companyId = (int) ($request->user()->getCurrentCompany()?->id ?? 0);
+
         $payload = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'assigned_to_user_id' => ['nullable', 'integer', 'exists:users,id'],
-            'assigned_to_team_id' => ['nullable', 'integer', 'exists:teams,id'],
-            'jobcard_id' => ['nullable', 'integer', 'exists:jobcards,id'],
+            'assigned_to_user_id' => ['nullable', 'integer', 'required_without:assigned_to_team_id', CompanyScopedRules::staffUser($companyId)],
+            'assigned_to_team_id' => ['nullable', 'integer', 'required_without:assigned_to_user_id', CompanyScopedRules::team($companyId)],
+            'jobcard_id' => ['nullable', 'integer', CompanyScopedRules::jobcard($companyId)],
             'scheduled_start_at' => ['nullable', 'date'],
             'scheduled_end_at' => ['nullable', 'date'],
         ]);
 
         $task = Task::create([
             ...$payload,
-            'company_id' => $request->user()->getCurrentCompany()?->id,
+            'company_id' => $companyId,
             'created_by' => $request->user()->id,
         ]);
 
@@ -56,15 +59,35 @@ class TaskController extends Controller
 
     public function update(Request $request, Task $task)
     {
+        $companyId = (int) ($request->user()->getCurrentCompany()?->id ?? 0);
+        abort_unless((int) $task->company_id === $companyId, 404);
+
         $payload = $request->validate([
-            'status' => ['nullable', 'in:pending,in_progress,completed,cancelled'],
+            'status' => ['nullable', 'in:new,scheduled,accepted,completed,cancelled'],
             'title' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'assigned_to_user_id' => ['nullable', 'integer', 'exists:users,id'],
-            'assigned_to_team_id' => ['nullable', 'integer', 'exists:teams,id'],
+            'assigned_to_user_id' => ['nullable', 'integer', CompanyScopedRules::staffUser($companyId)],
+            'assigned_to_team_id' => ['nullable', 'integer', CompanyScopedRules::team($companyId)],
             'scheduled_start_at' => ['nullable', 'date'],
             'scheduled_end_at' => ['nullable', 'date'],
         ]);
+
+        $effectiveAssignedUserId = array_key_exists('assigned_to_user_id', $payload)
+            ? $payload['assigned_to_user_id']
+            : $task->assigned_to_user_id;
+        $effectiveAssignedTeamId = array_key_exists('assigned_to_team_id', $payload)
+            ? $payload['assigned_to_team_id']
+            : $task->assigned_to_team_id;
+
+        if (! $effectiveAssignedUserId && ! $effectiveAssignedTeamId) {
+            return response()->json([
+                'message' => 'A task must be assigned to either a user or a team.',
+                'errors' => [
+                    'assigned_to_user_id' => ['A task must be assigned to either a user or a team.'],
+                    'assigned_to_team_id' => ['A task must be assigned to either a user or a team.'],
+                ],
+            ], 422);
+        }
 
         if (($payload['status'] ?? null) === 'completed' && ! $task->completed_at) {
             $payload['completed_at'] = now();
@@ -83,8 +106,28 @@ class TaskController extends Controller
         return response()->json($task->fresh());
     }
 
+    public function show(Request $request, Task $task)
+    {
+        $companyId = (int) ($request->user()->getCurrentCompany()?->id ?? 0);
+        abort_unless((int) $task->company_id === $companyId, 404);
+
+        return response()->json($task->load(['assignedUser:id,name', 'assignedTeam:id,name', 'notes.user:id,name']));
+    }
+
+    public function destroy(Request $request, Task $task)
+    {
+        $companyId = (int) ($request->user()->getCurrentCompany()?->id ?? 0);
+        abort_unless((int) $task->company_id === $companyId, 404);
+        $task->delete();
+
+        return response()->json(['message' => 'Task deleted']);
+    }
+
     public function addNote(Request $request, Task $task)
     {
+        $companyId = (int) ($request->user()->getCurrentCompany()?->id ?? 0);
+        abort_unless((int) $task->company_id === $companyId, 404);
+
         $payload = $request->validate([
             'note' => ['required', 'string'],
         ]);

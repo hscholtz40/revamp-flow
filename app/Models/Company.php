@@ -13,9 +13,17 @@ class Company extends Model
     use HasFactory;
 
     public const DEFAULT_JOBCARD_STATUS_LABELS = [
-        'draft' => 'Draft',
-        'pending' => 'Pending',
-        'in_progress' => 'In Progress',
+        'new' => 'New',
+        'needs_scheduling' => 'Needs scheduling',
+        'scheduled' => 'Scheduled',
+        'dispatched' => 'Dispatched',
+        'accepted' => 'Accepted',
+        'en_route' => 'En route',
+        'on_site' => 'On site',
+        'paused' => 'Paused',
+        'waiting_for_parts' => 'Waiting for parts',
+        'needs_follow_up' => 'Needs follow-up',
+        'emergency' => 'Emergency',
         'completed' => 'Completed',
         'cancelled' => 'Cancelled',
     ];

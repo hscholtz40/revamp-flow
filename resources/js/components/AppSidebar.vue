@@ -103,6 +103,14 @@ const mainNavItems: NavItem[] = [
         title: 'Jobcards',
         href: jobcards.index().url,
         icon: ClipboardList,
+        children: [
+            {
+                title: 'Dispatch',
+                href: '/dispatch',
+                icon: CalendarDays,
+                moduleKey: 'dispatch',
+            },
+        ],
     },
     {
         title: 'Quotes',
@@ -133,11 +141,6 @@ const mainNavItems: NavItem[] = [
         title: 'Messages',
         href: '/messages',
         icon: MessageSquare,
-    },
-    {
-        title: 'Dispatch',
-        href: '/dispatch',
-        icon: CalendarDays,
     },
     {
         title: 'Tasks',
@@ -181,16 +184,28 @@ const moduleKeyMap: Record<string, string> = {
     'Credit Notes': 'credit-notes',
     'Reports': 'reports',
     'Timesheet': 'timesheet',
-    'Messages': 'jobcards',
-    'Dispatch': 'jobcards',
-    'Tasks': 'jobcards',
+    'Messages': 'messages',
+    'Tasks': 'tasks',
 };
 
 const userType = computed(() => (page.props.auth?.user as any)?.user_type ?? 'standard');
 const homeHref = computed(() => userType.value === 'client' ? '/client-zone' : dashboard().url);
 
 const filteredNavItems = computed(() => {
-    return mainNavItems.filter((item) => {
+    const withFilteredChildren = mainNavItems.map((item) => {
+        if (item.title === 'Jobcards' && item.children?.length) {
+            const children = item.children.filter((child) => {
+                if (child.moduleKey === 'dispatch') {
+                    return !!(page.props.auth?.abilities as { dispatch?: { list?: boolean } } | undefined)?.dispatch?.list;
+                }
+                return true;
+            });
+            return { ...item, children };
+        }
+        return item;
+    });
+
+    return withFilteredChildren.filter((item) => {
         if (userType.value === 'client') {
             return ['Client Zone', 'Client Documents', 'Request Info Update'].includes(item.title);
         }
@@ -278,8 +293,14 @@ const filteredNavItems = computed(() => {
         if (item.title === 'Timesheet') {
             return !!page.props.auth?.abilities?.timesheet?.view;
         }
-        if (item.title === 'Messages' || item.title === 'Dispatch' || item.title === 'Tasks') {
-            return !!page.props.auth?.abilities?.jobcards?.list;
+        if (item.title === 'Messages') {
+            return !!page.props.auth?.abilities?.messages?.list;
+        }
+        if (item.title === 'Dispatch') {
+            return !!page.props.auth?.abilities?.dispatch?.list;
+        }
+        if (item.title === 'Tasks') {
+            return !!page.props.auth?.abilities?.tasks?.list;
         }
         if (item.title === 'Registered Users') {
             const abilities = page.props.auth?.abilities as Record<string, { list?: boolean } | undefined> | undefined;

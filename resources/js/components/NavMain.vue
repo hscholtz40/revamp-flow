@@ -5,6 +5,9 @@ import {
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
+    SidebarMenuSub,
+    SidebarMenuSubButton,
+    SidebarMenuSubItem,
 } from '@/components/ui/sidebar';
 import { urlIsActive } from '@/lib/utils';
 import { type NavItem } from '@/types';
@@ -15,6 +18,13 @@ defineProps<{
 }>();
 
 const page = usePage();
+
+const isParentOrChildActive = (item: NavItem): boolean => {
+    if (urlIsActive(item.href, page.url)) {
+        return true;
+    }
+    return item.children?.some((c) => urlIsActive(c.href, page.url)) ?? false;
+};
 </script>
 
 <template>
@@ -23,19 +33,49 @@ const page = usePage();
             Platform
         </SidebarGroupLabel>
         <SidebarMenu>
-            <SidebarMenuItem v-for="item in items" :key="item.title">
-                <SidebarMenuButton
-                    as-child
-                    :is-active="urlIsActive(item.href, page.url)"
-                    :tooltip="item.title"
-                    class="rounded-xl border border-transparent px-2.5 text-sidebar-foreground/80 transition-all duration-200 hover:border-sidebar-border/70 hover:bg-sidebar-accent/80 hover:text-sidebar-foreground data-[active=true]:border-primary/25 data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:shadow-sm dark:data-[active=true]:border-primary/35 dark:data-[active=true]:bg-primary/20"
-                >
-                    <Link :href="item.href">
-                        <component :is="item.icon" />
-                        <span>{{ item.title }}</span>
-                    </Link>
-                </SidebarMenuButton>
-            </SidebarMenuItem>
+            <template v-for="item in items" :key="item.title">
+                <SidebarMenuItem v-if="item.children?.length">
+                    <SidebarMenuButton
+                        as-child
+                        :is-active="isParentOrChildActive(item)"
+                        :tooltip="item.title"
+                        class="rounded-xl border border-transparent px-2.5 text-sidebar-foreground/80 transition-all duration-200 hover:border-sidebar-border/70 hover:bg-sidebar-accent/80 hover:text-sidebar-foreground data-[active=true]:border-primary/25 data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:shadow-sm dark:data-[active=true]:border-primary/35 dark:data-[active=true]:bg-primary/20"
+                    >
+                        <Link :href="item.href">
+                            <component :is="item.icon" />
+                            <span>{{ item.title }}</span>
+                        </Link>
+                    </SidebarMenuButton>
+                    <SidebarMenuSub>
+                        <SidebarMenuSubItem v-for="sub in item.children" :key="sub.title">
+                            <SidebarMenuSubButton
+                                as-child
+                                size="sm"
+                                :is-active="urlIsActive(sub.href, page.url)"
+                                class="data-[active=true]:bg-primary/10 data-[active=true]:text-primary"
+                            >
+                                <Link :href="sub.href" class="flex items-center gap-2">
+                                    <component :is="sub.icon" v-if="sub.icon" class="size-4 shrink-0" />
+                                    <span>{{ sub.title }}</span>
+                                </Link>
+                            </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                    </SidebarMenuSub>
+                </SidebarMenuItem>
+                <SidebarMenuItem v-else>
+                    <SidebarMenuButton
+                        as-child
+                        :is-active="urlIsActive(item.href, page.url)"
+                        :tooltip="item.title"
+                        class="rounded-xl border border-transparent px-2.5 text-sidebar-foreground/80 transition-all duration-200 hover:border-sidebar-border/70 hover:bg-sidebar-accent/80 hover:text-sidebar-foreground data-[active=true]:border-primary/25 data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:shadow-sm dark:data-[active=true]:border-primary/35 dark:data-[active=true]:bg-primary/20"
+                    >
+                        <Link :href="item.href">
+                            <component :is="item.icon" />
+                            <span>{{ item.title }}</span>
+                        </Link>
+                    </SidebarMenuButton>
+                </SidebarMenuItem>
+            </template>
         </SidebarMenu>
     </SidebarGroup>
 </template>

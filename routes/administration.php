@@ -1,10 +1,11 @@
 <?php
 
-use App\Http\Controllers\AdministrationController;
 use App\Http\Controllers\Administration\EmailTemplateController;
+use App\Http\Controllers\Administration\PdfTemplateController;
+use App\Http\Controllers\AdministrationController;
+use App\Http\Controllers\GoogleIntegrationController;
 use App\Http\Controllers\SMSSettingsController;
 use App\Http\Controllers\WhatsAppSettingsController;
-use App\Http\Controllers\Administration\PdfTemplateController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'verified', 'admin'])->group(function () {
@@ -17,26 +18,29 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::put('/administration/localization', [AdministrationController::class, 'updateLocalization'])->name('administration.localization.update');
     Route::get('/administration/status-editor', [AdministrationController::class, 'statusEditor'])->name('administration.status-editor');
     Route::put('/administration/status-editor', [AdministrationController::class, 'updateStatusEditor'])->name('administration.status-editor.update');
-    
+
     // Database Upgrade route
     Route::post('/administration/upgrade-database', [AdministrationController::class, 'upgradeDatabase'])->name('administration.upgrade-database');
-    
+
     // Module Visibility routes
     Route::get('/administration/module-visibility', [AdministrationController::class, 'moduleVisibility'])->name('administration.module-visibility');
     Route::put('/administration/module-visibility', [AdministrationController::class, 'update'])->name('administration.module-visibility.update');
-    
+
+    Route::get('/administration/google-integration', [GoogleIntegrationController::class, 'show'])->name('administration.google-integration');
+    Route::put('/administration/google-integration', [GoogleIntegrationController::class, 'update'])->name('administration.google-integration.update');
+
     // SMS Settings routes
     Route::get('/administration/sms-settings', [SMSSettingsController::class, 'index'])->name('sms-settings.index');
     Route::post('/administration/sms-settings', [SMSSettingsController::class, 'store'])->name('sms-settings.store');
     Route::put('/administration/sms-settings/{smsSettings}', [SMSSettingsController::class, 'update'])->name('sms-settings.update');
     Route::delete('/administration/sms-settings/{smsSettings}', [SMSSettingsController::class, 'destroy'])->name('sms-settings.destroy');
-    
+
     // WhatsApp Settings routes
     Route::get('/administration/whatsapp-settings', [WhatsAppSettingsController::class, 'index'])->name('whatsapp-settings.index');
     Route::post('/administration/whatsapp-settings', [WhatsAppSettingsController::class, 'store'])->name('whatsapp-settings.store');
     Route::put('/administration/whatsapp-settings/{whatsAppSettings}', [WhatsAppSettingsController::class, 'update'])->name('whatsapp-settings.update');
     Route::delete('/administration/whatsapp-settings/{whatsAppSettings}', [WhatsAppSettingsController::class, 'destroy'])->name('whatsapp-settings.destroy');
-    
+
     // PDF Templates routes
     Route::get('/administration/pdf-templates', [PdfTemplateController::class, 'index'])->name('administration.pdf-templates.index');
     Route::get('/administration/pdf-templates/create', [PdfTemplateController::class, 'create'])->name('administration.pdf-templates.create');

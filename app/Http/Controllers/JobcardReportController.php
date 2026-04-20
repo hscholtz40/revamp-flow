@@ -13,6 +13,28 @@ use Inertia\Response;
 class JobcardReportController extends Controller
 {
     /**
+     * @return array<int, string>
+     */
+    private function jobcardStatusOrder(): array
+    {
+        return [
+            'new',
+            'needs_scheduling',
+            'scheduled',
+            'dispatched',
+            'accepted',
+            'en_route',
+            'on_site',
+            'paused',
+            'waiting_for_parts',
+            'needs_follow_up',
+            'emergency',
+            'completed',
+            'cancelled',
+        ];
+    }
+
+    /**
      * Show the detailed jobcards report.
      */
     public function index(Request $request): Response
@@ -183,13 +205,9 @@ class JobcardReportController extends Controller
             'billable_amount' => $reportData->sum('billable_amount'),
             'total_line_items' => $reportData->sum('line_items_count'),
             'total_time_entries' => $reportData->sum('time_entries_count'),
-            'status_breakdown' => [
-                'draft' => $reportData->where('status', 'draft')->count(),
-                'pending' => $reportData->where('status', 'pending')->count(),
-                'in_progress' => $reportData->where('status', 'in_progress')->count(),
-                'completed' => $reportData->where('status', 'completed')->count(),
-                'cancelled' => $reportData->where('status', 'cancelled')->count(),
-            ],
+            'status_breakdown' => collect($this->jobcardStatusOrder())
+                ->mapWithKeys(fn (string $status) => [$status => $reportData->where('status', $status)->count()])
+                ->all(),
         ];
 
         // Lookup data for filters
@@ -296,10 +314,10 @@ class JobcardReportController extends Controller
             ];
 
             if ($includeStatusTrackers) {
-                $headerRow = array_merge($headerRow, [
-                    'Time in Draft', 'Time in Pending', 'Time in In Progress',
-                    'Time in Completed', 'Time in Cancelled',
-                ]);
+                $trackerHeaders = collect($this->jobcardStatusOrder())
+                    ->map(fn (string $status) => 'Time in '.ucfirst(str_replace('_', ' ', $status)))
+                    ->all();
+                $headerRow = array_merge($headerRow, $trackerHeaders);
             }
 
             fputcsv($file, $headerRow);
@@ -337,13 +355,10 @@ class JobcardReportController extends Controller
 
                 if ($includeStatusTrackers) {
                     $durations = $jc->getStatusDurations();
-                    $row = array_merge($row, [
-                        $this->formatDuration($durations['draft'] ?? 0),
-                        $this->formatDuration($durations['pending'] ?? 0),
-                        $this->formatDuration($durations['in_progress'] ?? 0),
-                        $this->formatDuration($durations['completed'] ?? 0),
-                        $this->formatDuration($durations['cancelled'] ?? 0),
-                    ]);
+                    $trackerValues = collect($this->jobcardStatusOrder())
+                        ->map(fn (string $status) => $this->formatDuration($durations[$status] ?? 0))
+                        ->all();
+                    $row = array_merge($row, $trackerValues);
                 }
 
                 fputcsv($file, $row);

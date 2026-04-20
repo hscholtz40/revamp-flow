@@ -74,7 +74,7 @@ test('jobcard updates apply stock deltas for changed and newly added line items'
         'customer_id' => $customer->id,
         'job_number' => 'JC-STOCK-'.uniqid(),
         'title' => 'Stock Delta Jobcard',
-        'status' => 'in_progress',
+        'status' => 'on_site',
         'subtotal' => 200,
         'discount_amount' => 0,
         'discount_percentage' => 0,
@@ -98,7 +98,7 @@ test('jobcard updates apply stock deltas for changed and newly added line items'
     $this->put(route('jobcards.update', $jobcard), [
         'customer_id' => $customer->id,
         'title' => 'Stock Delta Jobcard',
-        'status' => 'in_progress',
+        'status' => 'on_site',
         'tax_rate' => 0,
         'line_items' => [
             [
@@ -127,7 +127,7 @@ test('jobcard updates apply stock deltas for changed and newly added line items'
     $this->put(route('jobcards.update', $jobcard->fresh()), [
         'customer_id' => $customer->id,
         'title' => 'Stock Delta Jobcard',
-        'status' => 'in_progress',
+        'status' => 'on_site',
         'tax_rate' => 0,
         'line_items' => [
             [

@@ -434,6 +434,15 @@
                                     </span>
                                 </div>
                                 <div>
+                                    <label class="block text-sm font-medium text-gray-700">Priority</label>
+                                    <span
+                                        :class="getPriorityBadgeClass(props.jobcard.priority)"
+                                        class="inline-flex px-2 py-1 text-xs font-semibold rounded-full"
+                                    >
+                                        {{ formatPriorityLabel(props.jobcard.priority) }}
+                                    </span>
+                                </div>
+                                <div>
                                     <label class="block text-sm font-medium text-gray-700">Assigned To</label>
                                     <p class="text-sm text-gray-900">
                                         <span v-if="props.jobcard.assigned_user" class="inline-flex items-center gap-1.5">
@@ -859,6 +868,7 @@ interface Jobcard {
     title: string;
     description: string | null;
     status: string;
+    priority?: string | null;
     assigned_to_user_id: number | null;
     assigned_to_team_id: number | null;
     assigned_user: AssignedUser | null;
@@ -973,20 +983,42 @@ const roundingAdjustment = computed(() => {
 });
 
 const statusOptions = computed(() => props.statusOptions || []);
-const statusDurationOrder = ['draft', 'pending', 'in_progress', 'completed', 'cancelled'];
+const statusDurationOrder = [
+    'new',
+    'needs_scheduling',
+    'scheduled',
+    'dispatched',
+    'accepted',
+    'en_route',
+    'on_site',
+    'paused',
+    'waiting_for_parts',
+    'needs_follow_up',
+    'emergency',
+    'completed',
+    'cancelled',
+];
 const showStatusTimers = ref(false);
 const totalStatusDurationMinutes = computed(() =>
     Object.values(props.statusDurations || {}).reduce((sum, duration) => sum + (duration.minutes || 0), 0)
 );
 const statusBarColor = (status: string) => {
     const map: Record<string, string> = {
-        draft: '#9ca3af',
-        pending: '#f59e0b',
-        in_progress: '#3b82f6',
+        new: '#64748b',
+        needs_scheduling: '#f59e0b',
+        scheduled: '#3b82f6',
+        dispatched: '#4f46e5',
+        accepted: '#06b6d4',
+        en_route: '#0ea5e9',
+        on_site: '#8b5cf6',
+        paused: '#f97316',
+        waiting_for_parts: '#eab308',
+        needs_follow_up: '#d946ef',
+        emergency: '#dc2626',
         completed: '#10b981',
         cancelled: '#ef4444',
     };
-    return map[status] ?? '#9ca3af';
+    return map[status] ?? '#64748b';
 };
 
 // Computed property to check if user can edit the jobcard
@@ -1055,16 +1087,46 @@ const deleteJobcard = () => {
     }
 };
 
+const getPriorityBadgeClass = (priority: string | null | undefined) => {
+    const p = priority || 'normal';
+    const classes: Record<string, string> = {
+        low: 'bg-slate-100 text-slate-800',
+        normal: 'bg-gray-100 text-gray-800',
+        high: 'bg-orange-100 text-orange-900',
+        urgent: 'bg-red-100 text-red-900',
+    };
+    return classes[p] ?? classes.normal;
+};
+
+const formatPriorityLabel = (priority: string | null | undefined) => {
+    const p = priority || 'normal';
+    const labels: Record<string, string> = {
+        low: 'Low',
+        normal: 'Normal',
+        high: 'High',
+        urgent: 'Urgent',
+    };
+    return labels[p] ?? p;
+};
+
 const getStatusBadgeClass = (status: string) => {
     if (!status) return 'bg-gray-100 text-gray-800';
     const classes = {
-        draft: 'bg-gray-100 text-gray-800',
-        pending: 'bg-yellow-100 text-yellow-800',
-        in_progress: 'bg-blue-100 text-blue-800',
+        new: 'bg-slate-100 text-slate-800',
+        needs_scheduling: 'bg-amber-100 text-amber-800',
+        scheduled: 'bg-blue-100 text-blue-800',
+        dispatched: 'bg-indigo-100 text-indigo-800',
+        accepted: 'bg-cyan-100 text-cyan-800',
+        en_route: 'bg-sky-100 text-sky-800',
+        on_site: 'bg-violet-100 text-violet-800',
+        paused: 'bg-orange-100 text-orange-800',
+        waiting_for_parts: 'bg-yellow-100 text-yellow-800',
+        needs_follow_up: 'bg-fuchsia-100 text-fuchsia-800',
+        emergency: 'bg-red-100 text-red-800',
         completed: 'bg-green-100 text-green-800',
         cancelled: 'bg-red-100 text-red-800',
     };
-    return classes[status as keyof typeof classes] || classes.draft;
+    return classes[status as keyof typeof classes] || classes.new;
 };
 
 const formatStatus = (code: string) => {
