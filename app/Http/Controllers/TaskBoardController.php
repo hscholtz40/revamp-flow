@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Task;
 use App\Models\Team;
 use App\Models\User;
+use App\Support\CompanyScopedRules;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -23,7 +24,7 @@ class TaskBoardController extends Controller
                 ->orderByDesc('id')
                 ->paginate(30),
             'assignableUsers' => User::query()
-                ->where('company_id', $companyId)
+                ->staffSelectableForCompany((int) $companyId)
                 ->select('id', 'name')
                 ->orderBy('name')
                 ->get(),
@@ -42,8 +43,8 @@ class TaskBoardController extends Controller
         $payload = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'assigned_to_user_id' => ['nullable', 'integer', 'exists:users,id'],
-            'assigned_to_team_id' => ['nullable', 'integer', 'exists:teams,id'],
+            'assigned_to_user_id' => ['nullable', 'integer', CompanyScopedRules::staffUser((int) $companyId)],
+            'assigned_to_team_id' => ['nullable', 'integer', CompanyScopedRules::team((int) $companyId)],
             'scheduled_start_at' => ['nullable', 'date'],
             'scheduled_end_at' => ['nullable', 'date', 'after_or_equal:scheduled_start_at'],
         ]);
