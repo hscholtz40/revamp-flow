@@ -2,6 +2,7 @@
 
 ## 2026-04-20
 
+- **Tasks web assignment query fix:** Updated Task board user filtering to use company membership (`user_companies`) instead of a non-existent `users.company_id`, and tightened task-create assignment validation to company-scoped staff/team rules to prevent invalid cross-company IDs.
 - **Tasks web create flow:** Added web task creation on the Tasks page (`POST /tasks`) with title/description, optional user/team assignment, and optional schedule fields so staff can create tasks directly from the web module instead of API-only workflows.
 - **Dispatch/messaging migration ordering fix:** Renamed the `conversations` migration to an earlier timestamp so it runs before `conversation_participants`, preventing MySQL foreign-key creation failure (`Failed to open the referenced table 'conversations'`) during `php artisan migrate`.
 - **Conversation participants migration recovery:** Updated the `conversation_participants` migration to drop any pre-existing partial table before create, allowing retries after an interrupted/failed first run that left the table without completed constraints.
