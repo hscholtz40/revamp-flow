@@ -2,6 +2,7 @@
 
 ## 2026-04-21
 
+- **Task notification trigger policy refined:** Task assignment notifications are now sent only when a task is newly created or when `assigned_to_user_id` / `assigned_to_team_id` changes. Pure status/schedule/content updates no longer generate task assignment notifications.
 - **Tasks kanban drag-and-drop status updates:** Added drag-and-drop status changes in the Tasks Kanban view. Cards are draggable only when the user can update that task's status, and drops call the same status update endpoint/rules used by task show.
 - **Tasks list now supports List/Kanban tabs:** Added a view toggle on the tasks index with `List` and `Kanban` tabs. The kanban board uses the same permission-scoped task dataset as the list view, so fallback visibility and task permission rules are enforced consistently in both views.
 - **Task show status UI now matches jobcards pattern:** Replaced the task show status dropdown with a full clickable status bar (all statuses shown as buttons with active/disabled states), mirroring the jobcard show status interaction model.

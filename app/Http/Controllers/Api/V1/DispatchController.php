@@ -327,11 +327,16 @@ class DispatchController extends Controller
             $payload['completed_at'] = now();
         }
 
+        $previousAssignedUserId = (int) ($task->assigned_to_user_id ?? 0);
+        $previousAssignedTeamId = (int) ($task->assigned_to_team_id ?? 0);
         $task->update($payload);
-        $this->notifyTaskAssignmentTargets($companyId, $task);
-        event(new DispatchUpdated($task->fresh()));
+        $freshTask = $task->fresh();
+        if ($freshTask && $this->assignmentChanged($freshTask, $previousAssignedUserId, $previousAssignedTeamId)) {
+            $this->notifyTaskAssignmentTargets($companyId, $freshTask);
+        }
+        event(new DispatchUpdated($freshTask));
 
-        return response()->json($task->fresh());
+        return response()->json($freshTask);
     }
 
     public function generateRoute(Request $request)
@@ -589,9 +594,14 @@ class DispatchController extends Controller
                 if (($changes['status'] ?? null) === 'completed' && ! $record->completed_at) {
                     $changes['completed_at'] = now();
                 }
+                $previousAssignedUserId = (int) ($record->assigned_to_user_id ?? 0);
+                $previousAssignedTeamId = (int) ($record->assigned_to_team_id ?? 0);
                 $record->update($changes);
-                $this->notifyTaskAssignmentTargets($companyId, $record);
-                event(new DispatchUpdated($record->fresh()));
+                $freshRecord = $record->fresh();
+                if ($freshRecord && $this->assignmentChanged($freshRecord, $previousAssignedUserId, $previousAssignedTeamId)) {
+                    $this->notifyTaskAssignmentTargets($companyId, $freshRecord);
+                }
+                event(new DispatchUpdated($freshRecord));
                 $updated[] = ['type' => 'task', 'id' => $record->id];
             }
 
@@ -660,6 +670,12 @@ class DispatchController extends Controller
         $notifiableUsers
             ->unique('id')
             ->each(fn (User $user) => $user->notify(new AssignmentNotification('task', $task->id, $task->title ?: 'Task #'.$task->id)));
+    }
+
+    private function assignmentChanged(Task $task, int $previousAssignedUserId, int $previousAssignedTeamId): bool
+    {
+        return (int) ($task->assigned_to_user_id ?? 0) !== $previousAssignedUserId
+            || (int) ($task->assigned_to_team_id ?? 0) !== $previousAssignedTeamId;
     }
 
     public function mySchedule(Request $request)

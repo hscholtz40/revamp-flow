@@ -216,8 +216,13 @@ class TaskBoardController extends Controller
             $payload['completed_at'] = null;
         }
 
+        $previousAssignedUserId = (int) ($task->assigned_to_user_id ?? 0);
+        $previousAssignedTeamId = (int) ($task->assigned_to_team_id ?? 0);
         $task->update($payload);
-        $this->notifyTaskAssignmentTargets($companyId, $task->fresh());
+        $freshTask = $task->fresh();
+        if ($freshTask && $this->assignmentChanged($freshTask, $previousAssignedUserId, $previousAssignedTeamId)) {
+            $this->notifyTaskAssignmentTargets($companyId, $freshTask);
+        }
 
         return back()->with('success', 'Task updated successfully.');
     }
@@ -308,6 +313,12 @@ class TaskBoardController extends Controller
         $notifiableUsers
             ->unique('id')
             ->each(fn (User $user) => $user->notify(new AssignmentNotification('task', $task->id, $task->title ?: 'Task #'.$task->id)));
+    }
+
+    private function assignmentChanged(Task $task, int $previousAssignedUserId, int $previousAssignedTeamId): bool
+    {
+        return (int) ($task->assigned_to_user_id ?? 0) !== $previousAssignedUserId
+            || (int) ($task->assigned_to_team_id ?? 0) !== $previousAssignedTeamId;
     }
 
     private function canListOrViewAllTasks(Request $request): bool
