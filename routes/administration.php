@@ -26,8 +26,9 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::get('/administration/module-visibility', [AdministrationController::class, 'moduleVisibility'])->name('administration.module-visibility');
     Route::put('/administration/module-visibility', [AdministrationController::class, 'update'])->name('administration.module-visibility.update');
 
-    Route::get('/administration/google-integration', [GoogleIntegrationController::class, 'show'])->name('administration.google-integration');
-    Route::put('/administration/google-integration', [GoogleIntegrationController::class, 'update'])->name('administration.google-integration.update');
+    Route::get('/administration/other-integrations', [GoogleIntegrationController::class, 'show'])->name('administration.other-integrations');
+    Route::put('/administration/other-integrations', [GoogleIntegrationController::class, 'update'])->name('administration.other-integrations.update');
+    Route::redirect('/administration/google-integration', '/administration/other-integrations');
 
     // SMS Settings routes
     Route::get('/administration/sms-settings', [SMSSettingsController::class, 'index'])->name('sms-settings.index');

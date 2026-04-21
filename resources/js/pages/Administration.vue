@@ -220,12 +220,12 @@ const props = defineProps<{
                     </div>
                 </div>
 
-                <!-- Google Integration Card -->
+                <!-- Other Integrations Card -->
                 <div class="flex flex-col rounded-lg border bg-white p-6 shadow-sm">
                     <div class="flex items-center justify-between">
                         <div>
-                            <h2 class="text-lg font-semibold">Google Integration</h2>
-                            <p class="text-sm text-gray-600">Maps API key and Map ID for Dispatch and route optimization</p>
+                            <h2 class="text-lg font-semibold">Other Integrations</h2>
+                            <p class="text-sm text-gray-600">Google Maps and OpenAI global integration settings</p>
                         </div>
                         <div class="rounded-full bg-primary/10 p-3">
                             <MapPin class="h-6 w-6 text-primary" />
@@ -233,10 +233,10 @@ const props = defineProps<{
                     </div>
                     <div class="mt-auto pt-4">
                         <Link
-                            href="/administration/google-integration"
+                            href="/administration/other-integrations"
                             class="rounded bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
                         >
-                            Configure Google
+                            Configure Integrations
                         </Link>
                     </div>
                 </div>

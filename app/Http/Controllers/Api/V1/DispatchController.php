@@ -35,7 +35,13 @@ class DispatchController extends Controller
 
     public function board(Request $request)
     {
-        $companyId = (int) ($request->user()->getCurrentCompany()?->id ?? 0);
+        $user = $request->user();
+        $companyId = (int) ($user?->getCurrentCompany()?->id ?? 0);
+        $canListOrViewTasks = (bool) ($user?->hasModulePermission('tasks', 'list') || $user?->hasModulePermission('tasks', 'view'));
+        $currentUserId = (int) ($user?->id ?? 0);
+        $currentUserTeamIds = $user
+            ? $user->teams()->where('teams.company_id', $companyId)->pluck('teams.id')
+            : collect();
 
         $input = $request->all();
         if (isset($input['status']) && is_string($input['status'])) {
@@ -199,6 +205,18 @@ class DispatchController extends Controller
             ->when($from && $to, fn (Builder $query) => $query->whereBetween('scheduled_start_at', [$from, $to]))
             ->when($userId, fn (Builder $query) => $query->where('assigned_to_user_id', $userId))
             ->when($teamId, fn (Builder $query) => $query->where('assigned_to_team_id', $teamId))
+            ->when(! $canListOrViewTasks, function (Builder $query) use ($currentUserId, $currentUserTeamIds) {
+                $query->where(function (Builder $taskScope) use ($currentUserId, $currentUserTeamIds) {
+                    $taskScope->where('assigned_to_user_id', $currentUserId);
+                    if ($currentUserTeamIds->isNotEmpty()) {
+                        $taskScope->orWhere(function (Builder $teamScope) use ($currentUserTeamIds) {
+                            $teamScope
+                                ->whereNull('assigned_to_user_id')
+                                ->whereIn('assigned_to_team_id', $currentUserTeamIds->all());
+                        });
+                    }
+                });
+            })
             ->with(['assignedUser:id,name', 'assignedTeam:id,name'])
             ->orderBy('scheduled_start_at')
             ->get();
@@ -287,7 +305,6 @@ class DispatchController extends Controller
         }
 
         $jobcard->update($changes);
-        $this->notifyAssignmentTargets('jobcard', $jobcard->id, $jobcard->title, $jobcard->assigned_to_user_id, $jobcard->assigned_to_team_id, $companyId);
         event(new DispatchUpdated($jobcard->fresh()));
 
         return response()->json($jobcard->fresh()->load(['assignedUser:id,name', 'assignedTeam:id,name', 'customer:id,name,address,city,country', 'contact:id,name,phone,email']));
@@ -311,7 +328,7 @@ class DispatchController extends Controller
         }
 
         $task->update($payload);
-        $this->notifyAssignmentTargets('task', $task->id, $task->title, $task->assigned_to_user_id, $task->assigned_to_team_id, $companyId);
+        $this->notifyTaskAssignmentTargets($companyId, $task);
         event(new DispatchUpdated($task->fresh()));
 
         return response()->json($task->fresh());
@@ -482,14 +499,7 @@ class DispatchController extends Controller
             $task->update(['completed_at' => now()]);
         }
 
-        $this->notifyAssignmentTargets(
-            'task',
-            $task->id,
-            $task->title,
-            $task->assigned_to_user_id,
-            $task->assigned_to_team_id,
-            $companyId
-        );
+        $this->notifyTaskAssignmentTargets($companyId, $task);
         event(new DispatchUpdated($task->fresh()));
 
         return response()->json($task->fresh(), 201);
@@ -562,7 +572,6 @@ class DispatchController extends Controller
                         'estimated_duration_minutes',
                     ])->all();
                     $record->update($changes);
-                    $this->notifyAssignmentTargets('jobcard', $record->id, $record->title, $record->assigned_to_user_id, $record->assigned_to_team_id, $companyId);
                     event(new DispatchUpdated($record->fresh()));
                     $updated[] = ['type' => 'jobcard', 'id' => $record->id];
 
@@ -581,7 +590,7 @@ class DispatchController extends Controller
                     $changes['completed_at'] = now();
                 }
                 $record->update($changes);
-                $this->notifyAssignmentTargets('task', $record->id, $record->title, $record->assigned_to_user_id, $record->assigned_to_team_id, $companyId);
+                $this->notifyTaskAssignmentTargets($companyId, $record);
                 event(new DispatchUpdated($record->fresh()));
                 $updated[] = ['type' => 'task', 'id' => $record->id];
             }
@@ -624,6 +633,35 @@ class DispatchController extends Controller
         ]);
     }
 
+    private function notifyTaskAssignmentTargets(int $companyId, Task $task): void
+    {
+        $notifiableUsers = collect();
+
+        if ($task->assigned_to_user_id) {
+            $user = User::query()
+                ->staffSelectableForCompany($companyId)
+                ->whereKey((int) $task->assigned_to_user_id)
+                ->first();
+            if ($user) {
+                $notifiableUsers->push($user);
+            }
+        }
+
+        if ($task->assigned_to_team_id) {
+            $teamUsers = Team::query()
+                ->where('company_id', $companyId)
+                ->whereKey((int) $task->assigned_to_team_id)
+                ->with(['users' => fn ($query) => $query->select('users.id', 'users.name', 'users.email')])
+                ->first()
+                ?->users ?? collect();
+            $notifiableUsers = $notifiableUsers->merge($teamUsers);
+        }
+
+        $notifiableUsers
+            ->unique('id')
+            ->each(fn (User $user) => $user->notify(new AssignmentNotification('task', $task->id, $task->title ?: 'Task #'.$task->id)));
+    }
+
     public function mySchedule(Request $request)
     {
         $companyId = (int) ($request->user()->getCurrentCompany()?->id ?? 0);
@@ -664,35 +702,6 @@ class DispatchController extends Controller
             'tasks' => $tasks,
             'conflicts' => $this->collectConflicts($jobcards, $tasks),
         ]);
-    }
-
-    private function notifyAssignmentTargets(string $entityType, int $entityId, ?string $title, ?int $assignedUserId, ?int $assignedTeamId, int $companyId): void
-    {
-        $notifiableUsers = collect();
-
-        if ($assignedUserId) {
-            $user = User::query()
-                ->staffSelectableForCompany($companyId)
-                ->whereKey($assignedUserId)
-                ->first();
-            if ($user) {
-                $notifiableUsers->push($user);
-            }
-        }
-
-        if ($assignedTeamId) {
-            $teamUsers = Team::query()
-                ->where('company_id', $companyId)
-                ->whereKey($assignedTeamId)
-                ->with(['users' => fn ($query) => $query->select('users.id', 'users.name', 'users.email')])
-                ->first()
-                ?->users ?? collect();
-            $notifiableUsers = $notifiableUsers->merge($teamUsers);
-        }
-
-        $notifiableUsers
-            ->unique('id')
-            ->each(fn (User $user) => $user->notify(new AssignmentNotification($entityType, $entityId, $title ?: ucfirst($entityType).' #'.$entityId)));
     }
 
     private function collectConflicts(Collection $jobcards, Collection $tasks): array

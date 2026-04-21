@@ -8,6 +8,8 @@ const props = defineProps<{
     users: { id: number; name: string }[];
     teams: { id: number; name: string }[];
     googleMapsApiKey?: string;
+    technicianSuggestions?: Array<{ user_id: number; name: string; score: number; reason: string }>;
+    technicianSuggestionsLoading?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -18,6 +20,7 @@ const emit = defineEmits<{
     unschedule: [];
     'set-datetime': [payload: { scheduled_start_at: string; scheduled_end_at: string | null }];
     'set-estimated-duration': [minutes: number];
+    'suggest-technicians': [];
 }>();
 
 const estimatedMinutesDisplay = computed(() => {
@@ -143,6 +146,31 @@ const statusButtons = [
 
         <div class="border-t border-slate-100 pt-2">
             <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Assign</p>
+            <div class="mb-2 flex items-center justify-between">
+                <button
+                    type="button"
+                    class="rounded border border-indigo-200 bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-800 hover:bg-indigo-100"
+                    :disabled="technicianSuggestionsLoading"
+                    @click="emit('suggest-technicians')"
+                >
+                    {{ technicianSuggestionsLoading ? 'Suggesting…' : 'AI Suggest Technician' }}
+                </button>
+            </div>
+            <div v-if="technicianSuggestions?.length" class="mb-2 rounded border border-indigo-200 bg-indigo-50/60 p-2 text-xs">
+                <p class="mb-1 font-semibold text-indigo-900">Top suggestions</p>
+                <ul class="space-y-1">
+                    <li v-for="s in technicianSuggestions" :key="s.user_id" class="flex items-center justify-between gap-2">
+                        <span class="truncate text-indigo-900">{{ s.name }} ({{ s.score }})</span>
+                        <button
+                            type="button"
+                            class="rounded border border-indigo-300 bg-white px-1.5 py-0.5 text-[11px] font-medium text-indigo-800"
+                            @click="emit('assign', { assigned_to_user_id: s.user_id, assigned_to_team_id: job?.assigned_to_team_id ?? null })"
+                        >
+                            Assign
+                        </button>
+                    </li>
+                </ul>
+            </div>
             <div class="grid gap-2">
                 <select v-model="assignUser" class="w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm">
                     <option value="">Technician…</option>
@@ -180,7 +208,7 @@ const statusButtons = [
         <div class="border-t border-slate-100 pt-2">
             <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Map</p>
             <p v-if="!googleMapsApiKey" class="rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-600">
-                Map is disabled (no Google Maps API key). Configure it under Administration → Google Integration.
+                Map is disabled (no Google Maps API key). Configure it under Administration → Other Integrations.
             </p>
             <button
                 v-else

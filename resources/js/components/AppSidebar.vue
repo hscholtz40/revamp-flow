@@ -50,6 +50,11 @@ const mainNavItems: NavItem[] = [
         icon: LayoutGrid,
     },
     {
+        title: 'AI Assistant',
+        href: '/ai-assistant',
+        icon: MessageSquare,
+    },
+    {
         title: 'Client Zone',
         href: '/client-zone',
         icon: BookOpen,
@@ -214,6 +219,12 @@ const filteredNavItems = computed(() => {
         if (item.title === 'Dashboard') {
             return true;
         }
+        if (item.title === 'AI Assistant') {
+            return !!(page.props as { ai?: { allowed?: boolean } }).ai?.allowed;
+        }
+        if (item.title === 'Tasks') {
+            return true;
+        }
 
         if (item.title === 'Client Zone') {
             return false;
@@ -298,9 +309,6 @@ const filteredNavItems = computed(() => {
         }
         if (item.title === 'Dispatch') {
             return !!page.props.auth?.abilities?.dispatch?.list;
-        }
-        if (item.title === 'Tasks') {
-            return !!page.props.auth?.abilities?.tasks?.list;
         }
         if (item.title === 'Registered Users') {
             const abilities = page.props.auth?.abilities as Record<string, { list?: boolean } | undefined> | undefined;

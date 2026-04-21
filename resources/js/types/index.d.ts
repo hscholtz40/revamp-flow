@@ -178,6 +178,15 @@ export type AppPageProps<
     unreadNotificationCount?: number;
     /** Browser Maps JavaScript API key for Places Autocomplete (from Google integration settings). */
     google_maps_api_key?: string;
+    ai?: {
+        enabled: boolean;
+        available: boolean;
+        allowed: boolean;
+        admin_only: boolean;
+        prompt_logging_enabled: boolean;
+        daily_user_limit: number;
+        daily_company_limit: number;
+    };
 };
 
 export interface User {

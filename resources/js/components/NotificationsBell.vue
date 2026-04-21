@@ -9,7 +9,7 @@ import { toast } from 'vue-sonner';
 
 interface NotificationRow {
     id: string;
-    data: { type?: string; entity_id?: number; title?: string };
+    data: { type?: string; entity_id?: number; title?: string; url?: string };
     read_at: string | null;
     created_at: string;
 }
@@ -51,6 +51,9 @@ watch(open, (isOpen) => {
 });
 
 function hrefFor(n: NotificationRow): string | null {
+    if (n.data?.url) {
+        return n.data.url;
+    }
     const t = n.data?.type;
     const id = n.data?.entity_id;
     if (id == null) {
@@ -60,7 +63,7 @@ function hrefFor(n: NotificationRow): string | null {
         return `/jobcards/${id}`;
     }
     if (t === 'task') {
-        return `/tasks/${id}/edit`;
+        return `/tasks/${id}`;
     }
     return null;
 }

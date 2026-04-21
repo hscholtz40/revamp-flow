@@ -5,7 +5,6 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/tasks', [TaskBoardController::class, 'index'])
-        ->middleware('module.permission:tasks,list')
         ->name('tasks.index');
 
     Route::get('/tasks/create', [TaskBoardController::class, 'create'])
@@ -20,7 +19,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('module.permission:tasks,edit')
         ->name('tasks.edit');
 
+    Route::get('/tasks/{task}', [TaskBoardController::class, 'show'])
+        ->name('tasks.show');
+
     Route::put('/tasks/{task}', [TaskBoardController::class, 'update'])
-        ->middleware('module.permission:tasks,edit')
         ->name('tasks.update');
+
+    Route::delete('/tasks/{task}', [TaskBoardController::class, 'destroy'])
+        ->middleware('module.permission:tasks,delete')
+        ->name('tasks.destroy');
 });

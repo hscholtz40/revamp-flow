@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AiDraftHelper from '@/components/AiDraftHelper.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import EmailTemplateUnlayerEditor from '@/components/EmailTemplateUnlayerEditor.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
@@ -51,6 +52,12 @@ const submit = () => {
                         </div>
                         <div>
                             <label class="mb-1 block text-sm font-medium text-gray-700">Email Subject</label>
+                            <AiDraftHelper
+                                v-model="form.subject"
+                                :context="`Email template: ${form.name || ''}`"
+                                label="AI draft subject"
+                                class="mb-2"
+                            />
                             <input v-model="form.subject" type="text" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" />
                             <p v-if="form.errors.subject" class="mt-1 text-sm text-red-600">{{ form.errors.subject }}</p>
                         </div>

@@ -34,7 +34,18 @@ class AssignmentNotification extends Notification
         return [
             'type' => $this->entityType,
             'entity_id' => $this->entityId,
-            'title' => $this->title,
+            'title' => $this->notificationTitle(),
         ];
+    }
+
+    private function notificationTitle(): string
+    {
+        $title = trim($this->title);
+
+        return match ($this->entityType) {
+            'task' => "Task assignment: {$title}",
+            'jobcard' => "Jobcard assignment: {$title}",
+            default => $title,
+        };
     }
 }

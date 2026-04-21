@@ -117,4 +117,8 @@ return [
         'test_user_locations' => env('DISPATCH_TEST_USER_LOCATIONS', ''),
     ],
 
+    'openai' => [
+        'model' => env('OPENAI_MODEL', 'gpt-4o-mini'),
+    ],
+
 ];

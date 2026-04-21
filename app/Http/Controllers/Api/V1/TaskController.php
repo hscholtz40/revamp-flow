@@ -6,6 +6,7 @@ use App\Events\DispatchUpdated;
 use App\Http\Controllers\Controller;
 use App\Models\Task;
 use App\Models\TaskNote;
+use App\Models\Team;
 use App\Models\User;
 use App\Notifications\AssignmentNotification;
 use App\Support\CompanyScopedRules;
@@ -46,11 +47,7 @@ class TaskController extends Controller
             'created_by' => $request->user()->id,
         ]);
 
-        if ($task->assigned_to_user_id) {
-            User::query()->whereKey($task->assigned_to_user_id)->first()?->notify(
-                new AssignmentNotification('task', $task->id, $task->title)
-            );
-        }
+        $this->notifyTaskAssignmentTargets($companyId, $task);
 
         event(new DispatchUpdated($task));
 
@@ -94,12 +91,7 @@ class TaskController extends Controller
         }
 
         $task->update($payload);
-
-        if ($task->assigned_to_user_id) {
-            User::query()->whereKey($task->assigned_to_user_id)->first()?->notify(
-                new AssignmentNotification('task', $task->id, $task->title)
-            );
-        }
+        $this->notifyTaskAssignmentTargets($companyId, $task);
 
         event(new DispatchUpdated($task->fresh()));
 
@@ -139,5 +131,34 @@ class TaskController extends Controller
         ]);
 
         return response()->json($note->load('user:id,name'), 201);
+    }
+
+    private function notifyTaskAssignmentTargets(int $companyId, Task $task): void
+    {
+        $notifiableUsers = collect();
+
+        if ($task->assigned_to_user_id) {
+            $user = User::query()
+                ->staffSelectableForCompany($companyId)
+                ->whereKey((int) $task->assigned_to_user_id)
+                ->first();
+            if ($user) {
+                $notifiableUsers->push($user);
+            }
+        }
+
+        if ($task->assigned_to_team_id) {
+            $teamUsers = Team::query()
+                ->where('company_id', $companyId)
+                ->whereKey((int) $task->assigned_to_team_id)
+                ->with(['users' => fn ($query) => $query->select('users.id', 'users.name', 'users.email')])
+                ->first()
+                ?->users ?? collect();
+            $notifiableUsers = $notifiableUsers->merge($teamUsers);
+        }
+
+        $notifiableUsers
+            ->unique('id')
+            ->each(fn (User $user) => $user->notify(new AssignmentNotification('task', $task->id, $task->title ?: 'Task #'.$task->id)));
     }
 }

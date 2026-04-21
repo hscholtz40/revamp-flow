@@ -234,11 +234,24 @@
 
                         <div class="md:col-span-2">
                             <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                            <AiDraftHelper
+                                v-model="form.description"
+                                :context="`Quote title: ${form.title || ''}`"
+                                label="AI draft description"
+                                class="mb-2"
+                            />
                             <textarea v-model="form.description" rows="3" class="w-full rounded border px-3 py-2"
                                 :class="{ 'border-red-500': form.errors.description }"></textarea>
                             <div v-if="form.errors.description" class="text-red-500 text-sm mt-1">
                                 {{ form.errors.description }}
                             </div>
+                            <AiDocumentSuggestionPanel
+                                class="mt-3"
+                                document-type="quote"
+                                :title="form.title"
+                                :description="form.description"
+                                :notes="form.notes"
+                            />
                         </div>
                     </div>
                 </div>
@@ -559,6 +572,12 @@
 
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                            <AiDraftHelper
+                                v-model="form.notes"
+                                :context="`Quote notes for ${selectedCustomer?.name || 'customer'}`"
+                                label="AI draft notes"
+                                class="mb-2"
+                            />
                             <textarea v-model="form.notes" rows="3" class="w-full rounded border px-3 py-2"
                                 :class="{ 'border-red-500': form.errors.notes }"></textarea>
                             <div v-if="form.errors.notes" class="text-red-500 text-sm mt-1">
@@ -593,6 +612,8 @@
 </template>
 
 <script setup lang="ts">
+import AiDocumentSuggestionPanel from '@/components/AiDocumentSuggestionPanel.vue';
+import AiDraftHelper from '@/components/AiDraftHelper.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import ContactSelector from '@/components/ContactSelector.vue';
 import { matchesProductSearch } from '@/composables/productSearch';

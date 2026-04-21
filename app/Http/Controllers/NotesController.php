@@ -17,6 +17,7 @@ use App\Models\Quote;
 use App\Models\Report;
 use App\Models\StockMovement;
 use App\Models\Supplier;
+use App\Models\Task;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
@@ -45,6 +46,7 @@ class NotesController extends Controller
             'invoices' => ['class' => Invoice::class, 'label' => 'Invoices'],
             'credit-notes' => ['class' => CreditNote::class, 'label' => 'Credit Notes'],
             'purchase-orders' => ['class' => PurchaseOrder::class, 'label' => 'Purchase Orders'],
+            'tasks' => ['class' => Task::class, 'label' => 'Tasks'],
             'reports' => ['class' => Report::class, 'label' => 'Reports'],
             'licenses' => ['class' => License::class, 'label' => 'Licenses'],
         ];
@@ -266,6 +268,7 @@ class NotesController extends Controller
                 Invoice::class => ['invoice_number', 'title'],
                 CreditNote::class => ['credit_note_number', 'reference'],
                 PurchaseOrder::class => ['po_number', 'reference'],
+                Task::class => ['title', 'description'],
                 Report::class => ['name'],
                 ProductBatch::class => ['batch_number'],
                 ProductSerialNumber::class => ['serial_number'],
@@ -289,6 +292,7 @@ class NotesController extends Controller
             'invoices' => (string) ($record->invoice_number ?? "#{$record->id}"),
             'credit-notes' => (string) ($record->credit_note_number ?? "#{$record->id}"),
             'purchase-orders' => (string) ($record->po_number ?? "#{$record->id}"),
+            'tasks' => (string) ($record->title ?? "#{$record->id}"),
             'reports' => (string) ($record->name ?? "#{$record->id}"),
             'product-batches' => (string) ($record->batch_number ?? "#{$record->id}"),
             'product-serial-numbers' => (string) ($record->serial_number ?? "#{$record->id}"),

@@ -11,6 +11,7 @@ use App\Models\Jobcard;
 use App\Models\ProductSerialNumber;
 use App\Models\Quote;
 use App\Models\User;
+use App\Notifications\SystemEventNotification;
 use App\Services\CustomerAccountBalanceCalculator;
 use App\Services\CustomerStatementService;
 use App\Services\PdfGenerationService;
@@ -171,6 +172,8 @@ class ClientZoneController extends Controller
             'current_company_id' => $customer->company_id,
             'approval_status' => 'pending',
         ]);
+
+        $this->notifyCompanyApproversOfClientRegistration($customer, $validated['name']);
 
         return redirect()->route('login')->with('status', 'Registration submitted. Your account will be available once approved by an administrator.');
     }
@@ -811,6 +814,15 @@ HTML;
 
     private function notifyCompanyOfClientInformationUpdateRequest(Customer $customer, CustomerUpdateRequest $updateRequest, User $clientUser): void
     {
+        $reviewUrl = route('registered-users.update-requests.show', $updateRequest);
+        $this->companyApprovalUsers((int) $customer->company_id)->each(
+            fn (User $approver) => $approver->notify(new SystemEventNotification(
+                'Client Zone information update request submitted',
+                $reviewUrl,
+                'client_info_update'
+            ))
+        );
+
         try {
             $customer->loadMissing('company');
             $company = $customer->company;
@@ -826,7 +838,7 @@ HTML;
 
             $customerLabel = e($customer->name);
             $clientLabel = e($clientUser->name);
-            $reviewUrl = e(route('registered-users.update-requests.show', $updateRequest));
+            $reviewUrl = e($reviewUrl);
 
             $subject = 'Client Zone: information update request';
             $body = <<<HTML
@@ -850,5 +862,25 @@ HTML;
                 'message' => $e->getMessage(),
             ]);
         }
+    }
+
+    private function notifyCompanyApproversOfClientRegistration(Customer $customer, string $clientName): void
+    {
+        $pendingUsersUrl = route('registered-users.pending.index');
+        $title = "New Client Zone registration pending approval: {$clientName}";
+        $this->companyApprovalUsers((int) $customer->company_id)->each(
+            fn (User $approver) => $approver->notify(new SystemEventNotification($title, $pendingUsersUrl, 'client_registration'))
+        );
+    }
+
+    private function companyApprovalUsers(int $companyId)
+    {
+        return User::query()
+            ->staffSelectableForCompany($companyId)
+            ->get()
+            ->filter(fn (User $user) => $user->hasModulePermission('registered-users', 'approve')
+                || $user->hasModulePermission('customer-update-requests', 'approve'))
+            ->unique('id')
+            ->values();
     }
 }

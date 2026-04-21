@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Models\Company;
 use App\Models\GoogleIntegrationSettings;
+use App\Services\AI\AiAccessService;
 use DateTimeZone;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
@@ -197,9 +198,19 @@ class HandleInertiaRequests extends Middleware
         $parentAuth = $parentShare['auth'] ?? null;
 
         $googleMapsApiKey = '';
+        $aiCapabilities = [
+            'enabled' => false,
+            'available' => false,
+            'allowed' => false,
+            'admin_only' => true,
+            'prompt_logging_enabled' => false,
+            'daily_user_limit' => 0,
+            'daily_company_limit' => 0,
+        ];
         try {
             if (Schema::hasTable('google_integration_settings')) {
                 $googleMapsApiKey = GoogleIntegrationSettings::mapsApiKey();
+                $aiCapabilities = app(AiAccessService::class)->capabilitiesForUser($user);
             }
         } catch (\Throwable) {
             $googleMapsApiKey = '';
@@ -257,6 +268,7 @@ class HandleInertiaRequests extends Middleware
             'isLicensingInstance' => config('app.is_licensing_instance'),
             'unreadNotificationCount' => $unreadNotificationCount,
             'google_maps_api_key' => $googleMapsApiKey,
+            'ai' => $aiCapabilities,
         ];
     }
 

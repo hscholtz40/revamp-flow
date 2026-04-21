@@ -14,16 +14,29 @@ class GoogleIntegrationSettings extends Model
     protected $fillable = [
         'maps_api_key',
         'maps_map_id',
+        'openai_api_key',
+        'ai_enabled',
+        'ai_admin_only',
+        'ai_prompt_logging_enabled',
+        'ai_daily_user_limit',
+        'ai_daily_company_limit',
     ];
 
     protected $hidden = [
         'maps_api_key',
+        'openai_api_key',
     ];
 
     protected function casts(): array
     {
         return [
             'maps_api_key' => 'encrypted',
+            'openai_api_key' => 'encrypted',
+            'ai_enabled' => 'boolean',
+            'ai_admin_only' => 'boolean',
+            'ai_prompt_logging_enabled' => 'boolean',
+            'ai_daily_user_limit' => 'integer',
+            'ai_daily_company_limit' => 'integer',
         ];
     }
 
@@ -46,6 +59,16 @@ class GoogleIntegrationSettings extends Model
     public static function mapsApiKey(): string
     {
         return trim((string) (static::record()->maps_api_key ?? ''));
+    }
+
+    public static function openAiApiKey(): string
+    {
+        return trim((string) (static::record()->openai_api_key ?? ''));
+    }
+
+    public static function aiEnabled(): bool
+    {
+        return (bool) (static::record()->ai_enabled ?? false);
     }
 
     /**

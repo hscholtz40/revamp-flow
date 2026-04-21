@@ -37,6 +37,7 @@ const noteContext = computed(() => {
         { regex: /^\/invoices\/(\d+)\/?$/, module: 'invoices' },
         { regex: /^\/credit-notes\/(\d+)\/?$/, module: 'credit-notes' },
         { regex: /^\/purchase-orders\/(\d+)\/?$/, module: 'purchase-orders' },
+        { regex: /^\/tasks\/(\d+)\/?$/, module: 'tasks' },
         { regex: /^\/reports\/(\d+)\/?$/, module: 'reports' },
         { regex: /^\/licenses\/(\d+)\/?$/, module: 'licenses' },
     ];

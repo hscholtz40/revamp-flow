@@ -40,6 +40,7 @@ require __DIR__.'/purchase-orders.php';
 require __DIR__.'/time-entries.php';
 require __DIR__.'/messages.php';
 require __DIR__.'/dispatch.php';
+require __DIR__.'/ai.php';
 require __DIR__.'/tasks.php';
 require __DIR__.'/audit-logs.php';
 require __DIR__.'/backups.php';

@@ -259,6 +259,9 @@ const toApiValue = (value: string) => (value ? Number(value) : null);
 const csrfToken = () => (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null)?.content ?? '';
 const selectedMapUser = ref<UserPinMeta | null>(null);
 const showMapUserPinModal = ref(false);
+const mapTechnicianFilterUserId = ref('');
+const technicianSuggestions = ref<Array<{ user_id: number; name: string; score: number; reason: string }>>([]);
+const technicianSuggestionsLoading = ref(false);
 type EtaTrafficLevel = 'low' | 'medium' | 'high';
 type EtaSummary = { distanceText: string; durationText: string; trafficLevel: EtaTrafficLevel | null };
 
@@ -300,6 +303,20 @@ const selectedUserDailyLineup = computed(() => {
     const uid = selectedMapUser.value?.location.user_id;
     if (uid == null) return [];
     return getLineupCardsForUserId(uid);
+});
+const mapTechnicianOptions = computed(() =>
+    userLocations.value
+        .map((loc) => ({
+            userId: String(loc.user_id),
+            name: (loc.name ?? '').trim() || `Technician #${loc.user_id}`,
+        }))
+        .filter((loc, index, all) => all.findIndex((x) => x.userId === loc.userId) === index)
+        .sort((left, right) => left.name.localeCompare(right.name)),
+);
+const filteredMapUserLocations = computed(() => {
+    const filterValue = mapTechnicianFilterUserId.value.trim();
+    if (!filterValue) return userLocations.value;
+    return userLocations.value.filter((loc) => String(loc.user_id) === filterValue);
 });
 const dispatchPrefsStorageKey = computed(() => `dispatch:preferences:${currentUserId.value}`);
 const hasLoadedDispatchPreferences = ref(false);
@@ -439,6 +456,12 @@ const deriveTrafficLevelFromRoute = (route: google.maps.routes.Route): EtaTraffi
 
 const formatEtaTrafficLabel = (level: EtaTrafficLevel) =>
     level === 'low' ? 'Low' : level === 'medium' ? 'Medium' : 'High';
+const etaTrafficBadgeClass = (level: EtaTrafficLevel) =>
+    level === 'low'
+        ? 'bg-emerald-100 text-emerald-900 ring-emerald-200'
+        : level === 'medium'
+          ? 'bg-amber-100 text-amber-900 ring-amber-200'
+          : 'bg-rose-100 text-rose-900 ring-rose-200';
 
 const buildDrivingEtaFromRoute = (route: google.maps.routes.Route): EtaSummary | null => {
     const localized = route.localizedValues;
@@ -690,7 +713,7 @@ const renderBoardDrawerMarkers = async (maps: any) => {
     const bounds = new maps.LatLngBounds();
     let hasPoint = false;
 
-    userLocations.value.forEach((loc) => {
+    filteredMapUserLocations.value.forEach((loc) => {
         const position = { lat: loc.lat, lng: loc.lng };
         bounds.extend(position);
         hasPoint = true;
@@ -774,9 +797,14 @@ const renderBoardDrawerMarkers = async (maps: any) => {
                         etaEl.textContent = 'ETA to job: unavailable';
                         return;
                     }
-                    const trafficSuffix =
-                        eta.trafficLevel != null ? ` · Traffic: ${formatEtaTrafficLabel(eta.trafficLevel)}` : '';
-                    etaEl.textContent = `ETA to job: ${eta.durationText} (${eta.distanceText})${trafficSuffix}`;
+                    const etaText = `ETA to job: ${eta.durationText} (${eta.distanceText})`;
+                    if (eta.trafficLevel == null) {
+                        etaEl.textContent = etaText;
+                        return;
+                    }
+                    const trafficLabel = formatEtaTrafficLabel(eta.trafficLevel);
+                    const trafficClass = etaTrafficBadgeClass(eta.trafficLevel);
+                    etaEl.innerHTML = `${escapeHtml(etaText)} · Traffic: <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold ring-1 ${trafficClass}">${escapeHtml(trafficLabel)}</span>`;
                 });
             }
 
@@ -800,8 +828,11 @@ const renderBoardDrawerMarkers = async (maps: any) => {
     if (!addr) {
         if (hasPoint && boardDrawerMap.value) {
             boardDrawerMapError.value = '';
-            if (userLocations.value.length === 1) {
-                boardDrawerMap.value.setCenter({ lat: userLocations.value[0].lat, lng: userLocations.value[0].lng });
+            if (filteredMapUserLocations.value.length === 1) {
+                boardDrawerMap.value.setCenter({
+                    lat: filteredMapUserLocations.value[0].lat,
+                    lng: filteredMapUserLocations.value[0].lng,
+                });
                 boardDrawerMap.value.setZoom(12);
             } else {
                 try {
@@ -811,8 +842,9 @@ const renderBoardDrawerMarkers = async (maps: any) => {
                 }
             }
         } else {
-            boardDrawerMapError.value =
-                'No map location yet. Add a service address on the jobcard, or set DISPATCH_TEST_USER_LOCATIONS in env for technician pins.';
+            boardDrawerMapError.value = mapTechnicianFilterUserId.value
+                ? 'No map pins for the selected technician.'
+                : 'No map location yet. Add a service address on the jobcard, or set DISPATCH_TEST_USER_LOCATIONS in env for technician pins.';
         }
         return;
     }
@@ -861,11 +893,14 @@ const renderBoardDrawerMarkers = async (maps: any) => {
 
         boardDrawerMapError.value = '';
         try {
-            if (userLocations.value.length === 0 && status === 'OK' && results?.[0]) {
+            if (filteredMapUserLocations.value.length === 0 && status === 'OK' && results?.[0]) {
                 boardDrawerMap.value.setCenter(results[0].geometry.location);
                 boardDrawerMap.value.setZoom(14);
-            } else if (userLocations.value.length === 1 && status !== 'OK') {
-                boardDrawerMap.value.setCenter({ lat: userLocations.value[0].lat, lng: userLocations.value[0].lng });
+            } else if (filteredMapUserLocations.value.length === 1 && status !== 'OK') {
+                boardDrawerMap.value.setCenter({
+                    lat: filteredMapUserLocations.value[0].lat,
+                    lng: filteredMapUserLocations.value[0].lng,
+                });
                 boardDrawerMap.value.setZoom(12);
             } else {
                 boardDrawerMap.value.fitBounds(bounds, 60);
@@ -890,7 +925,7 @@ const ensureBoardDrawerMap = async () => {
         return;
     }
     if (!googleMapsApiKey.value) {
-        boardDrawerMapError.value = 'Google Maps API key is missing. Configure it under Administration → Google Integration.';
+        boardDrawerMapError.value = 'Google Maps API key is missing. Configure it under Administration → Other Integrations.';
         return;
     }
 
@@ -1178,6 +1213,32 @@ const onDrawerEstimatedDuration = async (minutes: number) => {
     loading.value = false;
     if (ok) await loadBoard();
 };
+const onSuggestTechnicians = async () => {
+    if (!selectedDispatchJobcard.value) return;
+    technicianSuggestionsLoading.value = true;
+    const response = await fetch('/ai/suggest-technician', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            'X-CSRF-TOKEN': csrfToken(),
+        },
+        body: JSON.stringify({
+            jobcard_id: selectedDispatchJobcard.value.id,
+            title: selectedDispatchJobcard.value.title || '',
+            description: selectedDispatchJobcard.value.description || '',
+            service_address: selectedDispatchJobcard.value.service_address || '',
+        }),
+    });
+    technicianSuggestionsLoading.value = false;
+    if (!response.ok) {
+        feedback.value = 'Unable to load AI technician suggestions.';
+        return;
+    }
+    const data = (await response.json()) as { suggestions?: Array<{ user_id: number; name: string; score: number; reason: string }> };
+    technicianSuggestions.value = data.suggestions ?? [];
+};
 
 const openFullJobcard = (job: DispatchJobcard) => {
     router.visit(`/jobcards/${job.id}`);
@@ -1359,7 +1420,7 @@ watch(showDispatchJobMapModal, async (open) => {
     }
 });
 watch(
-    [selectedDispatchJobcard, selectedDrawerJobAddress, googleMapsApiKey, userLocations],
+    [selectedDispatchJobcard, selectedDrawerJobAddress, googleMapsApiKey, userLocations, mapTechnicianFilterUserId],
     async () => {
         if (!showDispatchJobMapModal.value || viewMode.value !== 'board') {
             return;
@@ -1369,10 +1430,21 @@ watch(
     },
     { deep: true },
 );
+watch(mapTechnicianFilterUserId, () => {
+    if (
+        selectedMapUser.value &&
+        mapTechnicianFilterUserId.value &&
+        String(selectedMapUser.value.location.user_id) !== mapTechnicianFilterUserId.value
+    ) {
+        selectedMapUser.value = null;
+        showMapUserPinModal.value = false;
+    }
+});
 watch(selectedDispatchJobcard, (job) => {
     if (!job) {
         showDispatchJobMapModal.value = false;
     }
+    technicianSuggestions.value = [];
 });
 watch(
     [selectedMapUser, etaDestinationAddress],
@@ -1402,6 +1474,19 @@ watch(
                     </DialogDescription>
                 </DialogHeader>
                 <div v-if="googleMapsApiKey" class="space-y-2">
+                    <div class="flex items-center gap-2">
+                        <label for="dispatch-map-technician-filter" class="text-xs font-medium text-muted-foreground">Technician</label>
+                        <select
+                            id="dispatch-map-technician-filter"
+                            v-model="mapTechnicianFilterUserId"
+                            class="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                        >
+                            <option value="">All technicians</option>
+                            <option v-for="tech in mapTechnicianOptions" :key="tech.userId" :value="tech.userId">
+                                {{ tech.name }}
+                            </option>
+                        </select>
+                    </div>
                     <div class="h-[min(60vh,520px)] w-full overflow-hidden rounded-md border border-border bg-muted/30">
                         <div
                             :key="dispatchMapContainerKey"
@@ -1412,7 +1497,7 @@ watch(
                     <p v-if="boardDrawerMapError" class="text-xs text-amber-800">{{ boardDrawerMapError }}</p>
                 </div>
                 <p v-else class="text-sm text-muted-foreground">
-                    Configure a Google Maps API key under Administration → Google Integration.
+                    Configure a Google Maps API key under Administration → Other Integrations.
                 </p>
             </DialogContent>
         </Dialog>
@@ -1438,10 +1523,15 @@ watch(
                         ETA to job:
                         <span v-if="etaLoading">calculating…</span>
                         <span v-else-if="selectedUserEta">
-                            {{ selectedUserEta.durationText }} ({{ selectedUserEta.distanceText }})<template
-                                v-if="selectedUserEta.trafficLevel != null"
-                            >
-                                · Traffic: {{ formatEtaTrafficLabel(selectedUserEta.trafficLevel) }}
+                            {{ selectedUserEta.durationText }} ({{ selectedUserEta.distanceText }})
+                            <template v-if="selectedUserEta.trafficLevel != null">
+                                · Traffic:
+                                <span
+                                    class="ml-1 inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold ring-1"
+                                    :class="etaTrafficBadgeClass(selectedUserEta.trafficLevel)"
+                                >
+                                    {{ formatEtaTrafficLabel(selectedUserEta.trafficLevel) }}
+                                </span>
                             </template>
                         </span>
                         <span v-else>unavailable</span>
@@ -1532,12 +1622,15 @@ watch(
                     :users="board.users"
                     :teams="board.teams"
                     :google-maps-api-key="googleMapsApiKey"
+                    :technician-suggestions="technicianSuggestions"
+                    :technician-suggestions-loading="technicianSuggestionsLoading"
                     @open-full="openSelectedDispatchFull"
                     @view-map="showDispatchJobMapModal = true"
                     @set-status="onDrawerStatus"
                     @assign="onDrawerAssign"
                     @unschedule="onDrawerUnschedule"
                     @set-estimated-duration="onDrawerEstimatedDuration"
+                    @suggest-technicians="onSuggestTechnicians"
                 />
             </div>
 
