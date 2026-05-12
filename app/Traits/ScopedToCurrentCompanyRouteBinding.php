@@ -3,6 +3,7 @@
 namespace App\Traits;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Request;
 
 trait ScopedToCurrentCompanyRouteBinding
 {
@@ -22,14 +23,19 @@ trait ScopedToCurrentCompanyRouteBinding
             return null;
         }
 
-        $company = $user->getCurrentCompany();
-        if ($company === null) {
-            return null;
+        $companyId = Request::input('company_id');
+
+        if (! $companyId) {
+            $company = $user->getCurrentCompany();
+            if ($company === null) {
+                return null;
+            }
+            $companyId = $company->id;
         }
 
         return static::query()
             ->where($field, $value)
-            ->where('company_id', $company->id)
+            ->where('company_id', $companyId)
             ->first();
     }
 }

@@ -11,11 +11,21 @@ class JobcardController extends Controller
 {
     public function index(Request $request)
     {
-        $companyId = $request->user()?->getCurrentCompany()?->id;
+        $companyId = $request->input('company_id') ?: $request->user()?->getCurrentCompany()?->id;
+        $user = $request->user();
+
+        $teamIds = $user?->teams()->where('teams.company_id', $companyId)->pluck('teams.id') ?? collect();
 
         $query = Jobcard::query()
             ->with(['customer:id,name', 'assignedUser:id,name', 'assignedTeam:id,name'])
             ->when($companyId, fn ($q) => $q->where('company_id', $companyId))
+            ->where(function ($q) use ($user, $teamIds) {
+                $q->where('assigned_to_user_id', $user?->id);
+                if ($teamIds->isNotEmpty()) {
+                    $q->orWhereIn('assigned_to_team_id', $teamIds);
+                }
+            })
+            ->whereNotIn('status', ['completed', 'cancelled'])
             ->orderByDesc('id');
 
         if ($request->filled('status')) {
@@ -127,7 +137,8 @@ class JobcardController extends Controller
 
     private function assertCompanyScope(Jobcard $jobcard): void
     {
-        $companyId = (int) (request()->user()?->getCurrentCompany()?->id ?? 0);
+        $companyId = request()->input('company_id')
+            ?? (int) (request()->user()?->getCurrentCompany()?->id ?? 0);
         abort_unless((int) $jobcard->company_id === $companyId, 404);
     }
 }

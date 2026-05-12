@@ -40,6 +40,7 @@ class ProfileController extends Controller
                 'id' => $company->id,
                 'name' => $company->name,
             ] : null,
+            'companies' => $user?->companies()->get(['companies.id', 'companies.name']) ?? collect(),
         ]);
     }
 }
