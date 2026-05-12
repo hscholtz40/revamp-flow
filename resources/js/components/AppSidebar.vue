@@ -352,7 +352,7 @@ const filteredNavItems = computed(() => {
                                     />
                                     <img
                                         v-else
-                                        src="/jobcardonline-logo.png"
+                                        src="/logo-big.webp"
                                         alt="JobCardOnline"
                                         class="w-full h-auto max-h-16 object-contain rounded"
                                     />
@@ -379,7 +379,7 @@ const filteredNavItems = computed(() => {
             <!-- Default Logo above user menu when company logo is uploaded -->
             <div v-if="currentCompany?.logo_path" class="mb-3 px-2">
                 <img
-                    src="/jobcardonline-logo.png"
+                    src="/logo-big.webp"
                     alt="JobCardOnline"
                     class="w-full h-auto max-h-12 object-contain opacity-80 hover:opacity-100 transition-opacity"
                 />
