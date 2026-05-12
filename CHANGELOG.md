@@ -2,6 +2,7 @@
 
 ## 2026-05-12
 
+- Documentation: added root `README.md` with local development setup (PHP/Composer/Node, `.env`, MySQL, migrate/seed, storage link, `composer run dev`, tests); README documents MySQL-only local database (no SQLite path).
 - **Mobile API jobcards filtered by user and open status:** `GET /api/v1/jobcards` now returns only jobcards assigned to the authenticated user (directly or via team membership) and excludes `completed` or `cancelled` jobcards. Accepts optional `company_id` request parameter to scope to a specific company.
 - **ScopedToCurrentCompanyRouteBinding accepts company_id param:** Route model binding now checks for a `company_id` request parameter before falling back to the user's current company, enabling the mobile app to fetch records across companies.
 - **Mobile API profile includes company list:** `GET /api/v1/profile` now returns a `companies` array containing all companies the authenticated user belongs to, for company selector UI.
