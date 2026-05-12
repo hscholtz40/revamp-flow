@@ -129,4 +129,13 @@ return [
         'model' => env('OPENAI_MODEL', 'gpt-4o-mini'),
     ],
 
+    'quickbooks' => [
+        /** Use sandbox API host and sandbox companies from the Intuit Developer portal. */
+        'use_sandbox' => env('QUICKBOOKS_USE_SANDBOX', true),
+        /** QuickBooks Accounting API minorversion (Intuit recommends staying current; max 75). */
+        'minor_version' => env('QUICKBOOKS_MINOR_VERSION', 75),
+        /** Sent on Intuit OAuth and QBO API requests per Intuit integration guidance. */
+        'user_agent' => env('QUICKBOOKS_USER_AGENT', 'JobCardOnline/1.0 Laravel QuickBooks Client'),
+    ],
+
 ];
