@@ -143,6 +143,11 @@ class User extends Authenticatable
         return $this->hasMany(CustomerUpdateRequest::class);
     }
 
+    public function devices(): HasMany
+    {
+        return $this->hasMany(Device::class);
+    }
+
     public function hasModulePermission(string $module, string $ability): bool
     {
         $ability = match ($ability) {

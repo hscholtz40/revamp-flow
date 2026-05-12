@@ -8,6 +8,7 @@ use App\Models\RoutePlan;
 use App\Models\Task;
 use App\Models\Team;
 use App\Models\User;
+use App\Services\Dispatch\UserLocationProvider;
 use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -26,6 +27,8 @@ class DispatchBoardController extends Controller
             ->select('id', 'name')
             ->orderBy('name')
             ->get();
+
+        $userLocations = app(UserLocationProvider::class)->getUserLocations($dispatchUsers, (int) $companyId);
 
         return Inertia::render('dispatch/Index', [
             'jobcards' => Jobcard::query()
@@ -55,53 +58,7 @@ class DispatchBoardController extends Controller
                 ->get(),
             'google_maps_api_key' => GoogleIntegrationSettings::mapsApiKey(),
             'google_maps_map_id' => GoogleIntegrationSettings::record()->resolvedMapId(),
-            'user_locations' => $this->buildDispatchUserLocations($dispatchUsers),
+            'user_locations' => $userLocations,
         ]);
-    }
-
-    /**
-     * Build placeholder map markers for dispatch users from env config.
-     *
-     * Format: "lat,lng|lat,lng|..."
-     */
-    private function buildDispatchUserLocations(Collection $users): array
-    {
-        $raw = (string) config('services.dispatch.test_user_locations', '');
-        if ($raw === '') {
-            return [];
-        }
-
-        $coordinates = collect(explode('|', $raw))
-            ->map(fn (string $entry) => array_map('trim', explode(',', $entry)))
-            ->filter(fn (array $parts) => count($parts) === 2)
-            ->map(function (array $parts) {
-                $lat = is_numeric($parts[0]) ? (float) $parts[0] : null;
-                $lng = is_numeric($parts[1]) ? (float) $parts[1] : null;
-                if ($lat === null || $lng === null) {
-                    return null;
-                }
-                if ($lat < -90 || $lat > 90 || $lng < -180 || $lng > 180) {
-                    return null;
-                }
-
-                return ['lat' => $lat, 'lng' => $lng];
-            })
-            ->filter()
-            ->values();
-
-        if ($coordinates->isEmpty()) {
-            return [];
-        }
-
-        return $users->values()->map(function ($user, int $index) use ($coordinates) {
-            $point = $coordinates->get($index % $coordinates->count());
-
-            return [
-                'user_id' => (int) $user->id,
-                'name' => (string) $user->name,
-                'lat' => $point['lat'],
-                'lng' => $point['lng'],
-            ];
-        })->all();
     }
 }

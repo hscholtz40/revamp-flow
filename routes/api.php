@@ -175,5 +175,6 @@ Route::prefix('/api/v1')->name('api.v1.')->group(function () {
         Route::patch('/notifications/{id}/read', [NotificationsController::class, 'markRead']);
         Route::post('/notifications/read-all', [NotificationsController::class, 'markAllRead']);
         Route::post('/devices/register-push-token', [NotificationsController::class, 'registerDevice']);
+        Route::get('/devices', [NotificationsController::class, 'listDevices']);
     });
 });

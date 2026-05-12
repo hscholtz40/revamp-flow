@@ -284,6 +284,8 @@ class DispatchController extends Controller
             'priority' => ['nullable', 'string', Rule::in(['low', 'normal', 'high', 'urgent'])],
         ]);
 
+        $previousAssignedUserId = (int) ($jobcard->assigned_to_user_id ?? 0);
+        $previousAssignedTeamId = (int) ($jobcard->assigned_to_team_id ?? 0);
         $hadSchedule = $jobcard->scheduled_start_at !== null;
         $changes = collect($payload)->only([
             'assigned_to_user_id',
@@ -305,9 +307,15 @@ class DispatchController extends Controller
         }
 
         $jobcard->update($changes);
-        event(new DispatchUpdated($jobcard->fresh()));
+        $freshJobcard = $jobcard->fresh();
 
-        return response()->json($jobcard->fresh()->load(['assignedUser:id,name', 'assignedTeam:id,name', 'customer:id,name,address,city,country', 'contact:id,name,phone,email']));
+        if ($freshJobcard && $this->assignmentChanged($freshJobcard, $previousAssignedUserId, $previousAssignedTeamId)) {
+            $this->notifyJobcardAssignmentTargets($companyId, $freshJobcard);
+        }
+
+        event(new DispatchUpdated($freshJobcard));
+
+        return response()->json($freshJobcard->load(['assignedUser:id,name', 'assignedTeam:id,name', 'customer:id,name,address,city,country', 'contact:id,name,phone,email']));
     }
 
     public function assignTask(Request $request, Task $task)
@@ -672,10 +680,43 @@ class DispatchController extends Controller
             ->each(fn (User $user) => $user->notify(new AssignmentNotification('task', $task->id, $task->title ?: 'Task #'.$task->id)));
     }
 
-    private function assignmentChanged(Task $task, int $previousAssignedUserId, int $previousAssignedTeamId): bool
+    private function notifyJobcardAssignmentTargets(int $companyId, Jobcard $jobcard): void
     {
-        return (int) ($task->assigned_to_user_id ?? 0) !== $previousAssignedUserId
-            || (int) ($task->assigned_to_team_id ?? 0) !== $previousAssignedTeamId;
+        $notifiableUsers = collect();
+
+        if ($jobcard->assigned_to_user_id) {
+            $user = User::query()
+                ->staffSelectableForCompany($companyId)
+                ->whereKey((int) $jobcard->assigned_to_user_id)
+                ->first();
+            if ($user) {
+                $notifiableUsers->push($user);
+            }
+        }
+
+        if ($jobcard->assigned_to_team_id) {
+            $teamUsers = Team::query()
+                ->where('company_id', $companyId)
+                ->whereKey((int) $jobcard->assigned_to_team_id)
+                ->with(['users' => fn ($query) => $query->select('users.id', 'users.name', 'users.email')])
+                ->first()
+                ?->users ?? collect();
+            $notifiableUsers = $notifiableUsers->merge($teamUsers);
+        }
+
+        $notifiableUsers
+            ->unique('id')
+            ->each(fn (User $user) => $user->notify(new AssignmentNotification(
+                'jobcard',
+                $jobcard->id,
+                $jobcard->title ?: ('Jobcard #' . $jobcard->job_number)
+            )));
+    }
+
+    private function assignmentChanged(Task|Jobcard $model, int $previousAssignedUserId, int $previousAssignedTeamId): bool
+    {
+        return (int) ($model->assigned_to_user_id ?? 0) !== $previousAssignedUserId
+            || (int) ($model->assigned_to_team_id ?? 0) !== $previousAssignedTeamId;
     }
 
     public function mySchedule(Request $request)

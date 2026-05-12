@@ -113,8 +113,16 @@ return [
     ],
 
     'dispatch' => [
-        // Temporary test markers for Dispatch map (lat,lng|lat,lng|...).
+        'use_real_locations' => env('DISPATCH_USE_REAL_LOCATIONS', true),
         'test_user_locations' => env('DISPATCH_TEST_USER_LOCATIONS', ''),
+    ],
+
+    'push' => [
+        'fcm_server_key' => env('FCM_SERVER_KEY'),
+        'apns_key_id' => env('APNS_KEY_ID'),
+        'apns_team_id' => env('APNS_TEAM_ID'),
+        'apns_app_bundle_id' => env('APNS_APP_BUNDLE_ID'),
+        'apns_private_key' => env('APNS_PRIVATE_KEY'),
     ],
 
     'openai' => [

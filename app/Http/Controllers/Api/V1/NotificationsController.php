@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\Device;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Schema;
@@ -48,14 +49,27 @@ class NotificationsController extends Controller
     public function registerDevice(Request $request)
     {
         $payload = $request->validate([
-            'token' => ['required', 'string', 'max:255'],
-            'platform' => ['nullable', 'string', 'max:50'],
+            'token' => ['required', 'string', 'max:500'],
+            'platform' => ['required', 'string', 'max:50', 'in:ios,android'],
+            'device_name' => ['nullable', 'string', 'max:255'],
         ]);
 
-        return response()->json([
-            'message' => 'Push token registered',
-            'token' => $payload['token'],
-            'platform' => $payload['platform'] ?? 'unknown',
-        ], 201);
+        Device::updateOrCreate(
+            ['user_id' => $request->user()->id, 'token' => $payload['token']],
+            [
+                'platform' => $payload['platform'],
+                'device_name' => $payload['device_name'] ?? 'Unknown Device',
+                'last_active_at' => now(),
+            ]
+        );
+
+        return response()->json(['message' => 'Device registered'], 201);
+    }
+
+    public function listDevices(Request $request)
+    {
+        return response()->json(
+            $request->user()->devices()->get(['id', 'platform', 'device_name', 'last_active_at'])
+        );
     }
 }
