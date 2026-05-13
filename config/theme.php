@@ -87,7 +87,7 @@ return [
     // Background colors (for black/dark themes)
     'background' => [
         'light_mode_lightness' => env('THEME_BACKGROUND_LIGHT_MODE_LIGHTNESS', 100),
-        'dark_mode_lightness' => env('THEME_BACKGROUND_DARK_MODE_LIGHTNESS', 5),
+        'dark_mode_lightness' => env('THEME_BACKGROUND_DARK_MODE_LIGHTNESS', 3),
     ],
 
     // Layout variables

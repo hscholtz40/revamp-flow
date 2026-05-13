@@ -38,10 +38,6 @@ class Company extends Model
 
     /**
      * Restrict route binding to companies the authenticated user may access.
-     *
-     * @param  mixed  $value
-     * @param  string|null  $field
-     * @return static|null
      */
     public function resolveRouteBinding($value, $field = null)
     {
@@ -71,6 +67,7 @@ class Company extends Model
         'vat_number',
         'website',
         'logo_path',
+        'favicon_path',
         'description',
         'invoice_footer',
         'jobcard_footer',
@@ -105,11 +102,50 @@ class Company extends Model
         'locale_time_format',
         'jobcard_status_labels',
         'quote_status_labels',
+        // Theme colors
+        'theme_primary_hue',
+        'theme_primary_saturation',
+        'theme_primary_lightness',
+        'theme_primary_dark_mode_lightness',
+        'theme_secondary_hue',
+        'theme_secondary_saturation',
+        'theme_secondary_lightness',
+        'theme_secondary_dark_mode_lightness',
+        'theme_accent_hue',
+        'theme_accent_saturation',
+        'theme_accent_lightness',
+        'theme_accent_dark_mode_lightness',
+        'theme_chart_1_hue',
+        'theme_chart_1_saturation',
+        'theme_chart_1_lightness',
+        'theme_chart_2_hue',
+        'theme_chart_2_saturation',
+        'theme_chart_2_lightness',
+        'theme_chart_3_hue',
+        'theme_chart_3_saturation',
+        'theme_chart_3_lightness',
+        'theme_chart_4_hue',
+        'theme_chart_4_saturation',
+        'theme_chart_4_lightness',
+        'theme_chart_5_hue',
+        'theme_chart_5_saturation',
+        'theme_chart_5_lightness',
+        'theme_sidebar_primary_hue',
+        'theme_sidebar_primary_saturation',
+        'theme_sidebar_primary_lightness',
+        'theme_sidebar_primary_dark_mode_lightness',
+        'theme_sidebar_accent_hue',
+        'theme_sidebar_accent_saturation',
+        'theme_sidebar_accent_lightness',
+        'theme_background_light_mode_lightness',
+        'theme_background_dark_mode_lightness',
+        'theme_layout_sidebar_width',
+        'theme_layout_sidebar_collapsed_width',
+        'theme_layout_header_height',
+        'theme_layout_border_radius',
+        'theme_layout_spacing_unit',
     ];
 
-    /**
-     * @var list<string>
-     */
     protected $hidden = [
         'smtp_password',
     ];
@@ -129,6 +165,28 @@ class Company extends Model
         'jobcard_status_labels' => 'array',
         'quote_status_labels' => 'array',
     ];
+
+    /**
+     * Get the logo URL (accessor)
+     */
+    public function getLogoAttribute()
+    {
+        if ($this->logo_path) {
+            return '/storage/' . $this->logo_path;
+        }
+        return null;
+    }
+
+    /**
+     * Get the favicon URL (accessor)
+     */
+    public function getFaviconAttribute()
+    {
+        if ($this->favicon_path) {
+            return '/storage/' . $this->favicon_path;
+        }
+        return null;
+    }
 
     /**
      * Format a numeric amount using this company's decimal and thousands separators (no currency symbol).
@@ -211,9 +269,6 @@ class Company extends Model
         return Carbon::parse($value)->setTimezone($timezone);
     }
 
-    /**
-     * @return array<int, array{value: string, label: string}>
-     */
     public function getJobcardStatusOptions(): array
     {
         return $this->buildStatusOptions(
@@ -222,9 +277,6 @@ class Company extends Model
         );
     }
 
-    /**
-     * @return array<int, array{value: string, label: string}>
-     */
     public function getQuoteStatusOptions(): array
     {
         return $this->buildStatusOptions(
@@ -233,11 +285,6 @@ class Company extends Model
         );
     }
 
-    /**
-     * @param  array<string, string>  $defaults
-     * @param  array<string, mixed>  $overrides
-     * @return array<int, array{value: string, label: string}>
-     */
     private function buildStatusOptions(array $defaults, array $overrides): array
     {
         $options = [];
@@ -251,41 +298,6 @@ class Company extends Model
         }
 
         return $options;
-    }
-
-    /**
-     * Get the logo URL
-     */
-    public function getLogoAttribute()
-    {
-        if ($this->logo_path) {
-            return asset('storage/'.$this->logo_path);
-        }
-
-        return null;
-    }
-
-    /**
-     * Get the logo as a base64 data URI for PDF generation.
-     * DomPDF cannot fetch images from URLs, so we convert to inline base64.
-     */
-    public function getLogoPathForPdf()
-    {
-        if (! $this->logo_path) {
-            return null;
-        }
-
-        $fullPath = storage_path('app/public/'.$this->logo_path);
-
-        if (! file_exists($fullPath)) {
-            return null;
-        }
-
-        $imageData = file_get_contents($fullPath);
-        $imageInfo = getimagesize($fullPath);
-        $mimeType = $imageInfo['mime'] ?? 'image/png';
-
-        return 'data:'.$mimeType.';base64,'.base64_encode($imageData);
     }
 
     /**
@@ -349,10 +361,7 @@ class Company extends Model
      */
     public function setAsDefault()
     {
-        // Remove default from all other companies
         static::where('is_default', true)->update(['is_default' => false]);
-
-        // Set this company as default
         $this->update(['is_default' => true]);
     }
 
@@ -374,29 +383,21 @@ class Company extends Model
 
     /**
      * Check if a module is visible for this company.
-     * If visible_modules is null, all modules are visible by default.
      */
     public function isModuleVisible(string $moduleKey): bool
     {
         if ($this->visible_modules === null) {
-            return true; // All modules visible by default
+            return true;
         }
 
         return in_array($moduleKey, $this->visible_modules ?? []);
     }
 
-    /**
-     * Get visible modules array.
-     * Returns null if all modules should be visible, or array of module keys.
-     */
     public function getVisibleModules(): ?array
     {
         return $this->visible_modules;
     }
 
-    /**
-     * Set visible modules.
-     */
     public function setVisibleModules(?array $modules): void
     {
         $this->visible_modules = $modules;

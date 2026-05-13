@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-05-13
+
+- **Appearance settings page:** Added `/settings/appearance` with color pickers for theme customization (primary, secondary, accent, background colors in HSL format), layout variables (sidebar width, header height, border radius, spacing unit), and logo/favicon upload functionality. Theme settings are now stored per-company in the database instead of environment variables, enabling dynamic white-labeling via the UI.
+- **Company theme settings:** Added database migration for theme color columns (HSL values), layout variables, and favicon_path to `companies` table. Updated `Company` model with fillable fields and favicon accessor (falls back to logo if favicon not set). Theme config now reads from authenticated user's current company or falls back to environment variables.
+- **Dynamic favicon:** Updated `app.blade.php` to use company-specific favicon/logo when available, with fallback to default favicons.
+
 ## 2026-05-12
 
 - **Theme white-labeling support:** Added `config/theme.php` with environment variable support for customizing brand colors (primary, secondary, accent, chart, sidebar). Theme colors are now injected as CSS variables in `app.blade.php` and used in `app.css`, allowing different instances to have unique color schemes via `.env` configuration without code changes. Default values maintain the existing blue/teal JobCardOnline theme.
