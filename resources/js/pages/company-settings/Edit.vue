@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import { ArrowLeft } from 'lucide-vue-next';
 import companySettings from '@/routes/company-settings';
 import { ref, onMounted } from 'vue';
@@ -18,6 +18,7 @@ interface Company {
     vat_number: string;
     website: string;
     logo_path: string;
+    favicon_path: string;
     description: string;
     invoice_footer: string;
     jobcard_footer: string;
@@ -110,75 +111,46 @@ interface Props {
 
 const props = defineProps<Props>();
 
+const activeTab = ref('company');
+
 const form = useForm({
-    name: '',
-    email: '',
-    phone: '',
-    address: '',
-    city: '',
-    state: '',
-    postal_code: '',
-    country: '',
-    vat_number: '',
-    website: '',
-    description: '',
-    invoice_footer: '',
-    jobcard_footer: '',
-    quote_footer: '',
-    default_invoice_terms: '',
-    default_quote_terms: '',
-    default_jobcard_terms: '',
-    is_active: true,
-    is_default: false,
-    enable_pos: false,
-    enable_document_signing: false,
+    name: props.company.name || '',
+    email: props.company.email || '',
+    phone: props.company.phone || '',
+    address: props.company.address || '',
+    city: props.company.city || '',
+    state: props.company.state || '',
+    postal_code: props.company.postal_code || '',
+    country: props.company.country || '',
+    vat_number: props.company.vat_number || '',
+    website: props.company.website || '',
+    description: props.company.description || '',
+    invoice_footer: props.company.invoice_footer || '',
+    jobcard_footer: props.company.jobcard_footer || '',
+    quote_footer: props.company.quote_footer || '',
+    default_invoice_terms: props.company.default_invoice_terms || '',
+    default_quote_terms: props.company.default_quote_terms || '',
+    default_jobcard_terms: props.company.default_jobcard_terms || '',
+    is_active: props.company.is_active ?? true,
+    is_default: props.company.is_default ?? false,
+    enable_pos: props.company.enable_pos ?? false,
+    enable_document_signing: props.company.enable_document_signing ?? false,
     logo: null as File | null,
-    whatsapp_business_number: '',
-    bank_name: '',
-    bank_account_name: '',
-    bank_account_number: '',
-    bank_sort_code: '',
-});
-
-// Initialize form with company data
-onMounted(() => {
-    form.name = props.company.name || '';
-    form.email = props.company.email || '';
-    form.phone = props.company.phone || '';
-    form.address = props.company.address || '';
-    form.city = props.company.city || '';
-    form.state = props.company.state || '';
-    form.postal_code = props.company.postal_code || '';
-    form.country = props.company.country || '';
-    form.vat_number = props.company.vat_number || '';
-    form.website = props.company.website || '';
-    form.description = props.company.description || '';
-    form.invoice_footer = props.company.invoice_footer || '';
-    form.jobcard_footer = props.company.jobcard_footer || '';
-    form.quote_footer = props.company.quote_footer || '';
-    form.default_invoice_terms = props.company.default_invoice_terms || '';
-    form.default_quote_terms = props.company.default_quote_terms || '';
-    form.default_jobcard_terms = props.company.default_jobcard_terms || '';
-    form.is_active = props.company.is_active ?? true;
-    form.is_default = props.company.is_default ?? false;
-    form.enable_pos = props.company.enable_pos ?? false;
-    form.enable_document_signing = props.company.enable_document_signing ?? false;
-    form.whatsapp_business_number = props.company.whatsapp_business_number || '';
-    form.bank_name = props.company.bank_name || '';
-    form.bank_account_name = props.company.bank_account_name || '';
-    form.bank_account_number = props.company.bank_account_number || '';
-    form.bank_sort_code = props.company.bank_sort_code || '';
-
+    favicon: null as File | null,
+    whatsapp_business_number: props.company.whatsapp_business_number || '',
+    bank_name: props.company.bank_name || '',
+    bank_account_name: props.company.bank_account_name || '',
+    bank_account_number: props.company.bank_account_number || '',
+    bank_sort_code: props.company.bank_sort_code || '',
 });
 
 const logoPreview = ref<string | null>(props.company.logo_path ? `/storage/${props.company.logo_path}` : null);
+const faviconPreview = ref<string | null>(props.company.favicon_path ? `/storage/${props.company.favicon_path}` : null);
 
 function handleLogoChange(event: Event) {
     const target = event.target as HTMLInputElement;
     if (target.files && target.files[0]) {
         form.logo = target.files[0];
-        
-        // Create preview
         const reader = new FileReader();
         reader.onload = (e) => {
             logoPreview.value = e.target?.result as string;
@@ -187,76 +159,81 @@ function handleLogoChange(event: Event) {
     }
 }
 
-function submit() {
-    
-    // Ensure all form fields are properly set before submission
-    if (!form.name || form.name.trim() === '') {
-        console.error('Name field is empty!');
-        return;
+function handleFaviconChange(event: Event) {
+    const target = event.target as HTMLInputElement;
+    if (target.files && target.files[0]) {
+        form.favicon = target.files[0];
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            faviconPreview.value = e.target?.result as string;
+        };
+        reader.readAsDataURL(target.files[0]);
     }
-    
-    // Submit the form without logo first
-    const formWithoutLogo = useForm({
-        name: form.name,
-        email: form.email,
-        phone: form.phone,
-        address: form.address,
-        city: form.city,
-        state: form.state,
-        postal_code: form.postal_code,
-        country: form.country,
-        vat_number: form.vat_number,
-        website: form.website,
-        description: form.description,
-        invoice_footer: form.invoice_footer,
-        jobcard_footer: form.jobcard_footer,
-        quote_footer: form.quote_footer,
-        default_invoice_terms: form.default_invoice_terms,
-        default_quote_terms: form.default_quote_terms,
-        default_jobcard_terms: form.default_jobcard_terms,
-        is_active: form.is_active,
-        is_default: form.is_default,
-        enable_pos: form.enable_pos,
-        enable_document_signing: form.enable_document_signing,
-        whatsapp_business_number: form.whatsapp_business_number,
-        bank_name: form.bank_name,
-        bank_account_name: form.bank_account_name,
-        bank_account_number: form.bank_account_number,
-        bank_sort_code: form.bank_sort_code,
-    });
-    
-    formWithoutLogo.put(companySettings.update(props.company.id).url, { 
-        preserveScroll: true,
-        onSuccess: () => {
-            // If there's a logo, upload it separately
-            if (form.logo) {
-                uploadLogo();
-            }
-        },
-        onError: (errors) => {
-            console.error('Form submission errors:', errors);
-        }
-    });
 }
 
-function uploadLogo() {
-    if (!form.logo) return;
+function submit() {
+    const hasFiles = form.logo || form.favicon;
+
+    if (hasFiles) {
+        const formData = new FormData();
+        formData.append('_method', 'PUT');
         
-    const logoForm = useForm({
-        logo: form.logo,
-    });
-    
-    logoForm.post(companySettings.uploadLogo(props.company.id).url, {
-        preserveScroll: true,
-        onSuccess: () => {
-        },
-        onError: (errors) => {
-            console.error('Logo upload errors:', errors);
+        formData.append('name', form.name || '');
+        formData.append('email', form.email || '');
+        formData.append('phone', form.phone || '');
+        formData.append('address', form.address || '');
+        formData.append('city', form.city || '');
+        formData.append('state', form.state || '');
+        formData.append('postal_code', form.postal_code || '');
+        formData.append('country', form.country || '');
+        formData.append('vat_number', form.vat_number || '');
+        formData.append('website', form.website || '');
+        formData.append('description', form.description || '');
+        formData.append('invoice_footer', form.invoice_footer || '');
+        formData.append('jobcard_footer', form.jobcard_footer || '');
+        formData.append('quote_footer', form.quote_footer || '');
+        formData.append('default_invoice_terms', form.default_invoice_terms || '');
+        formData.append('default_quote_terms', form.default_quote_terms || '');
+        formData.append('default_jobcard_terms', form.default_jobcard_terms || '');
+        formData.append('is_active', form.is_active ? '1' : '0');
+        formData.append('is_default', form.is_default ? '1' : '0');
+        formData.append('enable_pos', form.enable_pos ? '1' : '0');
+        formData.append('enable_document_signing', form.enable_document_signing ? '1' : '0');
+        formData.append('whatsapp_business_number', form.whatsapp_business_number || '');
+        formData.append('bank_name', form.bank_name || '');
+        formData.append('bank_account_name', form.bank_account_name || '');
+        formData.append('bank_account_number', form.bank_account_number || '');
+        formData.append('bank_sort_code', form.bank_sort_code || '');
+        
+        if (form.logo) {
+            formData.append('logo', form.logo);
         }
-    });
+        if (form.favicon) {
+            formData.append('favicon', form.favicon);
+        }
+
+        router.post(companySettings.update(props.company.id).url, formData, {
+            preserveScroll: true,
+            onSuccess: () => {
+                console.log('Company updated successfully');
+            },
+            onError: (errors) => {
+                console.error('Form submission errors:', errors);
+            }
+        });
+    } else {
+        router.put(companySettings.update(props.company.id).url, form.data(), {
+            preserveScroll: true,
+            onSuccess: () => {
+                console.log('Company updated successfully');
+            },
+            onError: (errors) => {
+                console.error('Form submission errors:', errors);
+            }
+        });
+    }
 }
 
-// Reminder Settings Form
 const reminderForm = useForm({
     automation_enabled: false,
     overdue_invoice_email_enabled: false,
@@ -320,7 +297,6 @@ const reminderForm = useForm({
     jobcard_status_updated_whatsapp_template_variables: [] as string[],
 });
 
-// Initialize reminder form with settings data
 onMounted(() => {
     if (props.reminderSettings) {
         reminderForm.automation_enabled = props.reminderSettings.automation_enabled ?? false;
@@ -396,7 +372,6 @@ function submitReminderSettings() {
         }
     });
 }
-
 </script>
 
 <template>
@@ -409,7 +384,6 @@ function submitReminderSettings() {
         { title: 'Edit', href: '#' }
     ]">
         <div class="p-4">
-            <!-- Header -->
             <div class="mb-6 flex items-center gap-4">
                 <Link
                     :href="companySettings.show(props.company.id).url"
@@ -426,380 +400,427 @@ function submitReminderSettings() {
                     <p class="text-gray-600">Update the details for {{ props.company.name }}</p>
                 </div>
 
-                <form @submit.prevent="submit" class="space-y-6">
-                    <!-- Company Logo -->
-                    <div class="rounded-lg border bg-white p-6">
-                        <h2 class="mb-4 text-lg font-semibold text-gray-900">Company Logo</h2>
-                        <div class="flex items-center gap-6">
-                            <div v-if="logoPreview" class="h-20 w-20 overflow-hidden rounded-lg border">
-                                <img :src="logoPreview" alt="Company Logo" class="h-full w-full object-cover" />
-                            </div>
-                            <div>
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    @change="handleLogoChange"
-                                    class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                                />
-                                <p class="mt-1 text-xs text-gray-500">PNG, JPG, GIF up to 2MB</p>
-                            </div>
-                        </div>
-                    </div>
+                <!-- Tabs -->
+                <div class="mb-6 border-b border-gray-200">
+                    <nav class="-mb-px flex space-x-8">
+                        <button
+                            @click="activeTab = 'company'"
+                            :class="[
+                                'whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium',
+                                activeTab === 'company'
+                                    ? 'border-blue-500 text-blue-600'
+                                    : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                            ]"
+                        >
+                            Company Details
+                        </button>
+                        <button
+                            @click="activeTab = 'reminders'"
+                            :class="[
+                                'whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium',
+                                activeTab === 'reminders'
+                                    ? 'border-blue-500 text-blue-600'
+                                    : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                            ]"
+                        >
+                            Automated Reminders
+                        </button>
+                    </nav>
+                </div>
 
-                    <!-- Company Information -->
-                    <div class="rounded-lg border bg-white p-6">
-                        <h2 class="mb-4 text-lg font-semibold text-gray-900">Company Information</h2>
-                        <div class="grid gap-4 md:grid-cols-2">
-                            <div>
-                                <label class="mb-1 block text-sm font-medium">Company Name *</label>
-                                <input
-                                    v-model="form.name"
-                                    type="text"
-                                    class="w-full rounded border px-3 py-2"
-                                    required
-                                />
-                                <div v-if="form.errors.name" class="mt-1 text-sm text-red-600">{{ form.errors.name }}</div>
-                            </div>
-                            
-                            <div>
-                                <label class="mb-1 block text-sm font-medium">Email</label>
-                                <input
-                                    v-model="form.email"
-                                    type="email"
-                                    class="w-full rounded border px-3 py-2"
-                                />
-                                <div v-if="form.errors.email" class="mt-1 text-sm text-red-600">{{ form.errors.email }}</div>
-                            </div>
-                            
-                            <div>
-                                <label class="mb-1 block text-sm font-medium">Phone</label>
-                                <input
-                                    v-model="form.phone"
-                                    type="tel"
-                                    class="w-full rounded border px-3 py-2"
-                                />
-                                <div v-if="form.errors.phone" class="mt-1 text-sm text-red-600">{{ form.errors.phone }}</div>
-                            </div>
-                            
-                            <div>
-                                <label class="mb-1 block text-sm font-medium">Website</label>
-                                <input
-                                    v-model="form.website"
-                                    type="url"
-                                    class="w-full rounded border px-3 py-2"
-                                />
-                                <div v-if="form.errors.website" class="mt-1 text-sm text-red-600">{{ form.errors.website }}</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Address Information -->
-                    <div class="rounded-lg border bg-white p-6">
-                        <h2 class="mb-4 text-lg font-semibold text-gray-900">Address Information</h2>
-                        <div class="space-y-4">
-                            <div>
-                                <label class="mb-1 block text-sm font-medium">Address</label>
-                                <textarea
-                                    v-model="form.address"
-                                    rows="3"
-                                    class="w-full rounded border px-3 py-2"
-                                ></textarea>
-                                <div v-if="form.errors.address" class="mt-1 text-sm text-red-600">{{ form.errors.address }}</div>
-                            </div>
-                            
-                            <div class="grid gap-4 md:grid-cols-3">
+                <!-- Company Details Tab -->
+                <div v-if="activeTab === 'company'">
+                    <form @submit.prevent="submit" class="space-y-6">
+                        <!-- Company Logo -->
+                        <div class="rounded-lg border bg-white p-6">
+                            <h2 class="mb-4 text-lg font-semibold text-gray-900">Company Logo</h2>
+                            <div class="flex items-center gap-6">
+                                <div v-if="logoPreview" class="h-20 w-20 overflow-hidden rounded-lg border">
+                                    <img :src="logoPreview" alt="Company Logo" class="h-full w-full object-cover" />
+                                </div>
                                 <div>
-                                    <label class="mb-1 block text-sm font-medium">City</label>
                                     <input
-                                        v-model="form.city"
+                                        type="file"
+                                        accept="image/*"
+                                        @change="handleLogoChange"
+                                        class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                    />
+                                    <p class="mt-1 text-xs text-gray-500">PNG, JPG, GIF up to 2MB</p>
+                                </div>
+                            </div>
+
+                            <div class="mt-6 flex items-center gap-6">
+                                <div v-if="faviconPreview" class="h-12 w-12 overflow-hidden rounded-lg border">
+                                    <img :src="faviconPreview" alt="Company Favicon" class="h-full w-full object-cover" />
+                                </div>
+                                <div>
+                                    <label class="mb-1 block text-sm font-medium">Favicon</label>
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        @change="handleFaviconChange"
+                                        class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                    />
+                                    <p class="mt-1 text-xs text-gray-500">PNG, JPG, ICO up to 2MB (32x32 recommended)</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Company Information -->
+                        <div class="rounded-lg border bg-white p-6">
+                            <h2 class="mb-4 text-lg font-semibold text-gray-900">Company Information</h2>
+                            <div class="grid gap-4 md:grid-cols-2">
+                                <div>
+                                    <label class="mb-1 block text-sm font-medium">Company Name *</label>
+                                    <input
+                                        v-model="form.name"
                                         type="text"
                                         class="w-full rounded border px-3 py-2"
+                                        required
                                     />
-                                    <div v-if="form.errors.city" class="mt-1 text-sm text-red-600">{{ form.errors.city }}</div>
+                                    <div v-if="form.errors.name" class="mt-1 text-sm text-red-600">{{ form.errors.name }}</div>
                                 </div>
                                 
                                 <div>
-                                    <label class="mb-1 block text-sm font-medium">State/Province</label>
+                                    <label class="mb-1 block text-sm font-medium">Email</label>
                                     <input
-                                        v-model="form.state"
-                                        type="text"
+                                        v-model="form.email"
+                                        type="email"
                                         class="w-full rounded border px-3 py-2"
                                     />
-                                    <div v-if="form.errors.state" class="mt-1 text-sm text-red-600">{{ form.errors.state }}</div>
+                                    <div v-if="form.errors.email" class="mt-1 text-sm text-red-600">{{ form.errors.email }}</div>
                                 </div>
                                 
                                 <div>
-                                    <label class="mb-1 block text-sm font-medium">Postal Code</label>
+                                    <label class="mb-1 block text-sm font-medium">Phone</label>
                                     <input
-                                        v-model="form.postal_code"
+                                        v-model="form.phone"
+                                        type="tel"
+                                        class="w-full rounded border px-3 py-2"
+                                    />
+                                    <div v-if="form.errors.phone" class="mt-1 text-sm text-red-600">{{ form.errors.phone }}</div>
+                                </div>
+                                
+                                <div>
+                                    <label class="mb-1 block text-sm font-medium">Website</label>
+                                    <input
+                                        v-model="form.website"
+                                        type="url"
+                                        class="w-full rounded border px-3 py-2"
+                                    />
+                                    <div v-if="form.errors.website" class="mt-1 text-sm text-red-600">{{ form.errors.website }}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Address Information -->
+                        <div class="rounded-lg border bg-white p-6">
+                            <h2 class="mb-4 text-lg font-semibold text-gray-900">Address Information</h2>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="mb-1 block text-sm font-medium">Address</label>
+                                    <textarea
+                                        v-model="form.address"
+                                        rows="3"
+                                        class="w-full rounded border px-3 py-2"
+                                    ></textarea>
+                                    <div v-if="form.errors.address" class="mt-1 text-sm text-red-600">{{ form.errors.address }}</div>
+                                </div>
+                                
+                                <div class="grid gap-4 md:grid-cols-3">
+                                    <div>
+                                        <label class="mb-1 block text-sm font-medium">City</label>
+                                        <input
+                                            v-model="form.city"
+                                            type="text"
+                                            class="w-full rounded border px-3 py-2"
+                                        />
+                                        <div v-if="form.errors.city" class="mt-1 text-sm text-red-600">{{ form.errors.city }}</div>
+                                    </div>
+                                    
+                                    <div>
+                                        <label class="mb-1 block text-sm font-medium">State/Province</label>
+                                        <input
+                                            v-model="form.state"
+                                            type="text"
+                                            class="w-full rounded border px-3 py-2"
+                                        />
+                                        <div v-if="form.errors.state" class="mt-1 text-sm text-red-600">{{ form.errors.state }}</div>
+                                    </div>
+                                    
+                                    <div>
+                                        <label class="mb-1 block text-sm font-medium">Postal Code</label>
+                                        <input
+                                            v-model="form.postal_code"
+                                            type="text"
+                                            class="w-full rounded border px-3 py-2"
+                                        />
+                                        <div v-if="form.errors.postal_code" class="mt-1 text-sm text-red-600">{{ form.errors.postal_code }}</div>
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <label class="mb-1 block text-sm font-medium">Country</label>
+                                    <input
+                                        v-model="form.country"
                                         type="text"
                                         class="w-full rounded border px-3 py-2"
                                     />
-                                    <div v-if="form.errors.postal_code" class="mt-1 text-sm text-red-600">{{ form.errors.postal_code }}</div>
+                                    <div v-if="form.errors.country" class="mt-1 text-sm text-red-600">{{ form.errors.country }}</div>
+                                </div>
+                                
+                                <div>
+                                    <label class="mb-1 block text-sm font-medium">VAT Number</label>
+                                    <input
+                                        v-model="form.vat_number"
+                                        type="text"
+                                        class="w-full rounded border px-3 py-2"
+                                    />
+                                    <div v-if="form.errors.vat_number" class="mt-1 text-sm text-red-600">{{ form.errors.vat_number }}</div>
                                 </div>
                             </div>
+                        </div>
+
+                        <!-- Banking Details -->
+                        <div class="rounded-lg border bg-white p-6">
+                            <h2 class="mb-4 text-lg font-semibold text-gray-900">Banking Details</h2>
+                            <p class="mb-4 text-sm text-gray-600">These details will appear on your PDF documents (invoices, quotes, jobcards).</p>
+                            <div class="grid gap-4 md:grid-cols-2">
+                                <div>
+                                    <label class="mb-1 block text-sm font-medium">Bank Name</label>
+                                    <input
+                                        v-model="form.bank_name"
+                                        type="text"
+                                        class="w-full rounded border px-3 py-2"
+                                        placeholder="e.g. FNB, Standard Bank, ABSA"
+                                    />
+                                    <div v-if="form.errors.bank_name" class="mt-1 text-sm text-red-600">{{ form.errors.bank_name }}</div>
+                                </div>
+
+                                <div>
+                                    <label class="mb-1 block text-sm font-medium">Account Name</label>
+                                    <input
+                                        v-model="form.bank_account_name"
+                                        type="text"
+                                        class="w-full rounded border px-3 py-2"
+                                        placeholder="Name on the account"
+                                    />
+                                    <div v-if="form.errors.bank_account_name" class="mt-1 text-sm text-red-600">{{ form.errors.bank_account_name }}</div>
+                                </div>
+
+                                <div>
+                                    <label class="mb-1 block text-sm font-medium">Account Number</label>
+                                    <input
+                                        v-model="form.bank_account_number"
+                                        type="text"
+                                        class="w-full rounded border px-3 py-2"
+                                        placeholder="Bank account number"
+                                    />
+                                    <div v-if="form.errors.bank_account_number" class="mt-1 text-sm text-red-600">{{ form.errors.bank_account_number }}</div>
+                                </div>
+
+                                <div>
+                                    <label class="mb-1 block text-sm font-medium">Branch Code</label>
+                                    <input
+                                        v-model="form.bank_sort_code"
+                                        type="text"
+                                        class="w-full rounded border px-3 py-2"
+                                        placeholder="e.g. 250655"
+                                    />
+                                    <div v-if="form.errors.bank_sort_code" class="mt-1 text-sm text-red-600">{{ form.errors.bank_sort_code }}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Description -->
+                        <div class="rounded-lg border bg-white p-6">
+                            <h2 class="mb-4 text-lg font-semibold text-gray-900">Description</h2>
+                            <div>
+                                <label class="mb-1 block text-sm font-medium">Company Description</label>
+                                <textarea
+                                    v-model="form.description"
+                                    rows="4"
+                                    class="w-full rounded border px-3 py-2"
+                                    placeholder="Tell us about your company..."
+                                ></textarea>
+                                <div v-if="form.errors.description" class="mt-1 text-sm text-red-600">{{ form.errors.description }}</div>
+                            </div>
+                        </div>
+
+                        <!-- Document Footers -->
+                        <div class="rounded-lg border bg-white p-6">
+                            <h2 class="mb-4 text-lg font-semibold text-gray-900">Document Footers</h2>
+                            <p class="mb-4 text-sm text-gray-600">These footer texts will appear at the bottom of the respective PDF documents.</p>
                             
-                            <div>
-                                <label class="mb-1 block text-sm font-medium">Country</label>
-                                <input
-                                    v-model="form.country"
-                                    type="text"
-                                    class="w-full rounded border px-3 py-2"
-                                />
-                                <div v-if="form.errors.country" class="mt-1 text-sm text-red-600">{{ form.errors.country }}</div>
+                            <div class="space-y-6">
+                                <div>
+                                    <label class="mb-1 block text-sm font-medium">Invoice Footer</label>
+                                    <textarea
+                                        v-model="form.invoice_footer"
+                                        rows="4"
+                                        class="w-full rounded border px-3 py-2"
+                                        placeholder="Enter footer text that will appear on invoice PDFs (e.g., payment terms, thank you message, etc.)"
+                                    ></textarea>
+                                    <div v-if="form.errors.invoice_footer" class="mt-1 text-sm text-red-600">{{ form.errors.invoice_footer }}</div>
+                                </div>
+
+                                <div>
+                                    <label class="mb-1 block text-sm font-medium">Quote Footer</label>
+                                    <textarea
+                                        v-model="form.quote_footer"
+                                        rows="4"
+                                        class="w-full rounded border px-3 py-2"
+                                        placeholder="Enter footer text that will appear on quote PDFs (e.g., validity period, terms, etc.)"
+                                    ></textarea>
+                                    <div v-if="form.errors.quote_footer" class="mt-1 text-sm text-red-600">{{ form.errors.quote_footer }}</div>
+                                </div>
+
+                                <div>
+                                    <label class="mb-1 block text-sm font-medium">Jobcard Footer</label>
+                                    <textarea
+                                        v-model="form.jobcard_footer"
+                                        rows="4"
+                                        class="w-full rounded border px-3 py-2"
+                                        placeholder="Enter footer text that will appear on jobcard PDFs (e.g., completion notes, warranty info, etc.)"
+                                    ></textarea>
+                                    <div v-if="form.errors.jobcard_footer" class="mt-1 text-sm text-red-600">{{ form.errors.jobcard_footer }}</div>
+                                </div>
                             </div>
+                        </div>
+
+                        <!-- Default Terms & Conditions -->
+                        <div class="rounded-lg border bg-white p-6">
+                            <h2 class="mb-4 text-lg font-semibold text-gray-900">Default Terms & Conditions</h2>
+                            <p class="mb-4 text-sm text-gray-600">These terms will be automatically populated when creating new documents. They can be customized for each individual document.</p>
                             
-                            <div>
-                                <label class="mb-1 block text-sm font-medium">VAT Number</label>
-                                <input
-                                    v-model="form.vat_number"
-                                    type="text"
-                                    class="w-full rounded border px-3 py-2"
-                                />
-                                <div v-if="form.errors.vat_number" class="mt-1 text-sm text-red-600">{{ form.errors.vat_number }}</div>
+                            <div class="space-y-6">
+                                <div>
+                                    <label class="mb-1 block text-sm font-medium">Default Invoice Terms &amp; Conditions</label>
+                                    <textarea
+                                        v-model="form.default_invoice_terms"
+                                        rows="4"
+                                        class="w-full rounded border px-3 py-2"
+                                        placeholder="Default legal / commercial terms shown on new invoices (not payment terms like COD — those come from the customer record)"
+                                    ></textarea>
+                                    <div v-if="form.errors.default_invoice_terms" class="mt-1 text-sm text-red-600">{{ form.errors.default_invoice_terms }}</div>
+                                </div>
+
+                                <div>
+                                    <label class="mb-1 block text-sm font-medium">Default Quote Terms</label>
+                                    <textarea
+                                        v-model="form.default_quote_terms"
+                                        rows="4"
+                                        class="w-full rounded border px-3 py-2"
+                                        placeholder="Enter default terms and conditions for quotes (e.g., validity period, acceptance terms, etc.)"
+                                    ></textarea>
+                                    <div v-if="form.errors.default_quote_terms" class="mt-1 text-sm text-red-600">{{ form.errors.default_quote_terms }}</div>
+                                </div>
+
+                                <div>
+                                    <label class="mb-1 block text-sm font-medium">Default Jobcard Terms</label>
+                                    <textarea
+                                        v-model="form.default_jobcard_terms"
+                                        rows="4"
+                                        class="w-full rounded border px-3 py-2"
+                                        placeholder="Enter default terms and conditions for jobcards (e.g., warranty info, completion terms, etc.)"
+                                    ></textarea>
+                                    <div v-if="form.errors.default_jobcard_terms" class="mt-1 text-sm text-red-600">{{ form.errors.default_jobcard_terms }}</div>
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Banking Details -->
-                    <div class="rounded-lg border bg-white p-6">
-                        <h2 class="mb-4 text-lg font-semibold text-gray-900">Banking Details</h2>
-                        <p class="mb-4 text-sm text-gray-600">These details will appear on your PDF documents (invoices, quotes, jobcards).</p>
-                        <div class="grid gap-4 md:grid-cols-2">
-                            <div>
-                                <label class="mb-1 block text-sm font-medium">Bank Name</label>
-                                <input
-                                    v-model="form.bank_name"
-                                    type="text"
-                                    class="w-full rounded border px-3 py-2"
-                                    placeholder="e.g. FNB, Standard Bank, ABSA"
-                                />
-                                <div v-if="form.errors.bank_name" class="mt-1 text-sm text-red-600">{{ form.errors.bank_name }}</div>
-                            </div>
+                        <!-- Settings -->
+                        <div class="rounded-lg border bg-white p-6">
+                            <h2 class="mb-4 text-lg font-semibold text-gray-900">Settings</h2>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="flex items-center gap-2">
+                                        <input
+                                            v-model="form.is_active"
+                                            type="checkbox"
+                                            class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        />
+                                        <span class="text-sm font-medium text-gray-700">Active (available for selection)</span>
+                                    </label>
+                                </div>
 
-                            <div>
-                                <label class="mb-1 block text-sm font-medium">Account Name</label>
-                                <input
-                                    v-model="form.bank_account_name"
-                                    type="text"
-                                    class="w-full rounded border px-3 py-2"
-                                    placeholder="Name on the account"
-                                />
-                                <div v-if="form.errors.bank_account_name" class="mt-1 text-sm text-red-600">{{ form.errors.bank_account_name }}</div>
-                            </div>
+                                <div>
+                                    <label class="flex items-center gap-2">
+                                        <input
+                                            v-model="form.is_default"
+                                            type="checkbox"
+                                            class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        />
+                                        <span class="text-sm font-medium text-gray-700">Set as default company</span>
+                                    </label>
+                                </div>
 
-                            <div>
-                                <label class="mb-1 block text-sm font-medium">Account Number</label>
-                                <input
-                                    v-model="form.bank_account_number"
-                                    type="text"
-                                    class="w-full rounded border px-3 py-2"
-                                    placeholder="Bank account number"
-                                />
-                                <div v-if="form.errors.bank_account_number" class="mt-1 text-sm text-red-600">{{ form.errors.bank_account_number }}</div>
-                            </div>
+                                <div>
+                                    <label class="flex items-center gap-2">
+                                        <input
+                                            v-model="form.enable_pos"
+                                            type="checkbox"
+                                            class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        />
+                                        <span class="text-sm font-medium text-gray-700">Enable Point of Sale (POS)</span>
+                                    </label>
+                                </div>
 
-                            <div>
-                                <label class="mb-1 block text-sm font-medium">Branch Code</label>
-                                <input
-                                    v-model="form.bank_sort_code"
-                                    type="text"
-                                    class="w-full rounded border px-3 py-2"
-                                    placeholder="e.g. 250655"
-                                />
-                                <div v-if="form.errors.bank_sort_code" class="mt-1 text-sm text-red-600">{{ form.errors.bank_sort_code }}</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Description -->
-                    <div class="rounded-lg border bg-white p-6">
-                        <h2 class="mb-4 text-lg font-semibold text-gray-900">Description</h2>
-                        <div>
-                            <label class="mb-1 block text-sm font-medium">Company Description</label>
-                            <textarea
-                                v-model="form.description"
-                                rows="4"
-                                class="w-full rounded border px-3 py-2"
-                                placeholder="Tell us about your company..."
-                            ></textarea>
-                            <div v-if="form.errors.description" class="mt-1 text-sm text-red-600">{{ form.errors.description }}</div>
-                        </div>
-                    </div>
-
-                    <!-- Document Footers -->
-                    <div class="rounded-lg border bg-white p-6">
-                        <h2 class="mb-4 text-lg font-semibold text-gray-900">Document Footers</h2>
-                        <p class="mb-4 text-sm text-gray-600">These footer texts will appear at the bottom of the respective PDF documents.</p>
-                        
-                        <div class="space-y-6">
-                            <!-- Invoice Footer -->
-                            <div>
-                                <label class="mb-1 block text-sm font-medium">Invoice Footer</label>
-                                <textarea
-                                    v-model="form.invoice_footer"
-                                    rows="4"
-                                    class="w-full rounded border px-3 py-2"
-                                    placeholder="Enter footer text that will appear on invoice PDFs (e.g., payment terms, thank you message, etc.)"
-                                ></textarea>
-                                <div v-if="form.errors.invoice_footer" class="mt-1 text-sm text-red-600">{{ form.errors.invoice_footer }}</div>
-                                <p class="mt-1 text-xs text-gray-500">This text will appear at the bottom of all invoice PDFs generated for this company.</p>
-                            </div>
-
-                            <!-- Quote Footer -->
-                            <div>
-                                <label class="mb-1 block text-sm font-medium">Quote Footer</label>
-                                <textarea
-                                    v-model="form.quote_footer"
-                                    rows="4"
-                                    class="w-full rounded border px-3 py-2"
-                                    placeholder="Enter footer text that will appear on quote PDFs (e.g., validity period, terms, etc.)"
-                                ></textarea>
-                                <div v-if="form.errors.quote_footer" class="mt-1 text-sm text-red-600">{{ form.errors.quote_footer }}</div>
-                                <p class="mt-1 text-xs text-gray-500">This text will appear at the bottom of all quote PDFs generated for this company.</p>
-                            </div>
-
-                            <!-- Jobcard Footer -->
-                            <div>
-                                <label class="mb-1 block text-sm font-medium">Jobcard Footer</label>
-                                <textarea
-                                    v-model="form.jobcard_footer"
-                                    rows="4"
-                                    class="w-full rounded border px-3 py-2"
-                                    placeholder="Enter footer text that will appear on jobcard PDFs (e.g., completion notes, warranty info, etc.)"
-                                ></textarea>
-                                <div v-if="form.errors.jobcard_footer" class="mt-1 text-sm text-red-600">{{ form.errors.jobcard_footer }}</div>
-                                <p class="mt-1 text-xs text-gray-500">This text will appear at the bottom of all jobcard PDFs generated for this company.</p>
+                                <div>
+                                    <label class="flex items-center gap-2">
+                                        <input
+                                            v-model="form.enable_document_signing"
+                                            type="checkbox"
+                                            class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        />
+                                        <span class="text-sm font-medium text-gray-700">Enable document signing (jobcards and invoices)</span>
+                                    </label>
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Default Terms & Conditions -->
-                    <div class="rounded-lg border bg-white p-6">
-                        <h2 class="mb-4 text-lg font-semibold text-gray-900">Default Terms & Conditions</h2>
-                        <p class="mb-4 text-sm text-gray-600">These terms will be automatically populated when creating new documents. They can be customized for each individual document.</p>
-                        
-                        <div class="space-y-6">
-                            <!-- Invoice Terms -->
-                            <div>
-                                <label class="mb-1 block text-sm font-medium">Default Invoice Terms &amp; Conditions</label>
-                                <textarea
-                                    v-model="form.default_invoice_terms"
-                                    rows="4"
-                                    class="w-full rounded border px-3 py-2"
-                                    placeholder="Default legal / commercial terms shown on new invoices (not payment terms like COD — those come from the customer record)"
-                                ></textarea>
-                                <div v-if="form.errors.default_invoice_terms" class="mt-1 text-sm text-red-600">{{ form.errors.default_invoice_terms }}</div>
-                                <p class="mt-1 text-xs text-gray-500">Pre-fills the invoice Terms &amp; Conditions field. Payment terms (COD, Net 30, etc.) use each customer’s payment terms.</p>
-                            </div>
-
-                            <!-- Quote Terms -->
-                            <div>
-                                <label class="mb-1 block text-sm font-medium">Default Quote Terms</label>
-                                <textarea
-                                    v-model="form.default_quote_terms"
-                                    rows="4"
-                                    class="w-full rounded border px-3 py-2"
-                                    placeholder="Enter default terms and conditions for quotes (e.g., validity period, acceptance terms, etc.)"
-                                ></textarea>
-                                <div v-if="form.errors.default_quote_terms" class="mt-1 text-sm text-red-600">{{ form.errors.default_quote_terms }}</div>
-                                <p class="mt-1 text-xs text-gray-500">These terms will be pre-filled when creating new quotes.</p>
-                            </div>
-
-                            <!-- Jobcard Terms -->
-                            <div>
-                                <label class="mb-1 block text-sm font-medium">Default Jobcard Terms</label>
-                                <textarea
-                                    v-model="form.default_jobcard_terms"
-                                    rows="4"
-                                    class="w-full rounded border px-3 py-2"
-                                    placeholder="Enter default terms and conditions for jobcards (e.g., warranty info, completion terms, etc.)"
-                                ></textarea>
-                                <div v-if="form.errors.default_jobcard_terms" class="mt-1 text-sm text-red-600">{{ form.errors.default_jobcard_terms }}</div>
-                                <p class="mt-1 text-xs text-gray-500">These terms will be pre-filled when creating new jobcards.</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Settings -->
-                    <div class="rounded-lg border bg-white p-6">
-                        <h2 class="mb-4 text-lg font-semibold text-gray-900">Settings</h2>
-                        <div class="space-y-4">
-                            <div>
-                                <label class="flex items-center gap-2">
+                        <!-- Communication Settings -->
+                        <div class="rounded-lg border bg-white p-6">
+                            <h2 class="mb-4 text-lg font-semibold text-gray-900">Communication Settings</h2>
+                            <p class="mb-4 text-sm text-gray-600">Outgoing email transport is configured globally via environment settings. Company name and email are used as sender identity and reply-to.</p>
+                            
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="mb-1 block text-sm font-medium">WhatsApp Business Number</label>
                                     <input
-                                        v-model="form.is_active"
-                                        type="checkbox"
-                                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        v-model="form.whatsapp_business_number"
+                                        type="text"
+                                        class="w-full rounded border px-3 py-2"
+                                        placeholder="+27123456789"
                                     />
-                                    <span class="text-sm font-medium text-gray-700">Active (available for selection)</span>
-                                </label>
-                            </div>
-
-                            <div>
-                                <label class="flex items-center gap-2">
-                                    <input
-                                        v-model="form.is_default"
-                                        type="checkbox"
-                                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                    />
-                                    <span class="text-sm font-medium text-gray-700">Set as default company</span>
-                                </label>
-                            </div>
-
-                            <div>
-                                <label class="flex items-center gap-2">
-                                    <input
-                                        v-model="form.enable_pos"
-                                        type="checkbox"
-                                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                    />
-                                    <span class="text-sm font-medium text-gray-700">Enable Point of Sale (POS)</span>
-                                </label>
-                            </div>
-
-                            <div>
-                                <label class="flex items-center gap-2">
-                                    <input
-                                        v-model="form.enable_document_signing"
-                                        type="checkbox"
-                                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                    />
-                                    <span class="text-sm font-medium text-gray-700">Enable document signing (jobcards and invoices)</span>
-                                </label>
+                                    <div v-if="form.errors.whatsapp_business_number" class="mt-1 text-sm text-red-600">{{ form.errors.whatsapp_business_number }}</div>
+                                    <p class="mt-1 text-xs text-gray-500">WhatsApp Business number for this company (format: +[country code][number])</p>
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Communication Settings -->
+                        <!-- Form Actions -->
+                        <div class="flex items-center justify-end gap-4">
+                            <Link
+                                :href="companySettings.show(props.company.id).url"
+                                class="rounded-md border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50"
+                            >
+                                Cancel
+                            </Link>
+                            <button
+                                type="submit"
+                                :disabled="form.processing"
+                                class="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
+                            >
+                                {{ form.processing ? 'Updating...' : 'Update Company' }}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Automated Reminders Tab -->
+                <div v-if="activeTab === 'reminders'">
                     <div class="rounded-lg border bg-white p-6">
-                        <h2 class="mb-4 text-lg font-semibold text-gray-900">Communication Settings</h2>
-                        <p class="mb-4 text-sm text-gray-600">Outgoing email transport is configured globally via environment settings. Company name and email are used as sender identity and reply-to.</p>
-                        
-                        <div class="space-y-4">
-                            <div>
-                                <label class="mb-1 block text-sm font-medium">WhatsApp Business Number</label>
-                                <input
-                                    v-model="form.whatsapp_business_number"
-                                    type="text"
-                                    class="w-full rounded border px-3 py-2"
-                                    placeholder="+27123456789"
-                                />
-                                <div v-if="form.errors.whatsapp_business_number" class="mt-1 text-sm text-red-600">{{ form.errors.whatsapp_business_number }}</div>
-                                <p class="mt-1 text-xs text-gray-500">WhatsApp Business number for this company (format: +[country code][number])</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Automated Reminders -->
-                    <div class="rounded-lg border bg-white p-6">
-                        <div class="mb-4 flex items-center justify-between">
-                            <div>
-                                <h2 class="text-lg font-semibold text-gray-900">Automated Reminders</h2>
-                                <p class="text-sm text-gray-600">Configure automated email and SMS reminders for your business</p>
-                            </div>
-                        </div>
-
                         <form @submit.prevent="submitReminderSettings" class="space-y-8">
                             <!-- General Automation Toggle -->
                             <div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
@@ -1494,7 +1515,7 @@ function submitReminderSettings() {
                             <div class="flex items-center justify-end gap-4">
                                 <button
                                     type="submit"
-                                    :disabled="reminderForm.processing || !reminderForm.automation_enabled"
+                                    :disabled="reminderForm.processing"
                                     class="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
                                 >
                                     {{ reminderForm.processing ? 'Saving...' : 'Save Reminder Settings' }}
@@ -1502,24 +1523,7 @@ function submitReminderSettings() {
                             </div>
                         </form>
                     </div>
-
-                    <!-- Form Actions -->
-                    <div class="flex items-center justify-end gap-4">
-                        <Link
-                            :href="companySettings.show(props.company.id).url"
-                            class="rounded-md border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50"
-                        >
-                            Cancel
-                        </Link>
-                        <button
-                            type="submit"
-                            :disabled="form.processing"
-                            class="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
-                        >
-                            {{ form.processing ? 'Updating...' : 'Update Company' }}
-                        </button>
-                    </div>
-                </form>
+                </div>
             </div>
         </div>
     </AppLayout>

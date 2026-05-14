@@ -67,7 +67,8 @@ class CompanySettingsController extends Controller
             'is_default' => ['boolean'],
             'enable_pos' => ['boolean'],
             'enable_document_signing' => ['boolean'],
-            'logo' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg', 'max:2048'],
+            'logo' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg,ico,webp', 'max:2048'],
+            'favicon' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg,ico,webp', 'max:2048'],
             'whatsapp_business_number' => ['nullable', 'string', 'max:20'],
             'bank_name' => ['nullable', 'string', 'max:255'],
             'bank_account_name' => ['nullable', 'string', 'max:255'],
@@ -77,6 +78,10 @@ class CompanySettingsController extends Controller
 
         if ($request->hasFile('logo')) {
             $validated['logo_path'] = $request->file('logo')->store('company-logos', 'public');
+        }
+
+        if ($request->hasFile('favicon')) {
+            $validated['favicon_path'] = $request->file('favicon')->store('company-favicons', 'public');
         }
 
         $company = Company::create($validated);
@@ -189,7 +194,8 @@ class CompanySettingsController extends Controller
             'is_default' => ['boolean'],
             'enable_pos' => ['boolean'],
             'enable_document_signing' => ['boolean'],
-            'logo' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg', 'max:2048'],
+            'logo' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg,ico,webp', 'max:2048'],
+            'favicon' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg,ico,webp', 'max:2048'],
             'whatsapp_business_number' => ['nullable', 'string', 'max:20'],
             'bank_name' => ['nullable', 'string', 'max:255'],
             'bank_account_name' => ['nullable', 'string', 'max:255'],
@@ -203,6 +209,14 @@ class CompanySettingsController extends Controller
                 Storage::delete($company->logo_path);
             }
             $validated['logo_path'] = $request->file('logo')->store('company-logos', 'public');
+        }
+
+        if ($request->hasFile('favicon')) {
+            // Delete old favicon if exists
+            if ($company->favicon_path && Storage::exists($company->favicon_path)) {
+                Storage::delete($company->favicon_path);
+            }
+            $validated['favicon_path'] = $request->file('favicon')->store('company-favicons', 'public');
         }
 
         $company->update($validated);

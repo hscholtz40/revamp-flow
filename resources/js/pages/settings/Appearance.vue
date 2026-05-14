@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, usePage, useForm, router } from '@inertiajs/vue3';
-import { computed, ref, onUnmounted } from 'vue';
+import { computed, ref } from 'vue';
 
 import AppearanceTabs from '@/components/AppearanceTabs.vue';
 import HeadingSmall from '@/components/HeadingSmall.vue';
@@ -12,7 +12,7 @@ import SettingsLayout from '@/layouts/settings/Layout.vue';
 import { type BreadcrumbItem } from '@/types';
 
 const page = usePage();
-const company = computed(() => page.props.company as any);
+const user = computed(() => page.props.user as any);
 
 const breadcrumbItems: BreadcrumbItem[] = [
     {
@@ -35,6 +35,28 @@ interface AppearanceFormData {
     theme_accent_saturation: number;
     theme_accent_lightness: number;
     theme_accent_dark_mode_lightness: number;
+    theme_chart_1_hue: number;
+    theme_chart_1_saturation: number;
+    theme_chart_1_lightness: number;
+    theme_chart_2_hue: number;
+    theme_chart_2_saturation: number;
+    theme_chart_2_lightness: number;
+    theme_chart_3_hue: number;
+    theme_chart_3_saturation: number;
+    theme_chart_3_lightness: number;
+    theme_chart_4_hue: number;
+    theme_chart_4_saturation: number;
+    theme_chart_4_lightness: number;
+    theme_chart_5_hue: number;
+    theme_chart_5_saturation: number;
+    theme_chart_5_lightness: number;
+    theme_sidebar_primary_hue: number;
+    theme_sidebar_primary_saturation: number;
+    theme_sidebar_primary_lightness: number;
+    theme_sidebar_primary_dark_mode_lightness: number;
+    theme_sidebar_accent_hue: number;
+    theme_sidebar_accent_saturation: number;
+    theme_sidebar_accent_lightness: number;
     theme_background_light_mode_lightness: number;
     theme_background_dark_mode_lightness: number;
     theme_layout_sidebar_width: string;
@@ -46,112 +68,48 @@ interface AppearanceFormData {
 
 // Initialize form with current values
 const form = useForm<AppearanceFormData>({
-    theme_primary_hue: company.value?.theme_primary_hue ?? 215,
-    theme_primary_saturation: company.value?.theme_primary_saturation ?? 59,
-    theme_primary_lightness: company.value?.theme_primary_lightness ?? 41,
-    theme_primary_dark_mode_lightness: company.value?.theme_primary_dark_mode_lightness ?? 55,
-    theme_secondary_hue: company.value?.theme_secondary_hue ?? 178,
-    theme_secondary_saturation: company.value?.theme_secondary_saturation ?? 62,
-    theme_secondary_lightness: company.value?.theme_secondary_lightness ?? 46,
-    theme_secondary_dark_mode_lightness: company.value?.theme_secondary_dark_mode_lightness ?? 55,
-    theme_accent_hue: company.value?.theme_accent_hue ?? 215,
-    theme_accent_saturation: company.value?.theme_accent_saturation ?? 48,
-    theme_accent_lightness: company.value?.theme_accent_lightness ?? 48,
-    theme_accent_dark_mode_lightness: company.value?.theme_accent_dark_mode_lightness ?? 60,
-    theme_background_light_mode_lightness: company.value?.theme_background_light_mode_lightness ?? 100,
-    theme_background_dark_mode_lightness: company.value?.theme_background_dark_mode_lightness ?? 3,
-    theme_layout_sidebar_width: company.value?.theme_layout_sidebar_width ?? '260px',
-    theme_layout_sidebar_collapsed_width: company.value?.theme_layout_sidebar_collapsed_width ?? '64px',
-    theme_layout_header_height: company.value?.theme_layout_header_height ?? '64px',
-    theme_layout_border_radius: company.value?.theme_layout_border_radius ?? '0.5rem',
-    theme_layout_spacing_unit: company.value?.theme_layout_spacing_unit ?? '1rem',
+    theme_primary_hue: user.value?.theme_primary_hue ?? 215,
+    theme_primary_saturation: user.value?.theme_primary_saturation ?? 59,
+    theme_primary_lightness: user.value?.theme_primary_lightness ?? 41,
+    theme_primary_dark_mode_lightness: user.value?.theme_primary_dark_mode_lightness ?? 55,
+    theme_secondary_hue: user.value?.theme_secondary_hue ?? 178,
+    theme_secondary_saturation: user.value?.theme_secondary_saturation ?? 62,
+    theme_secondary_lightness: user.value?.theme_secondary_lightness ?? 46,
+    theme_secondary_dark_mode_lightness: user.value?.theme_secondary_dark_mode_lightness ?? 55,
+    theme_accent_hue: user.value?.theme_accent_hue ?? 215,
+    theme_accent_saturation: user.value?.theme_accent_saturation ?? 48,
+    theme_accent_lightness: user.value?.theme_accent_lightness ?? 48,
+    theme_accent_dark_mode_lightness: user.value?.theme_accent_dark_mode_lightness ?? 60,
+    theme_chart_1_hue: user.value?.theme_chart_1_hue ?? 215,
+    theme_chart_1_saturation: user.value?.theme_chart_1_saturation ?? 59,
+    theme_chart_1_lightness: user.value?.theme_chart_1_lightness ?? 41,
+    theme_chart_2_hue: user.value?.theme_chart_2_hue ?? 178,
+    theme_chart_2_saturation: user.value?.theme_chart_2_saturation ?? 62,
+    theme_chart_2_lightness: user.value?.theme_chart_2_lightness ?? 46,
+    theme_chart_3_hue: user.value?.theme_chart_3_hue ?? 215,
+    theme_chart_3_saturation: user.value?.theme_chart_3_saturation ?? 48,
+    theme_chart_3_lightness: user.value?.theme_chart_3_lightness ?? 48,
+    theme_chart_4_hue: user.value?.theme_chart_4_hue ?? 178,
+    theme_chart_4_saturation: user.value?.theme_chart_4_saturation ?? 50,
+    theme_chart_4_lightness: user.value?.theme_chart_4_lightness ?? 55,
+    theme_chart_5_hue: user.value?.theme_chart_5_hue ?? 215,
+    theme_chart_5_saturation: user.value?.theme_chart_5_saturation ?? 55,
+    theme_chart_5_lightness: user.value?.theme_chart_5_lightness ?? 55,
+    theme_sidebar_primary_hue: user.value?.theme_sidebar_primary_hue ?? 215,
+    theme_sidebar_primary_saturation: user.value?.theme_sidebar_primary_saturation ?? 59,
+    theme_sidebar_primary_lightness: user.value?.theme_sidebar_primary_lightness ?? 41,
+    theme_sidebar_primary_dark_mode_lightness: user.value?.theme_sidebar_primary_dark_mode_lightness ?? 55,
+    theme_sidebar_accent_hue: user.value?.theme_sidebar_accent_hue ?? 215,
+    theme_sidebar_accent_saturation: user.value?.theme_sidebar_accent_saturation ?? 59,
+    theme_sidebar_accent_lightness: user.value?.theme_sidebar_accent_lightness ?? 95,
+    theme_background_light_mode_lightness: user.value?.theme_background_light_mode_lightness ?? 100,
+    theme_background_dark_mode_lightness: user.value?.theme_background_dark_mode_lightness ?? 3,
+    theme_layout_sidebar_width: user.value?.theme_layout_sidebar_width ?? '260px',
+    theme_layout_sidebar_collapsed_width: user.value?.theme_layout_sidebar_collapsed_width ?? '64px',
+    theme_layout_header_height: user.value?.theme_layout_header_height ?? '64px',
+    theme_layout_border_radius: user.value?.theme_layout_border_radius ?? '0.5rem',
+    theme_layout_spacing_unit: user.value?.theme_layout_spacing_unit ?? '1rem',
 });
-
-// Separate refs for files
-const logoFile = ref<File | null>(null);
-const faviconFile = ref<File | null>(null);
-const logoPreview = ref<string>('');
-const faviconPreview = ref<string>('');
-
-// Helper to get image URL
-const getImageUrl = (path: string | null | undefined): string => {
-    if (!path) return '';
-    if (path.startsWith('http')) return path;
-    if (path.startsWith('blob:')) return path;
-    return `/storage/${path}`;
-};
-
-// Set initial previews from existing data
-if (company.value?.logo_path) {
-    logoPreview.value = getImageUrl(company.value.logo_path);
-}
-if (company.value?.favicon_path) {
-    faviconPreview.value = getImageUrl(company.value.favicon_path);
-}
-
-const handleLogoUpload = (e: Event) => {
-    const target = e.target as HTMLInputElement;
-    const file = target.files?.[0];
-    
-    if (file) {
-        // Validate file size (2MB)
-        if (file.size > 2 * 1024 * 1024) {
-            alert('Logo file size must be less than 2MB');
-            target.value = '';
-            return;
-        }
-        
-        // Validate file type
-        const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/svg+xml', 'image/x-icon', 'image/webp'];
-        if (!allowedTypes.includes(file.type)) {
-            alert('Invalid file type. Please upload JPEG, PNG, GIF, SVG, or ICO files.');
-            target.value = '';
-            return;
-        }
-        
-        logoFile.value = file;
-        
-        // Create preview
-        if (logoPreview.value && !logoPreview.value.startsWith('/storage/')) {
-            URL.revokeObjectURL(logoPreview.value);
-        }
-        logoPreview.value = URL.createObjectURL(file);
-        
-        console.log('Logo selected:', file.name, file.size, file.type);
-    }
-};
-
-const handleFaviconUpload = (e: Event) => {
-    const target = e.target as HTMLInputElement;
-    const file = target.files?.[0];
-    
-    if (file) {
-        // Validate file size (2MB)
-        if (file.size > 2 * 1024 * 1024) {
-            alert('Favicon file size must be less than 2MB');
-            target.value = '';
-            return;
-        }
-        
-        // Validate file type
-        const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/svg+xml', 'image/x-icon', 'image/webp'];
-        if (!allowedTypes.includes(file.type)) {
-            alert('Invalid file type. Please upload JPEG, PNG, GIF, SVG, or ICO files.');
-            target.value = '';
-            return;
-        }
-        
-        faviconFile.value = file;
-        
-        // Create preview
-        if (faviconPreview.value && !faviconPreview.value.startsWith('/storage/')) {
-            URL.revokeObjectURL(faviconPreview.value);
-        }
-        faviconPreview.value = URL.createObjectURL(file);
-        
-        console.log('Favicon selected:', file.name, file.size, file.type);
-    }
-};
 
 const getThemeColor = (hue: number, saturation: number, lightness: number): string => {
     return `hsl(${hue} ${saturation}% ${lightness}%)`;
@@ -172,21 +130,21 @@ const hslToHex = (h: number, s: number, l: number): string => {
 };
 
 const primaryColor = ref(hslToHex(
-    company.value?.theme_primary_hue ?? 215,
-    company.value?.theme_primary_saturation ?? 59,
-    company.value?.theme_primary_lightness ?? 41
+    user.value?.theme_primary_hue ?? 215,
+    user.value?.theme_primary_saturation ?? 59,
+    user.value?.theme_primary_lightness ?? 41
 ));
 
 const secondaryColor = ref(hslToHex(
-    company.value?.theme_secondary_hue ?? 178,
-    company.value?.theme_secondary_saturation ?? 62,
-    company.value?.theme_secondary_lightness ?? 46
+    user.value?.theme_secondary_hue ?? 178,
+    user.value?.theme_secondary_saturation ?? 62,
+    user.value?.theme_secondary_lightness ?? 46
 ));
 
 const accentColor = ref(hslToHex(
-    company.value?.theme_accent_hue ?? 215,
-    company.value?.theme_accent_saturation ?? 48,
-    company.value?.theme_accent_lightness ?? 48
+    user.value?.theme_accent_hue ?? 215,
+    user.value?.theme_accent_saturation ?? 48,
+    user.value?.theme_accent_lightness ?? 48
 ));
 
 const hexToHsl = (hex: string): { h: number; s: number; l: number } => {
@@ -258,18 +216,81 @@ const updateAccentColor = (hex: string) => {
     form.theme_accent_lightness = hsl.l;
 };
 
+// Function to update CSS variables dynamically
+const updateCssVariables = () => {
+    const root = document.documentElement;
+    
+    // Primary colors
+    root.style.setProperty('--theme-primary-hue', form.theme_primary_hue.toString());
+    root.style.setProperty('--theme-primary-saturation', `${form.theme_primary_saturation}%`);
+    root.style.setProperty('--theme-primary-lightness', `${form.theme_primary_lightness}%`);
+    root.style.setProperty('--theme-primary-dark-mode-lightness', form.theme_primary_dark_mode_lightness.toString());
+    
+    // Secondary colors
+    root.style.setProperty('--theme-secondary-hue', form.theme_secondary_hue.toString());
+    root.style.setProperty('--theme-secondary-saturation', `${form.theme_secondary_saturation}%`);
+    root.style.setProperty('--theme-secondary-lightness', `${form.theme_secondary_lightness}%`);
+    root.style.setProperty('--theme-secondary-dark-mode-lightness', form.theme_secondary_dark_mode_lightness.toString());
+    
+    // Accent colors
+    root.style.setProperty('--theme-accent-hue', form.theme_accent_hue.toString());
+    root.style.setProperty('--theme-accent-saturation', `${form.theme_accent_saturation}%`);
+    root.style.setProperty('--theme-accent-lightness', `${form.theme_accent_lightness}%`);
+    root.style.setProperty('--theme-accent-dark-mode-lightness', form.theme_accent_dark_mode_lightness.toString());
+    
+    // Chart colors
+    root.style.setProperty('--theme-chart-1-hue', form.theme_chart_1_hue.toString());
+    root.style.setProperty('--theme-chart-1-saturation', `${form.theme_chart_1_saturation}%`);
+    root.style.setProperty('--theme-chart-1-lightness', form.theme_chart_1_lightness.toString());
+    
+    root.style.setProperty('--theme-chart-2-hue', form.theme_chart_2_hue.toString());
+    root.style.setProperty('--theme-chart-2-saturation', `${form.theme_chart_2_saturation}%`);
+    root.style.setProperty('--theme-chart-2-lightness', form.theme_chart_2_lightness.toString());
+    
+    root.style.setProperty('--theme-chart-3-hue', form.theme_chart_3_hue.toString());
+    root.style.setProperty('--theme-chart-3-saturation', `${form.theme_chart_3_saturation}%`);
+    root.style.setProperty('--theme-chart-3-lightness', form.theme_chart_3_lightness.toString());
+    
+    root.style.setProperty('--theme-chart-4-hue', form.theme_chart_4_hue.toString());
+    root.style.setProperty('--theme-chart-4-saturation', `${form.theme_chart_4_saturation}%`);
+    root.style.setProperty('--theme-chart-4-lightness', form.theme_chart_4_lightness.toString());
+    
+    root.style.setProperty('--theme-chart-5-hue', form.theme_chart_5_hue.toString());
+    root.style.setProperty('--theme-chart-5-saturation', `${form.theme_chart_5_saturation}%`);
+    root.style.setProperty('--theme-chart-5-lightness', form.theme_chart_5_lightness.toString());
+    
+    // Sidebar colors
+    root.style.setProperty('--theme-sidebar-primary-hue', form.theme_sidebar_primary_hue.toString());
+    root.style.setProperty('--theme-sidebar-primary-saturation', `${form.theme_sidebar_primary_saturation}%`);
+    root.style.setProperty('--theme-sidebar-primary-lightness', `${form.theme_sidebar_primary_lightness}%`);
+    root.style.setProperty('--theme-sidebar-primary-dark-mode-lightness', form.theme_sidebar_primary_dark_mode_lightness.toString());
+    
+    root.style.setProperty('--theme-sidebar-accent-hue', form.theme_sidebar_accent_hue.toString());
+    root.style.setProperty('--theme-sidebar-accent-saturation', `${form.theme_sidebar_accent_saturation}%`);
+    root.style.setProperty('--theme-sidebar-accent-lightness', `${form.theme_sidebar_accent_lightness}%`);
+    
+    // Background colors
+    root.style.setProperty('--theme-background-light-mode-lightness', `${form.theme_background_light_mode_lightness}%`);
+    root.style.setProperty('--theme-background-dark-mode-lightness', `${form.theme_background_dark_mode_lightness}%`);
+    
+    // Layout variables
+    root.style.setProperty('--theme-layout-sidebar-width', form.theme_layout_sidebar_width);
+    root.style.setProperty('--theme-layout-sidebar-collapsed-width', form.theme_layout_sidebar_collapsed_width);
+    root.style.setProperty('--theme-layout-header-height', form.theme_layout_header_height);
+    root.style.setProperty('--theme-layout-border-radius', form.theme_layout_border_radius);
+    root.style.setProperty('--theme-layout-spacing-unit', form.theme_layout_spacing_unit);
+};
+
 const submit = () => {
     console.log('Submitting form...');
-    console.log('Logo file:', logoFile.value);
-    console.log('Favicon file:', faviconFile.value);
-    
+
     // Create FormData manually
     const formData = new FormData();
-    
+
     // Add _method for PATCH spoofing
     formData.append('_method', 'PATCH');
-    
-    // Add all form fields - manually list them to avoid TypeScript errors
+
+    // Add all form fields
     formData.append('theme_primary_hue', form.theme_primary_hue.toString());
     formData.append('theme_primary_saturation', form.theme_primary_saturation.toString());
     formData.append('theme_primary_lightness', form.theme_primary_lightness.toString());
@@ -282,6 +303,28 @@ const submit = () => {
     formData.append('theme_accent_saturation', form.theme_accent_saturation.toString());
     formData.append('theme_accent_lightness', form.theme_accent_lightness.toString());
     formData.append('theme_accent_dark_mode_lightness', form.theme_accent_dark_mode_lightness.toString());
+    formData.append('theme_chart_1_hue', form.theme_chart_1_hue.toString());
+    formData.append('theme_chart_1_saturation', form.theme_chart_1_saturation.toString());
+    formData.append('theme_chart_1_lightness', form.theme_chart_1_lightness.toString());
+    formData.append('theme_chart_2_hue', form.theme_chart_2_hue.toString());
+    formData.append('theme_chart_2_saturation', form.theme_chart_2_saturation.toString());
+    formData.append('theme_chart_2_lightness', form.theme_chart_2_lightness.toString());
+    formData.append('theme_chart_3_hue', form.theme_chart_3_hue.toString());
+    formData.append('theme_chart_3_saturation', form.theme_chart_3_saturation.toString());
+    formData.append('theme_chart_3_lightness', form.theme_chart_3_lightness.toString());
+    formData.append('theme_chart_4_hue', form.theme_chart_4_hue.toString());
+    formData.append('theme_chart_4_saturation', form.theme_chart_4_saturation.toString());
+    formData.append('theme_chart_4_lightness', form.theme_chart_4_lightness.toString());
+    formData.append('theme_chart_5_hue', form.theme_chart_5_hue.toString());
+    formData.append('theme_chart_5_saturation', form.theme_chart_5_saturation.toString());
+    formData.append('theme_chart_5_lightness', form.theme_chart_5_lightness.toString());
+    formData.append('theme_sidebar_primary_hue', form.theme_sidebar_primary_hue.toString());
+    formData.append('theme_sidebar_primary_saturation', form.theme_sidebar_primary_saturation.toString());
+    formData.append('theme_sidebar_primary_lightness', form.theme_sidebar_primary_lightness.toString());
+    formData.append('theme_sidebar_primary_dark_mode_lightness', form.theme_sidebar_primary_dark_mode_lightness.toString());
+    formData.append('theme_sidebar_accent_hue', form.theme_sidebar_accent_hue.toString());
+    formData.append('theme_sidebar_accent_saturation', form.theme_sidebar_accent_saturation.toString());
+    formData.append('theme_sidebar_accent_lightness', form.theme_sidebar_accent_lightness.toString());
     formData.append('theme_background_light_mode_lightness', form.theme_background_light_mode_lightness.toString());
     formData.append('theme_background_dark_mode_lightness', form.theme_background_dark_mode_lightness.toString());
     formData.append('theme_layout_sidebar_width', form.theme_layout_sidebar_width);
@@ -289,35 +332,35 @@ const submit = () => {
     formData.append('theme_layout_header_height', form.theme_layout_header_height);
     formData.append('theme_layout_border_radius', form.theme_layout_border_radius);
     formData.append('theme_layout_spacing_unit', form.theme_layout_spacing_unit);
-    
-    // Add files
-    if (logoFile.value) {
-        formData.append('logo', logoFile.value);
-    }
-    if (faviconFile.value) {
-        formData.append('favicon', faviconFile.value);
-    }
-    
-    // Log what we're sending
-    console.log('Sending FormData with fields:', Array.from(formData.keys()));
-    
-    // Send using router.post (Inertia v2)
+
+    // Send using router.post
     router.post('/settings/appearance', formData, {
         preserveScroll: true,
         onSuccess: () => {
             console.log('Success!');
-            // Reset file inputs
-            logoFile.value = null;
-            faviconFile.value = null;
-            const logoInput = document.getElementById('logo') as HTMLInputElement;
-            const faviconInput = document.getElementById('favicon') as HTMLInputElement;
-            if (logoInput) logoInput.value = '';
-            if (faviconInput) faviconInput.value = '';
             
-            // Refresh page to show new images after a short delay
-            setTimeout(() => {
-                window.location.reload();
-            }, 500);
+            // Update CSS variables dynamically without reload
+            updateCssVariables();
+            
+            // Update the color picker values to match
+            primaryColor.value = hslToHex(
+                form.theme_primary_hue,
+                form.theme_primary_saturation,
+                form.theme_primary_lightness
+            );
+            secondaryColor.value = hslToHex(
+                form.theme_secondary_hue,
+                form.theme_secondary_saturation,
+                form.theme_secondary_lightness
+            );
+            accentColor.value = hslToHex(
+                form.theme_accent_hue,
+                form.theme_accent_saturation,
+                form.theme_accent_lightness
+            );
+            
+            // Optional: Show success message
+            // You can add a toast notification here
         },
         onError: (errors) => {
             console.error('Error:', errors);
@@ -325,16 +368,6 @@ const submit = () => {
         },
     });
 };
-
-// Clean up on unmount
-onUnmounted(() => {
-    if (logoPreview.value && logoPreview.value.startsWith('blob:')) {
-        URL.revokeObjectURL(logoPreview.value);
-    }
-    if (faviconPreview.value && faviconPreview.value.startsWith('blob:')) {
-        URL.revokeObjectURL(faviconPreview.value);
-    }
-});
 </script>
 
 <template>
@@ -343,16 +376,9 @@ onUnmounted(() => {
 
         <SettingsLayout>
             <div class="space-y-6">
-                <!-- Debug info (remove in production) -->
-                <div v-if="logoFile || faviconFile" class="rounded-lg border border-blue-500 bg-blue-50 p-4">
-                    <h3 class="mb-2 font-bold text-blue-800">Files Ready to Upload</h3>
-                    <p v-if="logoFile" class="text-sm text-blue-700">Logo: {{ logoFile.name }} ({{ (logoFile.size / 1024).toFixed(2) }} KB)</p>
-                    <p v-if="faviconFile" class="text-sm text-blue-700">Favicon: {{ faviconFile.name }} ({{ (faviconFile.size / 1024).toFixed(2) }} KB)</p>
-                </div>
-
                 <HeadingSmall
                     title="Appearance settings"
-                    description="Customize your company's theme colors and branding"
+                    description="Customize your personal theme colors"
                 />
 
                 <AppearanceTabs />
@@ -651,62 +677,6 @@ onUnmounted(() => {
                                     v-model="form.theme_layout_spacing_unit"
                                     class="mt-1"
                                 />
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Branding Section -->
-                    <div class="rounded-lg border p-6">
-                        <h3 class="mb-4 text-lg font-semibold">Branding</h3>
-                        <div class="space-y-6">
-                            <div class="space-y-4">
-                                <h4 class="font-medium">Logo</h4>
-                                <div>
-                                    <Label for="logo">Upload Logo</Label>
-                                    <Input
-                                        id="logo"
-                                        type="file"
-                                        @change="handleLogoUpload"
-                                        accept="image/jpeg,image/png,image/jpg,image/gif,image/svg+xml,image/x-icon,image/webp"
-                                        class="mt-1"
-                                    />
-                                    <p class="mt-1 text-sm text-muted-foreground">
-                                        Recommended size: 200x60px. Max file size: 2MB.
-                                    </p>
-                                </div>
-                                <div v-if="logoPreview" class="mt-2">
-                                    <p class="text-sm text-muted-foreground">Logo preview:</p>
-                                    <img
-                                        :src="logoPreview"
-                                        alt="Company logo"
-                                        class="mt-1 h-16 rounded border object-contain"
-                                    />
-                                </div>
-                            </div>
-
-                            <div class="space-y-4">
-                                <h4 class="font-medium">Favicon</h4>
-                                <div>
-                                    <Label for="favicon">Upload Favicon</Label>
-                                    <Input
-                                        id="favicon"
-                                        type="file"
-                                        @change="handleFaviconUpload"
-                                        accept="image/jpeg,image/png,image/jpg,image/gif,image/svg+xml,image/x-icon,image/webp"
-                                        class="mt-1"
-                                    />
-                                    <p class="mt-1 text-sm text-muted-foreground">
-                                        Recommended size: 32x32px or 16x16px. Max file size: 2MB.
-                                    </p>
-                                </div>
-                                <div v-if="faviconPreview" class="mt-2">
-                                    <p class="text-sm text-muted-foreground">Favicon preview:</p>
-                                    <img
-                                        :src="faviconPreview"
-                                        alt="Company favicon"
-                                        class="mt-1 h-8 w-8 rounded border object-contain"
-                                    />
-                                </div>
                             </div>
                         </div>
                     </div>
