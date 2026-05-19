@@ -23,30 +23,35 @@ trait ScopedToCurrentCompanyRouteBinding
             return null;
         }
 
-        \Illuminate\Support\Facades\Log::info('resolveRouteBinding', [
+        $companyId = request()->input('company_id');
+
+        \Illuminate\Support\Facades\Log::info('resolveRouteBinding START', [
             'value' => $value,
             'field' => $field,
-            'company_id_input' => \Illuminate\Support\Facades\Request::input('company_id'),
+            'company_id' => $companyId,
             'user_id' => $user->id,
         ]);
 
-        $companyId = \Illuminate\Support\Facades\Request::input('company_id');
-
         if (! $companyId) {
             $company = $user->getCurrentCompany();
+            \Illuminate\Support\Facades\Log::info('getCurrentCompany result', [
+                'company' => $company ? ['id' => $company->id, 'name' => $company->name] : null,
+            ]);
             if ($company === null) {
                 return null;
             }
             $companyId = $company->id;
         }
 
-        \Illuminate\Support\Facades\Log::info('resolveRouteBinding query', [
-            'company_id' => $companyId,
-        ]);
-
-        return static::query()
+        $result = static::query()
             ->where($field, $value)
             ->where('company_id', $companyId)
             ->first();
+
+        \Illuminate\Support\Facades\Log::info('resolveRouteBinding result', [
+            'result_id' => $result?->id,
+        ]);
+
+        return $result;
     }
 }

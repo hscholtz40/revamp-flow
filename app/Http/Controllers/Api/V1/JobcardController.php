@@ -35,11 +35,19 @@ class JobcardController extends Controller
         return response()->json($query->paginate(25));
     }
 
-    public function show(Jobcard $jobcard)
+    public function show(Request $request, $id)
     {
-        $this->assertCompanyScope($jobcard);
-        $jobcard->load(['customer', 'assignedUser', 'assignedTeam', 'lineItems', 'timeEntries']);
+        \Illuminate\Support\Facades\Log::info('show called manually', ['id' => $id, 'company_id' => $request->input('company_id')]);
 
+        $companyId = $request->input('company_id') ?? $request->user()?->getCurrentCompany()?->id;
+
+        $jobcard = \App\Models\Jobcard::where('id', $id)->where('company_id', $companyId)->first();
+
+        if (! $jobcard) {
+            return response()->json(['message' => 'Jobcard not found'], 404);
+        }
+
+        $jobcard->load(['customer', 'assignedUser', 'assignedTeam', 'lineItems', 'timeEntries']);
         return response()->json($jobcard);
     }
 
