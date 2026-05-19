@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-05-19
+
+- **Database upgrade — duplicate `logo_path` migration:** Removed redundant `add_logo_path_to_companies_table` migration; `logo_path` already exists on `companies` from the original create-table migration, which caused "Duplicate column name" errors during admin database upgrade.
+
 ## 2026-05-13
 
 - **Appearance settings page:** Added `/settings/appearance` with color pickers for theme customization (primary, secondary, accent, background colors in HSL format), layout variables (sidebar width, header height, border radius, spacing unit), and logo/favicon upload functionality. Theme settings are now stored per-company in the database instead of environment variables, enabling dynamic white-labeling via the UI.
