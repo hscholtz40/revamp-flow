@@ -19,73 +19,71 @@
                 
                 // Set theme variables immediately via JavaScript
                 @php
-                    $user = auth()->check() ? auth()->user() : null;
-                    
-                    $getThemeValue = function($sessionKey, $userProperty, $configPath) use ($user) {
-                        if (session()->has("user_theme.{$sessionKey}")) {
-                            return session("user_theme.{$sessionKey}");
+                    $company = auth()->check() ? auth()->user()->getCurrentCompany() : null;
+
+                    $getThemeValue = function ($property, $configPath) use ($company) {
+                        if ($company && $company->{$property} !== null) {
+                            return $company->{$property};
                         }
-                        if ($user && $user->{$userProperty} !== null) {
-                            return $user->{$userProperty};
-                        }
+
                         return config($configPath);
                     };
                 @endphp
                 
                 const root = document.documentElement;
                 
-                root.style.setProperty('--theme-primary-hue', '{{ $getThemeValue('theme_primary_hue', 'theme_primary_hue', 'theme.primary.hue') }}');
-                root.style.setProperty('--theme-primary-saturation', '{{ $getThemeValue('theme_primary_saturation', 'theme_primary_saturation', 'theme.primary.saturation') }}%');
-                root.style.setProperty('--theme-primary-lightness', '{{ $getThemeValue('theme_primary_lightness', 'theme_primary_lightness', 'theme.primary.lightness') }}%');
-                root.style.setProperty('--theme-primary-dark-mode-lightness', '{{ $getThemeValue('theme_primary_dark_mode_lightness', 'theme_primary_dark_mode_lightness', 'theme.primary.dark_mode_lightness') }}');
+                root.style.setProperty('--theme-primary-hue', '{{ $getThemeValue('theme_primary_hue', 'theme.primary.hue') }}');
+                root.style.setProperty('--theme-primary-saturation', '{{ $getThemeValue('theme_primary_saturation', 'theme.primary.saturation') }}%');
+                root.style.setProperty('--theme-primary-lightness', '{{ $getThemeValue('theme_primary_lightness', 'theme.primary.lightness') }}%');
+                root.style.setProperty('--theme-primary-dark-mode-lightness', '{{ $getThemeValue('theme_primary_dark_mode_lightness', 'theme.primary.dark_mode_lightness') }}');
                 
-                root.style.setProperty('--theme-secondary-hue', '{{ $getThemeValue('theme_secondary_hue', 'theme_secondary_hue', 'theme.secondary.hue') }}');
-                root.style.setProperty('--theme-secondary-saturation', '{{ $getThemeValue('theme_secondary_saturation', 'theme_secondary_saturation', 'theme.secondary.saturation') }}%');
-                root.style.setProperty('--theme-secondary-lightness', '{{ $getThemeValue('theme_secondary_lightness', 'theme_secondary_lightness', 'theme.secondary.lightness') }}%');
-                root.style.setProperty('--theme-secondary-dark-mode-lightness', '{{ $getThemeValue('theme_secondary_dark_mode_lightness', 'theme_secondary_dark_mode_lightness', 'theme.secondary.dark_mode_lightness') }}');
+                root.style.setProperty('--theme-secondary-hue', '{{ $getThemeValue('theme_secondary_hue', 'theme.secondary.hue') }}');
+                root.style.setProperty('--theme-secondary-saturation', '{{ $getThemeValue('theme_secondary_saturation', 'theme.secondary.saturation') }}%');
+                root.style.setProperty('--theme-secondary-lightness', '{{ $getThemeValue('theme_secondary_lightness', 'theme.secondary.lightness') }}%');
+                root.style.setProperty('--theme-secondary-dark-mode-lightness', '{{ $getThemeValue('theme_secondary_dark_mode_lightness', 'theme.secondary.dark_mode_lightness') }}');
                 
-                root.style.setProperty('--theme-accent-hue', '{{ $getThemeValue('theme_accent_hue', 'theme_accent_hue', 'theme.accent.hue') }}');
-                root.style.setProperty('--theme-accent-saturation', '{{ $getThemeValue('theme_accent_saturation', 'theme_accent_saturation', 'theme.accent.saturation') }}%');
-                root.style.setProperty('--theme-accent-lightness', '{{ $getThemeValue('theme_accent_lightness', 'theme_accent_lightness', 'theme.accent.lightness') }}%');
-                root.style.setProperty('--theme-accent-dark-mode-lightness', '{{ $getThemeValue('theme_accent_dark_mode_lightness', 'theme_accent_dark_mode_lightness', 'theme.accent.dark_mode_lightness') }}');
+                root.style.setProperty('--theme-accent-hue', '{{ $getThemeValue('theme_accent_hue', 'theme.accent.hue') }}');
+                root.style.setProperty('--theme-accent-saturation', '{{ $getThemeValue('theme_accent_saturation', 'theme.accent.saturation') }}%');
+                root.style.setProperty('--theme-accent-lightness', '{{ $getThemeValue('theme_accent_lightness', 'theme.accent.lightness') }}%');
+                root.style.setProperty('--theme-accent-dark-mode-lightness', '{{ $getThemeValue('theme_accent_dark_mode_lightness', 'theme.accent.dark_mode_lightness') }}');
                 
-                root.style.setProperty('--theme-chart-1-hue', '{{ $getThemeValue('theme_chart_1_hue', 'theme_chart_1_hue', 'theme.chart.1.hue') }}');
-                root.style.setProperty('--theme-chart-1-saturation', '{{ $getThemeValue('theme_chart_1_saturation', 'theme_chart_1_saturation', 'theme.chart.1.saturation') }}%');
-                root.style.setProperty('--theme-chart-1-lightness', '{{ $getThemeValue('theme_chart_1_lightness', 'theme_chart_1_lightness', 'theme.chart.1.lightness') }}');
+                root.style.setProperty('--theme-chart-1-hue', '{{ $getThemeValue('theme_chart_1_hue', 'theme.chart.1.hue') }}');
+                root.style.setProperty('--theme-chart-1-saturation', '{{ $getThemeValue('theme_chart_1_saturation', 'theme.chart.1.saturation') }}%');
+                root.style.setProperty('--theme-chart-1-lightness', '{{ $getThemeValue('theme_chart_1_lightness', 'theme.chart.1.lightness') }}');
                 
-                root.style.setProperty('--theme-chart-2-hue', '{{ $getThemeValue('theme_chart_2_hue', 'theme_chart_2_hue', 'theme.chart.2.hue') }}');
-                root.style.setProperty('--theme-chart-2-saturation', '{{ $getThemeValue('theme_chart_2_saturation', 'theme_chart_2_saturation', 'theme.chart.2.saturation') }}%');
-                root.style.setProperty('--theme-chart-2-lightness', '{{ $getThemeValue('theme_chart_2_lightness', 'theme_chart_2_lightness', 'theme.chart.2.lightness') }}');
+                root.style.setProperty('--theme-chart-2-hue', '{{ $getThemeValue('theme_chart_2_hue', 'theme.chart.2.hue') }}');
+                root.style.setProperty('--theme-chart-2-saturation', '{{ $getThemeValue('theme_chart_2_saturation', 'theme.chart.2.saturation') }}%');
+                root.style.setProperty('--theme-chart-2-lightness', '{{ $getThemeValue('theme_chart_2_lightness', 'theme.chart.2.lightness') }}');
                 
-                root.style.setProperty('--theme-chart-3-hue', '{{ $getThemeValue('theme_chart_3_hue', 'theme_chart_3_hue', 'theme.chart.3.hue') }}');
-                root.style.setProperty('--theme-chart-3-saturation', '{{ $getThemeValue('theme_chart_3_saturation', 'theme_chart_3_saturation', 'theme.chart.3.saturation') }}%');
-                root.style.setProperty('--theme-chart-3-lightness', '{{ $getThemeValue('theme_chart_3_lightness', 'theme_chart_3_lightness', 'theme.chart.3.lightness') }}');
+                root.style.setProperty('--theme-chart-3-hue', '{{ $getThemeValue('theme_chart_3_hue', 'theme.chart.3.hue') }}');
+                root.style.setProperty('--theme-chart-3-saturation', '{{ $getThemeValue('theme_chart_3_saturation', 'theme.chart.3.saturation') }}%');
+                root.style.setProperty('--theme-chart-3-lightness', '{{ $getThemeValue('theme_chart_3_lightness', 'theme.chart.3.lightness') }}');
                 
-                root.style.setProperty('--theme-chart-4-hue', '{{ $getThemeValue('theme_chart_4_hue', 'theme_chart_4_hue', 'theme.chart.4.hue') }}');
-                root.style.setProperty('--theme-chart-4-saturation', '{{ $getThemeValue('theme_chart_4_saturation', 'theme_chart_4_saturation', 'theme.chart.4.saturation') }}%');
-                root.style.setProperty('--theme-chart-4-lightness', '{{ $getThemeValue('theme_chart_4_lightness', 'theme_chart_4_lightness', 'theme.chart.4.lightness') }}');
+                root.style.setProperty('--theme-chart-4-hue', '{{ $getThemeValue('theme_chart_4_hue', 'theme.chart.4.hue') }}');
+                root.style.setProperty('--theme-chart-4-saturation', '{{ $getThemeValue('theme_chart_4_saturation', 'theme.chart.4.saturation') }}%');
+                root.style.setProperty('--theme-chart-4-lightness', '{{ $getThemeValue('theme_chart_4_lightness', 'theme.chart.4.lightness') }}');
                 
-                root.style.setProperty('--theme-chart-5-hue', '{{ $getThemeValue('theme_chart_5_hue', 'theme_chart_5_hue', 'theme.chart.5.hue') }}');
-                root.style.setProperty('--theme-chart-5-saturation', '{{ $getThemeValue('theme_chart_5_saturation', 'theme_chart_5_saturation', 'theme.chart.5.saturation') }}%');
-                root.style.setProperty('--theme-chart-5-lightness', '{{ $getThemeValue('theme_chart_5_lightness', 'theme_chart_5_lightness', 'theme.chart.5.lightness') }}');
+                root.style.setProperty('--theme-chart-5-hue', '{{ $getThemeValue('theme_chart_5_hue', 'theme.chart.5.hue') }}');
+                root.style.setProperty('--theme-chart-5-saturation', '{{ $getThemeValue('theme_chart_5_saturation', 'theme.chart.5.saturation') }}%');
+                root.style.setProperty('--theme-chart-5-lightness', '{{ $getThemeValue('theme_chart_5_lightness', 'theme.chart.5.lightness') }}');
                 
-                root.style.setProperty('--theme-sidebar-primary-hue', '{{ $getThemeValue('theme_sidebar_primary_hue', 'theme_sidebar_primary_hue', 'theme.sidebar.primary.hue') }}');
-                root.style.setProperty('--theme-sidebar-primary-saturation', '{{ $getThemeValue('theme_sidebar_primary_saturation', 'theme_sidebar_primary_saturation', 'theme.sidebar.primary.saturation') }}%');
-                root.style.setProperty('--theme-sidebar-primary-lightness', '{{ $getThemeValue('theme_sidebar_primary_lightness', 'theme_sidebar_primary_lightness', 'theme.sidebar.primary.lightness') }}');
-                root.style.setProperty('--theme-sidebar-primary-dark-mode-lightness', '{{ $getThemeValue('theme_sidebar_primary_dark_mode_lightness', 'theme_sidebar_primary_dark_mode_lightness', 'theme.sidebar.primary.dark_mode_lightness') }}');
+                root.style.setProperty('--theme-sidebar-primary-hue', '{{ $getThemeValue('theme_sidebar_primary_hue', 'theme.sidebar.primary.hue') }}');
+                root.style.setProperty('--theme-sidebar-primary-saturation', '{{ $getThemeValue('theme_sidebar_primary_saturation', 'theme.sidebar.primary.saturation') }}%');
+                root.style.setProperty('--theme-sidebar-primary-lightness', '{{ $getThemeValue('theme_sidebar_primary_lightness', 'theme.sidebar.primary.lightness') }}');
+                root.style.setProperty('--theme-sidebar-primary-dark-mode-lightness', '{{ $getThemeValue('theme_sidebar_primary_dark_mode_lightness', 'theme.sidebar.primary.dark_mode_lightness') }}');
                 
-                root.style.setProperty('--theme-sidebar-accent-hue', '{{ $getThemeValue('theme_sidebar_accent_hue', 'theme_sidebar_accent_hue', 'theme.sidebar.accent.hue') }}');
-                root.style.setProperty('--theme-sidebar-accent-saturation', '{{ $getThemeValue('theme_sidebar_accent_saturation', 'theme_sidebar_accent_saturation', 'theme.sidebar.accent.saturation') }}%');
-                root.style.setProperty('--theme-sidebar-accent-lightness', '{{ $getThemeValue('theme_sidebar_accent_lightness', 'theme_sidebar_accent_lightness', 'theme.sidebar.accent.lightness') }}');
+                root.style.setProperty('--theme-sidebar-accent-hue', '{{ $getThemeValue('theme_sidebar_accent_hue', 'theme.sidebar.accent.hue') }}');
+                root.style.setProperty('--theme-sidebar-accent-saturation', '{{ $getThemeValue('theme_sidebar_accent_saturation', 'theme.sidebar.accent.saturation') }}%');
+                root.style.setProperty('--theme-sidebar-accent-lightness', '{{ $getThemeValue('theme_sidebar_accent_lightness', 'theme.sidebar.accent.lightness') }}');
                 
-                root.style.setProperty('--theme-background-light-mode-lightness', '{{ $getThemeValue('theme_background_light_mode_lightness', 'theme_background_light_mode_lightness', 'theme.background.light_mode_lightness') }}%');
-                root.style.setProperty('--theme-background-dark-mode-lightness', '{{ $getThemeValue('theme_background_dark_mode_lightness', 'theme_background_dark_mode_lightness', 'theme.background.dark_mode_lightness') }}%');
+                root.style.setProperty('--theme-background-light-mode-lightness', '{{ $getThemeValue('theme_background_light_mode_lightness', 'theme.background.light_mode_lightness') }}%');
+                root.style.setProperty('--theme-background-dark-mode-lightness', '{{ $getThemeValue('theme_background_dark_mode_lightness', 'theme.background.dark_mode_lightness') }}%');
                 
-                root.style.setProperty('--theme-layout-sidebar-width', '{{ $getThemeValue('theme_layout_sidebar_width', 'theme_layout_sidebar_width', 'theme.layout.sidebar_width') }}');
-                root.style.setProperty('--theme-layout-sidebar-collapsed-width', '{{ $getThemeValue('theme_layout_sidebar_collapsed_width', 'theme_layout_sidebar_collapsed_width', 'theme.layout.sidebar_collapsed_width') }}');
-                root.style.setProperty('--theme-layout-header-height', '{{ $getThemeValue('theme_layout_header_height', 'theme_layout_header_height', 'theme.layout.header_height') }}');
-                root.style.setProperty('--theme-layout-border-radius', '{{ $getThemeValue('theme_layout_border_radius', 'theme_layout_border_radius', 'theme.layout.border_radius') }}');
-                root.style.setProperty('--theme-layout-spacing-unit', '{{ $getThemeValue('theme_layout_spacing_unit', 'theme_layout_spacing_unit', 'theme.layout.spacing_unit') }}');
+                root.style.setProperty('--theme-layout-sidebar-width', '{{ $getThemeValue('theme_layout_sidebar_width', 'theme.layout.sidebar_width') }}');
+                root.style.setProperty('--theme-layout-sidebar-collapsed-width', '{{ $getThemeValue('theme_layout_sidebar_collapsed_width', 'theme.layout.sidebar_collapsed_width') }}');
+                root.style.setProperty('--theme-layout-header-height', '{{ $getThemeValue('theme_layout_header_height', 'theme.layout.header_height') }}');
+                root.style.setProperty('--theme-layout-border-radius', '{{ $getThemeValue('theme_layout_border_radius', 'theme.layout.border_radius') }}');
+                root.style.setProperty('--theme-layout-spacing-unit', '{{ $getThemeValue('theme_layout_spacing_unit', 'theme.layout.spacing_unit') }}');
             })();
         </script>
 

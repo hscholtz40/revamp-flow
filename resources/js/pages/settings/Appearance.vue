@@ -12,7 +12,7 @@ import SettingsLayout from '@/layouts/settings/Layout.vue';
 import { type BreadcrumbItem } from '@/types';
 
 const page = usePage();
-const user = computed(() => page.props.user as any);
+const company = computed(() => page.props.company as Record<string, unknown> | undefined);
 
 const breadcrumbItems: BreadcrumbItem[] = [
     {
@@ -68,47 +68,47 @@ interface AppearanceFormData {
 
 // Initialize form with current values
 const form = useForm<AppearanceFormData>({
-    theme_primary_hue: user.value?.theme_primary_hue ?? 215,
-    theme_primary_saturation: user.value?.theme_primary_saturation ?? 59,
-    theme_primary_lightness: user.value?.theme_primary_lightness ?? 41,
-    theme_primary_dark_mode_lightness: user.value?.theme_primary_dark_mode_lightness ?? 55,
-    theme_secondary_hue: user.value?.theme_secondary_hue ?? 178,
-    theme_secondary_saturation: user.value?.theme_secondary_saturation ?? 62,
-    theme_secondary_lightness: user.value?.theme_secondary_lightness ?? 46,
-    theme_secondary_dark_mode_lightness: user.value?.theme_secondary_dark_mode_lightness ?? 55,
-    theme_accent_hue: user.value?.theme_accent_hue ?? 215,
-    theme_accent_saturation: user.value?.theme_accent_saturation ?? 48,
-    theme_accent_lightness: user.value?.theme_accent_lightness ?? 48,
-    theme_accent_dark_mode_lightness: user.value?.theme_accent_dark_mode_lightness ?? 60,
-    theme_chart_1_hue: user.value?.theme_chart_1_hue ?? 215,
-    theme_chart_1_saturation: user.value?.theme_chart_1_saturation ?? 59,
-    theme_chart_1_lightness: user.value?.theme_chart_1_lightness ?? 41,
-    theme_chart_2_hue: user.value?.theme_chart_2_hue ?? 178,
-    theme_chart_2_saturation: user.value?.theme_chart_2_saturation ?? 62,
-    theme_chart_2_lightness: user.value?.theme_chart_2_lightness ?? 46,
-    theme_chart_3_hue: user.value?.theme_chart_3_hue ?? 215,
-    theme_chart_3_saturation: user.value?.theme_chart_3_saturation ?? 48,
-    theme_chart_3_lightness: user.value?.theme_chart_3_lightness ?? 48,
-    theme_chart_4_hue: user.value?.theme_chart_4_hue ?? 178,
-    theme_chart_4_saturation: user.value?.theme_chart_4_saturation ?? 50,
-    theme_chart_4_lightness: user.value?.theme_chart_4_lightness ?? 55,
-    theme_chart_5_hue: user.value?.theme_chart_5_hue ?? 215,
-    theme_chart_5_saturation: user.value?.theme_chart_5_saturation ?? 55,
-    theme_chart_5_lightness: user.value?.theme_chart_5_lightness ?? 55,
-    theme_sidebar_primary_hue: user.value?.theme_sidebar_primary_hue ?? 215,
-    theme_sidebar_primary_saturation: user.value?.theme_sidebar_primary_saturation ?? 59,
-    theme_sidebar_primary_lightness: user.value?.theme_sidebar_primary_lightness ?? 41,
-    theme_sidebar_primary_dark_mode_lightness: user.value?.theme_sidebar_primary_dark_mode_lightness ?? 55,
-    theme_sidebar_accent_hue: user.value?.theme_sidebar_accent_hue ?? 215,
-    theme_sidebar_accent_saturation: user.value?.theme_sidebar_accent_saturation ?? 59,
-    theme_sidebar_accent_lightness: user.value?.theme_sidebar_accent_lightness ?? 95,
-    theme_background_light_mode_lightness: user.value?.theme_background_light_mode_lightness ?? 100,
-    theme_background_dark_mode_lightness: user.value?.theme_background_dark_mode_lightness ?? 3,
-    theme_layout_sidebar_width: user.value?.theme_layout_sidebar_width ?? '260px',
-    theme_layout_sidebar_collapsed_width: user.value?.theme_layout_sidebar_collapsed_width ?? '64px',
-    theme_layout_header_height: user.value?.theme_layout_header_height ?? '64px',
-    theme_layout_border_radius: user.value?.theme_layout_border_radius ?? '0.5rem',
-    theme_layout_spacing_unit: user.value?.theme_layout_spacing_unit ?? '1rem',
+    theme_primary_hue: company.value?.theme_primary_hue ?? 215,
+    theme_primary_saturation: company.value?.theme_primary_saturation ?? 59,
+    theme_primary_lightness: company.value?.theme_primary_lightness ?? 41,
+    theme_primary_dark_mode_lightness: company.value?.theme_primary_dark_mode_lightness ?? 55,
+    theme_secondary_hue: company.value?.theme_secondary_hue ?? 178,
+    theme_secondary_saturation: company.value?.theme_secondary_saturation ?? 62,
+    theme_secondary_lightness: company.value?.theme_secondary_lightness ?? 46,
+    theme_secondary_dark_mode_lightness: company.value?.theme_secondary_dark_mode_lightness ?? 55,
+    theme_accent_hue: company.value?.theme_accent_hue ?? 215,
+    theme_accent_saturation: company.value?.theme_accent_saturation ?? 48,
+    theme_accent_lightness: company.value?.theme_accent_lightness ?? 48,
+    theme_accent_dark_mode_lightness: company.value?.theme_accent_dark_mode_lightness ?? 60,
+    theme_chart_1_hue: company.value?.theme_chart_1_hue ?? 215,
+    theme_chart_1_saturation: company.value?.theme_chart_1_saturation ?? 59,
+    theme_chart_1_lightness: company.value?.theme_chart_1_lightness ?? 41,
+    theme_chart_2_hue: company.value?.theme_chart_2_hue ?? 178,
+    theme_chart_2_saturation: company.value?.theme_chart_2_saturation ?? 62,
+    theme_chart_2_lightness: company.value?.theme_chart_2_lightness ?? 46,
+    theme_chart_3_hue: company.value?.theme_chart_3_hue ?? 215,
+    theme_chart_3_saturation: company.value?.theme_chart_3_saturation ?? 48,
+    theme_chart_3_lightness: company.value?.theme_chart_3_lightness ?? 48,
+    theme_chart_4_hue: company.value?.theme_chart_4_hue ?? 178,
+    theme_chart_4_saturation: company.value?.theme_chart_4_saturation ?? 50,
+    theme_chart_4_lightness: company.value?.theme_chart_4_lightness ?? 55,
+    theme_chart_5_hue: company.value?.theme_chart_5_hue ?? 215,
+    theme_chart_5_saturation: company.value?.theme_chart_5_saturation ?? 55,
+    theme_chart_5_lightness: company.value?.theme_chart_5_lightness ?? 55,
+    theme_sidebar_primary_hue: company.value?.theme_sidebar_primary_hue ?? 215,
+    theme_sidebar_primary_saturation: company.value?.theme_sidebar_primary_saturation ?? 59,
+    theme_sidebar_primary_lightness: company.value?.theme_sidebar_primary_lightness ?? 41,
+    theme_sidebar_primary_dark_mode_lightness: company.value?.theme_sidebar_primary_dark_mode_lightness ?? 55,
+    theme_sidebar_accent_hue: company.value?.theme_sidebar_accent_hue ?? 215,
+    theme_sidebar_accent_saturation: company.value?.theme_sidebar_accent_saturation ?? 59,
+    theme_sidebar_accent_lightness: company.value?.theme_sidebar_accent_lightness ?? 95,
+    theme_background_light_mode_lightness: company.value?.theme_background_light_mode_lightness ?? 100,
+    theme_background_dark_mode_lightness: company.value?.theme_background_dark_mode_lightness ?? 3,
+    theme_layout_sidebar_width: company.value?.theme_layout_sidebar_width ?? '260px',
+    theme_layout_sidebar_collapsed_width: company.value?.theme_layout_sidebar_collapsed_width ?? '64px',
+    theme_layout_header_height: company.value?.theme_layout_header_height ?? '64px',
+    theme_layout_border_radius: company.value?.theme_layout_border_radius ?? '0.5rem',
+    theme_layout_spacing_unit: company.value?.theme_layout_spacing_unit ?? '1rem',
 });
 
 const getThemeColor = (hue: number, saturation: number, lightness: number): string => {
@@ -130,21 +130,21 @@ const hslToHex = (h: number, s: number, l: number): string => {
 };
 
 const primaryColor = ref(hslToHex(
-    user.value?.theme_primary_hue ?? 215,
-    user.value?.theme_primary_saturation ?? 59,
-    user.value?.theme_primary_lightness ?? 41
+    company.value?.theme_primary_hue ?? 215,
+    company.value?.theme_primary_saturation ?? 59,
+    company.value?.theme_primary_lightness ?? 41
 ));
 
 const secondaryColor = ref(hslToHex(
-    user.value?.theme_secondary_hue ?? 178,
-    user.value?.theme_secondary_saturation ?? 62,
-    user.value?.theme_secondary_lightness ?? 46
+    company.value?.theme_secondary_hue ?? 178,
+    company.value?.theme_secondary_saturation ?? 62,
+    company.value?.theme_secondary_lightness ?? 46
 ));
 
 const accentColor = ref(hslToHex(
-    user.value?.theme_accent_hue ?? 215,
-    user.value?.theme_accent_saturation ?? 48,
-    user.value?.theme_accent_lightness ?? 48
+    company.value?.theme_accent_hue ?? 215,
+    company.value?.theme_accent_saturation ?? 48,
+    company.value?.theme_accent_lightness ?? 48
 ));
 
 const hexToHsl = (hex: string): { h: number; s: number; l: number } => {
@@ -378,7 +378,7 @@ const submit = () => {
             <div class="space-y-6">
                 <HeadingSmall
                     title="Appearance settings"
-                    description="Customize your personal theme colors"
+                    description="Customize theme colors for your current company"
                 />
 
                 <AppearanceTabs />

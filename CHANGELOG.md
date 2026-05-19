@@ -2,6 +2,8 @@
 
 ## 2026-05-19
 
+- **Appearance settings save target:** Appearance settings now read and write theme columns on the current `companies` row (not `users`), matching the theme migration and fixing "Unknown column 'theme_primary_hue'" errors on save. `app.blade.php` loads theme CSS variables from the current company as well.
+- **Blade theme variables syntax:** Fixed corrupted `{{ $getThemeValue(...) }}` expressions in `app.blade.php` that caused a parse error on page load.
 - **Database upgrade — duplicate `logo_path` migration:** Removed redundant `add_logo_path_to_companies_table` migration; `logo_path` already exists on `companies` from the original create-table migration, which caused "Duplicate column name" errors during admin database upgrade.
 
 ## 2026-05-13
