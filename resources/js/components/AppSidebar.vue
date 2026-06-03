@@ -196,12 +196,19 @@ const moduleKeyMap: Record<string, string> = {
 const userType = computed(() => (page.props.auth?.user as any)?.user_type ?? 'standard');
 const homeHref = computed(() => userType.value === 'client' ? '/client-zone' : dashboard().url);
 
+const dispatchEnabledForCompany = computed(
+    () => !!(page.props.currentCompany as { enable_dispatch?: boolean } | null | undefined)?.enable_dispatch,
+);
+
 const filteredNavItems = computed(() => {
     const withFilteredChildren = mainNavItems.map((item) => {
         if (item.title === 'Jobcards' && item.children?.length) {
             const children = item.children.filter((child) => {
                 if (child.moduleKey === 'dispatch') {
-                    return !!(page.props.auth?.abilities as { dispatch?: { list?: boolean } } | undefined)?.dispatch?.list;
+                    return (
+                        dispatchEnabledForCompany.value &&
+                        !!(page.props.auth?.abilities as { dispatch?: { list?: boolean } } | undefined)?.dispatch?.list
+                    );
                 }
                 return true;
             });
@@ -308,7 +315,7 @@ const filteredNavItems = computed(() => {
             return !!page.props.auth?.abilities?.messages?.list;
         }
         if (item.title === 'Dispatch') {
-            return !!page.props.auth?.abilities?.dispatch?.list;
+            return dispatchEnabledForCompany.value && !!page.props.auth?.abilities?.dispatch?.list;
         }
         if (item.title === 'Registered Users') {
             const abilities = page.props.auth?.abilities as Record<string, { list?: boolean } | undefined> | undefined;

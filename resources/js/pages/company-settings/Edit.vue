@@ -30,6 +30,7 @@ interface Company {
     is_default: boolean;
     enable_pos: boolean;
     enable_document_signing: boolean;
+    enable_dispatch: boolean;
     whatsapp_business_number: string | null;
     bank_name: string | null;
     bank_account_name: string | null;
@@ -135,6 +136,7 @@ const form = useForm({
     is_default: props.company.is_default ?? false,
     enable_pos: props.company.enable_pos ?? false,
     enable_document_signing: props.company.enable_document_signing ?? false,
+    enable_dispatch: props.company.enable_dispatch ?? false,
     logo: null as File | null,
     favicon: null as File | null,
     whatsapp_business_number: props.company.whatsapp_business_number || '',
@@ -199,6 +201,7 @@ function submit() {
         formData.append('is_default', form.is_default ? '1' : '0');
         formData.append('enable_pos', form.enable_pos ? '1' : '0');
         formData.append('enable_document_signing', form.enable_document_signing ? '1' : '0');
+        formData.append('enable_dispatch', form.enable_dispatch ? '1' : '0');
         formData.append('whatsapp_business_number', form.whatsapp_business_number || '');
         formData.append('bank_name', form.bank_name || '');
         formData.append('bank_account_name', form.bank_account_name || '');
@@ -774,6 +777,17 @@ function submitReminderSettings() {
                                             class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                         />
                                         <span class="text-sm font-medium text-gray-700">Enable document signing (jobcards and invoices)</span>
+                                    </label>
+                                </div>
+
+                                <div>
+                                    <label class="flex items-center gap-2">
+                                        <input
+                                            v-model="form.enable_dispatch"
+                                            type="checkbox"
+                                            class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        />
+                                        <span class="text-sm font-medium text-gray-700">Enable jobcard dispatch board</span>
                                     </label>
                                 </div>
                             </div>

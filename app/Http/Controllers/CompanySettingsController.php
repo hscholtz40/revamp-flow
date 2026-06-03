@@ -67,6 +67,7 @@ class CompanySettingsController extends Controller
             'is_default' => ['boolean'],
             'enable_pos' => ['boolean'],
             'enable_document_signing' => ['boolean'],
+            'enable_dispatch' => ['boolean'],
             'logo' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg,ico,webp', 'max:2048'],
             'favicon' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg,ico,webp', 'max:2048'],
             'whatsapp_business_number' => ['nullable', 'string', 'max:20'],
@@ -161,6 +162,7 @@ class CompanySettingsController extends Controller
                 'is_default' => $company->is_default,
                 'enable_pos' => $company->enable_pos,
                 'enable_document_signing' => $company->enable_document_signing,
+                'enable_dispatch' => $company->enable_dispatch,
             ];
 
             if ($request->hasFile('logo')) {
@@ -194,6 +196,7 @@ class CompanySettingsController extends Controller
             'is_default' => ['boolean'],
             'enable_pos' => ['boolean'],
             'enable_document_signing' => ['boolean'],
+            'enable_dispatch' => ['boolean'],
             'logo' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg,ico,webp', 'max:2048'],
             'favicon' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg,ico,webp', 'max:2048'],
             'whatsapp_business_number' => ['nullable', 'string', 'max:20'],

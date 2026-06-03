@@ -57,16 +57,18 @@ Route::prefix('/api/v1')->name('api.v1.')->group(function () {
         Route::post('/messages/conversations/{conversation}/messages', [MessagingController::class, 'storeMessage'])->middleware('api.module.permission:messages,create');
         Route::patch('/messages/conversations/{conversation}/read', [MessagingController::class, 'markRead'])->middleware('api.module.permission:messages,view');
 
-        Route::get('/dispatch/board', [DispatchController::class, 'board'])->middleware('api.module.permission:dispatch,list');
-        Route::patch('/dispatch/jobcards/{jobcard}/assign', [DispatchController::class, 'assignJobcard'])->middleware('api.module.permission:dispatch,edit');
-        Route::patch('/dispatch/tasks/{task}/assign', [DispatchController::class, 'assignTask'])->middleware('api.module.permission:dispatch,edit');
-        Route::patch('/dispatch/reorder', [DispatchController::class, 'reorder'])->middleware('api.module.permission:dispatch,edit');
-        Route::patch('/dispatch/bulk-update', [DispatchController::class, 'bulkUpdate'])->middleware('api.module.permission:dispatch,edit');
-        Route::get('/dispatch/conflicts', [DispatchController::class, 'conflicts'])->middleware('api.module.permission:dispatch,list');
-        Route::get('/dispatch/my-schedule', [DispatchController::class, 'mySchedule'])->middleware('api.module.permission:dispatch,list');
-        Route::post('/dispatch/routes/generate', [DispatchController::class, 'generateRoute'])->middleware('api.module.permission:dispatch,create');
-        Route::get('/dispatch/routes', [DispatchController::class, 'routes'])->middleware('api.module.permission:dispatch,list');
-        Route::get('/dispatch/routes/{routePlan}', [DispatchController::class, 'showRoute'])->middleware('api.module.permission:dispatch,view');
+        Route::middleware('dispatch.enabled')->group(function () {
+            Route::get('/dispatch/board', [DispatchController::class, 'board'])->middleware('api.module.permission:dispatch,list');
+            Route::patch('/dispatch/jobcards/{jobcard}/assign', [DispatchController::class, 'assignJobcard'])->middleware('api.module.permission:dispatch,edit');
+            Route::patch('/dispatch/tasks/{task}/assign', [DispatchController::class, 'assignTask'])->middleware('api.module.permission:dispatch,edit');
+            Route::patch('/dispatch/reorder', [DispatchController::class, 'reorder'])->middleware('api.module.permission:dispatch,edit');
+            Route::patch('/dispatch/bulk-update', [DispatchController::class, 'bulkUpdate'])->middleware('api.module.permission:dispatch,edit');
+            Route::get('/dispatch/conflicts', [DispatchController::class, 'conflicts'])->middleware('api.module.permission:dispatch,list');
+            Route::get('/dispatch/my-schedule', [DispatchController::class, 'mySchedule'])->middleware('api.module.permission:dispatch,list');
+            Route::post('/dispatch/routes/generate', [DispatchController::class, 'generateRoute'])->middleware('api.module.permission:dispatch,create');
+            Route::get('/dispatch/routes', [DispatchController::class, 'routes'])->middleware('api.module.permission:dispatch,list');
+            Route::get('/dispatch/routes/{routePlan}', [DispatchController::class, 'showRoute'])->middleware('api.module.permission:dispatch,view');
+        });
 
         Route::get('/tracking/vehicles', [TrackingController::class, 'vehicles']);
         Route::post('/tracking/vehicles', [TrackingController::class, 'storeVehicle']);

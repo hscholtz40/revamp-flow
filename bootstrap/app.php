@@ -47,6 +47,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'license.api.auth' => \App\Http\Middleware\AuthenticateLicenseApiRequest::class,
             'license.infrastructure' => EnsureLicenseInfrastructureAccess::class,
             'api.module.permission' => \App\Http\Middleware\EnsureApiModulePermission::class,
+            'dispatch.enabled' => \App\Http\Middleware\EnsureDispatchEnabled::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

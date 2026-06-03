@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-06-03
+
+- **Company dispatch toggle:** Added `companies.enable_dispatch` (default off). Company Settings includes “Enable jobcard dispatch board”; web `/dispatch` routes and `/api/v1/dispatch/*` return 403 when disabled; Jobcards → Dispatch sidebar link is hidden unless enabled for the current company.
+- **QuickBooks settings migration (existing table):** `create_quickbooks_settings_table` and `add_refresh_token_expires_at_to_quickbooks_settings` now no-op when the table or column already exists, fixing `migrate` failures on databases that already have `quickbooks_settings` without a migrations row.
+
 ## 2026-05-19
 
 - **Appearance settings save target:** Appearance settings now read and write theme columns on the current `companies` row (not `users`), matching the theme migration and fixing "Unknown column 'theme_primary_hue'" errors on save. `app.blade.php` loads theme CSS variables from the current company as well.

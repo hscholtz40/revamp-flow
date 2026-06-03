@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (! Schema::hasTable('quickbooks_settings') || Schema::hasColumn('quickbooks_settings', 'refresh_token_expires_at')) {
+            return;
+        }
+
         Schema::table('quickbooks_settings', function (Blueprint $table) {
             $table->timestamp('refresh_token_expires_at')->nullable()->after('token_expires_at');
         });

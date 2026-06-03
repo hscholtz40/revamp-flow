@@ -229,6 +229,7 @@ class HandleInertiaRequests extends Middleware
                 'logo_path' => $currentCompany->logo_path,
                 'is_default' => $currentCompany->is_default,
                 'enable_pos' => (bool) $currentCompany->enable_pos,
+                'enable_dispatch' => (bool) $currentCompany->enable_dispatch,
                 'visible_modules' => $currentCompany->visible_modules,
             ] : null,
             'numberFormat' => $currentCompany ? [
