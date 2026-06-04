@@ -2,8 +2,8 @@
 import { useAuthAbility } from '@/composables/useAuthAbilities';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { computed } from 'vue';
-import { ArrowLeft, Mail, Phone, Trash2, CheckCircle2, RotateCcw } from 'lucide-vue-next';
+import { computed, ref } from 'vue';
+import { ArrowLeft, Mail, Phone, Trash2, CheckCircle2, RotateCcw, LayoutGrid, List, FileVideo, ExternalLink } from 'lucide-vue-next';
 
 interface QueryAttachment {
     id: number;
@@ -30,6 +30,8 @@ const canEdit = useAuthAbility('queries', 'edit');
 const canDelete = useAuthAbility('queries', 'delete');
 
 const attachments = computed(() => props.query.attachments ?? []);
+
+const attachmentView = ref<'grid' | 'list'>('grid');
 
 function setStatus(status: 'open' | 'closed') {
     router.patch(`/queries/${props.query.id}`, { status }, { preserveScroll: true });
@@ -101,10 +103,36 @@ function formatDate(value: string | null) {
 
                     <!-- Attachments -->
                     <div v-if="attachments.length" class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-                        <h2 class="mb-4 text-sm font-medium uppercase tracking-wider text-gray-500">
-                            Attachments ({{ attachments.length }})
-                        </h2>
-                        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                        <div class="mb-4 flex items-center justify-between">
+                            <h2 class="text-sm font-medium uppercase tracking-wider text-gray-500">
+                                Attachments ({{ attachments.length }})
+                            </h2>
+                            <div class="inline-flex overflow-hidden rounded-md border border-gray-300">
+                                <button
+                                    type="button"
+                                    @click="attachmentView = 'grid'"
+                                    :class="attachmentView === 'grid' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                                    class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium"
+                                    title="Grid view"
+                                >
+                                    <LayoutGrid class="h-4 w-4" />
+                                    Grid
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="attachmentView = 'list'"
+                                    :class="attachmentView === 'list' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                                    class="flex items-center gap-1 border-l border-gray-300 px-3 py-1.5 text-xs font-medium"
+                                    title="List view"
+                                >
+                                    <List class="h-4 w-4" />
+                                    List
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Grid view -->
+                        <div v-if="attachmentView === 'grid'" class="grid grid-cols-1 gap-6 sm:grid-cols-2">
                             <div v-for="attachment in attachments" :key="attachment.id" class="space-y-2">
                                 <video v-if="attachment.type === 'video'" :src="attachment.url" controls class="max-h-[360px] w-full rounded-md bg-black" />
                                 <img v-else :src="attachment.url" :alt="attachment.original_name || 'Query attachment'" class="max-h-[360px] w-full rounded-md object-contain" />
@@ -113,6 +141,30 @@ function formatDate(value: string | null) {
                                 </a>
                             </div>
                         </div>
+
+                        <!-- List view -->
+                        <ul v-else class="divide-y divide-gray-200">
+                            <li v-for="attachment in attachments" :key="attachment.id" class="flex items-center gap-3 py-3">
+                                <div class="h-14 w-14 shrink-0 overflow-hidden rounded-md border border-gray-200 bg-gray-50">
+                                    <img v-if="attachment.type !== 'video'" :src="attachment.url" :alt="attachment.original_name || 'Query attachment'" class="h-full w-full object-cover" />
+                                    <div v-else class="flex h-full w-full items-center justify-center text-gray-400">
+                                        <FileVideo class="h-6 w-6" />
+                                    </div>
+                                </div>
+                                <div class="min-w-0 flex-1">
+                                    <p class="truncate text-sm font-medium text-gray-900">{{ attachment.original_name || 'Attachment' }}</p>
+                                    <p class="text-xs uppercase tracking-wide text-gray-400">{{ attachment.type || 'file' }}</p>
+                                </div>
+                                <a
+                                    :href="attachment.url"
+                                    target="_blank"
+                                    class="inline-flex shrink-0 items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-gray-50"
+                                >
+                                    <ExternalLink class="h-4 w-4" />
+                                    Open
+                                </a>
+                            </li>
+                        </ul>
                     </div>
                 </div>
 
