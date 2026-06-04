@@ -7,11 +7,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Storage;
 
 class Query extends Model
 {
-    use HasFactory, ScopedToCurrentCompanyRouteBinding;
+    use HasFactory, ScopedToCurrentCompanyRouteBinding, SoftDeletes;
 
     public const STATUS_OPEN = 'open';
 
@@ -29,8 +30,13 @@ class Query extends Model
 
     protected static function booted(): void
     {
-        // Remove stored attachment files when a query is deleted.
+        // Only purge stored files and attachment rows on a permanent (force) delete.
+        // A soft delete keeps everything so the query can be restored intact.
         static::deleting(function (Query $query) {
+            if (! $query->isForceDeleting()) {
+                return;
+            }
+
             foreach ($query->attachments as $attachment) {
                 if ($attachment->path && Storage::disk('public')->exists($attachment->path)) {
                     Storage::disk('public')->delete($attachment->path);

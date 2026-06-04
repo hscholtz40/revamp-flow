@@ -180,14 +180,16 @@ class QueriesController extends Controller
     /**
      * Remove the specified query.
      */
-    public function destroy(Query $query): RedirectResponse
+    public function destroy(Request $request, Query $query): RedirectResponse
     {
         $this->authorize('delete', $query);
 
         // Attached files are removed by the Query model's deleting hook.
         $query->delete();
 
-        // Redirect back to the list preserving the active filters (status tab, search, page).
-        return redirect()->back()->with('success', 'Query deleted.');
+        // Redirect to the list preserving any filters passed by the caller (status tab, search, page).
+        $filters = array_filter($request->only(['status', 'search', 'page']), fn ($value) => $value !== null && $value !== '');
+
+        return redirect()->route('queries.index', $filters)->with('success', 'Query deleted.');
     }
 }

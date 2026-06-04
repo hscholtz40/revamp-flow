@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { useAuthAbility } from '@/composables/useAuthAbilities';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
-import { ArrowLeft, Mail, Phone, Trash2, CheckCircle2, RotateCcw, LayoutGrid, List, FileVideo, ExternalLink } from 'lucide-vue-next';
+import { ArrowLeft, Mail, Phone, Trash2, CheckCircle2, RotateCcw, LayoutGrid, List, FileVideo, ExternalLink, AlertTriangle } from 'lucide-vue-next';
 
 interface QueryAttachment {
     id: number;
@@ -37,10 +38,19 @@ function setStatus(status: 'open' | 'closed') {
     router.patch(`/queries/${props.query.id}`, { status }, { preserveScroll: true });
 }
 
-function deleteQuery() {
-    if (confirm(`Delete the query from "${props.query.name} ${props.query.surname}"?`)) {
-        router.delete(`/queries/${props.query.id}`);
-    }
+const showDeleteDialog = ref(false);
+const isDeleting = ref(false);
+
+function cancelDelete() {
+    if (isDeleting.value) return;
+    showDeleteDialog.value = false;
+}
+
+function performDelete() {
+    router.delete(`/queries/${props.query.id}`, {
+        onStart: () => (isDeleting.value = true),
+        onFinish: () => (isDeleting.value = false),
+    });
 }
 
 function formatDate(value: string | null) {
@@ -194,7 +204,7 @@ function formatDate(value: string | null) {
                             <button
                                 v-if="canDelete"
                                 type="button"
-                                @click="deleteQuery"
+                                @click="showDeleteDialog = true"
                                 class="flex w-full items-center justify-center gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
                             >
                                 <Trash2 class="h-4 w-4" />
@@ -205,5 +215,44 @@ function formatDate(value: string | null) {
                 </div>
             </div>
         </div>
+
+        <!-- Delete confirmation modal -->
+        <Dialog :open="showDeleteDialog" @update:open="(value) => { if (!value) cancelDelete(); }">
+            <DialogContent class="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle class="flex items-center gap-2">
+                        <span class="flex h-9 w-9 items-center justify-center rounded-full bg-red-100 text-red-600">
+                            <AlertTriangle class="h-5 w-5" />
+                        </span>
+                        Delete query
+                    </DialogTitle>
+                    <DialogDescription>
+                        Are you sure you want to delete the query from
+                        <strong>{{ query.name }} {{ query.surname }}</strong>?
+                        Any attached files will also be removed. This action cannot be undone.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <DialogFooter>
+                    <button
+                        type="button"
+                        :disabled="isDeleting"
+                        @click="cancelDelete"
+                        class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        :disabled="isDeleting"
+                        @click="performDelete"
+                        class="flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        <Trash2 class="h-4 w-4" />
+                        <span>{{ isDeleting ? 'Deleting…' : 'Delete' }}</span>
+                    </button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     </AppLayout>
 </template>

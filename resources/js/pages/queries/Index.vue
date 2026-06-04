@@ -109,7 +109,14 @@ function cancelDelete() {
 
 function performDelete() {
     if (!queryToDelete.value) return;
+    const data: Record<string, string | number> = {};
+    if (status.value) data.status = status.value;
+    if (search.value && search.value.trim()) data.search = search.value.trim();
+    const currentPage = props.queries?.meta?.current_page;
+    if (currentPage && currentPage > 1) data.page = currentPage;
+
     router.delete(`/queries/${queryToDelete.value.id}`, {
+        data,
         preserveScroll: true,
         onStart: () => (isDeleting.value = true),
         onFinish: () => {
