@@ -403,6 +403,13 @@ class HandleInertiaRequests extends Middleware
                     'edit' => $user->hasModulePermission('tasks', 'edit'),
                     'delete' => $user->hasModulePermission('tasks', 'delete'),
                 ],
+                'queries' => [
+                    'list' => $user->hasModulePermission('queries', 'list'),
+                    'view' => $user->hasModulePermission('queries', 'view'),
+                    'create' => $user->hasModulePermission('queries', 'create'),
+                    'edit' => $user->hasModulePermission('queries', 'edit'),
+                    'delete' => $user->hasModulePermission('queries', 'delete'),
+                ],
                 'registered-users' => [
                     'list' => $user->hasModulePermission('registered-users', 'list'),
                     'view' => $user->hasModulePermission('registered-users', 'view'),

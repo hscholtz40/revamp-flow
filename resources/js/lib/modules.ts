@@ -14,6 +14,7 @@ export const modules = [
     { key: 'messages', label: 'Messages' },
     { key: 'dispatch', label: 'Dispatch' },
     { key: 'tasks', label: 'Tasks' },
+    { key: 'queries', label: 'Queries' },
 ] as const;
 
 /** Client Zone staff moderation: listed separately on the group permissions screen. */

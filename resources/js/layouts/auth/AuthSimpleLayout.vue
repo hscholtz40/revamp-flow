@@ -32,8 +32,8 @@ defineProps<{
                                 />
                             </div>
                             <div class="space-y-1">
-                                <h1 class="text-2xl font-bold text-gray-900">JobCardOnline</h1>
-                                <p class="text-sm text-gray-600">by Nexora Software</p>
+                                <h1 class="text-2xl font-bold text-slate-900">JobCardOnline</h1>
+                                <p class="text-sm text-slate-600">by Nexora Software</p>
                             </div>
                         </Link>
                     </div>
@@ -41,8 +41,8 @@ defineProps<{
                     <!-- Login form card -->
                     <div class="rounded-2xl bg-white/80 backdrop-blur-sm shadow-xl border border-white/20 p-8">
                         <div class="mb-6 text-center">
-                            <h2 class="text-2xl font-bold text-gray-900">{{ title }}</h2>
-                            <p class="mt-2 text-sm text-gray-600">
+                            <h2 class="text-2xl font-bold text-slate-900">{{ title }}</h2>
+                            <p class="mt-2 text-sm text-slate-600">
                                 {{ description }}
                             </p>
                         </div>
@@ -52,7 +52,7 @@ defineProps<{
 
                     <!-- Footer info -->
                     <div class="mt-8 text-center">
-                        <p class="text-xs text-gray-500">
+                        <p class="text-xs text-slate-500">
                             © {{ new Date().getFullYear() }} Nexora Software (Pty) Ltd. All rights reserved.
                         </p>
                     </div>

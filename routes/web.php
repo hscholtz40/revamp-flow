@@ -56,6 +56,7 @@ require __DIR__.'/notes.php';
 require __DIR__.'/client-zone.php';
 require __DIR__.'/registered-users.php';
 require __DIR__.'/user-notifications.php';
+require __DIR__.'/queries.php';
 
 // Installer routes (available only before first install)
 Route::middleware([EnsureNotInstalled::class])->group(function () {
