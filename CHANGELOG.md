@@ -2,6 +2,7 @@
 
 ## 2026-06-10
 
+- **CSP — Google Maps:** Allow `*.googleapis.com` and `*.gstatic.com` in `script-src` and `connect-src`, plus `worker-src blob:` and `frame-src *.google.com`, so Dispatch and Places Autocomplete can load the Maps JavaScript API when CSP is enabled.
 - **Frontend TypeScript build:** Fixed CI type errors in Appearance settings (theme values from `Record<string, unknown>`), invoice create AI panel (`form.title` instead of missing `invoice_number`), and sidebar Queries nav (`queries` added to `Auth.abilities` types).
 - **Dispatch map — location timestamp timezone:** `location_pings.recorded_at` is now `DATETIME` (not MySQL `TIMESTAMP`) with UTC read/write on the model and `SET time_zone = '+00:00'` on connect. Run `php artisan migrate` (adds datetime column + repairs legacy SAST-skewed rows). Restart `php artisan serve` and send a fresh GPS ping. Dispatch resolves company timezone from the dispatch company; “last updated” is formatted server-side (`last_updated_label`).
 - **Mobile tracking — GPS ping retention:** `POST /api/v1/tracking/pings` deletes location pings older than 24 hours for that user/company on each ingest (`TRACKING_LOCATION_RETENTION_HOURS`, default 24).
