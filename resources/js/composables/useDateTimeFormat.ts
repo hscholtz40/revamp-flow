@@ -1,3 +1,4 @@
+import { parseUtcInstant } from '@/lib/dispatchScheduleFormat';
 import { computed } from 'vue';
 import { usePage } from '@inertiajs/vue3';
 
@@ -75,6 +76,67 @@ export function formatLocalizedDateTime(value: string | Date | null | undefined,
     const date = toValidDate(value);
     if (!date) return 'N/A';
     return `${formatDateValue(date, format)} ${formatTimeValue(date, format)}`;
+}
+
+/** Format a UTC API instant (`…Z` / `+00:00`) in the company timezone. */
+export function formatUtcInstantInTimezone(utcIso: string, format: DateTimeFormatProps): string {
+    const date = parseUtcInstant(utcIso);
+    if (!date) {
+        return '—';
+    }
+
+    const locale = resolveLocaleForDateFormat(format.date_format);
+    const parts = new Intl.DateTimeFormat(locale, {
+        timeZone: format.timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: format.time_format === '12h',
+    }).formatToParts(date);
+
+    const pick = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? '';
+
+    if (format.date_format === 'yyyy-mm-dd') {
+        return `${pick('year')}-${pick('month')}-${pick('day')} ${pick('hour')}:${pick('minute')}`;
+    }
+    if (format.date_format === 'mm/dd/yyyy') {
+        return `${pick('month')}/${pick('day')}/${pick('year')} ${pick('hour')}:${pick('minute')}`;
+    }
+
+    return `${pick('day')}/${pick('month')}/${pick('year')} ${pick('hour')}:${pick('minute')}`;
+}
+
+/** Relative “ago” label for a UTC API instant (timezone-independent). */
+export function formatUtcRelativeAgo(utcIso: string): string {
+    const date = parseUtcInstant(utcIso);
+    if (!date) {
+        return 'unknown';
+    }
+
+    const seconds = Math.round((Date.now() - date.getTime()) / 1000);
+    if (seconds < 45) {
+        return 'just now';
+    }
+    const minutes = Math.round(seconds / 60);
+    if (minutes < 60) {
+        return `${minutes} min ago`;
+    }
+    const hours = Math.round(minutes / 60);
+    if (hours < 48) {
+        return `${hours} hr ago`;
+    }
+    const days = Math.round(hours / 24);
+    if (days < 14) {
+        return `${days} day${days === 1 ? '' : 's'} ago`;
+    }
+
+    return formatUtcInstantInTimezone(utcIso, {
+        timezone: 'UTC',
+        date_format: 'dd/mm/yyyy',
+        time_format: '24h',
+    });
 }
 
 export function useDateTimeFormat() {

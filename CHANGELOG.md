@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-06-10
+
+- **Dispatch map — location timestamp timezone:** `location_pings.recorded_at` is now `DATETIME` (not MySQL `TIMESTAMP`) with UTC read/write on the model and `SET time_zone = '+00:00'` on connect. Run `php artisan migrate` (adds datetime column + repairs legacy SAST-skewed rows). Restart `php artisan serve` and send a fresh GPS ping. Dispatch resolves company timezone from the dispatch company; “last updated” is formatted server-side (`last_updated_label`).
+- **Mobile tracking — GPS ping retention:** `POST /api/v1/tracking/pings` deletes location pings older than 24 hours for that user/company on each ingest (`TRACKING_LOCATION_RETENTION_HOURS`, default 24).
+- **Dispatch map — live technician GPS:** Dispatch map now shows real mobile location pings (default 8-hour window via `DISPATCH_LOCATION_WINDOW_MINUTES`) with technician markers, polls `/dispatch/user-locations` every 15s while the map is open, and displays “last updated” (relative + timestamp) when clicking a technician pin or opening full pin details. Test env coordinates still work when `DISPATCH_USE_REAL_LOCATIONS=false` or no recent pings exist. When simulator GPS and the job site are far apart, the map centers on technicians instead of zooming to a world view. Fixed stale pins by awaiting a location refresh before the first render, resetting the map when the modal opens, and re-rendering markers after each poll (pin clicks always read the latest coordinates). Dispatch company resolution and location queries were hardened so `/dispatch/user-locations` no longer returns empty when the session company is unset; mobile tracking pings fall back to the jobcard company when needed.
+
 ## 2026-06-03
 
 - **Company dispatch toggle:** Added `companies.enable_dispatch` (default off). Company Settings includes “Enable jobcard dispatch board”; web `/dispatch` routes and `/api/v1/dispatch/*` return 403 when disabled; Jobcards → Dispatch sidebar link is hidden unless enabled for the current company.

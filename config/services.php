@@ -115,6 +115,13 @@ return [
     'dispatch' => [
         'use_real_locations' => env('DISPATCH_USE_REAL_LOCATIONS', true),
         'test_user_locations' => env('DISPATCH_TEST_USER_LOCATIONS', ''),
+        /** How far back dispatch map shows technician GPS pings (minutes). Default 8 hours. */
+        'location_window_minutes' => env('DISPATCH_LOCATION_WINDOW_MINUTES', 480),
+    ],
+
+    'tracking' => [
+        /** Per-user GPS ping retention; older rows are deleted on each ingest. */
+        'location_retention_hours' => env('TRACKING_LOCATION_RETENTION_HOURS', 24),
     ],
 
     'push' => [
