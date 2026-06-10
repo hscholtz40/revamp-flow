@@ -14,6 +14,16 @@ import { type BreadcrumbItem } from '@/types';
 const page = usePage();
 const company = computed(() => page.props.company as Record<string, unknown> | undefined);
 
+const companyThemeNumber = (key: string, fallback: number): number => {
+    const value = company.value?.[key];
+    return typeof value === 'number' ? value : fallback;
+};
+
+const companyThemeString = (key: string, fallback: string): string => {
+    const value = company.value?.[key];
+    return typeof value === 'string' ? value : fallback;
+};
+
 const breadcrumbItems: BreadcrumbItem[] = [
     {
         title: 'Appearance settings',
@@ -68,47 +78,47 @@ interface AppearanceFormData {
 
 // Initialize form with current values
 const form = useForm<AppearanceFormData>({
-    theme_primary_hue: company.value?.theme_primary_hue ?? 215,
-    theme_primary_saturation: company.value?.theme_primary_saturation ?? 59,
-    theme_primary_lightness: company.value?.theme_primary_lightness ?? 41,
-    theme_primary_dark_mode_lightness: company.value?.theme_primary_dark_mode_lightness ?? 55,
-    theme_secondary_hue: company.value?.theme_secondary_hue ?? 178,
-    theme_secondary_saturation: company.value?.theme_secondary_saturation ?? 62,
-    theme_secondary_lightness: company.value?.theme_secondary_lightness ?? 46,
-    theme_secondary_dark_mode_lightness: company.value?.theme_secondary_dark_mode_lightness ?? 55,
-    theme_accent_hue: company.value?.theme_accent_hue ?? 215,
-    theme_accent_saturation: company.value?.theme_accent_saturation ?? 48,
-    theme_accent_lightness: company.value?.theme_accent_lightness ?? 48,
-    theme_accent_dark_mode_lightness: company.value?.theme_accent_dark_mode_lightness ?? 60,
-    theme_chart_1_hue: company.value?.theme_chart_1_hue ?? 215,
-    theme_chart_1_saturation: company.value?.theme_chart_1_saturation ?? 59,
-    theme_chart_1_lightness: company.value?.theme_chart_1_lightness ?? 41,
-    theme_chart_2_hue: company.value?.theme_chart_2_hue ?? 178,
-    theme_chart_2_saturation: company.value?.theme_chart_2_saturation ?? 62,
-    theme_chart_2_lightness: company.value?.theme_chart_2_lightness ?? 46,
-    theme_chart_3_hue: company.value?.theme_chart_3_hue ?? 215,
-    theme_chart_3_saturation: company.value?.theme_chart_3_saturation ?? 48,
-    theme_chart_3_lightness: company.value?.theme_chart_3_lightness ?? 48,
-    theme_chart_4_hue: company.value?.theme_chart_4_hue ?? 178,
-    theme_chart_4_saturation: company.value?.theme_chart_4_saturation ?? 50,
-    theme_chart_4_lightness: company.value?.theme_chart_4_lightness ?? 55,
-    theme_chart_5_hue: company.value?.theme_chart_5_hue ?? 215,
-    theme_chart_5_saturation: company.value?.theme_chart_5_saturation ?? 55,
-    theme_chart_5_lightness: company.value?.theme_chart_5_lightness ?? 55,
-    theme_sidebar_primary_hue: company.value?.theme_sidebar_primary_hue ?? 215,
-    theme_sidebar_primary_saturation: company.value?.theme_sidebar_primary_saturation ?? 59,
-    theme_sidebar_primary_lightness: company.value?.theme_sidebar_primary_lightness ?? 41,
-    theme_sidebar_primary_dark_mode_lightness: company.value?.theme_sidebar_primary_dark_mode_lightness ?? 55,
-    theme_sidebar_accent_hue: company.value?.theme_sidebar_accent_hue ?? 215,
-    theme_sidebar_accent_saturation: company.value?.theme_sidebar_accent_saturation ?? 59,
-    theme_sidebar_accent_lightness: company.value?.theme_sidebar_accent_lightness ?? 95,
-    theme_background_light_mode_lightness: company.value?.theme_background_light_mode_lightness ?? 100,
-    theme_background_dark_mode_lightness: company.value?.theme_background_dark_mode_lightness ?? 3,
-    theme_layout_sidebar_width: company.value?.theme_layout_sidebar_width ?? '260px',
-    theme_layout_sidebar_collapsed_width: company.value?.theme_layout_sidebar_collapsed_width ?? '64px',
-    theme_layout_header_height: company.value?.theme_layout_header_height ?? '64px',
-    theme_layout_border_radius: company.value?.theme_layout_border_radius ?? '0.5rem',
-    theme_layout_spacing_unit: company.value?.theme_layout_spacing_unit ?? '1rem',
+    theme_primary_hue: companyThemeNumber('theme_primary_hue', 215),
+    theme_primary_saturation: companyThemeNumber('theme_primary_saturation', 59),
+    theme_primary_lightness: companyThemeNumber('theme_primary_lightness', 41),
+    theme_primary_dark_mode_lightness: companyThemeNumber('theme_primary_dark_mode_lightness', 55),
+    theme_secondary_hue: companyThemeNumber('theme_secondary_hue', 178),
+    theme_secondary_saturation: companyThemeNumber('theme_secondary_saturation', 62),
+    theme_secondary_lightness: companyThemeNumber('theme_secondary_lightness', 46),
+    theme_secondary_dark_mode_lightness: companyThemeNumber('theme_secondary_dark_mode_lightness', 55),
+    theme_accent_hue: companyThemeNumber('theme_accent_hue', 215),
+    theme_accent_saturation: companyThemeNumber('theme_accent_saturation', 48),
+    theme_accent_lightness: companyThemeNumber('theme_accent_lightness', 48),
+    theme_accent_dark_mode_lightness: companyThemeNumber('theme_accent_dark_mode_lightness', 60),
+    theme_chart_1_hue: companyThemeNumber('theme_chart_1_hue', 215),
+    theme_chart_1_saturation: companyThemeNumber('theme_chart_1_saturation', 59),
+    theme_chart_1_lightness: companyThemeNumber('theme_chart_1_lightness', 41),
+    theme_chart_2_hue: companyThemeNumber('theme_chart_2_hue', 178),
+    theme_chart_2_saturation: companyThemeNumber('theme_chart_2_saturation', 62),
+    theme_chart_2_lightness: companyThemeNumber('theme_chart_2_lightness', 46),
+    theme_chart_3_hue: companyThemeNumber('theme_chart_3_hue', 215),
+    theme_chart_3_saturation: companyThemeNumber('theme_chart_3_saturation', 48),
+    theme_chart_3_lightness: companyThemeNumber('theme_chart_3_lightness', 48),
+    theme_chart_4_hue: companyThemeNumber('theme_chart_4_hue', 178),
+    theme_chart_4_saturation: companyThemeNumber('theme_chart_4_saturation', 50),
+    theme_chart_4_lightness: companyThemeNumber('theme_chart_4_lightness', 55),
+    theme_chart_5_hue: companyThemeNumber('theme_chart_5_hue', 215),
+    theme_chart_5_saturation: companyThemeNumber('theme_chart_5_saturation', 55),
+    theme_chart_5_lightness: companyThemeNumber('theme_chart_5_lightness', 55),
+    theme_sidebar_primary_hue: companyThemeNumber('theme_sidebar_primary_hue', 215),
+    theme_sidebar_primary_saturation: companyThemeNumber('theme_sidebar_primary_saturation', 59),
+    theme_sidebar_primary_lightness: companyThemeNumber('theme_sidebar_primary_lightness', 41),
+    theme_sidebar_primary_dark_mode_lightness: companyThemeNumber('theme_sidebar_primary_dark_mode_lightness', 55),
+    theme_sidebar_accent_hue: companyThemeNumber('theme_sidebar_accent_hue', 215),
+    theme_sidebar_accent_saturation: companyThemeNumber('theme_sidebar_accent_saturation', 59),
+    theme_sidebar_accent_lightness: companyThemeNumber('theme_sidebar_accent_lightness', 95),
+    theme_background_light_mode_lightness: companyThemeNumber('theme_background_light_mode_lightness', 100),
+    theme_background_dark_mode_lightness: companyThemeNumber('theme_background_dark_mode_lightness', 3),
+    theme_layout_sidebar_width: companyThemeString('theme_layout_sidebar_width', '260px'),
+    theme_layout_sidebar_collapsed_width: companyThemeString('theme_layout_sidebar_collapsed_width', '64px'),
+    theme_layout_header_height: companyThemeString('theme_layout_header_height', '64px'),
+    theme_layout_border_radius: companyThemeString('theme_layout_border_radius', '0.5rem'),
+    theme_layout_spacing_unit: companyThemeString('theme_layout_spacing_unit', '1rem'),
 });
 
 const getThemeColor = (hue: number, saturation: number, lightness: number): string => {
@@ -130,21 +140,21 @@ const hslToHex = (h: number, s: number, l: number): string => {
 };
 
 const primaryColor = ref(hslToHex(
-    company.value?.theme_primary_hue ?? 215,
-    company.value?.theme_primary_saturation ?? 59,
-    company.value?.theme_primary_lightness ?? 41
+    companyThemeNumber('theme_primary_hue', 215),
+    companyThemeNumber('theme_primary_saturation', 59),
+    companyThemeNumber('theme_primary_lightness', 41),
 ));
 
 const secondaryColor = ref(hslToHex(
-    company.value?.theme_secondary_hue ?? 178,
-    company.value?.theme_secondary_saturation ?? 62,
-    company.value?.theme_secondary_lightness ?? 46
+    companyThemeNumber('theme_secondary_hue', 178),
+    companyThemeNumber('theme_secondary_saturation', 62),
+    companyThemeNumber('theme_secondary_lightness', 46),
 ));
 
 const accentColor = ref(hslToHex(
-    company.value?.theme_accent_hue ?? 215,
-    company.value?.theme_accent_saturation ?? 48,
-    company.value?.theme_accent_lightness ?? 48
+    companyThemeNumber('theme_accent_hue', 215),
+    companyThemeNumber('theme_accent_saturation', 48),
+    companyThemeNumber('theme_accent_lightness', 48),
 ));
 
 const hexToHsl = (hex: string): { h: number; s: number; l: number } => {

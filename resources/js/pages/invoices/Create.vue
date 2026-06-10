@@ -260,7 +260,7 @@
                         <AiDocumentSuggestionPanel
                             class="mt-3"
                             document-type="invoice"
-                            :title="form.invoice_number || ''"
+                            :title="form.title || ''"
                             :description="form.description"
                             :notes="form.notes"
                         />

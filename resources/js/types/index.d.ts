@@ -115,6 +115,13 @@ export interface Auth {
                     edit?: boolean;
                     delete?: boolean;
                 };
+                queries?: {
+                    list?: boolean;
+                    view?: boolean;
+                    create?: boolean;
+                    edit?: boolean;
+                    delete?: boolean;
+                };
                 dispatch?: {
                     list?: boolean;
                     view?: boolean;
