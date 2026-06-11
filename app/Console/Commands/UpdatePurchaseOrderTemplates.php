@@ -52,7 +52,7 @@ class UpdatePurchaseOrderTemplates extends Command
             <th class="text-right">Quantity</th>
             <th class="text-right">Unit Cost</th>
             <th class="text-right">Total</th>',
-                "<th>Item Code</th>\n            <th>Item Description</th>\n            <th class=\"text-right\">QTY</th>\n            <th class=\"text-right\">Price (Ex)</th>\n            <th class=\"text-right\">Tax</th>\n            <th class=\"text-right\">Total (Incl)</th>",
+                "<th>Item Code</th>\n            <th>Item Description</th>\n            <th class=\"text-right\">QTY</th>\n            <th class=\"text-right\">Price (Ex)</th>\n            <th class=\"text-right\">Tax</th>\n            <th class=\"text-right\">Total (Excl)</th>",
                 $html
             );
             $html = str_replace(
