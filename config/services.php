@@ -138,4 +138,11 @@ return [
         'user_agent' => env('QUICKBOOKS_USER_AGENT', 'JobCardOnline/1.0 Laravel QuickBooks Client'),
     ],
 
+    'query_api' => [
+        // Shared secret authenticating inbound public query submissions from
+        // external sites (e.g. the Revamp marketing landing page). Required for
+        // the POST /api/queries endpoint to accept requests.
+        'key' => env('QUERY_API_KEY'),
+    ],
+
 ];

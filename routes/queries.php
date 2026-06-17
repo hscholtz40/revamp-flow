@@ -3,15 +3,8 @@
 use App\Http\Controllers\QueriesController;
 use Illuminate\Support\Facades\Route;
 
-// Public-facing query submission form (no authentication required).
-Route::get('/submit-query/{company?}', [QueriesController::class, 'publicForm'])
-    ->name('queries.public.form');
-
-Route::post('/submit-query', [QueriesController::class, 'publicStore'])
-    ->middleware('throttle:10,1')
-    ->name('queries.public.store');
-
 // Internal queries management.
+// Public submissions are received via the API (see routes/api.php → api.queries.store).
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/queries', [QueriesController::class, 'index'])
         ->middleware('module.permission:queries,list')

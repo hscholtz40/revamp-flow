@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
-import { Search, Eye, Trash2, Mail, Phone, Inbox, Paperclip, Link2, Copy, Check, ExternalLink, AlertTriangle } from 'lucide-vue-next';
+import { Search, Eye, Trash2, Mail, Phone, Inbox, Paperclip, AlertTriangle } from 'lucide-vue-next';
 
 interface QueryItem {
     id: number;
@@ -36,36 +36,15 @@ interface Props {
         open: number;
         closed: number;
     };
-    publicFormUrl?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
     queries: () => ({ data: [], links: [], meta: {} }),
     filters: () => ({}),
     counts: () => ({ open: 0, closed: 0 }),
-    publicFormUrl: '',
 });
 
 const canDelete = useAuthAbility('queries', 'delete');
-
-const copied = ref(false);
-
-async function copyLink() {
-    if (!props.publicFormUrl) return;
-    try {
-        await navigator.clipboard.writeText(props.publicFormUrl);
-    } catch {
-        // Fallback for browsers/contexts without the async clipboard API
-        const el = document.createElement('textarea');
-        el.value = props.publicFormUrl;
-        document.body.appendChild(el);
-        el.select();
-        document.execCommand('copy');
-        document.body.removeChild(el);
-    }
-    copied.value = true;
-    setTimeout(() => (copied.value = false), 2000);
-}
 
 const search = ref(props.filters?.search || '');
 const status = ref<'' | 'open' | 'closed'>(props.filters?.status || '');
@@ -145,37 +124,6 @@ function formatDate(value: string) {
                 <div>
                     <h1 class="text-2xl font-bold text-gray-900">Queries</h1>
                     <p class="text-gray-600">Enquiries submitted through your public query form</p>
-                </div>
-            </div>
-
-            <!-- Public form link -->
-            <div v-if="publicFormUrl" class="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4">
-                <div class="flex items-start gap-3">
-                    <Link2 class="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
-                    <div class="min-w-0 flex-1">
-                        <p class="text-sm font-medium text-blue-900">Public query form link</p>
-                        <p class="mb-2 text-xs text-blue-700">Share this link so anyone can submit a query without logging in.</p>
-                        <div class="flex flex-wrap items-center gap-2">
-                            <code class="min-w-0 flex-1 truncate rounded border border-blue-200 bg-white px-3 py-2 text-sm text-gray-800">{{ publicFormUrl }}</code>
-                            <button
-                                type="button"
-                                @click="copyLink"
-                                class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
-                            >
-                                <component :is="copied ? Check : Copy" class="h-4 w-4" />
-                                {{ copied ? 'Copied' : 'Copy' }}
-                            </button>
-                            <a
-                                :href="publicFormUrl"
-                                target="_blank"
-                                rel="noopener"
-                                class="inline-flex items-center gap-1.5 rounded-md border border-blue-300 bg-white px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
-                            >
-                                <ExternalLink class="h-4 w-4" />
-                                Open
-                            </a>
-                        </div>
-                    </div>
                 </div>
             </div>
 

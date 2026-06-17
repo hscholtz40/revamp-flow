@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Company;
 use App\Models\Query;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -13,31 +14,14 @@ use Inertia\Response;
 class QueriesController extends Controller
 {
     /**
-     * Show the public query submission form.
-     * Optionally scoped to a specific company; falls back to the default company.
+     * Store a query submitted from an external site (e.g. the Revamp marketing
+     * landing page) via the public query API. Authenticated by a shared API key
+     * (query.api.auth middleware); see routes/api.php → api.queries.store.
      */
-    public function publicForm(?Company $company = null): Response
-    {
-        $company = $company && $company->is_active ? $company : Company::getDefault();
-
-        abort_if($company === null, 404, 'No company is available to receive queries.');
-
-        return Inertia::render('queries/PublicForm', [
-            'company' => [
-                'id' => $company->id,
-                'name' => $company->name,
-                'logo_path' => $company->logo_path,
-            ],
-        ]);
-    }
-
-    /**
-     * Store a query submitted through the public form (no authentication).
-     */
-    public function publicStore(Request $request): RedirectResponse
+    public function apiStore(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'company_id' => ['required', 'integer', 'exists:companies,id'],
+            'company_id' => ['nullable', 'integer', 'exists:companies,id'],
             'name' => ['required', 'string', 'max:255'],
             'surname' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255'],
@@ -51,8 +35,12 @@ class QueriesController extends Controller
             'attachments.*.mimes' => 'Each file must be an image or video.',
         ]);
 
-        $company = Company::where('id', $validated['company_id'])->where('is_active', true)->first();
-        abort_if($company === null, 404, 'This company is not available to receive queries.');
+        // Route to the requested active company, or fall back to the default company.
+        $company = ! empty($validated['company_id'])
+            ? Company::where('id', $validated['company_id'])->where('is_active', true)->first()
+            : Company::getDefault();
+
+        abort_if($company === null, 404, 'No company is available to receive queries.');
 
         $query = Query::create([
             'company_id' => $company->id,
@@ -72,9 +60,10 @@ class QueriesController extends Controller
             ]);
         }
 
-        return redirect()
-            ->route('queries.public.form', ['company' => $company->id])
-            ->with('success', 'Your query has been submitted. We will get back to you shortly.');
+        return response()->json([
+            'message' => 'Your query has been submitted. We will get back to you shortly.',
+            'id' => $query->id,
+        ], 201);
     }
 
     /**
@@ -96,7 +85,6 @@ class QueriesController extends Controller
                 'queries' => new \Illuminate\Pagination\LengthAwarePaginator([], 0, 15),
                 'filters' => ['search' => '', 'status' => $status],
                 'counts' => ['open' => 0, 'closed' => 0],
-                'publicFormUrl' => route('queries.public.form'),
             ]);
         }
 
@@ -128,7 +116,6 @@ class QueriesController extends Controller
                 'open' => (clone $base)->where('status', Query::STATUS_OPEN)->count(),
                 'closed' => (clone $base)->where('status', Query::STATUS_CLOSED)->count(),
             ],
-            'publicFormUrl' => route('queries.public.form', ['company' => $currentCompany->id]),
         ]);
     }
 

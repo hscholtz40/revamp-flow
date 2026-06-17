@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\V1\TaskController;
 use App\Http\Controllers\Api\V1\TeamsController;
 use App\Http\Controllers\Api\V1\TimesheetController;
 use App\Http\Controllers\Api\V1\TrackingController;
+use App\Http\Controllers\QueriesController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -35,6 +36,12 @@ Route::post('/api/licenses/validate', [LicenseValidationController::class, 'vali
 Route::post('/api/licenses/report-version', [LicenseValidationController::class, 'reportVersion'])
     ->middleware('license.api.auth')
     ->name('api.licenses.report-version');
+
+// Public query submission from external sites (e.g. the Revamp landing page).
+// Authenticated by a shared API key (X-Api-Key header).
+Route::post('/api/queries', [QueriesController::class, 'apiStore'])
+    ->middleware(['query.api.auth', 'throttle:20,1'])
+    ->name('api.queries.store');
 
 Route::prefix('/api/v1')->name('api.v1.')->group(function () {
     Route::post('/auth/login', [AuthController::class, 'login'])->name('auth.login');
