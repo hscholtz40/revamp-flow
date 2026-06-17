@@ -1,4 +1,28 @@
 /**
+ * Parse API/DB instants stored as UTC. Naive strings (no timezone suffix) are UTC wall time,
+ * not browser-local — avoids e.g. Africa/Johannesburg browsers reading UTC as local (−2 h).
+ */
+export function parseUtcInstant(value: unknown): Date | null {
+    if (value == null || value === '') {
+        return null;
+    }
+    if (value instanceof Date) {
+        return Number.isNaN(value.getTime()) ? null : value;
+    }
+    const raw = String(value).trim();
+    if (!raw) {
+        return null;
+    }
+    if (/[zZ]|[+-]\d{2}:\d{2}(?::\d{2})?$/.test(raw)) {
+        const d = new Date(raw);
+        return Number.isNaN(d.getTime()) ? null : d;
+    }
+    const normalized = raw.includes(' ') ? raw.replace(' ', 'T') : raw;
+    const d = new Date(`${normalized}Z`);
+    return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
  * Parse Inertia/API schedule values that may be ISO strings or hydrated Date instances.
  */
 export function parseScheduleInstant(value: unknown): Date | null {

@@ -520,7 +520,7 @@
                 <th class="text-right">Price (Ex)</th>
                 <th class="text-right">Discount</th>
                 <th class="text-right">Tax</th>
-                <th class="text-right">Total (Incl)</th>
+                <th class="text-right">Total (Excl)</th>
             </tr>
         </thead>
         <tbody>

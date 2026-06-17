@@ -12,6 +12,9 @@ Route::middleware(['auth', 'verified', 'dispatch.enabled'])->group(function () {
     Route::get('/dispatch/board-data', [ApiDispatchController::class, 'board'])
         ->middleware('module.permission:dispatch,list')
         ->name('dispatch.board-data');
+    Route::get('/dispatch/user-locations', [DispatchBoardController::class, 'userLocations'])
+        ->middleware('module.permission:dispatch,list')
+        ->name('dispatch.user-locations');
     Route::patch('/dispatch/jobcards/{jobcard}/assign', [ApiDispatchController::class, 'assignJobcard'])
         ->middleware('module.permission:dispatch,edit')
         ->name('dispatch.jobcards.assign');

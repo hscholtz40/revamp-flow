@@ -5,6 +5,40 @@ export function csrfToken(): string {
     return (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null)?.content ?? '';
 }
 
+export interface DispatchUserLocation {
+    user_id: number;
+    name: string;
+    lat: number;
+    lng: number;
+    recorded_at?: string | null;
+    recorded_at_local_display?: string | null;
+    recorded_at_ago?: string | null;
+    last_updated_label?: string | null;
+    is_test?: boolean;
+}
+
+export async function fetchDispatchUserLocations(): Promise<{
+    locations: DispatchUserLocation[];
+    timezone: string | null;
+} | null> {
+    const response = await fetch('/dispatch/user-locations', {
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) {
+        return null;
+    }
+    const data = (await response.json()) as {
+        user_locations?: DispatchUserLocation[];
+        timezone?: string;
+    };
+    return {
+        locations: data.user_locations ?? [],
+        timezone: data.timezone ?? null,
+    };
+}
+
 export async function fetchDispatchBoard(params: URLSearchParams): Promise<DispatchBoardPayload | null> {
     const response = await fetch(`/dispatch/board-data?${params.toString()}`, {
         credentials: 'same-origin',

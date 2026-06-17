@@ -4,9 +4,12 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Events\LocationPingUpdated;
 use App\Http\Controllers\Controller;
+use App\Models\Company;
+use App\Models\Jobcard;
 use App\Models\LocationPing;
 use App\Models\Vehicle;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 
 class TrackingController extends Controller
 {
@@ -103,15 +106,33 @@ class TrackingController extends Controller
             'speed' => ['nullable', 'numeric'],
             'heading' => ['nullable', 'numeric'],
             'accuracy' => ['nullable', 'numeric'],
-            'recorded_at' => ['nullable', 'date'],
         ]);
+
+        $companyId = $request->user()->getCurrentCompany()?->id;
+        if (! $companyId && ! empty($payload['jobcard_id'])) {
+            $companyId = Jobcard::query()->whereKey($payload['jobcard_id'])->value('company_id');
+        }
+        if (! $companyId) {
+            $companyId = $request->user()->companies()->where('companies.is_active', true)->value('companies.id');
+        }
+        if (! $companyId) {
+            $companyId = Company::getDefault()?->id;
+        }
+
+        unset($payload['recorded_at']);
 
         $ping = LocationPing::create([
             ...$payload,
-            'company_id' => $request->user()->getCurrentCompany()?->id,
+            'company_id' => $companyId,
             'user_id' => $request->user()->id,
-            'recorded_at' => $payload['recorded_at'] ?? now(),
+            'recorded_at' => Carbon::now('UTC'),
         ]);
+
+        LocationPing::pruneStaleForUser(
+            (int) $companyId,
+            (int) $request->user()->id,
+            max(1, (int) config('services.tracking.location_retention_hours', 24)),
+        );
 
         event(new LocationPingUpdated($ping));
 

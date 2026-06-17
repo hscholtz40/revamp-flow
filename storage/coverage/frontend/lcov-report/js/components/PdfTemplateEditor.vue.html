@@ -7431,7 +7431,7 @@ const defaultTemplates: Record&lt;string, { html: string; css: string }&gt; = <s
             &lt;th class="text-right"&gt;Price (Ex)&lt;/th&gt;
             &lt;th class="text-right"&gt;Disc %&lt;/th&gt;
             &lt;th class="text-right"&gt;Tax&lt;/th&gt;
-            &lt;th class="text-right"&gt;Total (Incl)&lt;/th&gt;
+            &lt;th class="text-right"&gt;Total (Excl)&lt;/th&gt;
         &lt;/tr&gt;
     &lt;/thead&gt;
     &lt;tbody&gt;&lt;tr data-handlebars-loop-start="{{#each invoice.lineItems}}" data-handlebars-loop-end="{{/each}}"&gt;
@@ -7454,7 +7454,7 @@ const defaultTemplates: Record&lt;string, { html: string; css: string }&gt; = <s
         &lt;span&gt;R{{invoice.tax_amount}}&lt;/span&gt;
     &lt;/div&gt;
     &lt;div class="total-row"&gt;
-        &lt;span&gt;Total (Incl):&lt;/span&gt;
+        &lt;span&gt;Total (Excl):&lt;/span&gt;
         &lt;span&gt;R{{invoice.total}}&lt;/span&gt;
     &lt;/div&gt;
     &lt;div class="total-row"&gt;
@@ -7470,7 +7470,7 @@ const defaultTemplates: Record&lt;string, { html: string; css: string }&gt; = <s
         &lt;span&gt;R0.00&lt;/span&gt;
     &lt;/div&gt;
     &lt;div class="total-row final"&gt;
-        &lt;span&gt;Total (Incl):&lt;/span&gt;
+        &lt;span&gt;Total (Excl):&lt;/span&gt;
         &lt;span&gt;R{{invoice.total}}&lt;/span&gt;
     &lt;/div&gt;
 &lt;/div&gt;
@@ -7822,7 +7822,7 @@ const defaultTemplates: Record&lt;string, { html: string; css: string }&gt; = <s
             &lt;th class="text-right"&gt;Price (Ex)&lt;/th&gt;
             &lt;th class="text-right"&gt;Disc %&lt;/th&gt;
             &lt;th class="text-right"&gt;Tax&lt;/th&gt;
-            &lt;th class="text-right"&gt;Total (Incl)&lt;/th&gt;
+            &lt;th class="text-right"&gt;Total (Excl)&lt;/th&gt;
         &lt;/tr&gt;
     &lt;/thead&gt;
     &lt;tbody&gt;&lt;!-- {{#each quote.lineItems}} --&gt;&lt;tr&gt;
@@ -7844,7 +7844,7 @@ const defaultTemplates: Record&lt;string, { html: string; css: string }&gt; = <s
         &lt;span&gt;R{{quote.tax_amount}}&lt;/span&gt;
     &lt;/div&gt;
     &lt;div class="total-row"&gt;
-        &lt;span&gt;Total (Incl):&lt;/span&gt;
+        &lt;span&gt;Total (Excl):&lt;/span&gt;
         &lt;span&gt;R{{quote.total}}&lt;/span&gt;
     &lt;/div&gt;
     &lt;div class="total-row"&gt;
@@ -7860,7 +7860,7 @@ const defaultTemplates: Record&lt;string, { html: string; css: string }&gt; = <s
         &lt;span&gt;R0.00&lt;/span&gt;
     &lt;/div&gt;
     &lt;div class="total-row final"&gt;
-        &lt;span&gt;Total (Incl):&lt;/span&gt;
+        &lt;span&gt;Total (Excl):&lt;/span&gt;
         &lt;span&gt;R{{quote.total}}&lt;/span&gt;
     &lt;/div&gt;
 &lt;/div&gt;
@@ -8218,7 +8218,7 @@ const defaultTemplates: Record&lt;string, { html: string; css: string }&gt; = <s
             &lt;th class="text-right"&gt;QTY&lt;/th&gt;
             &lt;th class="text-right"&gt;Rate&lt;/th&gt;
             &lt;th class="text-right"&gt;Hours&lt;/th&gt;
-            &lt;th class="text-right"&gt;Total (Incl)&lt;/th&gt;
+            &lt;th class="text-right"&gt;Total (Excl)&lt;/th&gt;
         &lt;/tr&gt;
     &lt;/thead&gt;
     &lt;tbody&gt;
@@ -8242,7 +8242,7 @@ const defaultTemplates: Record&lt;string, { html: string; css: string }&gt; = <s
         &lt;span&gt;R{{jobcard.tax_amount}}&lt;/span&gt;
     &lt;/div&gt;
     &lt;div class="total-row"&gt;
-        &lt;span&gt;Total (Incl):&lt;/span&gt;
+        &lt;span&gt;Total (Excl):&lt;/span&gt;
         &lt;span&gt;R{{jobcard.total}}&lt;/span&gt;
     &lt;/div&gt;
     &lt;div class="total-row"&gt;
@@ -8258,7 +8258,7 @@ const defaultTemplates: Record&lt;string, { html: string; css: string }&gt; = <s
         &lt;span&gt;R0.00&lt;/span&gt;
     &lt;/div&gt;
     &lt;div class="total-row final"&gt;
-        &lt;span&gt;Total (Incl):&lt;/span&gt;
+        &lt;span&gt;Total (Excl):&lt;/span&gt;
         &lt;span&gt;R{{jobcard.total}}&lt;/span&gt;
     &lt;/div&gt;
 &lt;/div&gt;
@@ -8608,7 +8608,7 @@ const defaultTemplates: Record&lt;string, { html: string; css: string }&gt; = <s
             &lt;th class="text-right"&gt;Price (Ex)&lt;/th&gt;
             &lt;th class="text-right"&gt;Disc %&lt;/th&gt;
             &lt;th class="text-right"&gt;Tax&lt;/th&gt;
-            &lt;th class="text-right"&gt;Total (Incl)&lt;/th&gt;
+            &lt;th class="text-right"&gt;Total (Excl)&lt;/th&gt;
         &lt;/tr&gt;
     &lt;/thead&gt;
     &lt;tbody&gt;&lt;!-- {{#each quote.lineItems}} --&gt;&lt;tr&gt;
@@ -8630,7 +8630,7 @@ const defaultTemplates: Record&lt;string, { html: string; css: string }&gt; = <s
         &lt;span&gt;R{{quote.tax_amount}}&lt;/span&gt;
     &lt;/div&gt;
     &lt;div class="total-row"&gt;
-        &lt;span&gt;Total (Incl):&lt;/span&gt;
+        &lt;span&gt;Total (Excl):&lt;/span&gt;
         &lt;span&gt;R{{quote.total}}&lt;/span&gt;
     &lt;/div&gt;
     &lt;div class="total-row"&gt;
@@ -8646,7 +8646,7 @@ const defaultTemplates: Record&lt;string, { html: string; css: string }&gt; = <s
         &lt;span&gt;R0.00&lt;/span&gt;
     &lt;/div&gt;
     &lt;div class="total-row final"&gt;
-        &lt;span&gt;Total (Incl):&lt;/span&gt;
+        &lt;span&gt;Total (Excl):&lt;/span&gt;
         &lt;span&gt;R{{quote.total}}&lt;/span&gt;
     &lt;/div&gt;
 &lt;/div&gt;
@@ -8932,7 +8932,7 @@ const defaultTemplates: Record&lt;string, { html: string; css: string }&gt; = <s
             &lt;th class="text-right"&gt;QTY&lt;/th&gt;
             &lt;th class="text-right"&gt;Price (Ex)&lt;/th&gt;
             &lt;th class="text-right"&gt;Tax&lt;/th&gt;
-            &lt;th class="text-right"&gt;Total (Incl)&lt;/th&gt;
+            &lt;th class="text-right"&gt;Total (Excl)&lt;/th&gt;
         &lt;/tr&gt;
     &lt;/thead&gt;
     &lt;tbody&gt;&lt;!-- {{#each purchaseOrder.items}} --&gt;&lt;tr&gt;

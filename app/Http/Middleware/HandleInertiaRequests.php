@@ -231,6 +231,9 @@ class HandleInertiaRequests extends Middleware
                 'enable_pos' => (bool) $currentCompany->enable_pos,
                 'enable_dispatch' => (bool) $currentCompany->enable_dispatch,
                 'visible_modules' => $currentCompany->visible_modules,
+                'locale_timezone' => ($currentCompany->locale_timezone !== null && $currentCompany->locale_timezone !== '')
+                    ? $currentCompany->locale_timezone
+                    : $resolvedTimezone,
             ] : null,
             'numberFormat' => $currentCompany ? [
                 'decimal_separator' => ($currentCompany->locale_decimal_separator !== null && $currentCompany->locale_decimal_separator !== '')

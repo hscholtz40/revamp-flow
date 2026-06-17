@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Company;
 use App\Models\GoogleIntegrationSettings;
 use App\Models\Jobcard;
 use App\Models\RoutePlan;
@@ -9,17 +10,34 @@ use App\Models\Task;
 use App\Models\Team;
 use App\Models\User;
 use App\Services\Dispatch\UserLocationProvider;
+use App\Support\DispatchCompanyResolver;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class DispatchBoardController extends Controller
 {
-    public function index(): Response
+    private function companyTimezone(): string
     {
-        $companyId = auth()->user()?->getCurrentCompany()?->id;
-        $dispatchUsers = User::query()
-            ->staffSelectableForCompany((int) $companyId)
+        $companyId = DispatchCompanyResolver::companyIdForUser(auth()->user());
+        if ($companyId > 0) {
+            $timezone = Company::query()->whereKey($companyId)->value('locale_timezone');
+            if (is_string($timezone) && $timezone !== '') {
+                return $timezone;
+            }
+        }
+
+        return (string) config('app.timezone', 'UTC');
+    }
+
+    /**
+     * @return Collection<int, object{id: int, name: string}>
+     */
+    private function dispatchUsersForCompany(int $companyId): Collection
+    {
+        return User::query()
+            ->staffSelectableForCompany($companyId)
             ->where(function ($query) {
                 $query->whereNull('user_type')
                     ->orWhere('user_type', '!=', 'info');
@@ -27,8 +45,27 @@ class DispatchBoardController extends Controller
             ->select('id', 'name')
             ->orderBy('name')
             ->get();
+    }
 
-        $userLocations = app(UserLocationProvider::class)->getUserLocations($dispatchUsers, (int) $companyId);
+    public function userLocations(UserLocationProvider $userLocationProvider): JsonResponse
+    {
+        $companyId = DispatchCompanyResolver::companyIdForUser(auth()->user());
+        $dispatchUsers = $this->dispatchUsersForCompany($companyId);
+
+        return response()
+            ->json([
+                'user_locations' => $userLocationProvider->getUserLocations($dispatchUsers, $companyId, $this->companyTimezone()),
+                'timezone' => $this->companyTimezone(),
+            ])
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate');
+    }
+
+    public function index(): Response
+    {
+        $companyId = DispatchCompanyResolver::companyIdForUser(auth()->user());
+        $dispatchUsers = $this->dispatchUsersForCompany($companyId);
+
+        $userLocations = app(UserLocationProvider::class)->getUserLocations($dispatchUsers, $companyId, $this->companyTimezone());
 
         return Inertia::render('dispatch/Index', [
             'jobcards' => Jobcard::query()
@@ -59,6 +96,7 @@ class DispatchBoardController extends Controller
             'google_maps_api_key' => GoogleIntegrationSettings::mapsApiKey(),
             'google_maps_map_id' => GoogleIntegrationSettings::record()->resolvedMapId(),
             'user_locations' => $userLocations,
+            'company_timezone' => $this->companyTimezone(),
         ]);
     }
 }

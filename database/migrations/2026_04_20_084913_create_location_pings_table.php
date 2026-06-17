@@ -22,7 +22,7 @@ return new class extends Migration
             $table->decimal('speed', 8, 2)->nullable();
             $table->decimal('heading', 8, 2)->nullable();
             $table->decimal('accuracy', 8, 2)->nullable();
-            $table->timestamp('recorded_at')->index();
+            $table->dateTime('recorded_at')->index();
             $table->json('meta')->nullable();
             $table->timestamps();
         });

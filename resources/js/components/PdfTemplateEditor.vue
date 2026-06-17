@@ -644,7 +644,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
             <th class="text-right">Price (Ex)</th>
             <th class="text-right">Disc %</th>
             <th class="text-right">Tax</th>
-            <th class="text-right">Total (Incl)</th>
+            <th class="text-right">Total (Excl)</th>
         </tr>
     </thead>
     <tbody><tr data-handlebars-loop-start="{{#each invoice.lineItems}}" data-handlebars-loop-end="{{/each}}">
@@ -667,7 +667,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
         <span>R{{invoice.tax_amount}}</span>
     </div>
     <div class="total-row">
-        <span>Total (Incl):</span>
+        <span>Total (Excl):</span>
         <span>R{{invoice.total}}</span>
     </div>
     <div class="total-row">
@@ -683,7 +683,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
         <span>R0.00</span>
     </div>
     <div class="total-row final">
-        <span>Total (Incl):</span>
+        <span>Total (Excl):</span>
         <span>R{{invoice.total}}</span>
     </div>
 </div>
@@ -1035,7 +1035,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
             <th class="text-right">Price (Ex)</th>
             <th class="text-right">Disc %</th>
             <th class="text-right">Tax</th>
-            <th class="text-right">Total (Incl)</th>
+            <th class="text-right">Total (Excl)</th>
         </tr>
     </thead>
     <tbody><!-- {{#each quote.lineItems}} --><tr>
@@ -1057,7 +1057,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
         <span>R{{quote.tax_amount}}</span>
     </div>
     <div class="total-row">
-        <span>Total (Incl):</span>
+        <span>Total (Excl):</span>
         <span>R{{quote.total}}</span>
     </div>
     <div class="total-row">
@@ -1073,7 +1073,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
         <span>R0.00</span>
     </div>
     <div class="total-row final">
-        <span>Total (Incl):</span>
+        <span>Total (Excl):</span>
         <span>R{{quote.total}}</span>
     </div>
 </div>
@@ -1431,7 +1431,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
             <th class="text-right">QTY</th>
             <th class="text-right">Rate</th>
             <th class="text-right">Hours</th>
-            <th class="text-right">Total (Incl)</th>
+            <th class="text-right">Total (Excl)</th>
         </tr>
     </thead>
     <tbody>
@@ -1455,7 +1455,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
         <span>R{{jobcard.tax_amount}}</span>
     </div>
     <div class="total-row">
-        <span>Total (Incl):</span>
+        <span>Total (Excl):</span>
         <span>R{{jobcard.total}}</span>
     </div>
     <div class="total-row">
@@ -1471,7 +1471,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
         <span>R0.00</span>
     </div>
     <div class="total-row final">
-        <span>Total (Incl):</span>
+        <span>Total (Excl):</span>
         <span>R{{jobcard.total}}</span>
     </div>
 </div>
@@ -1821,7 +1821,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
             <th class="text-right">Price (Ex)</th>
             <th class="text-right">Disc %</th>
             <th class="text-right">Tax</th>
-            <th class="text-right">Total (Incl)</th>
+            <th class="text-right">Total (Excl)</th>
         </tr>
     </thead>
     <tbody><!-- {{#each quote.lineItems}} --><tr>
@@ -1843,7 +1843,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
         <span>R{{quote.tax_amount}}</span>
     </div>
     <div class="total-row">
-        <span>Total (Incl):</span>
+        <span>Total (Excl):</span>
         <span>R{{quote.total}}</span>
     </div>
     <div class="total-row">
@@ -1859,7 +1859,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
         <span>R0.00</span>
     </div>
     <div class="total-row final">
-        <span>Total (Incl):</span>
+        <span>Total (Excl):</span>
         <span>R{{quote.total}}</span>
     </div>
 </div>
@@ -2145,7 +2145,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
             <th class="text-right">QTY</th>
             <th class="text-right">Price (Ex)</th>
             <th class="text-right">Tax</th>
-            <th class="text-right">Total (Incl)</th>
+            <th class="text-right">Total (Excl)</th>
         </tr>
     </thead>
     <tbody><!-- {{#each purchaseOrder.items}} --><tr>

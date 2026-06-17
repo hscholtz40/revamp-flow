@@ -4,26 +4,31 @@ import { Head, router, usePage } from '@inertiajs/vue3';
 import { useDebounceFn } from '@vueuse/core';
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import type { DispatchConflict, DispatchJobcard, DispatchQueueTab } from '@/types/dispatch-board';
-import { fetchDispatchBoard, patchJobcardAssign, patchJobcardSchedule, patchJobcardStatus } from '@/pages/dispatch/composables/useDispatchApi';
+import {
+    fetchDispatchBoard,
+    fetchDispatchUserLocations,
+    patchJobcardAssign,
+    patchJobcardSchedule,
+    patchJobcardStatus,
+    type DispatchUserLocation,
+} from '@/pages/dispatch/composables/useDispatchApi';
 import DispatchFilters from '@/pages/dispatch/components/DispatchFilters.vue';
 import UnscheduledJobcardList from '@/pages/dispatch/components/UnscheduledJobcardList.vue';
 import TechnicianTimelineBoard from '@/pages/dispatch/components/TechnicianTimelineBoard.vue';
 import DispatchJobcardDrawer from '@/pages/dispatch/components/DispatchJobcardDrawer.vue';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+    formatUtcInstantInTimezone,
+    formatUtcRelativeAgo,
+    type DateTimeFormatProps,
+} from '@/composables/useDateTimeFormat';
 import { formatDispatchScheduleInstant, parseScheduleInstant } from '@/lib/dispatchScheduleFormat';
 import { loadGoogleMapsJavaScriptApi } from '@/lib/googleMapsLoader';
 
 interface LookupItem {
     id: number;
     name: string;
-}
-
-interface DispatchUserLocation {
-    user_id: number;
-    name: string;
-    lat: number;
-    lng: number;
 }
 
 interface ScheduledItem {
@@ -92,13 +97,60 @@ const props = defineProps<{
     /** Map ID for vector map styling; drawer pins use legacy `google.maps.Marker` so they render even when Advanced Markers are unavailable. */
     google_maps_map_id?: string;
     user_locations?: DispatchUserLocation[];
+    /** IANA timezone for converting UTC `recorded_at` pings (e.g. Africa/Johannesburg). */
+    company_timezone?: string;
 }>();
 
 const page = usePage();
+const companyTimezone = ref(props.company_timezone ?? 'UTC');
+
+const locationDateTimeFormat = computed((): DateTimeFormatProps => {
+    const shared = page.props.dateTimeFormat as DateTimeFormatProps | undefined;
+    return {
+        timezone: companyTimezone.value || shared?.timezone || 'UTC',
+        date_format: shared?.date_format || 'dd/mm/yyyy',
+        time_format: shared?.time_format || '24h',
+    };
+});
+
+const formatLocationDateTime = (iso: string) => formatUtcInstantInTimezone(iso, locationDateTimeFormat.value);
+
 const currentUserId = computed(() => String(page.props?.auth?.user?.id ?? 'guest'));
 const googleMapsApiKey = computed(() => props.google_maps_api_key ?? '');
 const googleMapsMapId = computed(() => props.google_maps_map_id?.trim() || 'DEMO_MAP_ID');
-const userLocations = computed(() => props.user_locations ?? []);
+const userLocations = ref<DispatchUserLocation[]>(props.user_locations ?? []);
+let userLocationPollTimer: ReturnType<typeof setInterval> | null = null;
+
+const refreshUserLocations = async (): Promise<boolean> => {
+    const result = await fetchDispatchUserLocations();
+    if (result === null) {
+        return false;
+    }
+    if (result.timezone) {
+        companyTimezone.value = result.timezone;
+    }
+    userLocations.value = result.locations;
+
+    const selected = selectedMapUser.value;
+    if (selected) {
+        const updated = result.locations.find((loc) => loc.user_id === selected.location.user_id);
+        if (updated) {
+            selectedMapUser.value = {
+                ...selected,
+                location: updated,
+            };
+        }
+    }
+
+    if (showDispatchJobMapModal.value && boardDrawerMap.value) {
+        const maps = (window as Window & { google?: { maps?: any } }).google?.maps;
+        if (maps) {
+            await renderBoardDrawerMarkers(maps);
+        }
+    }
+
+    return true;
+};
 const filters = ref({
     assigned_to_user_id: '',
     assigned_to_team_id: '',
@@ -541,6 +593,22 @@ const formatIwDateTime = (value?: string | null) => {
     return formatDispatchScheduleInstant(value);
 };
 
+const formatLocationLastUpdatedLabel = (loc: DispatchUserLocation) => {
+    if (typeof loc.last_updated_label === 'string' && loc.last_updated_label.trim() !== '') {
+        return loc.last_updated_label;
+    }
+    if (loc.is_test) {
+        return 'Test location (not from GPS)';
+    }
+    if (loc.recorded_at_ago && loc.recorded_at_local_display) {
+        return `Last updated ${loc.recorded_at_ago} (${loc.recorded_at_local_display})`;
+    }
+    if (!loc.recorded_at) {
+        return 'Last updated: unknown';
+    }
+    return `Last updated ${formatUtcRelativeAgo(loc.recorded_at)} (${formatLocationDateTime(loc.recorded_at)})`;
+};
+
 const boardLineupEstMinutes = (item: BoardCard): number => {
     if (typeof item.estimated_duration_minutes === 'number' && item.estimated_duration_minutes >= 5) {
         return item.estimated_duration_minutes;
@@ -676,6 +744,60 @@ const updateSelectedUserEta = async () => {
     }
 };
 
+const haversineKm = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
+    const dLat = toRad(b.lat - a.lat);
+    const dLng = toRad(b.lng - a.lng);
+    const lat1 = toRad(a.lat);
+    const lat2 = toRad(b.lat);
+    const x =
+        Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+    return 6371 * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+};
+
+const boundsSpanKm = (maps: any, bounds: any) => {
+    const sw = bounds.getSouthWest();
+    const ne = bounds.getNorthEast();
+    return haversineKm({ lat: sw.lat(), lng: sw.lng() }, { lat: ne.lat(), lng: ne.lng() });
+};
+
+/** Avoid world-zoom when simulator GPS and job site are continents apart. */
+const frameBoardDrawerMap = (maps: any, bounds: any, hasJobSite: boolean) => {
+    if (!boardDrawerMap.value) {
+        return;
+    }
+    const techs = filteredMapUserLocations.value;
+    const spanKm = boundsSpanKm(maps, bounds);
+
+    if (spanKm > 400 && techs.length > 0 && hasJobSite) {
+        boardDrawerMapError.value = `Technician GPS is far from the job site (~${Math.round(spanKm).toLocaleString()} km). Map centered on technician location.`;
+        if (techs.length === 1) {
+            boardDrawerMap.value.setCenter({ lat: techs[0].lat, lng: techs[0].lng });
+            boardDrawerMap.value.setZoom(12);
+        } else {
+            const techBounds = new maps.LatLngBounds();
+            techs.forEach((loc) => techBounds.extend({ lat: loc.lat, lng: loc.lng }));
+            boardDrawerMap.value.fitBounds(techBounds, 60);
+        }
+        return;
+    }
+
+    boardDrawerMapError.value = '';
+    if (techs.length === 0 && hasJobSite) {
+        boardDrawerMap.value.setCenter(bounds.getCenter());
+        boardDrawerMap.value.setZoom(14);
+    } else if (techs.length === 1 && !hasJobSite) {
+        boardDrawerMap.value.setCenter({ lat: techs[0].lat, lng: techs[0].lng });
+        boardDrawerMap.value.setZoom(12);
+    } else {
+        try {
+            boardDrawerMap.value.fitBounds(bounds, 60);
+        } catch {
+            boardDrawerMap.value.setCenter(bounds.getCenter());
+        }
+    }
+};
+
 const clearBoardDrawerMarkers = () => {
     closeBoardDrawerInfoWindow();
     if (boardDrawerJobcardMarker.value) {
@@ -735,7 +857,7 @@ const renderBoardDrawerMarkers = async (maps: any) => {
         maps.event.addListener(marker, 'click', () => {
             boardDrawerIwUpdateSerial += 1;
             const serial = boardDrawerIwUpdateSerial;
-            const locSnapshot = { ...loc };
+            const locSnapshot = userLocations.value.find((l) => l.user_id === loc.user_id) ?? { ...loc };
             const jobAddr = selectedDrawerJobAddress.value;
 
             const lineup = getLineupCardsForUserId(locSnapshot.user_id);
@@ -751,7 +873,7 @@ const renderBoardDrawerMarkers = async (maps: any) => {
             el.className = 'dispatch-map-infowindow max-w-[320px] text-slate-800';
             el.innerHTML = `
                 <div class="font-semibold text-slate-900">${escapeHtml(locSnapshot.name)}</div>
-                <div class="mt-0.5 text-xs text-slate-500">Technician (test location)</div>
+                <div data-iw-updated class="mt-0.5 text-xs text-slate-500"></div>
                 <div class="mt-1 font-mono text-[11px] text-slate-600">${locSnapshot.lat.toFixed(5)}, ${locSnapshot.lng.toFixed(5)}</div>
                 <div data-iw-addr class="mt-1 text-xs text-slate-700">Loading address…</div>
                 ${jobAddr ? `<div data-iw-eta class="mt-1 text-xs text-slate-700">ETA to job: calculating…</div>` : ''}
@@ -772,6 +894,11 @@ const renderBoardDrawerMarkers = async (maps: any) => {
                     <button type="button" data-iw-details class="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-800 hover:bg-slate-50">Full details…</button>
                 </div>
             `;
+
+            const updatedEl = el.querySelector('[data-iw-updated]');
+            if (updatedEl) {
+                updatedEl.textContent = formatLocationLastUpdatedLabel(locSnapshot);
+            }
 
             openBoardDrawerInfoWindow(maps, marker, el);
 
@@ -827,24 +954,11 @@ const renderBoardDrawerMarkers = async (maps: any) => {
     const addr = selectedDrawerJobAddress.value;
     if (!addr) {
         if (hasPoint && boardDrawerMap.value) {
-            boardDrawerMapError.value = '';
-            if (filteredMapUserLocations.value.length === 1) {
-                boardDrawerMap.value.setCenter({
-                    lat: filteredMapUserLocations.value[0].lat,
-                    lng: filteredMapUserLocations.value[0].lng,
-                });
-                boardDrawerMap.value.setZoom(12);
-            } else {
-                try {
-                    boardDrawerMap.value.fitBounds(bounds, 60);
-                } catch {
-                    boardDrawerMap.value.setCenter(bounds.getCenter());
-                }
-            }
+            frameBoardDrawerMap(maps, bounds, false);
         } else {
             boardDrawerMapError.value = mapTechnicianFilterUserId.value
                 ? 'No map pins for the selected technician.'
-                : 'No map location yet. Add a service address on the jobcard, or set DISPATCH_TEST_USER_LOCATIONS in env for technician pins.';
+                : 'No technician GPS locations in the last 30 minutes. Add a service address on the jobcard to plot the job site.';
         }
         return;
     }
@@ -887,26 +1001,24 @@ const renderBoardDrawerMarkers = async (maps: any) => {
 
         if (!hasPoint) {
             boardDrawerMapError.value =
-                'Could not plot this job (address lookup failed and no technician pins). Check the service address or DISPATCH_TEST_USER_LOCATIONS.';
+                'Could not plot this job (address lookup failed and no recent technician GPS locations). Check the service address.';
             return;
         }
 
-        boardDrawerMapError.value = '';
-        try {
-            if (filteredMapUserLocations.value.length === 0 && status === 'OK' && results?.[0]) {
-                boardDrawerMap.value.setCenter(results[0].geometry.location);
-                boardDrawerMap.value.setZoom(14);
-            } else if (filteredMapUserLocations.value.length === 1 && status !== 'OK') {
-                boardDrawerMap.value.setCenter({
-                    lat: filteredMapUserLocations.value[0].lat,
-                    lng: filteredMapUserLocations.value[0].lng,
-                });
-                boardDrawerMap.value.setZoom(12);
-            } else {
-                boardDrawerMap.value.fitBounds(bounds, 60);
-            }
-        } catch {
-            boardDrawerMap.value.setCenter(bounds.getCenter());
+        const hasJobSite = status === 'OK' && !!results?.[0];
+        if (filteredMapUserLocations.value.length === 0 && hasJobSite) {
+            boardDrawerMapError.value = '';
+            boardDrawerMap.value.setCenter(results[0].geometry.location);
+            boardDrawerMap.value.setZoom(14);
+        } else if (filteredMapUserLocations.value.length === 1 && !hasJobSite) {
+            boardDrawerMapError.value = '';
+            boardDrawerMap.value.setCenter({
+                lat: filteredMapUserLocations.value[0].lat,
+                lng: filteredMapUserLocations.value[0].lng,
+            });
+            boardDrawerMap.value.setZoom(12);
+        } else {
+            frameBoardDrawerMap(maps, bounds, hasJobSite);
         }
         if (boardDrawerMap.value && maps?.event) {
             maps.event.trigger(boardDrawerMap.value, 'resize');
@@ -1313,6 +1425,10 @@ const openCardRecord = (card: BoardCard) => {
 };
 onBeforeUnmount(() => {
     document.removeEventListener('dragover', onKanbanAutoScrollDragOver);
+    if (userLocationPollTimer) {
+        clearInterval(userLocationPollTimer);
+        userLocationPollTimer = null;
+    }
     clearBoardDrawerMarkers();
     boardDrawerMap.value = null;
     boardDrawerInfoWindow.value = null;
@@ -1407,12 +1523,24 @@ watch(
 );
 watch(showDispatchJobMapModal, async (open) => {
     if (open) {
+        boardDrawerMap.value = null;
         dispatchMapContainerKey.value += 1;
         await nextTick();
         await nextTick();
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        await refreshUserLocations();
+        if (userLocationPollTimer) {
+            clearInterval(userLocationPollTimer);
+        }
+        userLocationPollTimer = setInterval(() => {
+            void refreshUserLocations();
+        }, 15000);
         void ensureBoardDrawerMap();
     } else {
+        if (userLocationPollTimer) {
+            clearInterval(userLocationPollTimer);
+            userLocationPollTimer = null;
+        }
         clearBoardDrawerMarkers();
         boardDrawerMap.value = null;
         boardDrawerMapError.value = '';
@@ -1420,7 +1548,7 @@ watch(showDispatchJobMapModal, async (open) => {
     }
 });
 watch(
-    [selectedDispatchJobcard, selectedDrawerJobAddress, googleMapsApiKey, userLocations, mapTechnicianFilterUserId],
+    [selectedDispatchJobcard, selectedDrawerJobAddress, googleMapsApiKey, () => userLocations.value, mapTechnicianFilterUserId],
     async () => {
         if (!showDispatchJobMapModal.value || viewMode.value !== 'board') {
             return;
@@ -1470,7 +1598,7 @@ watch(
                         </template>
                     </DialogTitle>
                     <DialogDescription class="sr-only">
-                        Map for the selected jobcard showing technician test locations and the job address when available.
+                        Map for the selected jobcard showing technician GPS locations and the job address when available.
                     </DialogDescription>
                 </DialogHeader>
                 <div v-if="googleMapsApiKey" class="space-y-2">
@@ -1511,6 +1639,9 @@ watch(
                     </DialogDescription>
                 </DialogHeader>
                 <div class="space-y-3 text-sm text-gray-700">
+                    <p class="text-xs text-gray-500">
+                        {{ formatLocationLastUpdatedLabel(selectedMapUser.location) }}
+                    </p>
                     <p>
                         Nearest address:
                         {{ selectedMapUser.nearestAddress || 'Loading address...' }}
