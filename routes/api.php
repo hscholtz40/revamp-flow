@@ -17,6 +17,8 @@ use App\Http\Controllers\Api\V1\TaskController;
 use App\Http\Controllers\Api\V1\TeamsController;
 use App\Http\Controllers\Api\V1\TimesheetController;
 use App\Http\Controllers\Api\V1\TrackingController;
+use App\Http\Controllers\Api\V1\JobQueryController;
+use App\Http\Controllers\Api\QuoteIntegrationController;
 use App\Http\Controllers\QueriesController;
 use Illuminate\Support\Facades\Route;
 
@@ -43,6 +45,16 @@ Route::post('/api/queries', [QueriesController::class, 'apiStore'])
     ->middleware(['query.api.auth', 'throttle:20,1'])
     ->name('api.queries.store');
 
+// External quote integration (Revamp): dispatch a quote to the nearest licensed
+// contractors and report which contractor accepted. Shared API key auth.
+Route::post('/api/quotes/dispatch', [QuoteIntegrationController::class, 'dispatchQuote'])
+    ->middleware(['query.api.auth', 'throttle:30,1'])
+    ->name('api.quotes.dispatch');
+
+Route::get('/api/quotes/{externalQuoteId}/status', [QuoteIntegrationController::class, 'status'])
+    ->middleware(['query.api.auth', 'throttle:60,1'])
+    ->name('api.quotes.status');
+
 Route::prefix('/api/v1')->name('api.v1.')->group(function () {
     Route::post('/auth/login', [AuthController::class, 'login'])->name('auth.login');
 
@@ -57,6 +69,11 @@ Route::prefix('/api/v1')->name('api.v1.')->group(function () {
         Route::delete('/jobcards/{jobcard}', [JobcardController::class, 'destroy'])->middleware('api.module.permission:jobcards,delete');
         Route::patch('/jobcards/{jobcard}/status', [JobcardController::class, 'updateStatus'])->middleware('api.module.permission:jobcards,edit');
         Route::post('/jobcards/{jobcard}/time-entries/convert', [JobcardController::class, 'convertTimeEntries'])->middleware('api.module.permission:jobcards,edit');
+
+        // Contractor job queries (mobile app): list and accept/decline dispatched jobs.
+        Route::get('/job-queries', [JobQueryController::class, 'index'])->middleware('api.module.permission:queries,list');
+        Route::post('/job-queries/{query}/accept', [JobQueryController::class, 'accept'])->middleware('api.module.permission:queries,edit');
+        Route::post('/job-queries/{query}/decline', [JobQueryController::class, 'decline'])->middleware('api.module.permission:queries,edit');
 
         Route::get('/messages/conversations', [MessagingController::class, 'index'])->middleware('api.module.permission:messages,list');
         Route::post('/messages/conversations', [MessagingController::class, 'storeConversation'])->middleware('api.module.permission:messages,create');

@@ -18,15 +18,48 @@ class Query extends Model
 
     public const STATUS_CLOSED = 'closed';
 
+    public const KIND_ENQUIRY = 'enquiry';
+
+    public const KIND_JOB = 'job';
+
+    public const RESPONSE_PENDING = 'pending';
+
+    public const RESPONSE_ACCEPTED = 'accepted';
+
+    public const RESPONSE_DECLINED = 'declined';
+
     protected $fillable = [
         'company_id',
+        'kind',
+        'external_source',
+        'external_quote_id',
+        'contractor_company_key',
         'name',
         'surname',
         'email',
         'cell',
         'description',
         'status',
+        'response',
+        'responded_at',
+        'job_location',
+        'job_latitude',
+        'job_longitude',
     ];
+
+    protected $casts = [
+        'responded_at' => 'datetime',
+        'job_latitude' => 'decimal:7',
+        'job_longitude' => 'decimal:7',
+    ];
+
+    /**
+     * Scope to contractor "job" queries (dispatched from an external quote).
+     */
+    public function scopeJobs($query)
+    {
+        return $query->where('kind', self::KIND_JOB);
+    }
 
     protected static function booted(): void
     {

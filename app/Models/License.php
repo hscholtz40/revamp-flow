@@ -17,6 +17,9 @@ class License extends Model
         'customer_id',
         'license_key',
         'url',
+        'latitude',
+        'longitude',
+        'location_address',
         'version',
         'deployed_at',
         'limited_users',
@@ -29,6 +32,8 @@ class License extends Model
     protected $casts = [
         'limited_users' => 'integer',
         'standard_users' => 'integer',
+        'latitude' => 'decimal:7',
+        'longitude' => 'decimal:7',
         'deployed_at' => 'datetime',
         'expires_at' => 'datetime',
     ];

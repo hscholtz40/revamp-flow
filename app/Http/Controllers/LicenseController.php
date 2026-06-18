@@ -97,6 +97,9 @@ class LicenseController extends Controller
         $validated = $request->validate([
             'customer_id' => ['required', CompanyScopedRules::customer($currentCompany->id)],
             'url' => ['nullable', 'url', 'max:255'],
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'location_address' => ['nullable', 'string', 'max:255'],
             'limited_users' => ['required', 'integer', 'min:0'],
             'standard_users' => ['required', 'integer', 'min:0'],
             'status' => ['required', 'in:active,suspended,expired,revoked'],
@@ -169,6 +172,9 @@ class LicenseController extends Controller
         $validated = $request->validate([
             'customer_id' => ['required', CompanyScopedRules::customer($license->company_id)],
             'url' => ['nullable', 'url', 'max:255'],
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'location_address' => ['nullable', 'string', 'max:255'],
             'limited_users' => ['required', 'integer', 'min:0'],
             'standard_users' => ['required', 'integer', 'min:0'],
             'status' => ['required', 'in:active,suspended,expired,revoked'],

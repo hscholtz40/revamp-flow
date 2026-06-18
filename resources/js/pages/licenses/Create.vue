@@ -19,6 +19,9 @@ const props = defineProps<Props>();
 const form = useForm({
     customer_id: '' as string | number,
     url: '',
+    latitude: '' as string | number,
+    longitude: '' as string | number,
+    location_address: '',
     limited_users: 0,
     standard_users: 0,
     status: 'active',
@@ -93,6 +96,49 @@ function submit() {
                             <p class="mt-1 text-xs text-gray-500">The URL of the instance authorized to use this license. Validation requests must originate from this URL.</p>
                             <div v-if="form.errors.url" class="mt-1 text-sm text-red-600">
                                 {{ form.errors.url }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Contractor Location -->
+                    <div>
+                        <h2 class="mb-4 text-lg font-semibold text-gray-900">Contractor Location</h2>
+                        <p class="mb-4 text-xs text-gray-500">Used to match this contractor to nearby jobs by proximity. Enter coordinates (and optionally a readable address).</p>
+                        <div class="grid gap-6 md:grid-cols-2">
+                            <div>
+                                <label class="mb-1 block text-sm font-medium text-gray-700">Latitude</label>
+                                <input
+                                    v-model="form.latitude"
+                                    type="number"
+                                    step="any"
+                                    placeholder="-26.2041"
+                                    class="w-full rounded border px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                                    :class="{ 'border-red-500': form.errors.latitude }"
+                                />
+                                <div v-if="form.errors.latitude" class="mt-1 text-sm text-red-600">{{ form.errors.latitude }}</div>
+                            </div>
+                            <div>
+                                <label class="mb-1 block text-sm font-medium text-gray-700">Longitude</label>
+                                <input
+                                    v-model="form.longitude"
+                                    type="number"
+                                    step="any"
+                                    placeholder="28.0473"
+                                    class="w-full rounded border px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                                    :class="{ 'border-red-500': form.errors.longitude }"
+                                />
+                                <div v-if="form.errors.longitude" class="mt-1 text-sm text-red-600">{{ form.errors.longitude }}</div>
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="mb-1 block text-sm font-medium text-gray-700">Address</label>
+                                <input
+                                    v-model="form.location_address"
+                                    type="text"
+                                    placeholder="123 Main Rd, Johannesburg"
+                                    class="w-full rounded border px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                                    :class="{ 'border-red-500': form.errors.location_address }"
+                                />
+                                <div v-if="form.errors.location_address" class="mt-1 text-sm text-red-600">{{ form.errors.location_address }}</div>
                             </div>
                         </div>
                     </div>
