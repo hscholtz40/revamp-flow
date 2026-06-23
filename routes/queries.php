@@ -27,6 +27,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('module.permission:queries,edit')
         ->name('queries.decline');
 
+    // Convert an accepted Revamp quote query into a jobcard.
+    Route::post('/queries/{query}/convert-to-jobcard', [QueriesController::class, 'convertToJobcard'])
+        ->middleware('module.permission:queries,edit')
+        ->name('queries.convert-to-jobcard');
+
     Route::delete('/queries/{query}', [QueriesController::class, 'destroy'])
         ->middleware('module.permission:queries,delete')
         ->name('queries.destroy');

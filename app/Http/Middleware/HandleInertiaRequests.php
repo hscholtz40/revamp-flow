@@ -73,6 +73,7 @@ class HandleInertiaRequests extends Middleware
             return [
                 ...parent::share($request),
                 'name' => config('app.name'),
+                'csrf_token' => $request->session()->token(),
                 'app' => [
                     'version' => \App\Helpers\Version::get(),
                 ],
@@ -219,6 +220,7 @@ class HandleInertiaRequests extends Middleware
         return [
             ...$parentShare,
             'name' => config('app.name'),
+            'csrf_token' => $request->session()->token(),
             'app' => [
                 'version' => \App\Helpers\Version::get(),
             ],

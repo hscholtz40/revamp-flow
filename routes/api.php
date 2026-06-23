@@ -74,6 +74,7 @@ Route::prefix('/api/v1')->name('api.v1.')->group(function () {
         Route::get('/job-queries', [JobQueryController::class, 'index'])->middleware('api.module.permission:queries,list');
         Route::post('/job-queries/{query}/accept', [JobQueryController::class, 'accept'])->middleware('api.module.permission:queries,edit');
         Route::post('/job-queries/{query}/decline', [JobQueryController::class, 'decline'])->middleware('api.module.permission:queries,edit');
+        Route::post('/job-queries/{query}/convert-to-jobcard', [JobQueryController::class, 'convertToJobcard'])->middleware('api.module.permission:queries,edit');
 
         Route::get('/messages/conversations', [MessagingController::class, 'index'])->middleware('api.module.permission:messages,list');
         Route::post('/messages/conversations', [MessagingController::class, 'storeConversation'])->middleware('api.module.permission:messages,create');

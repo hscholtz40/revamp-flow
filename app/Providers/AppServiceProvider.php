@@ -25,6 +25,7 @@ class AppServiceProvider extends ServiceProvider
             'jobcard' => \App\Models\Jobcard::class,
             'purchase_order' => \App\Models\PurchaseOrder::class,
             'invoice' => \App\Models\Invoice::class,
+            'query' => \App\Models\Query::class,
         ]);
     }
 }

@@ -179,10 +179,20 @@ createInertiaApp({
         });
 
         router.on('navigate', (event) => {
-            const nextProps = (event.detail.page.props ?? {}) as { dateTimeFormat?: DateTimeFormatProps };
+            const nextProps = (event.detail.page.props ?? {}) as { dateTimeFormat?: DateTimeFormatProps; csrf_token?: string };
             activeDateTimeFormat = nextProps.dateTimeFormat;
             patchDateLocalization(nextProps.dateTimeFormat);
             refreshLocalizedDateInputs(nextProps.dateTimeFormat);
+
+            // Keep the CSRF meta tag in sync after each Inertia navigation.
+            // Laravel regenerates the session token on POST requests, so the
+            // stale meta tag causes 419 errors on subsequent form submissions.
+            if (nextProps.csrf_token) {
+                const meta = document.querySelector('meta[name="csrf-token"]');
+                if (meta) {
+                    meta.setAttribute('content', nextProps.csrf_token);
+                }
+            }
         });
 
         createApp({

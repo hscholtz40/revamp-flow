@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
-import { Search, Eye, Trash2, Mail, Phone, Inbox, Paperclip, AlertTriangle } from 'lucide-vue-next';
+import { Search, Eye, Trash2, Mail, Phone, Inbox, Paperclip, AlertTriangle, MapPin } from 'lucide-vue-next';
 
 interface QueryItem {
     id: number;
@@ -18,6 +18,10 @@ interface QueryItem {
     attachments_count: number;
     status: 'open' | 'closed';
     response: 'pending' | 'accepted' | 'declined' | 'expired' | null;
+    external_source: string | null;
+    external_quote_id: string | null;
+    quote_total_amount: number | null;
+    job_location: string | null;
     created_at: string;
 }
 
@@ -225,7 +229,16 @@ function formatDate(value: string) {
                                 <td class="whitespace-nowrap px-6 py-4">
                                     <div class="flex items-center">
                                         <Inbox class="mr-2 h-5 w-5 text-gray-400" />
-                                        <div class="font-medium text-gray-900">{{ query.name }} {{ query.surname }}</div>
+                                        <div>
+                                            <div class="font-medium text-gray-900">{{ query.name }} {{ query.surname }}</div>
+                                            <div v-if="query.kind === 'job' && query.external_quote_id" class="mt-0.5 text-xs text-gray-500">
+                                                {{ query.external_quote_id }}<span v-if="query.external_source"> &middot; Source: {{ query.external_source }}</span>
+                                            </div>
+                                            <div v-if="query.kind === 'job' && query.job_location" class="mt-0.5 flex items-center gap-1 text-xs text-gray-400">
+                                                <MapPin class="h-3 w-3" />
+                                                <span class="truncate max-w-[200px]">{{ query.job_location }}</span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </td>
                                 <td class="whitespace-nowrap px-6 py-4">

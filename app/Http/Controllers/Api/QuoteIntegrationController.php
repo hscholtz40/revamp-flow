@@ -81,7 +81,7 @@ class QuoteIntegrationController extends Controller
                     'external_source' => $validated['source'] ?? 'revamp',
                     'external_quote_id' => $validated['external_quote_id'],
                     'contractor_company_key' => $license->license_key,
-                    'name' => 'Quote from Revamp - '.$validated['external_quote_id'],
+                    'name' => $validated['client']['name'],
                     'surname' => $validated['client']['surname'] ?? '',
                     'email' => $validated['client']['email'],
                     'cell' => $validated['client']['cell'],

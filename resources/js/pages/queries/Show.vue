@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
-import { ArrowLeft, Mail, Phone, Trash2, CheckCircle2, RotateCcw, LayoutGrid, List, FileVideo, ExternalLink, AlertTriangle, MapPin, Check, X, Lock } from 'lucide-vue-next';
+import { ArrowLeft, Mail, Phone, Trash2, CheckCircle2, RotateCcw, LayoutGrid, List, FileVideo, ExternalLink, AlertTriangle, MapPin, Check, X, Lock, Briefcase } from 'lucide-vue-next';
 
 interface QueryAttachment {
     id: number;
@@ -103,6 +103,16 @@ function performDecline() {
             isResponding.value = false;
             showDeclineDialog.value = false;
         },
+    });
+}
+
+const isConverting = ref(false);
+
+function convertToJobcard() {
+    router.post(`/queries/${props.query.id}/convert-to-jobcard`, {}, {
+        preserveScroll: true,
+        onStart: () => (isConverting.value = true),
+        onFinish: () => (isConverting.value = false),
     });
 }
 
@@ -402,6 +412,18 @@ function formatDate(value: string | null) {
                             <p v-else-if="query.response === 'declined'" class="text-sm text-gray-600">
                                 You declined this job{{ query.responded_at ? ' on ' + formatDate(query.responded_at) : '' }}.
                             </p>
+
+                            <!-- Convert to Jobcard: only for accepted queries from Revamp with quote data -->
+                            <button
+                                v-if="query.response === 'accepted' && query.external_source && hasStructuredQuote && canEdit"
+                                type="button"
+                                :disabled="isConverting"
+                                @click="convertToJobcard"
+                                class="flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 mt-3"
+                            >
+                                <Briefcase class="h-4 w-4" />
+                                {{ isConverting ? 'Converting…' : 'Convert to Jobcard' }}
+                            </button>
                         </div>
                     </div>
 
