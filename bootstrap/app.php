@@ -17,9 +17,12 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
         then: function () {
-            // Stateless API routes (no CSRF, no session)
-            \Illuminate\Support\Facades\Route::middleware('throttle:60,1')
-                ->group(base_path('routes/api.php'));
+            // Stateless API routes (no CSRF, no session). SubstituteBindings is required
+            // so {jobcard} and other route parameters resolve to Eloquent models.
+            \Illuminate\Support\Facades\Route::middleware([
+                \Illuminate\Routing\Middleware\SubstituteBindings::class,
+                'throttle:60,1',
+            ])->group(base_path('routes/api.php'));
         },
     )
     ->withMiddleware(function (Middleware $middleware) {

@@ -98,9 +98,4 @@ return [
         'border_radius' => env('THEME_LAYOUT_BORDER_RADIUS', '0.5rem'),
         'spacing_unit' => env('THEME_LAYOUT_SPACING_UNIT', '1rem'),
     ],
-
-    // Helper function to format HSL values as CSS string
-    'hsl' => function ($hue, $saturation, $lightness) {
-        return "hsl({$hue} {$saturation}% {$lightness}%)";
-    },
 ];

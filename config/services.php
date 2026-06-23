@@ -130,6 +130,8 @@ return [
         'apns_team_id' => env('APNS_TEAM_ID'),
         'apns_app_bundle_id' => env('APNS_APP_BUNDLE_ID'),
         'apns_private_key' => env('APNS_PRIVATE_KEY'),
+        /** Use sandbox APNs host for Xcode/debug builds; production/TestFlight/App Store use api.push.apple.com. */
+        'apns_use_sandbox' => env('APNS_USE_SANDBOX', false),
     ],
 
     'openai' => [
