@@ -33,7 +33,7 @@ defineProps<{
                             </div>
                             <div class="space-y-1">
                                 <h1 class="text-2xl font-bold text-slate-900">JobCardOnline</h1>
-                                <p class="text-sm text-slate-600">by Nexora Software</p>
+                                <p class="text-sm text-slate-600">by Revamp</p>
                             </div>
                         </Link>
                     </div>
@@ -53,7 +53,7 @@ defineProps<{
                     <!-- Footer info -->
                     <div class="mt-8 text-center">
                         <p class="text-xs text-slate-500">
-                            © {{ new Date().getFullYear() }} Nexora Software (Pty) Ltd. All rights reserved.
+                            © {{ new Date().getFullYear() }} Revamp. All rights reserved.
                         </p>
                     </div>
                 </div>
