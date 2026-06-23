@@ -11,6 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // MySQL/MariaDB-only: SET time_zone, MODIFY column type and DATE_ADD are
+        // MySQL syntax. No-op on other drivers (e.g. sqlite used in tests).
+        if (! in_array(DB::getDriverName(), ['mysql', 'mariadb'], true)) {
+            return;
+        }
+
         DB::statement("SET time_zone = '+00:00'");
         DB::statement('ALTER TABLE location_pings MODIFY recorded_at DATETIME NOT NULL');
 
@@ -26,6 +32,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (! in_array(DB::getDriverName(), ['mysql', 'mariadb'], true)) {
+            return;
+        }
+
         DB::statement("SET time_zone = '+00:00'");
         DB::statement('ALTER TABLE location_pings MODIFY recorded_at TIMESTAMP NOT NULL');
     }

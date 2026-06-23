@@ -34,6 +34,13 @@ class QuoteIntegrationController extends Controller
             'job.address' => ['nullable', 'string', 'max:500'],
             'job.latitude' => ['required', 'numeric', 'between:-90,90'],
             'job.longitude' => ['required', 'numeric', 'between:-180,180'],
+            'job.line_items' => ['nullable', 'array'],
+            'job.line_items.*.group' => ['nullable', 'string', 'max:255'],
+            'job.line_items.*.description' => ['required_with:job.line_items', 'string', 'max:1000'],
+            'job.line_items.*.quantity' => ['required_with:job.line_items', 'numeric', 'min:0'],
+            'job.line_items.*.unit_price' => ['required_with:job.line_items', 'numeric', 'min:0'],
+            'job.line_items.*.line_total' => ['required_with:job.line_items', 'numeric', 'min:0'],
+            'job.total_amount' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         // Idempotent: if this quote was already dispatched, return the existing matches.
@@ -74,7 +81,7 @@ class QuoteIntegrationController extends Controller
                     'external_source' => $validated['source'] ?? 'revamp',
                     'external_quote_id' => $validated['external_quote_id'],
                     'contractor_company_key' => $license->license_key,
-                    'name' => $validated['client']['name'],
+                    'name' => 'Quote from Revamp - '.$validated['external_quote_id'],
                     'surname' => $validated['client']['surname'] ?? '',
                     'email' => $validated['client']['email'],
                     'cell' => $validated['client']['cell'],
@@ -84,6 +91,10 @@ class QuoteIntegrationController extends Controller
                     'job_location' => $validated['job']['address'] ?? null,
                     'job_latitude' => $validated['job']['latitude'],
                     'job_longitude' => $validated['job']['longitude'],
+                    'quote_line_items' => $validated['job']['line_items'] ?? null,
+                    'quote_total_amount' => $validated['job']['total_amount'] ?? null,
+                    'quote_client_email' => $validated['client']['email'],
+                    'quote_client_phone' => $validated['client']['cell'],
                 ]);
 
                 return [
@@ -114,6 +125,17 @@ class QuoteIntegrationController extends Controller
             return response()->json(['message' => 'No dispatched job found for this quote.'], 404);
         }
 
+        // Per-recipient breakdown so the caller can mirror the true audit trail
+        // (pending / accepted / declined / expired) rather than guessing.
+        $recipients = $jobs->map(fn (Query $q) => [
+            'company_key' => $q->contractor_company_key,
+            'company_name' => $q->company?->name,
+            'email' => $q->company?->email,
+            'phone' => $q->company?->phone,
+            'response' => $q->response,
+            'responded_at' => $q->responded_at?->toIso8601String(),
+        ])->values();
+
         $accepted = $jobs->firstWhere('response', Query::RESPONSE_ACCEPTED);
 
         if ($accepted) {
@@ -127,6 +149,8 @@ class QuoteIntegrationController extends Controller
                     'phone' => $accepted->company?->phone,
                     'assigned_at' => $accepted->responded_at?->toIso8601String(),
                 ],
+                'contractors_notified' => $jobs->count(),
+                'recipients' => $recipients,
             ]);
         }
 
@@ -136,6 +160,7 @@ class QuoteIntegrationController extends Controller
             'external_quote_id' => $externalQuoteId,
             'status' => $allDeclined ? 'declined' : 'pending',
             'contractors_notified' => $jobs->count(),
+            'recipients' => $recipients,
         ]);
     }
 }

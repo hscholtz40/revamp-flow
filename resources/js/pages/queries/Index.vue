@@ -9,6 +9,7 @@ import { Search, Eye, Trash2, Mail, Phone, Inbox, Paperclip, AlertTriangle } fro
 
 interface QueryItem {
     id: number;
+    kind: 'enquiry' | 'job';
     name: string;
     surname: string;
     email: string;
@@ -16,8 +17,16 @@ interface QueryItem {
     description: string;
     attachments_count: number;
     status: 'open' | 'closed';
+    response: 'pending' | 'accepted' | 'declined' | 'expired' | null;
     created_at: string;
 }
+
+const jobResponseClasses: Record<string, string> = {
+    pending: 'bg-blue-100 text-blue-800',
+    accepted: 'bg-green-100 text-green-800',
+    declined: 'bg-red-100 text-red-800',
+    expired: 'bg-amber-100 text-amber-800',
+};
 
 interface Props {
     queries?: {
@@ -123,7 +132,7 @@ function formatDate(value: string) {
             <div class="mb-6 flex items-center justify-between">
                 <div>
                     <h1 class="text-2xl font-bold text-gray-900">Queries</h1>
-                    <p class="text-gray-600">Enquiries submitted through your public query form</p>
+                    <p class="text-gray-600">Public enquiries and dispatched contractor jobs</p>
                 </div>
             </div>
 
@@ -194,6 +203,7 @@ function formatDate(value: string) {
                     <thead class="bg-gray-50">
                         <tr>
                             <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Name</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Type</th>
                             <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Contact</th>
                             <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Query</th>
                             <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Submitted</th>
@@ -218,6 +228,14 @@ function formatDate(value: string) {
                                         <div class="font-medium text-gray-900">{{ query.name }} {{ query.surname }}</div>
                                     </div>
                                 </td>
+                                <td class="whitespace-nowrap px-6 py-4">
+                                    <span
+                                        :class="query.kind === 'job' ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-100 text-gray-700'"
+                                        class="inline-flex rounded-full px-2 py-1 text-xs font-semibold capitalize"
+                                    >
+                                        {{ query.kind === 'job' ? 'Job' : 'Enquiry' }}
+                                    </span>
+                                </td>
                                 <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
                                     <div class="flex items-center gap-1">
                                         <Mail class="h-4 w-4" />
@@ -239,6 +257,14 @@ function formatDate(value: string) {
                                 <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">{{ formatDate(query.created_at) }}</td>
                                 <td class="whitespace-nowrap px-6 py-4">
                                     <span
+                                        v-if="query.kind === 'job'"
+                                        :class="jobResponseClasses[query.response ?? 'pending'] ?? 'bg-gray-100 text-gray-800'"
+                                        class="inline-flex rounded-full px-2 py-1 text-xs font-semibold capitalize"
+                                    >
+                                        {{ query.response ?? 'pending' }}
+                                    </span>
+                                    <span
+                                        v-else
                                         :class="query.status === 'open' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'"
                                         class="inline-flex rounded-full px-2 py-1 text-xs font-semibold capitalize"
                                     >
@@ -270,7 +296,7 @@ function formatDate(value: string) {
                             </tr>
                         </template>
                         <tr v-else>
-                            <td colspan="6" class="px-6 py-8 text-center text-sm text-gray-500">No queries found.</td>
+                            <td colspan="7" class="px-6 py-8 text-center text-sm text-gray-500">No queries found.</td>
                         </tr>
                     </tbody>
                 </table>

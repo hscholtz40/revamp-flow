@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Exceptions\JobQueryNotActionableException;
 use App\Http\Controllers\Controller;
 use App\Models\Query;
+use App\Services\JobQueryService;
+use App\Services\RevampWebhookService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Contractor-facing job queries for the mobile app. A "job" Query is dispatched
@@ -40,79 +42,67 @@ class JobQueryController extends Controller
     }
 
     /**
-     * Accept a job. First contractor to accept wins; siblings are auto-declined.
+     * Accept a job. First contractor to accept wins (atomic claim); the other
+     * contractors' still-pending copies are expired.
      */
-    public function accept(Request $request, Query $query): JsonResponse
+    public function accept(Request $request, Query $query, JobQueryService $service, RevampWebhookService $webhook): JsonResponse
     {
-        $this->assertActionable($request, $query);
+        $this->assertOwnedJob($request, $query);
 
-        $alreadyTaken = Query::jobs()
-            ->where('external_quote_id', $query->external_quote_id)
-            ->where('response', Query::RESPONSE_ACCEPTED)
-            ->exists();
-
-        if ($alreadyTaken) {
-            return response()->json([
-                'message' => 'This job has already been accepted by another contractor.',
-            ], 409);
+        try {
+            $accepted = $service->accept($query);
+        } catch (JobQueryNotActionableException $e) {
+            return response()->json(
+                ['message' => $e->getMessage()],
+                $e->reason === JobQueryNotActionableException::REASON_TAKEN ? 409 : 422,
+            );
         }
 
-        DB::transaction(function () use ($query) {
-            $query->update([
-                'response' => Query::RESPONSE_ACCEPTED,
-                'responded_at' => now(),
-            ]);
-
-            // First-accept-wins: decline the other contractors' copies of this job.
-            Query::jobs()
-                ->where('external_quote_id', $query->external_quote_id)
-                ->where('id', '!=', $query->id)
-                ->where('response', Query::RESPONSE_PENDING)
-                ->update([
-                    'response' => Query::RESPONSE_DECLINED,
-                    'responded_at' => now(),
-                    'status' => Query::STATUS_CLOSED,
-                ]);
-        });
+        // Push status update to Revamp (fire-and-forget).
+        if ($query->external_source === 'revamp') {
+            $webhook->notifyStatusUpdate($query);
+        }
 
         return response()->json([
             'message' => 'Job accepted.',
-            'data' => $this->transform($query->fresh()),
+            'data' => $this->transform($accepted),
         ]);
     }
 
     /**
      * Decline a job for this contractor only.
      */
-    public function decline(Request $request, Query $query): JsonResponse
+    public function decline(Request $request, Query $query, JobQueryService $service, RevampWebhookService $webhook): JsonResponse
     {
-        $this->assertActionable($request, $query);
+        $this->assertOwnedJob($request, $query);
 
-        $query->update([
-            'response' => Query::RESPONSE_DECLINED,
-            'responded_at' => now(),
-            'status' => Query::STATUS_CLOSED,
-        ]);
+        try {
+            $declined = $service->decline($query);
+        } catch (JobQueryNotActionableException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        // Push status update to Revamp (fire-and-forget).
+        if ($query->external_source === 'revamp') {
+            $webhook->notifyStatusUpdate($query);
+        }
 
         return response()->json([
             'message' => 'Job declined.',
-            'data' => $this->transform($query->fresh()),
+            'data' => $this->transform($declined),
         ]);
     }
 
     /**
-     * Ensure the query is an actionable, still-pending job for the user's company.
+     * Ensure the query is a job belonging to the authenticated user's company.
+     * (Whether it is still actionable is enforced atomically by JobQueryService.)
      */
-    private function assertActionable(Request $request, Query $query): void
+    private function assertOwnedJob(Request $request, Query $query): void
     {
         $company = $request->user()->getCurrentCompany();
 
         abort_if($company === null || (int) $query->company_id !== (int) $company->id, 404);
         abort_unless($query->kind === Query::KIND_JOB, 404);
-
-        if ($query->response !== Query::RESPONSE_PENDING) {
-            abort(422, 'This job has already been responded to.');
-        }
     }
 
     private function transform(Query $query): array

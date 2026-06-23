@@ -18,6 +18,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('module.permission:queries,edit')
         ->name('queries.update');
 
+    // Contractor accept/decline for dispatched job queries (first-accept-wins).
+    Route::post('/queries/{query}/accept', [QueriesController::class, 'accept'])
+        ->middleware('module.permission:queries,edit')
+        ->name('queries.accept');
+
+    Route::post('/queries/{query}/decline', [QueriesController::class, 'decline'])
+        ->middleware('module.permission:queries,edit')
+        ->name('queries.decline');
+
     Route::delete('/queries/{query}', [QueriesController::class, 'destroy'])
         ->middleware('module.permission:queries,delete')
         ->name('queries.destroy');

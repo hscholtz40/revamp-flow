@@ -11,6 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // MySQL/MariaDB-only data repair (DATE_SUB/INTERVAL). No-op elsewhere (e.g. sqlite in tests).
+        if (! in_array(DB::getDriverName(), ['mysql', 'mariadb'], true)) {
+            return;
+        }
+
         DB::table('location_pings')
             ->where('recorded_at', '>', now()->addMinutes(30))
             ->update([
@@ -20,6 +25,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (! in_array(DB::getDriverName(), ['mysql', 'mariadb'], true)) {
+            return;
+        }
+
         DB::table('location_pings')
             ->where('recorded_at', '<', now()->subMinutes(30))
             ->update([

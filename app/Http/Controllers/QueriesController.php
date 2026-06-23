@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\JobQueryNotActionableException;
 use App\Models\Company;
 use App\Models\Query;
+use App\Services\JobQueryService;
+use App\Services\RevampWebhookService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -131,6 +134,7 @@ class QueriesController extends Controller
         return Inertia::render('queries/Show', [
             'query' => [
                 'id' => $query->id,
+                'kind' => $query->kind,
                 'name' => $query->name,
                 'surname' => $query->surname,
                 'email' => $query->email,
@@ -138,6 +142,19 @@ class QueriesController extends Controller
                 'description' => $query->description,
                 'status' => $query->status,
                 'created_at' => $query->created_at?->toIso8601String(),
+                // Job fields (null for public enquiries). For job queries these
+                // carry the read-only quote the contractor accepts/declines.
+                'response' => $query->response,
+                'responded_at' => $query->responded_at?->toIso8601String(),
+                'external_source' => $query->external_source,
+                'external_quote_id' => $query->external_quote_id,
+                'job_location' => $query->job_location,
+                'job_latitude' => $query->job_latitude,
+                'job_longitude' => $query->job_longitude,
+                'quote_line_items' => $query->quote_line_items,
+                'quote_total_amount' => $query->quote_total_amount,
+                'quote_client_email' => $query->quote_client_email,
+                'quote_client_phone' => $query->quote_client_phone,
                 'attachments' => $query->attachments->map(fn ($attachment) => [
                     'id' => $attachment->id,
                     'url' => Storage::disk('public')->url($attachment->path),
@@ -149,11 +166,59 @@ class QueriesController extends Controller
     }
 
     /**
+     * Accept a dispatched job query (first-accept-wins). The other contractors'
+     * pending copies are expired by JobQueryService.
+     */
+    public function accept(Query $query, JobQueryService $service, RevampWebhookService $webhook): RedirectResponse
+    {
+        $this->authorize('update', $query);
+        abort_unless($query->isJob(), 404);
+
+        try {
+            $service->accept($query);
+        } catch (JobQueryNotActionableException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        // Push status update to Revamp (fire-and-forget).
+        if ($query->external_source === 'revamp') {
+            $webhook->notifyStatusUpdate($query);
+        }
+
+        return redirect()->back()->with('success', 'Job accepted. It has been assigned to your company.');
+    }
+
+    /**
+     * Decline a dispatched job query for this contractor only.
+     */
+    public function decline(Query $query, JobQueryService $service, RevampWebhookService $webhook): RedirectResponse
+    {
+        $this->authorize('update', $query);
+        abort_unless($query->isJob(), 404);
+
+        try {
+            $service->decline($query);
+        } catch (JobQueryNotActionableException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        // Push status update to Revamp (fire-and-forget).
+        if ($query->external_source === 'revamp') {
+            $webhook->notifyStatusUpdate($query);
+        }
+
+        return redirect()->back()->with('success', 'Job declined.');
+    }
+
+    /**
      * Update the status of the specified query (open/closed).
      */
     public function update(Request $request, Query $query): RedirectResponse
     {
         $this->authorize('update', $query);
+
+        // Job queries are read-only here; their lifecycle is driven by accept/decline.
+        abort_if($query->isJob(), 403, 'Job queries cannot be edited.');
 
         $validated = $request->validate([
             'status' => ['required', 'in:open,closed'],

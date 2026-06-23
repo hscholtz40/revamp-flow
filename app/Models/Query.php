@@ -28,6 +28,9 @@ class Query extends Model
 
     public const RESPONSE_DECLINED = 'declined';
 
+    // The job was claimed by another contractor first; this copy is locked out.
+    public const RESPONSE_EXPIRED = 'expired';
+
     protected $fillable = [
         'company_id',
         'kind',
@@ -45,12 +48,18 @@ class Query extends Model
         'job_location',
         'job_latitude',
         'job_longitude',
+        'quote_line_items',
+        'quote_total_amount',
+        'quote_client_email',
+        'quote_client_phone',
     ];
 
     protected $casts = [
         'responded_at' => 'datetime',
         'job_latitude' => 'decimal:7',
         'job_longitude' => 'decimal:7',
+        'quote_line_items' => 'array',
+        'quote_total_amount' => 'decimal:2',
     ];
 
     /**
@@ -59,6 +68,23 @@ class Query extends Model
     public function scopeJobs($query)
     {
         return $query->where('kind', self::KIND_JOB);
+    }
+
+    /**
+     * Whether this query is a contractor job (dispatched from an external quote)
+     * rather than a public enquiry.
+     */
+    public function isJob(): bool
+    {
+        return $this->kind === self::KIND_JOB;
+    }
+
+    /**
+     * Whether this is a job still awaiting the contractor's accept/decline.
+     */
+    public function isPendingJob(): bool
+    {
+        return $this->isJob() && $this->response === self::RESPONSE_PENDING;
     }
 
     protected static function booted(): void

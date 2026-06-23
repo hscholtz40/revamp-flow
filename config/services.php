@@ -152,4 +152,11 @@ return [
         'key' => env('QUERY_API_KEY'),
     ],
 
+    'revamp' => [
+        // Base URL of the Revamp system for pushing status updates back.
+        'url' => env('REVAMP_URL'),
+        // Shared secret sent as the X-Api-Key header to Revamp's webhook endpoint.
+        'api_key' => env('REVAMP_API_KEY'),
+    ],
+
 ];
