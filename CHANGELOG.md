@@ -4,6 +4,7 @@
 
 - **Jobcard assignment push notifications:** Assigned users and team members now receive assignment notifications (database, broadcast, and push when devices are registered) when jobcards are assigned via web forms, mobile API, or dispatch bulk/reorder flows—not only from the dispatch assign endpoint.
 - **API route binding (Sanctum):** API routes now run `SubstituteBindings` middleware so `{jobcard}` and other model parameters resolve correctly (fixes empty-model 404s on `PATCH /api/v1/jobcards/{id}` and similar endpoints). Company-scoped binding also reads the authenticated user from the request for bearer tokens.
+- **`config:cache` fix:** Removed an unused Closure from `config/theme.php` that caused `php artisan config:cache` to fail with “configuration files are not serializable”.
 
 ## 2026-06-10
 
