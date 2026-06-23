@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-06-16
+
+- **Jobcard assignment push notifications:** Assigned users and team members now receive assignment notifications (database, broadcast, and push when devices are registered) when jobcards are assigned via web forms, mobile API, or dispatch bulk/reorder flows—not only from the dispatch assign endpoint.
+- **API route binding (Sanctum):** API routes now run `SubstituteBindings` middleware so `{jobcard}` and other model parameters resolve correctly (fixes empty-model 404s on `PATCH /api/v1/jobcards/{id}` and similar endpoints). Company-scoped binding also reads the authenticated user from the request for bearer tokens.
+
 ## 2026-06-10
 
 - **CSP — Google Maps:** Allow `*.googleapis.com` and `*.gstatic.com` in `script-src` and `connect-src`, plus `worker-src blob:` and `frame-src *.google.com`, so Dispatch and Places Autocomplete can load the Maps JavaScript API when CSP is enabled.

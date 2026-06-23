@@ -17,6 +17,7 @@ use App\Models\RecurringDocument;
 use App\Models\TaxRate;
 use App\Models\Team;
 use App\Models\User;
+use App\Services\AssignmentNotificationService;
 use App\Services\ReminderService;
 use App\Services\StockService;
 use App\Support\ColumnFilters;
@@ -441,6 +442,13 @@ class JobcardController extends Controller
             return $jobcard->fresh();
         });
 
+        app(AssignmentNotificationService::class)->notifyJobcardAssignmentIfChanged(
+            $currentCompany->id,
+            $jobcard,
+            0,
+            0
+        );
+
         // Send automated reminder if enabled
         try {
             $reminderService = new ReminderService;
@@ -729,6 +737,9 @@ class JobcardController extends Controller
         $lineItemsPayload = $validated['line_items'] ?? [];
         unset($validated['line_groups'], $validated['line_items']);
 
+        $previousAssignedUserId = (int) ($jobcard->assigned_to_user_id ?? 0);
+        $previousAssignedTeamId = (int) ($jobcard->assigned_to_team_id ?? 0);
+
         DB::transaction(function () use ($jobcard, $validated, $groupPayload, $lineItemsPayload) {
             $previousLineItems = $jobcard->lineItems()->get();
 
@@ -794,6 +805,13 @@ class JobcardController extends Controller
             );
             $jobcard->calculateTotals();
         });
+
+        app(AssignmentNotificationService::class)->notifyJobcardAssignmentIfChanged(
+            (int) $jobcard->company_id,
+            $jobcard->fresh(),
+            $previousAssignedUserId,
+            $previousAssignedTeamId
+        );
 
         return redirect()->route('jobcards.show', $jobcard)
             ->with('success', 'Jobcard updated successfully');

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Jobcard;
 use App\Models\TimeEntry;
+use App\Services\AssignmentNotificationService;
 use Illuminate\Http\Request;
 
 class JobcardController extends Controller
@@ -74,6 +75,13 @@ class JobcardController extends Controller
             'status' => $payload['status'] ?? 'new',
         ]);
 
+        app(AssignmentNotificationService::class)->notifyJobcardAssignmentIfChanged(
+            $companyId,
+            $jobcard,
+            0,
+            0
+        );
+
         return response()->json($jobcard, 201);
     }
 
@@ -95,9 +103,20 @@ class JobcardController extends Controller
             'estimated_duration_minutes' => ['sometimes', 'nullable', 'integer', 'min:5', 'max:1440'],
         ]);
 
-        $jobcard->update($payload);
+        $previousAssignedUserId = (int) ($jobcard->assigned_to_user_id ?? 0);
+        $previousAssignedTeamId = (int) ($jobcard->assigned_to_team_id ?? 0);
 
-        return response()->json($jobcard->fresh());
+        $jobcard->update($payload);
+        $freshJobcard = $jobcard->fresh();
+
+        app(AssignmentNotificationService::class)->notifyJobcardAssignmentIfChanged(
+            (int) $jobcard->company_id,
+            $freshJobcard,
+            $previousAssignedUserId,
+            $previousAssignedTeamId
+        );
+
+        return response()->json($freshJobcard);
     }
 
     public function destroy(Jobcard $jobcard)
@@ -145,8 +164,11 @@ class JobcardController extends Controller
 
     private function assertCompanyScope(Jobcard $jobcard): void
     {
-        $companyId = request()->input('company_id')
-            ?? (int) (request()->user()?->getCurrentCompany()?->id ?? 0);
-        abort_unless((int) $jobcard->company_id === $companyId, 404);
+        $request = request();
+        $companyId = $request->filled('company_id')
+            ? (int) $request->input('company_id')
+            : (int) ($request->user()?->getCurrentCompany()?->id ?? 0);
+
+        abort_unless($companyId > 0 && (int) $jobcard->company_id === $companyId, 404);
     }
 }

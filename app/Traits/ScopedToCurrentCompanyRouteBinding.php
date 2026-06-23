@@ -18,7 +18,7 @@ trait ScopedToCurrentCompanyRouteBinding
     {
         $field ??= $this->getRouteKeyName();
 
-        $user = auth()->user();
+        $user = Request::user() ?? auth()->user();
         if ($user === null) {
             return null;
         }
