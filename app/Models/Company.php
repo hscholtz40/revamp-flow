@@ -192,15 +192,53 @@ class Company extends Model
     }
 
     /**
-     * Web path for the company logo in PDF templates (dompdf resolves /storage/ to a local file).
+     * Embedded logo for PDF rendering (base64 data URI from companies.logo_path).
      */
     public function getLogoPathForPdf(): ?string
     {
-        if (! $this->logo_path || ! Storage::disk('public')->exists($this->logo_path)) {
+        $filePath = $this->resolvePublicLogoFilePath();
+
+        if ($filePath === null) {
             return null;
         }
 
-        return '/storage/'.$this->logo_path;
+        $imageInfo = @getimagesize($filePath);
+        if ($imageInfo === false) {
+            return null;
+        }
+
+        $imageData = file_get_contents($filePath);
+        if ($imageData === false) {
+            return null;
+        }
+
+        $mimeType = $imageInfo['mime'] ?? 'image/png';
+
+        return 'data:'.$mimeType.';base64,'.base64_encode($imageData);
+    }
+
+    /**
+     * Absolute filesystem path to the uploaded company logo (same file as /storage/{logo_path}).
+     */
+    private function resolvePublicLogoFilePath(): ?string
+    {
+        if (! $this->logo_path) {
+            return null;
+        }
+
+        $relativePath = ltrim($this->logo_path, '/');
+
+        foreach ([
+            Storage::disk('public')->path($relativePath),
+            storage_path('app/public/'.$relativePath),
+            public_path('storage/'.$relativePath),
+        ] as $path) {
+            if (is_string($path) && file_exists($path)) {
+                return $path;
+            }
+        }
+
+        return null;
     }
 
     /**

@@ -191,7 +191,10 @@ class PdfGenerationService
 
         $view = $viewMap[$module] ?? 'pdf.invoice';
 
-        return Pdf::loadView($view, $data);
+        $html = View::make($view, $data)->render();
+        $html = $this->convertImagePathsToAbsolute($html);
+
+        return Pdf::loadHTML($html);
     }
 
     /**

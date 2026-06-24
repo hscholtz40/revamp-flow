@@ -2,7 +2,7 @@
 
 ## 2026-06-24
 
-- **PDF company logo:** Added missing `Company::getLogoPathForPdf()` used by jobcard, invoice, quote, and other PDF Blade templates.
+- **PDF company logo:** Added missing `Company::getLogoPathForPdf()` used by jobcard, invoice, quote, and other PDF Blade templates. PDFs now embed the same `logo_path` file as the sidebar (base64 data URI for dompdf), with fallback path resolution via `storage/app/public` and `public/storage`. Blade PDF templates also run image path conversion; jobcard PDFs use the jobcard’s company record for branding.
 
 ## 2026-06-16
 

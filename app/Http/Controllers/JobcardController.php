@@ -937,13 +937,14 @@ class JobcardController extends Controller
         $currentCompany = auth()->user()->getCurrentCompany();
 
         $jobcard->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company', 'signatures']);
+        $company = $jobcard->company ?? $currentCompany;
         $templateId = $request->get('template_id');
 
         $pdfService = new \App\Services\PdfGenerationService;
         $pdf = $pdfService->generatePdf('jobcard', [
             'jobcard' => $jobcard,
-            'company' => $currentCompany,
-        ], $currentCompany, $templateId);
+            'company' => $company,
+        ], $company, $templateId);
 
         $filename = 'jobcard-'.$jobcard->job_number.'.pdf';
         $pdfContent = $pdf->output();
@@ -1036,11 +1037,12 @@ class JobcardController extends Controller
             $templateId = $request->get('template_id');
 
             $pdfService = new \App\Services\PdfGenerationService;
+            $company = $jobcard->company ?? $currentCompany;
             $pdf = $pdfService->generatePdf('jobcard', [
                 'jobcard' => $jobcard,
-                'company' => $currentCompany,
+                'company' => $company,
                 'customMessage' => $validated['message'] ?? '',
-            ], $currentCompany, $templateId);
+            ], $company, $templateId);
 
             $filename = 'jobcard-'.$jobcard->job_number.'.pdf';
 
