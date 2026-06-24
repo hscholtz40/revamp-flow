@@ -368,7 +368,7 @@ const filteredNavItems = computed(() => {
                                     />
                                     <img
                                         v-else
-                                        src="/logo-big.webp"
+                                        src="/revamp-logo.png"
                                         alt="JobCardOnline"
                                         class="w-full h-auto max-h-16 object-contain rounded"
                                     />
@@ -401,7 +401,7 @@ const filteredNavItems = computed(() => {
                 />
                 <img
                     v-else
-                    src="/logo-big.webp"
+                    src="/revamp-logo.png"
                     alt="JobCardOnline"
                     class="w-full h-auto max-h-12 object-contain opacity-80 hover:opacity-100 transition-opacity"
                 />
