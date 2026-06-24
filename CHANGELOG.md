@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-06-24
+
+- **PDF company logo:** Added missing `Company::getLogoPathForPdf()` used by jobcard, invoice, quote, and other PDF Blade templates.
+
 ## 2026-06-16
 
 - **Jobcard assignment push notifications:** Assigned users and team members now receive assignment notifications (database, broadcast, and push when devices are registered) when jobcards are assigned via web forms, mobile API, or dispatch bulk/reorder flows—not only from the dispatch assign endpoint.

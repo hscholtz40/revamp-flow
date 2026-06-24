@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 
 class Company extends Model
 {
@@ -188,6 +189,18 @@ class Company extends Model
             return '/storage/' . $this->favicon_path;
         }
         return null;
+    }
+
+    /**
+     * Web path for the company logo in PDF templates (dompdf resolves /storage/ to a local file).
+     */
+    public function getLogoPathForPdf(): ?string
+    {
+        if (! $this->logo_path || ! Storage::disk('public')->exists($this->logo_path)) {
+            return null;
+        }
+
+        return '/storage/'.$this->logo_path;
     }
 
     /**
