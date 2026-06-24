@@ -146,7 +146,7 @@ return [
     */
 
     'is_licensing_instance' => (bool) env('IS_LICENSING_INSTANCE', false),
-    'license_server_url' => env('LICENSE_SERVER_URL', 'https://jco.nexorasoftware.co.za'),
+    'license_server_url' => env('LICENSE_SERVER_URL', 'https://admin.jc.revamp.house'),
     'license_validation_timeout' => (int) env('LICENSE_VALIDATION_TIMEOUT', 10),
     'license_api_max_clock_skew' => (int) env('LICENSE_API_MAX_CLOCK_SKEW', 300),
     'license_api_nonce_ttl' => (int) env('LICENSE_API_NONCE_TTL', 300),

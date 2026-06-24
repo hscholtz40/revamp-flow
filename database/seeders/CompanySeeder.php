@@ -15,15 +15,15 @@ class CompanySeeder extends Seeder
     {
         $companies = [
             [
-                'name' => 'Nexora Software',
-                'email' => 'info@nexorasoftware.co.za',
-                'phone' => '+27728755541',
+                'name' => 'Revamp (Change in Admin)',
+                'email' => 'admin@revamp.house',
+                'phone' => '+27721234567',
                 'address' => '',
                 'city' => '',
                 'state' => '',
                 'postal_code' => '',
                 'country' => '',
-                'website' => 'https://nexorasoftware.co.za',
+                'website' => 'https://revamp.house',
                 'description' => 'Leading provider of innovative business solutions',
                 'is_active' => true,
                 'is_default' => true,
