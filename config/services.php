@@ -126,7 +126,11 @@ return [
     ],
 
     'push' => [
-        'fcm_server_key' => env('FCM_SERVER_KEY'),
+        'fcm_project_id' => env('FCM_PROJECT_ID'),
+        'fcm_client_email' => env('FCM_CLIENT_EMAIL'),
+        'fcm_private_key' => env('FCM_PRIVATE_KEY'),
+        'fcm_credentials_path' => env('FCM_CREDENTIALS_PATH'),
+        'fcm_credentials_json' => env('FCM_CREDENTIALS_JSON'),
         'apns_key_id' => env('APNS_KEY_ID'),
         'apns_team_id' => env('APNS_TEAM_ID'),
         'apns_app_bundle_id' => env('APNS_APP_BUNDLE_ID'),

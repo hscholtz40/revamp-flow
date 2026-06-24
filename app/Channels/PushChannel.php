@@ -2,6 +2,7 @@
 
 namespace App\Channels;
 
+use App\Services\FcmMessagingService;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -9,6 +10,10 @@ use RuntimeException;
 
 class PushChannel
 {
+    public function __construct(
+        private readonly FcmMessagingService $fcmMessagingService
+    ) {}
+
     public function send(object $notifiable, Notification $notification): void
     {
         if (! method_exists($notification, 'toPush')) {
@@ -97,29 +102,7 @@ class PushChannel
 
     private function sendFcm(string $token, array $push): void
     {
-        $serverKey = config('services.push.fcm_server_key');
-
-        if (! $serverKey) {
-            Log::warning('FCM server key not configured, skipping push', [
-                'token' => substr($token, 0, 20).'...',
-            ]);
-
-            return;
-        }
-
-        $payload = [
-            'to' => $token,
-            'notification' => [
-                'title' => $push['title'] ?? '',
-                'body' => $push['body'] ?? '',
-            ],
-            'data' => $push['data'] ?? [],
-        ];
-
-        Http::withHeaders([
-            'Authorization' => "key={$serverKey}",
-            'Content-Type' => 'application/json',
-        ])->post('https://fcm.googleapis.com/fcm/send', $payload);
+        $this->fcmMessagingService->sendToDevice($token, $push);
     }
 
     /**
