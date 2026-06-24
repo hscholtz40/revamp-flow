@@ -154,6 +154,13 @@ jobs:
             echo 'AWS_USE_PATH_STYLE_ENDPOINT=false'
             echo ''
             echo 'VITE_APP_NAME="${APP_NAME}"'
+            echo ''
+            echo 'FCM_CREDENTIALS_PATH='
+            echo 'APNS_KEY_ID='
+            echo 'APNS_TEAM_ID='
+            echo 'APNS_APP_BUNDLE_ID='
+            echo 'APNS_PRIVATE_KEY='
+            echo 'APNS_USE_SANDBOX=false'
           } > "$STAGING_DIR/.env"
           
           echo "Created .env file with APP_KEY: ${APP_KEY:0:20}..."
@@ -221,6 +228,14 @@ jobs:
           mkdir -p "$STAGING_DIR/storage/logs"
           mkdir -p "$STAGING_DIR/storage/fonts"
           mkdir -p "$STAGING_DIR/bootstrap/cache"
+
+          FCM_CREDENTIALS_FILE="storage/app/revampjobcard-8f5fb37b5d39.json"
+          if [ -f "$FCM_CREDENTIALS_FILE" ]; then
+            cp "$FCM_CREDENTIALS_FILE" "$STAGING_DIR/storage/app/"
+            echo "Included Firebase credentials: $FCM_CREDENTIALS_FILE"
+          else
+            echo "Warning: $FCM_CREDENTIALS_FILE not found; Android push will not work until it is added to the package."
+          fi
           
           # Copy .gitignore files to preserve directory structure (rsync excludes .gitignore)
           # These ensure empty directories are tracked in git and preserved in deployment

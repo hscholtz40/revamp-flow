@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "revampjobcard",
+  "private_key_id": "8f5fb37b5d39d4a537a65ad113df798e8bb3eebe",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCpGUzOB4THwMER\n0HeP16QKG2i9eY/xcBPk5hbXA73g1VczArv+7f3HoZ4+DQ/qGq6YClRHERry04gl\nTCfTLR92iLsLdc63+6+psg0332FWepuuePVi0LjfLlcKQvpq5TxI/jTICxgWh27q\nU6PMu/dJPbGlXdppcrzU4leGFXZQEHlqSyFkWvYGbWygn8uQ8iaOctpi0K36ITzZ\ncxbMCajBngk6C0C8BBqf/zf1Lr3WcA4pjybzwMdt5QppWnz9aMqXGX8yiiscODRO\nMBbTex21RRQbckMYhRohaLLS0BTxLfX7XUnpgbF/XFKo/iLMsycixnCdNOhIxDM2\nqbWuTUxpAgMBAAECggEAFxzh6lxNOhde3F475WGSZp5B9fn+YoAQ/A22C/wTMT6/\nzTVfuFPTxvxQeodDCFrOx/HLfK46GnwuxPhQjjUB8qv0MvgOggfJBh8T3vHtpkoa\nauHWGoRQbJLzKzAl9cPw9kImuTwI9hVbY/R8NFDx1yUzWZjHMHgSFt/8GhPnaMBq\n0mXGTmcwnx12cgRwbvxyKRddIAUs2EHffsC/No693nDJuv5tQ5rbvJCkd6j3+Nrp\nV4l8e/lVLIJZxjHtuM+BZ5CO5HoM5uicPVvOqB5Tmo54K0AbkLvk8HQ3/M6as/FL\nU1onhfZRNwpEWB73pSAVYV7DgenJZJvUR3NO/s9STQKBgQDSk2oc3OCwyPqVV+MS\n+W7FVsCM9VyqSxnzpR1ZmGPhO8XRgmlJrw/SCsIqy9cvrbJnASpC77HTttN6+ut/\nzm4xGSQrQsZDYMbF9JlJJOvT/7Y3ApjsV6mGaBQIa0k5XnVwZyN7M3j90CkZVaWb\nlum66Af+EnhPkTOLmTz+/6KARQKBgQDNk2jGR6llWLXOWMQU2lVbW559xYYbxwOT\n62q1p8rVafnZivIObU+GdwjLZLrtLk9R0tPYtP5obXE4FF6SrbJ0MeeRiWmg/K44\nfMDzBZ4mS+hzfiqg+9EIot7dxhG/25FXCq10UEjQHCDCIJ31nR7Z6IiQ4yovztfX\nEaFBxV731QKBgArpYKJGP85pW7LJbxbYngjTyf6D6F1arumVMMQnxWUyd7m3jEUp\nMSStMgqNrYTm90unH82AJjLWUncY8YMZ61PX/avQNf3f0e0IE7lalG3T3llTZSE6\nGarBUehtxsmWP3enoIsNy8M7OiX57i71zv7Eb0WXJ2zYFVeyhRqhnIYRAoGBAKfm\nW06GPO4PM/3iNdOqNsi03Y9vggax1lQ7lB3lex4uvedVOjlaQfdaxQ4JqToJ9rKn\ndGqr+JUlvbDFwjAeOX/5Ol59Uo4vkcOE8LoLvo0cti+NvhdZU/Kvw0JygRCnrd7f\nU6eJ4s5GCuNCbICr4QSsjM15G32MfHClb4UeRGA5AoGAd+Pd32XiEGCftSS5+s8g\niGmw29tS+nmSS2Win2ecJGuiisJDoZGlW4s1nHyxU8DuT1OBqGPLSBaXd2T9DTwG\nim6mauch0kYtyswzL/fppZSzUYUJLPg9ZwSVDp3y0G1rizH5pO2O67GOAeYsKgaq\na7Zf+qHNg35PHHBHrTGbsCg=\n-----END PRIVATE KEY-----\n",
+  "client_email": "firebase-adminsdk-fbsvc@revampjobcard.iam.gserviceaccount.com",
+  "client_id": "118029352158610505788",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40revampjobcard.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

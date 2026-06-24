@@ -224,12 +224,12 @@ class CpanelService
             }
 
             // 5. Set .env variables
-            $result = $this->updateEnvFile($subdomainRoot, [
+            $result = $this->updateEnvFile($subdomainRoot, array_merge([
                 'APP_URL' => $appUrl,
                 'DB_DATABASE' => $fullDbName,
                 'DB_USERNAME' => $fullDbUser,
                 'DB_PASSWORD' => $dbPassword,
-            ]);
+            ], $this->buildDeployedPushEnvVariables($subdomainRoot)));
             $steps[] = ['step' => 'Update .env file', 'result' => $result];
 
             if (! $result['success']) {
@@ -539,18 +539,58 @@ class CpanelService
      */
     private function updateEnvFile(string $subdomainRoot, array $variables): array
     {
-        // Build sed commands to replace each variable
-        // Using | as delimiter so / in URLs doesn't need escaping
+        $envPath = "{$subdomainRoot}/.env";
         $sedCommands = [];
+
         foreach ($variables as $key => $value) {
-            // Only escape characters special to sed with | delimiter: \ & |
-            $escapedValue = str_replace(['\\', '&', '|'], ['\\\\', '\\&', '\\|'], $value);
-            $sedCommands[] = "sed -i 's|^{$key}=.*|{$key}={$escapedValue}|' {$subdomainRoot}/.env";
+            if (! is_string($key) || $key === '' || ! is_scalar($value)) {
+                continue;
+            }
+
+            $stringValue = (string) $value;
+            $escapedValue = str_replace(['\\', '&', '|'], ['\\\\', '\\&', '\\|'], $stringValue);
+            $sedCommands[] = "if grep -q '^{$key}=' {$envPath}; then "
+                ."sed -i 's|^{$key}=.*|{$key}={$escapedValue}|' {$envPath}; "
+                ."else printf '%s\\n' '{$key}={$escapedValue}' >> {$envPath}; fi";
+        }
+
+        if ($sedCommands === []) {
+            return ['success' => true];
         }
 
         $command = implode(' && ', $sedCommands);
 
         return $this->runShellCommand($command);
+    }
+
+    /**
+     * Push notification env vars written to each deployed child instance.
+     *
+     * @return array<string, string>
+     */
+    private function buildDeployedPushEnvVariables(string $subdomainRoot): array
+    {
+        $filename = (string) config('services.deploy.fcm_credentials_filename', 'revampjobcard-8f5fb37b5d39.json');
+        $variables = [
+            'FCM_CREDENTIALS_PATH' => "{$subdomainRoot}/storage/app/{$filename}",
+        ];
+
+        $pushMappings = [
+            'APNS_KEY_ID' => config('services.push.apns_key_id'),
+            'APNS_TEAM_ID' => config('services.push.apns_team_id'),
+            'APNS_APP_BUNDLE_ID' => config('services.push.apns_app_bundle_id'),
+            'APNS_PRIVATE_KEY' => config('services.push.apns_private_key'),
+        ];
+
+        foreach ($pushMappings as $envKey => $configValue) {
+            if (is_string($configValue) && $configValue !== '') {
+                $variables[$envKey] = $configValue;
+            }
+        }
+
+        $variables['APNS_USE_SANDBOX'] = config('services.push.apns_use_sandbox') ? 'true' : 'false';
+
+        return $variables;
     }
 
     /**

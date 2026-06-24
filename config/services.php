@@ -139,6 +139,11 @@ return [
         'apns_use_sandbox' => env('APNS_USE_SANDBOX', false),
     ],
 
+    'deploy' => [
+        /** Firebase service account JSON filename bundled under storage/app/ in release packages. */
+        'fcm_credentials_filename' => env('DEPLOY_FCM_CREDENTIALS_FILENAME', 'revampjobcard-8f5fb37b5d39.json'),
+    ],
+
     'openai' => [
         'model' => env('OPENAI_MODEL', 'gpt-4o-mini'),
     ],
