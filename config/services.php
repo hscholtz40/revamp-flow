@@ -42,6 +42,7 @@ return [
         'api_token' => env('CPANEL_API_TOKEN'),
         'domain' => env('CPANEL_DOMAIN'),
         'home_dir' => env('CPANEL_HOME_DIR', '/home'),
+        'deploy_default_admin_password' => env('CPANEL_DEPLOY_DEFAULT_ADMIN_PASSWORD', 'P@ssw0rd'),
     ],
 
     'xero' => [

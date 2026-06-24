@@ -49,4 +49,11 @@ Route::middleware('auth')->group(function () {
 
     Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])
         ->name('logout');
+
+    Route::get('password/required', [\App\Http\Controllers\Auth\RequiredPasswordController::class, 'edit'])
+        ->name('password.required');
+
+    Route::put('password/required', [\App\Http\Controllers\Auth\RequiredPasswordController::class, 'update'])
+        ->middleware('throttle:6,1')
+        ->name('password.required.update');
 });

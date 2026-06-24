@@ -38,6 +38,7 @@ return Application::configure(basePath: dirname(__DIR__))
             CspMiddleware::class,
             AddLinkHeadersForPreloadedAssets::class,
             \App\Http\Middleware\RestrictLimitedUser::class,
+            \App\Http\Middleware\EnsurePasswordIsCurrent::class,
             \App\Http\Middleware\EnsureLicenseIsValid::class,
         ]);
 

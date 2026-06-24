@@ -42,6 +42,7 @@ class User extends Authenticatable
         'approval_status',
         'approved_at',
         'approved_by',
+        'must_reset_password',
     ];
 
     /**
@@ -68,6 +69,7 @@ class User extends Authenticatable
             'hourly_rate' => 'decimal:2',
             'smtp_password' => 'encrypted',
             'approved_at' => 'datetime',
+            'must_reset_password' => 'boolean',
         ];
     }
 

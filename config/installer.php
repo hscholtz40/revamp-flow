@@ -16,4 +16,8 @@ return [
 
     'bootstrap_admin_password' => null,
 
+    'bootstrap_admin_name' => null,
+
+    'bootstrap_admin_must_reset_password' => false,
+
 ];

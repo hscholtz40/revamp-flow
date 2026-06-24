@@ -2,6 +2,8 @@
 
 ## 2026-06-16
 
+- **License deploy admin account:** Deploying a license instance now seeds the remote admin user with the selected customer’s email as the login username, default password `P@ssw0rd` (configurable via `CPANEL_DEPLOY_DEFAULT_ADMIN_PASSWORD`), and `must_reset_password` so the first login forces a password change. Deploy is blocked when the license customer has no email.
+- **Forced password reset:** Added `users.must_reset_password`, `/password/required` page, and middleware that redirects affected users until they set a new password (cannot reuse the default deploy password).
 - **Admin CSV import:** Added Administration → CSV Import for customers, suppliers, and products. Upload a CSV, map columns (or set defaults for required fields), preview sample rows, and run the import with created/skipped counts and row-level error reporting. Import upload metadata is stored in an encrypted token (not cache) so run import works reliably when cache is misconfigured or per-server.
 
 ## 2026-06-24

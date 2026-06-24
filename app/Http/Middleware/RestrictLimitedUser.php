@@ -32,7 +32,7 @@ class RestrictLimitedUser
             }
 
             // Always allow logout and auth-related routes
-            if ($path === 'logout' || str_starts_with($path, 'user/') || str_starts_with($path, 'email/')) {
+            if ($path === 'logout' || str_starts_with($path, 'user/') || str_starts_with($path, 'email/') || str_starts_with($path, 'password/required')) {
                 return $next($request);
             }
 

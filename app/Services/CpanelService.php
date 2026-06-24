@@ -95,9 +95,10 @@ class CpanelService
      * @param  string  $subdomain  The subdomain to create (e.g. "client1" for client1.domain.com)
      * @param  string  $zipPath  The local path to the uploaded zip file
      * @param  string  $appUrl  The full URL for the instance
+     * @param  array{email?: string, password?: string, name?: string, must_reset_password?: bool}|null  $adminBootstrap
      * @return array{success: bool, message: string, details?: array}
      */
-    public function deploy(string $subdomain, string $zipPath, string $appUrl): array
+    public function deploy(string $subdomain, string $zipPath, string $appUrl, ?array $adminBootstrap = null): array
     {
         $steps = [];
 
@@ -242,7 +243,7 @@ class CpanelService
             // 6 & 7. Run artisan commands
             $artisanCommands = [
                 'php artisan migrate --force',
-                'php artisan db:seed --force',
+                $this->buildSeedCommand($adminBootstrap),
                 'php artisan storage:link',
             ];
 
@@ -267,6 +268,7 @@ class CpanelService
                     'db_name' => $fullDbName,
                     'db_user' => $fullDbUser,
                     'db_password' => $dbPassword,
+                    'admin_email' => is_string($adminBootstrap['email'] ?? null) ? $adminBootstrap['email'] : null,
                 ],
             ];
 
@@ -873,6 +875,30 @@ PHPSCRIPT;
                 'error' => $e->getMessage(),
             ];
         }
+    }
+
+    /**
+     * Build the db:seed command with one-shot admin bootstrap env vars when deploying.
+     */
+    private function buildSeedCommand(?array $adminBootstrap): string
+    {
+        if (! is_array($adminBootstrap) || empty($adminBootstrap['email'])) {
+            return 'php artisan db:seed --force';
+        }
+
+        $email = $this->escapeShellArg((string) $adminBootstrap['email']);
+        $password = $this->escapeShellArg(
+            (string) ($adminBootstrap['password'] ?? config('services.cpanel.deploy_default_admin_password', 'P@ssw0rd'))
+        );
+        $name = $this->escapeShellArg((string) ($adminBootstrap['name'] ?? 'Administrator'));
+        $mustReset = ! empty($adminBootstrap['must_reset_password']) ? '1' : '0';
+
+        return "ADMIN_EMAIL={$email} ADMIN_PASSWORD={$password} ADMIN_NAME={$name} ADMIN_MUST_RESET_PASSWORD={$mustReset} php artisan db:seed --force";
+    }
+
+    private function escapeShellArg(string $value): string
+    {
+        return "'".str_replace("'", "'\\''", $value)."'";
     }
 
     /**

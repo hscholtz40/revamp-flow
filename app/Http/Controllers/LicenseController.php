@@ -239,13 +239,27 @@ class LicenseController extends Controller
                 ->withErrors(['message' => 'Could not determine subdomain from the license URL.']);
         }
 
+        $license->loadMissing('customer');
+        $customer = $license->customer;
+        $customerEmail = trim((string) ($customer?->email ?? ''));
+        if ($customerEmail === '') {
+            return redirect()->back()
+                ->withErrors(['message' => 'The license customer must have an email address before deploying.']);
+        }
+
         // Store the uploaded file temporarily
         $zipFile = $request->file('zip_file');
         $zipPath = $zipFile->store('temp', 'local');
         $fullZipPath = storage_path('app/private/'.$zipPath);
 
         try {
-            $result = $cpanel->deploy($subdomain, $fullZipPath, $license->url);
+            $defaultPassword = (string) config('services.cpanel.deploy_default_admin_password', 'P@ssw0rd');
+            $result = $cpanel->deploy($subdomain, $fullZipPath, $license->url, [
+                'email' => $customerEmail,
+                'password' => $defaultPassword,
+                'name' => $customer?->name ?: 'Administrator',
+                'must_reset_password' => true,
+            ]);
 
             // Clean up temp file
             if (file_exists($fullZipPath)) {
@@ -261,7 +275,7 @@ class LicenseController extends Controller
                 ]);
 
                 return redirect()->route('licenses.show', $license)
-                    ->with('success', 'Instance deployed successfully to '.$license->url);
+                    ->with('success', 'Instance deployed successfully to '.$license->url.'. Admin login: '.$customerEmail.' (temporary password — must be changed on first login).');
             }
 
             Log::error('License deployment failed', SafeLog::redactContext([

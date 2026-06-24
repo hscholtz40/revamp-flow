@@ -14,6 +14,11 @@ class AdminUserSeeder extends Seeder
     {
         $adminEmail = config('installer.bootstrap_admin_email') ?: env('ADMIN_EMAIL');
         $adminPassword = config('installer.bootstrap_admin_password') ?: env('ADMIN_PASSWORD');
+        $adminName = config('installer.bootstrap_admin_name') ?: env('ADMIN_NAME', 'Administrator');
+        $mustResetPassword = filter_var(
+            config('installer.bootstrap_admin_must_reset_password') ?: env('ADMIN_MUST_RESET_PASSWORD', false),
+            FILTER_VALIDATE_BOOL
+        );
 
         if (! is_string($adminEmail) || $adminEmail === '' || ! is_string($adminPassword) || $adminPassword === '') {
             if ($this->command) {
@@ -32,13 +37,14 @@ class AdminUserSeeder extends Seeder
             ]
         );
 
-        // Create admin user if missing
-        $admin = User::firstOrCreate(
+        // Create or refresh admin user for bootstrap (e.g. license deploy)
+        $admin = User::updateOrCreate(
             ['email' => $adminEmail],
             [
-                'name' => 'Administrator',
+                'name' => is_string($adminName) && $adminName !== '' ? $adminName : 'Administrator',
                 'password' => Hash::make($adminPassword),
                 'email_verified_at' => now(),
+                'must_reset_password' => $mustResetPassword,
             ]
         );
 
