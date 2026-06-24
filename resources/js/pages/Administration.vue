@@ -8,7 +8,7 @@ import groups from '@/routes/groups';
 import companySettings from '@/routes/company-settings';
 import smsSettings from '@/routes/sms-settings';
 import whatsappSettings from '@/routes/whatsapp-settings';
-import { Users, UsersRound, Shield, Building2, UserCheck, Package, Tag, MessageSquare, Zap, FileText, ClipboardList, Database, Percent, BookOpen, CreditCard, ArrowUpCircle, Eye, KeyRound, Hash, Mail, Globe2, ListChecks, MapPin, Calculator } from 'lucide-vue-next';
+import { Users, UsersRound, Shield, Building2, UserCheck, Package, Tag, MessageSquare, Zap, FileText, ClipboardList, Database, Percent, BookOpen, CreditCard, ArrowUpCircle, Eye, KeyRound, Hash, Mail, Globe2, ListChecks, MapPin, Calculator, Upload } from 'lucide-vue-next';
 import auditLogs from '@/routes/audit-logs';
 import backups from '@/routes/backups/index';
 import { ref } from 'vue';
@@ -493,6 +493,27 @@ const props = defineProps<{
                             class="rounded bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
                         >
                             Open Status Editor
+                        </Link>
+                    </div>
+                </div>
+
+                <!-- CSV Import Card -->
+                <div class="flex flex-col rounded-lg border bg-white p-6 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold">CSV Import</h2>
+                            <p class="text-sm text-gray-600">Import customers, suppliers, or products with column mapping</p>
+                        </div>
+                        <div class="rounded-full bg-primary/10 p-3">
+                            <Upload class="h-6 w-6 text-primary" />
+                        </div>
+                    </div>
+                    <div class="mt-auto pt-4">
+                        <Link
+                            href="/administration/import"
+                            class="rounded bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
+                        >
+                            Open CSV Import
                         </Link>
                     </div>
                 </div>

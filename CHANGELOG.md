@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-06-16
+
+- **Admin CSV import:** Added Administration → CSV Import for customers, suppliers, and products. Upload a CSV, map columns (or set defaults for required fields), preview sample rows, and run the import with created/skipped counts and row-level error reporting.
+
 ## 2026-06-24
 
 - **PDF company logo:** Added missing `Company::getLogoPathForPdf()` used by jobcard, invoice, quote, and other PDF Blade templates. PDFs now embed the same `logo_path` file as the sidebar (base64 data URI for dompdf), with fallback path resolution via `storage/app/public` and `public/storage`. Blade PDF templates also run image path conversion; jobcard PDFs use the jobcard’s company record for branding.

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Administration\EmailTemplateController;
+use App\Http\Controllers\Administration\ImportController;
 use App\Http\Controllers\Administration\PdfTemplateController;
 use App\Http\Controllers\AdministrationController;
 use App\Http\Controllers\GoogleIntegrationController;
@@ -59,4 +60,8 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::put('/administration/email-templates/{emailTemplate}', [EmailTemplateController::class, 'update'])->name('administration.email-templates.update');
     Route::delete('/administration/email-templates/{emailTemplate}', [EmailTemplateController::class, 'destroy'])->name('administration.email-templates.destroy');
     Route::post('/administration/email-templates/upload-image', [EmailTemplateController::class, 'uploadImage'])->name('administration.email-templates.upload-image');
+
+    Route::get('/administration/import', [ImportController::class, 'index'])->name('administration.import');
+    Route::post('/administration/import/upload', [ImportController::class, 'upload'])->name('administration.import.upload');
+    Route::post('/administration/import/run', [ImportController::class, 'run'])->name('administration.import.run');
 });
