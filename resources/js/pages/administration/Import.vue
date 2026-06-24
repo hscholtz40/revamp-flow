@@ -93,6 +93,7 @@ const uploadCsv = async () => {
 
         const response = await fetch('/administration/import/upload', {
             method: 'POST',
+            credentials: 'same-origin',
             headers: {
                 'X-CSRF-TOKEN': csrf(),
                 'Accept': 'application/json',
@@ -135,6 +136,7 @@ const runImport = async () => {
     try {
         const response = await fetch('/administration/import/run', {
             method: 'POST',
+            credentials: 'same-origin',
             headers: {
                 'X-CSRF-TOKEN': csrf(),
                 'Content-Type': 'application/json',

@@ -8,7 +8,7 @@ use App\Models\Product;
 use App\Models\Supplier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Inertia\Inertia;
@@ -16,7 +16,6 @@ use Inertia\Response;
 
 class ImportController extends Controller
 {
-    private const IMPORT_CACHE_PREFIX = 'admin-import:';
     private const IMPORT_DISK = 'local';
 
     public function index(): Response
@@ -67,16 +66,20 @@ class ImportController extends Controller
         }
         fclose($handle);
 
-        $token = (string) str()->uuid();
-        Cache::put(self::IMPORT_CACHE_PREFIX.$token, [
+        $companyId = (int) (auth()->user()->getCurrentCompany()?->id ?? 0);
+        if ($companyId <= 0) {
+            return response()->json(['message' => 'Invalid company context for import.'], 422);
+        }
+
+        $token = $this->createImportToken([
             'entity' => $entity,
             'path' => $path,
             'disk' => self::IMPORT_DISK,
             'delimiter' => $delimiter,
             'headers' => $headers,
-            'uploaded_by' => auth()->id(),
-            'company_id' => auth()->user()->getCurrentCompany()?->id,
-        ], now()->addHour());
+            'uploaded_by' => (int) auth()->id(),
+            'company_id' => $companyId,
+        ]);
 
         return response()->json([
             'token' => $token,
@@ -95,19 +98,18 @@ class ImportController extends Controller
             'defaults' => ['nullable', 'array'],
         ]);
 
-        $cacheKey = self::IMPORT_CACHE_PREFIX.$validated['token'];
-        $cached = Cache::get($cacheKey);
-        if (! is_array($cached)) {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        $companyId = (int) ($currentCompany?->id ?? 0);
+        if ($companyId <= 0) {
+            return response()->json(['message' => 'Invalid company context for import.'], 422);
+        }
+
+        $cached = $this->resolveImportToken($validated['token'], (int) auth()->id(), $companyId);
+        if ($cached === null) {
             return response()->json(['message' => 'Import session expired. Please upload CSV again.'], 422);
         }
         if (($cached['entity'] ?? null) !== $validated['entity']) {
             return response()->json(['message' => 'Import entity mismatch. Please restart import.'], 422);
-        }
-
-        $currentCompany = auth()->user()->getCurrentCompany();
-        $companyId = (int) ($currentCompany?->id ?? 0);
-        if ($companyId <= 0 || (int) ($cached['company_id'] ?? 0) !== $companyId) {
-            return response()->json(['message' => 'Invalid company context for import.'], 422);
         }
 
         $definitions = $this->entityDefinitions();
@@ -190,13 +192,45 @@ class ImportController extends Controller
         }
         fclose($handle);
 
-        Cache::forget($cacheKey);
-
         return response()->json([
             'created' => $created,
             'skipped' => $skipped,
             'errors' => $errors,
         ]);
+    }
+
+    private function createImportToken(array $payload): string
+    {
+        $payload['expires_at'] = now()->addHour()->timestamp;
+
+        return Crypt::encryptString(json_encode($payload));
+    }
+
+    private function resolveImportToken(string $token, int $userId, int $companyId): ?array
+    {
+        try {
+            $cached = json_decode(Crypt::decryptString($token), true);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if (! is_array($cached)) {
+            return null;
+        }
+
+        if ((int) ($cached['expires_at'] ?? 0) < now()->timestamp) {
+            return null;
+        }
+
+        if ((int) ($cached['uploaded_by'] ?? 0) !== $userId) {
+            return null;
+        }
+
+        if ((int) ($cached['company_id'] ?? 0) !== $companyId) {
+            return null;
+        }
+
+        return $cached;
     }
 
     private function importRow(string $entity, array $mapped, int $companyId): bool

@@ -2,7 +2,7 @@
 
 ## 2026-06-16
 
-- **Admin CSV import:** Added Administration → CSV Import for customers, suppliers, and products. Upload a CSV, map columns (or set defaults for required fields), preview sample rows, and run the import with created/skipped counts and row-level error reporting.
+- **Admin CSV import:** Added Administration → CSV Import for customers, suppliers, and products. Upload a CSV, map columns (or set defaults for required fields), preview sample rows, and run the import with created/skipped counts and row-level error reporting. Import upload metadata is stored in an encrypted token (not cache) so run import works reliably when cache is misconfigured or per-server.
 
 ## 2026-06-24
 

@@ -5,7 +5,6 @@ use App\Models\Customer;
 use App\Models\Group;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -84,5 +83,4 @@ test('administrator can upload csv and import customers', function () {
         ]);
 
     expect(Customer::query()->where('company_id', $company->id)->count())->toBe(2);
-    expect(Cache::get('admin-import:'.$token))->toBeNull();
 });
