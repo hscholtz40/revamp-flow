@@ -15,7 +15,7 @@ interface QueryAttachment {
 
 interface QueryItem {
     id: number;
-    kind: 'enquiry' | 'job';
+    kind: 'enquiry' | 'job' | 'contractor';
     name: string;
     surname: string;
     email: string;
@@ -35,6 +35,15 @@ interface QueryItem {
     quote_total_amount: number | null;
     quote_client_email: string | null;
     quote_client_phone: string | null;
+    company_name: string | null;
+    company_registration_no: string | null;
+    company_address: string | null;
+    company_email: string | null;
+    company_contact_number: string | null;
+    company_website: string | null;
+    accepted_at: string | null;
+    accepted_customer_id: number | null;
+    accepted_contact_id: number | null;
     attachments: QueryAttachment[];
 }
 
@@ -44,6 +53,7 @@ const canEdit = useAuthAbility('queries', 'edit');
 const canDelete = useAuthAbility('queries', 'delete');
 
 const isJob = computed(() => props.query.kind === 'job');
+const isContractor = computed(() => props.query.kind === 'contractor');
 const isPending = computed(() => props.query.response === 'pending');
 const attachments = computed(() => props.query.attachments ?? []);
 const attachmentView = ref<'grid' | 'list'>('grid');
@@ -106,6 +116,15 @@ function performDecline() {
     });
 }
 
+const isAcceptingContractor = ref(false);
+function acceptContractor() {
+    router.post(`/queries/${props.query.id}/accept-contractor`, {}, {
+        preserveScroll: true,
+        onStart: () => (isAcceptingContractor.value = true),
+        onFinish: () => (isAcceptingContractor.value = false),
+    });
+}
+
 const isConverting = ref(false);
 
 function convertToJobcard() {
@@ -151,9 +170,16 @@ function formatDate(value: string | null) {
                     <ArrowLeft class="h-4 w-4" />
                     Back to Queries
                 </Link>
-                <!-- Job: accept/decline response badge. Enquiry: open/closed. -->
+                <!-- Job/contractor: response badge. Enquiry: open/closed. -->
                 <span
                     v-if="isJob"
+                    :class="responseMeta.classes"
+                    class="inline-flex rounded-full px-3 py-1 text-xs font-semibold"
+                >
+                    {{ responseMeta.label }}
+                </span>
+                <span
+                    v-else-if="isContractor"
                     :class="responseMeta.classes"
                     class="inline-flex rounded-full px-3 py-1 text-xs font-semibold"
                 >
@@ -179,6 +205,9 @@ function formatDate(value: string | null) {
                             <strong class="capitalize">{{ query.external_source || 'an external system' }}</strong>.
                             You can <strong>accept</strong> or <strong>decline</strong> it — the first contractor to accept claims the job.
                         </span>
+                    </div>
+                    <div v-if="isContractor" class="rounded-lg border border-purple-200 bg-purple-50 p-4 text-sm text-purple-800">
+                        Contractor onboarding query. Accepting this will create a customer and a linked primary contact.
                     </div>
 
                     <!-- Structured Quote Display (like a physical quote) -->
@@ -292,6 +321,17 @@ function formatDate(value: string | null) {
                                 {{ isJob ? 'Quote details' : 'Description' }}
                             </dt>
                             <dd class="mt-1 whitespace-pre-wrap text-sm text-gray-900">{{ query.description }}</dd>
+                        </div>
+                        <div v-if="isContractor" class="mt-6 border-t border-gray-200 pt-4">
+                            <h3 class="text-xs font-medium uppercase tracking-wider text-gray-500">Company Details</h3>
+                            <dl class="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <div><dt class="text-xs text-gray-500">Company Name</dt><dd class="text-sm text-gray-900">{{ query.company_name || '—' }}</dd></div>
+                                <div><dt class="text-xs text-gray-500">Registration No</dt><dd class="text-sm text-gray-900">{{ query.company_registration_no || '—' }}</dd></div>
+                                <div><dt class="text-xs text-gray-500">Company Email</dt><dd class="text-sm text-gray-900">{{ query.company_email || '—' }}</dd></div>
+                                <div><dt class="text-xs text-gray-500">Company Contact</dt><dd class="text-sm text-gray-900">{{ query.company_contact_number || '—' }}</dd></div>
+                                <div class="sm:col-span-2"><dt class="text-xs text-gray-500">Company Address</dt><dd class="text-sm text-gray-900">{{ query.company_address || '—' }}</dd></div>
+                                <div class="sm:col-span-2"><dt class="text-xs text-gray-500">Company Website</dt><dd class="text-sm text-gray-900">{{ query.company_website || '—' }}</dd></div>
+                            </dl>
                         </div>
                     </div>
 
@@ -425,6 +465,23 @@ function formatDate(value: string | null) {
                                 {{ isConverting ? 'Converting…' : 'Convert to Jobcard' }}
                             </button>
                         </div>
+                    </div>
+
+                    <div v-else-if="isContractor" class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+                        <h2 class="mb-4 text-sm font-medium uppercase tracking-wider text-gray-500">Contractor Approval</h2>
+                        <button
+                            v-if="query.response === 'pending' && canEdit"
+                            type="button"
+                            :disabled="isAcceptingContractor"
+                            @click="acceptContractor"
+                            class="flex w-full items-center justify-center gap-2 rounded-md bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50"
+                        >
+                            {{ isAcceptingContractor ? 'Accepting…' : 'Accept and Create Customer/Contact' }}
+                        </button>
+                        <p v-else-if="query.response === 'accepted'" class="text-sm text-gray-600">
+                            Accepted {{ query.accepted_at ? `on ${formatDate(query.accepted_at)}` : '' }}.
+                            Customer ID: {{ query.accepted_customer_id ?? '—' }}, Contact ID: {{ query.accepted_contact_id ?? '—' }}.
+                        </p>
                     </div>
 
                     <!-- Enquiry query: open/close management -->

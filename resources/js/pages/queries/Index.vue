@@ -9,7 +9,7 @@ import { Search, Eye, Trash2, Mail, Phone, Inbox, Paperclip, AlertTriangle, MapP
 
 interface QueryItem {
     id: number;
-    kind: 'enquiry' | 'job';
+    kind: 'enquiry' | 'job' | 'contractor';
     name: string;
     surname: string;
     email: string;
@@ -49,6 +49,13 @@ interface Props {
         open: number;
         closed: number;
     };
+    integration?: {
+        public_url: string;
+        embed_script_url: string;
+        embed_html: string;
+        contractor_public_url?: string | null;
+        contractor_embed_html?: string | null;
+    } | null;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -67,6 +74,10 @@ const hasQueries = computed(() => !!props.queries?.data && props.queries.data.le
 const paginationFrom = computed(() => props.queries?.meta?.from ?? props.queries?.from ?? (hasQueries.value ? 1 : 0));
 const paginationTo = computed(() => props.queries?.meta?.to ?? props.queries?.to ?? (props.queries?.data?.length ?? 0));
 const paginationTotal = computed(() => props.queries?.meta?.total ?? props.queries?.total ?? (props.queries?.data?.length ?? 0));
+
+function copy(text: string) {
+    navigator.clipboard.writeText(text);
+}
 
 function applyFilters() {
     const params: Record<string, string> = {};
@@ -137,6 +148,40 @@ function formatDate(value: string) {
                 <div>
                     <h1 class="text-2xl font-bold text-gray-900">Queries</h1>
                     <p class="text-gray-600">Public enquiries and dispatched contractor jobs</p>
+                </div>
+            </div>
+
+            <div v-if="props.integration" class="mb-6 rounded-lg border border-gray-200 bg-white p-4">
+                <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-600">Public Form Integration</h2>
+                <div class="space-y-3 text-sm">
+                    <div>
+                        <p class="mb-1 font-medium text-gray-800">Hosted URL</p>
+                        <div class="flex gap-2">
+                            <input :value="props.integration.public_url" readonly class="w-full rounded border border-gray-300 px-3 py-2 text-xs text-gray-700" />
+                            <button type="button" class="rounded bg-blue-600 px-3 py-2 text-white hover:bg-blue-700" @click="copy(props.integration.public_url)">Copy</button>
+                        </div>
+                    </div>
+                    <div>
+                        <p class="mb-1 font-medium text-gray-800">Embed snippet</p>
+                        <div class="flex gap-2">
+                            <textarea :value="props.integration.embed_html" readonly rows="2" class="w-full rounded border border-gray-300 px-3 py-2 font-mono text-xs text-gray-700"></textarea>
+                            <button type="button" class="rounded bg-blue-600 px-3 py-2 text-white hover:bg-blue-700" @click="copy(props.integration.embed_html)">Copy</button>
+                        </div>
+                    </div>
+                    <div v-if="props.integration.contractor_public_url">
+                        <p class="mb-1 font-medium text-gray-800">Contractor Form URL (Licensing only)</p>
+                        <div class="flex gap-2">
+                            <input :value="props.integration.contractor_public_url" readonly class="w-full rounded border border-gray-300 px-3 py-2 text-xs text-gray-700" />
+                            <button type="button" class="rounded bg-blue-600 px-3 py-2 text-white hover:bg-blue-700" @click="copy(props.integration.contractor_public_url)">Copy</button>
+                        </div>
+                    </div>
+                    <div v-if="props.integration.contractor_embed_html">
+                        <p class="mb-1 font-medium text-gray-800">Contractor embed snippet</p>
+                        <div class="flex gap-2">
+                            <textarea :value="props.integration.contractor_embed_html" readonly rows="2" class="w-full rounded border border-gray-300 px-3 py-2 font-mono text-xs text-gray-700"></textarea>
+                            <button type="button" class="rounded bg-blue-600 px-3 py-2 text-white hover:bg-blue-700" @click="copy(props.integration.contractor_embed_html)">Copy</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -243,10 +288,10 @@ function formatDate(value: string) {
                                 </td>
                                 <td class="whitespace-nowrap px-6 py-4">
                                     <span
-                                        :class="query.kind === 'job' ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-100 text-gray-700'"
+                                        :class="query.kind === 'job' ? 'bg-indigo-100 text-indigo-800' : (query.kind === 'contractor' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-700')"
                                         class="inline-flex rounded-full px-2 py-1 text-xs font-semibold capitalize"
                                     >
-                                        {{ query.kind === 'job' ? 'Job' : 'Enquiry' }}
+                                        {{ query.kind === 'job' ? 'Job' : (query.kind === 'contractor' ? 'Contractor' : 'Enquiry') }}
                                     </span>
                                 </td>
                                 <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
@@ -272,6 +317,13 @@ function formatDate(value: string) {
                                     <span
                                         v-if="query.kind === 'job'"
                                         :class="jobResponseClasses[query.response ?? 'pending'] ?? 'bg-gray-100 text-gray-800'"
+                                        class="inline-flex rounded-full px-2 py-1 text-xs font-semibold capitalize"
+                                    >
+                                        {{ query.response ?? 'pending' }}
+                                    </span>
+                                    <span
+                                        v-else-if="query.kind === 'contractor'"
+                                        :class="jobResponseClasses[query.response ?? 'pending'] ?? 'bg-purple-100 text-purple-800'"
                                         class="inline-flex rounded-full px-2 py-1 text-xs font-semibold capitalize"
                                     >
                                         {{ query.response ?? 'pending' }}

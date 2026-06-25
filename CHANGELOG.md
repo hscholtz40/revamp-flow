@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-06-25
+
+- **API timesheet duration fix:** Fixed `/api/v1/time-entries` and timer endpoints to persist `duration_minutes` correctly (including pause/resume accumulation), preventing valid mobile time entries from appearing as `0m` in production.
+- **Contractor query type (licensing-only):** Added `contractor` queries with onboarding fields (contact person details plus company name/registration/address/email/contact/website), available only on licensing instances for hosted and embedded public forms.
+- **Contractor acceptance workflow:** Queries can now be accepted as contractor onboarding, which creates/links a `Customer` and primary `Contact`, marks the query accepted/closed, and stores linked record IDs.
+- **Public query form (hosted + embeddable):** Added tokenized public query form URLs (`/query-form/{companyId}/{token}`) plus an embeddable script endpoint (`/query-form/embed.js`) that injects an iframe for easy website integration.
+- **Query form security hardening:** Added dedicated `QUERY_PUBLIC_FORM_KEY` token validation, route throttling for hosted/embedded endpoints, and a honeypot field to reduce automated spam submissions.
+- **Queries UI integration helpers:** Queries index now shows copy-ready hosted form and embed script snippets for the current company.
+
 ## 2026-06-16
 
 - **FCM HTTP v1:** Android push notifications now use the Firebase Cloud Messaging HTTP v1 API with a service account (OAuth2), replacing the deprecated legacy server key (`FCM_SERVER_KEY`). Configure `FCM_CREDENTIALS_PATH` to your Firebase service account JSON, or set `FCM_PROJECT_ID`, `FCM_CLIENT_EMAIL`, and `FCM_PRIVATE_KEY`.

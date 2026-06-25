@@ -19,9 +19,12 @@ class CspMiddleware
         $nonce = Str::random(40);
         $request->attributes->set('csp_nonce', $nonce);
         $response = $next($request);
+        $isPublicQueryForm = $request->routeIs('queries.public.form');
 
         $response->headers->set('X-Content-Type-Options', 'nosniff');
-        $response->headers->set('X-Frame-Options', 'SAMEORIGIN');
+        if (! $isPublicQueryForm) {
+            $response->headers->set('X-Frame-Options', 'SAMEORIGIN');
+        }
         $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
         $response->headers->set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
         if ($request->isSecure()) {
@@ -29,10 +32,11 @@ class CspMiddleware
         }
 
         if (app()->environment('production') || config('app.csp_enabled', false)) {
+            $frameAncestors = $isPublicQueryForm ? '*' : "'self'";
             $csp = "default-src 'self'; " .
                    "base-uri 'self'; " .
                    "object-src 'none'; " .
-                   "frame-ancestors 'self'; " .
+                   "frame-ancestors {$frameAncestors}; " .
                    "script-src 'self' 'nonce-{$nonce}' https://login.xero.com https://identity.xero.com https://*.googleapis.com https://*.gstatic.com; " .
                    // Browsers ignore 'unsafe-inline' when a nonce is present; Vue/third-party often sets style="..." without a nonce.
                    "style-src 'self' 'unsafe-inline' https://fonts.bunny.net; " .

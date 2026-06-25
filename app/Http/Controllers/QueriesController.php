@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Exceptions\JobQueryNotActionableException;
 use App\Models\Company;
+use App\Models\Contact;
 use App\Models\Customer;
 use App\Models\Jobcard;
 use App\Models\JobcardLineItem;
@@ -13,6 +14,7 @@ use App\Models\Query;
 use App\Services\CustomerUpsertService;
 use App\Services\JobQueryService;
 use App\Services\RevampWebhookService;
+use Illuminate\Contracts\View\View as ViewContract;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,6 +25,8 @@ use Inertia\Response;
 
 class QueriesController extends Controller
 {
+    private const PUBLIC_FORM_HONEYPOT_FIELD = 'website';
+
     /**
      * Store a query submitted from an external site (e.g. the Revamp marketing
      * landing page) via the public query API. Authenticated by a shared API key
@@ -37,6 +41,13 @@ class QueriesController extends Controller
             'email' => ['required', 'email', 'max:255'],
             'cell' => ['required', 'string', 'max:50'],
             'description' => ['required', 'string', 'max:5000'],
+            'kind' => ['nullable', 'in:enquiry,contractor'],
+            'company_name' => ['nullable', 'required_if:kind,contractor', 'string', 'max:255'],
+            'company_registration_no' => ['nullable', 'required_if:kind,contractor', 'string', 'max:255'],
+            'company_address' => ['nullable', 'required_if:kind,contractor', 'string', 'max:500'],
+            'company_email' => ['nullable', 'required_if:kind,contractor', 'email', 'max:255'],
+            'company_contact_number' => ['nullable', 'required_if:kind,contractor', 'string', 'max:100'],
+            'company_website' => ['nullable', 'required_if:kind,contractor', 'url', 'max:255'],
             'attachments' => ['nullable', 'array', 'max:10'],
             'attachments.*' => ['file', 'max:51200', 'mimes:jpg,jpeg,png,gif,webp,mp4,mov,avi,webm'],
         ], [
@@ -52,14 +63,27 @@ class QueriesController extends Controller
 
         abort_if($company === null, 404, 'No company is available to receive queries.');
 
+        $kind = (string) ($validated['kind'] ?? Query::KIND_ENQUIRY);
+        if ($kind === Query::KIND_CONTRACTOR && ! config('app.is_licensing_instance')) {
+            abort(403, 'Contractor queries are only available on licensing instances.');
+        }
+
         $query = Query::create([
             'company_id' => $company->id,
+            'kind' => $kind,
             'name' => $validated['name'],
             'surname' => $validated['surname'],
             'email' => $validated['email'],
             'cell' => $validated['cell'],
             'description' => $validated['description'],
+            'company_name' => $validated['company_name'] ?? null,
+            'company_registration_no' => $validated['company_registration_no'] ?? null,
+            'company_address' => $validated['company_address'] ?? null,
+            'company_email' => $validated['company_email'] ?? null,
+            'company_contact_number' => $validated['company_contact_number'] ?? null,
+            'company_website' => $validated['company_website'] ?? null,
             'status' => Query::STATUS_OPEN,
+            'response' => $kind === Query::KIND_CONTRACTOR ? Query::RESPONSE_PENDING : null,
         ]);
 
         foreach ((array) $request->file('attachments', []) as $file) {
@@ -74,6 +98,147 @@ class QueriesController extends Controller
             'message' => 'Your query has been submitted. We will get back to you shortly.',
             'id' => $query->id,
         ], 201);
+    }
+
+    /**
+     * Hosted public query form that can be used directly or embedded in an iframe.
+     */
+    public function publicForm(Request $request, int $companyId, string $token): ViewContract
+    {
+        $company = Company::query()->whereKey($companyId)->firstOrFail();
+        abort_unless($company->is_active, 404);
+        abort_unless($this->isValidPublicFormToken($company, $token), 403, 'Invalid form token.');
+        $kind = (string) $request->query('kind', Query::KIND_ENQUIRY);
+        if (! in_array($kind, [Query::KIND_ENQUIRY, Query::KIND_CONTRACTOR], true)) {
+            $kind = Query::KIND_ENQUIRY;
+        }
+        if ($kind === Query::KIND_CONTRACTOR && ! config('app.is_licensing_instance')) {
+            abort(403, 'Contractor queries are only available on licensing instances.');
+        }
+
+        return view('public.query-form', [
+            'company' => $company,
+            'token' => $token,
+            'kind' => $kind,
+            'submitted' => (bool) $request->boolean('submitted'),
+            'errors' => session('errors'),
+        ]);
+    }
+
+    /**
+     * Process hosted public form submissions.
+     */
+    public function publicStore(Request $request, int $companyId, string $token): RedirectResponse
+    {
+        $company = Company::query()->whereKey($companyId)->firstOrFail();
+        abort_unless($company->is_active, 404);
+        abort_unless($this->isValidPublicFormToken($company, $token), 403, 'Invalid form token.');
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'surname' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255'],
+            'cell' => ['required', 'string', 'max:50'],
+            'description' => ['required', 'string', 'max:5000'],
+            'kind' => ['nullable', 'in:enquiry,contractor'],
+            'company_name' => ['nullable', 'required_if:kind,contractor', 'string', 'max:255'],
+            'company_registration_no' => ['nullable', 'required_if:kind,contractor', 'string', 'max:255'],
+            'company_address' => ['nullable', 'required_if:kind,contractor', 'string', 'max:500'],
+            'company_email' => ['nullable', 'required_if:kind,contractor', 'email', 'max:255'],
+            'company_contact_number' => ['nullable', 'required_if:kind,contractor', 'string', 'max:100'],
+            'company_website' => ['nullable', 'required_if:kind,contractor', 'url', 'max:255'],
+            self::PUBLIC_FORM_HONEYPOT_FIELD => ['nullable', 'max:0'],
+            'attachments' => ['nullable', 'array', 'max:10'],
+            'attachments.*' => ['file', 'max:51200', 'mimes:jpg,jpeg,png,gif,webp,mp4,mov,avi,webm'],
+        ], [
+            'attachments.max' => 'You can upload a maximum of 10 files.',
+            'attachments.*.max' => 'Each file may not be larger than 50MB.',
+            'attachments.*.mimes' => 'Each file must be an image or video.',
+        ]);
+
+        $kind = (string) ($validated['kind'] ?? Query::KIND_ENQUIRY);
+        if ($kind === Query::KIND_CONTRACTOR && ! config('app.is_licensing_instance')) {
+            abort(403, 'Contractor queries are only available on licensing instances.');
+        }
+
+        $query = Query::create([
+            'company_id' => $company->id,
+            'kind' => $kind,
+            'name' => $validated['name'],
+            'surname' => $validated['surname'],
+            'email' => $validated['email'],
+            'cell' => $validated['cell'],
+            'description' => $validated['description'],
+            'company_name' => $validated['company_name'] ?? null,
+            'company_registration_no' => $validated['company_registration_no'] ?? null,
+            'company_address' => $validated['company_address'] ?? null,
+            'company_email' => $validated['company_email'] ?? null,
+            'company_contact_number' => $validated['company_contact_number'] ?? null,
+            'company_website' => $validated['company_website'] ?? null,
+            'status' => Query::STATUS_OPEN,
+            'response' => $kind === Query::KIND_CONTRACTOR ? Query::RESPONSE_PENDING : null,
+        ]);
+
+        foreach ((array) $request->file('attachments', []) as $file) {
+            $query->attachments()->create([
+                'path' => $file->store('query-attachments', 'public'),
+                'type' => str_starts_with((string) $file->getMimeType(), 'video/') ? 'video' : 'image',
+                'original_name' => $file->getClientOriginalName(),
+            ]);
+        }
+
+        return redirect()
+            ->route('queries.public.form', [
+                'companyId' => $company->id,
+                'token' => $token,
+                'submitted' => 1,
+            ]);
+    }
+
+    /**
+     * Embeddable script that injects the hosted form in an iframe.
+     */
+    public function embedScript(Request $request): \Symfony\Component\HttpFoundation\Response
+    {
+        $companyId = (int) $request->query('company', 0);
+        $token = (string) $request->query('token', '');
+        $height = (int) $request->query('height', 820);
+        $height = max(500, min(1800, $height));
+        $kind = (string) $request->query('kind', Query::KIND_ENQUIRY);
+        if (! in_array($kind, [Query::KIND_ENQUIRY, Query::KIND_CONTRACTOR], true)) {
+            $kind = Query::KIND_ENQUIRY;
+        }
+
+        abort_unless($companyId > 0 && $token !== '', 422, 'Missing embed parameters.');
+
+        $company = Company::query()->whereKey($companyId)->where('is_active', true)->firstOrFail();
+        abort_unless($this->isValidPublicFormToken($company, $token), 403, 'Invalid form token.');
+        if ($kind === Query::KIND_CONTRACTOR && ! config('app.is_licensing_instance')) {
+            abort(403, 'Contractor queries are only available on licensing instances.');
+        }
+
+        $formUrl = route('queries.public.form', ['companyId' => $company->id, 'token' => $token]).'?kind='.$kind;
+        $script = <<<JS
+(function () {
+  var script = document.currentScript;
+  if (!script) return;
+  var iframe = document.createElement('iframe');
+  iframe.src = '{$formUrl}';
+  iframe.width = '100%';
+  iframe.height = '{$height}';
+  iframe.style.border = '0';
+  iframe.style.maxWidth = '100%';
+  iframe.loading = 'lazy';
+  iframe.referrerPolicy = 'strict-origin-when-cross-origin';
+  iframe.title = 'Query form';
+  script.parentNode.insertBefore(iframe, script);
+})();
+JS;
+
+        return response($script, 200, [
+            'Content-Type' => 'application/javascript; charset=UTF-8',
+            'Cache-Control' => 'no-store, no-cache, must-revalidate',
+        ]);
     }
 
     /**
@@ -126,6 +291,7 @@ class QueriesController extends Controller
                 'open' => (clone $base)->where('status', Query::STATUS_OPEN)->count(),
                 'closed' => (clone $base)->where('status', Query::STATUS_CLOSED)->count(),
             ],
+            'integration' => $this->buildIntegrationPayload($currentCompany),
         ]);
     }
 
@@ -147,6 +313,12 @@ class QueriesController extends Controller
                 'email' => $query->email,
                 'cell' => $query->cell,
                 'description' => $query->description,
+                'company_name' => $query->company_name,
+                'company_registration_no' => $query->company_registration_no,
+                'company_address' => $query->company_address,
+                'company_email' => $query->company_email,
+                'company_contact_number' => $query->company_contact_number,
+                'company_website' => $query->company_website,
                 'status' => $query->status,
                 'created_at' => $query->created_at?->toIso8601String(),
                 // Job fields (null for public enquiries). For job queries these
@@ -162,6 +334,9 @@ class QueriesController extends Controller
                 'quote_total_amount' => $query->quote_total_amount,
                 'quote_client_email' => $query->quote_client_email,
                 'quote_client_phone' => $query->quote_client_phone,
+                'accepted_at' => $query->accepted_at?->toIso8601String(),
+                'accepted_customer_id' => $query->accepted_customer_id,
+                'accepted_contact_id' => $query->accepted_contact_id,
                 'attachments' => $query->attachments->map(fn ($attachment) => [
                     'id' => $attachment->id,
                     'url' => Storage::disk('public')->url($attachment->path),
@@ -323,6 +498,77 @@ class QueriesController extends Controller
     }
 
     /**
+     * Accept a contractor onboarding query and create a customer + linked contact.
+     */
+    public function acceptContractor(Query $query): RedirectResponse
+    {
+        $this->authorize('update', $query);
+        abort_unless($query->isContractorQuery(), 404);
+        abort_if($query->response && $query->response !== Query::RESPONSE_PENDING, 422, 'This contractor query is no longer actionable.');
+
+        $companyId = (int) $query->company_id;
+
+        [$customer, $contact] = DB::transaction(function () use ($query, $companyId) {
+            $customerEmail = $query->company_email ?: $query->email;
+            $customerPhone = $query->company_contact_number ?: $query->cell;
+            $customerName = trim((string) ($query->company_name ?: ($query->name.' '.$query->surname)));
+
+            $customer = Customer::query()
+                ->where('company_id', $companyId)
+                ->when($customerEmail, fn ($q) => $q->where('email', $customerEmail), fn ($q) => $q->where('name', $customerName))
+                ->first();
+
+            if (! $customer) {
+                $customer = Customer::create([
+                    'company_id' => $companyId,
+                    'name' => $customerName !== '' ? $customerName : 'Contractor Prospect',
+                    'email' => $customerEmail ?: null,
+                    'phone' => $customerPhone ?: null,
+                    'address' => $query->company_address ?: null,
+                    'notes' => trim(collect([
+                        $query->company_registration_no ? 'Registration No: '.$query->company_registration_no : null,
+                        $query->company_website ? 'Website: '.$query->company_website : null,
+                        'Source Query #'.$query->id,
+                    ])->filter()->implode("\n")),
+                    'account_code' => Customer::generateAccountCode($customerName !== '' ? $customerName : 'Contractor', $companyId),
+                ]);
+            }
+
+            $contactName = trim($query->name.' '.$query->surname);
+            $contact = Contact::query()
+                ->where('company_id', $companyId)
+                ->where('customer_id', $customer->id)
+                ->when($query->email, fn ($q) => $q->where('email', $query->email), fn ($q) => $q->where('name', $contactName))
+                ->first();
+
+            if (! $contact) {
+                $contact = Contact::create([
+                    'company_id' => $companyId,
+                    'customer_id' => $customer->id,
+                    'name' => $contactName !== '' ? $contactName : 'Primary Contact',
+                    'email' => $query->email ?: null,
+                    'phone' => $query->cell ?: null,
+                    'position' => 'Contact person',
+                    'is_primary' => true,
+                ]);
+            }
+
+            $query->update([
+                'response' => Query::RESPONSE_ACCEPTED,
+                'responded_at' => now(),
+                'accepted_at' => now(),
+                'accepted_customer_id' => $customer->id,
+                'accepted_contact_id' => $contact->id,
+                'status' => Query::STATUS_CLOSED,
+            ]);
+
+            return [$customer, $contact];
+        });
+
+        return redirect()->back()->with('success', "Contractor accepted and converted to customer {$customer->name} with contact {$contact->name}.");
+    }
+
+    /**
      * Update the status of the specified query (open/closed).
      */
     public function update(Request $request, Query $query): RedirectResponse
@@ -355,5 +601,73 @@ class QueriesController extends Controller
         $filters = array_filter($request->only(['status', 'search', 'page']), fn ($value) => $value !== null && $value !== '');
 
         return redirect()->route('queries.index', $filters)->with('success', 'Query deleted.');
+    }
+
+    private function publicFormKey(): string
+    {
+        $configured = (string) config('services.query_api.public_form_key', '');
+
+        if ($configured !== '') {
+            return $configured;
+        }
+
+        return (string) config('services.query_api.key', '');
+    }
+
+    private function publicFormTokenForCompany(Company $company): ?string
+    {
+        $key = $this->publicFormKey();
+        if ($key === '') {
+            return null;
+        }
+
+        return hash_hmac('sha256', 'company:'.$company->id, $key);
+    }
+
+    private function isValidPublicFormToken(Company $company, string $provided): bool
+    {
+        $key = $this->publicFormKey();
+        if ($key === '' || $provided === '') {
+            return false;
+        }
+
+        $expected = hash_hmac('sha256', 'company:'.$company->id, $key);
+
+        return hash_equals($expected, $provided);
+    }
+
+    /**
+     * @return array<string, string>|null
+     */
+    private function buildIntegrationPayload(?Company $company): ?array
+    {
+        if (! $company) {
+            return null;
+        }
+
+        $token = $this->publicFormTokenForCompany($company);
+        if ($token === null) {
+            return null;
+        }
+        $publicUrl = route('queries.public.form', [
+            'companyId' => $company->id,
+            'token' => $token,
+        ]);
+        $embedUrl = route('queries.public.embed');
+
+        $contractorPublicUrl = null;
+        $contractorEmbedHtml = null;
+        if (config('app.is_licensing_instance')) {
+            $contractorPublicUrl = $publicUrl.'?kind=contractor';
+            $contractorEmbedHtml = '<script src="'.$embedUrl.'?company='.$company->id.'&token='.$token.'&kind=contractor" async></script>';
+        }
+
+        return [
+            'public_url' => $publicUrl,
+            'embed_script_url' => $embedUrl.'?company='.$company->id.'&token='.$token,
+            'embed_html' => '<script src="'.$embedUrl.'?company='.$company->id.'&token='.$token.'" async></script>',
+            'contractor_public_url' => $contractorPublicUrl,
+            'contractor_embed_html' => $contractorEmbedHtml,
+        ];
     }
 }

@@ -22,6 +22,8 @@ class Query extends Model
 
     public const KIND_JOB = 'job';
 
+    public const KIND_CONTRACTOR = 'contractor';
+
     public const RESPONSE_PENDING = 'pending';
 
     public const RESPONSE_ACCEPTED = 'accepted';
@@ -42,9 +44,18 @@ class Query extends Model
         'email',
         'cell',
         'description',
+        'company_name',
+        'company_registration_no',
+        'company_address',
+        'company_email',
+        'company_contact_number',
+        'company_website',
         'status',
         'response',
         'responded_at',
+        'accepted_at',
+        'accepted_customer_id',
+        'accepted_contact_id',
         'job_location',
         'job_latitude',
         'job_longitude',
@@ -56,6 +67,7 @@ class Query extends Model
 
     protected $casts = [
         'responded_at' => 'datetime',
+        'accepted_at' => 'datetime',
         'job_latitude' => 'decimal:7',
         'job_longitude' => 'decimal:7',
         'quote_line_items' => 'array',
@@ -77,6 +89,11 @@ class Query extends Model
     public function isJob(): bool
     {
         return $this->kind === self::KIND_JOB;
+    }
+
+    public function isContractorQuery(): bool
+    {
+        return $this->kind === self::KIND_CONTRACTOR;
     }
 
     /**

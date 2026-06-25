@@ -162,6 +162,9 @@ return [
         // external sites (e.g. the Revamp marketing landing page). Required for
         // the POST /api/queries endpoint to accept requests.
         'key' => env('QUERY_API_KEY'),
+        // Token secret used for browser-facing hosted/embedded query forms.
+        // Keep separate from QUERY_API_KEY where possible.
+        'public_form_key' => env('QUERY_PUBLIC_FORM_KEY'),
     ],
 
     'revamp' => [

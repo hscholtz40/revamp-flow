@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\TimeEntry;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 
 class TimesheetController extends Controller
 {
@@ -31,10 +32,18 @@ class TimesheetController extends Controller
             'hourly_rate' => ['nullable', 'numeric'],
         ]);
 
+        $durationMinutes = $this->calculateDurationMinutes(
+            $payload['date'],
+            $payload['start_time'],
+            $payload['end_time'] ?? null,
+            0
+        );
+
         $entry = TimeEntry::create([
             ...$payload,
             'company_id' => $this->companyId($request),
             'user_id' => $request->user()->id,
+            'duration_minutes' => $durationMinutes,
             'status' => 'completed',
         ]);
 
@@ -52,6 +61,20 @@ class TimesheetController extends Controller
             'is_billable' => ['nullable', 'boolean'],
             'hourly_rate' => ['nullable', 'numeric'],
         ]);
+
+        $effectiveDate = $payload['date'] ?? $timeEntry->date?->toDateString() ?? now()->toDateString();
+        $effectiveStartTime = $payload['start_time'] ?? $timeEntry->start_time?->format('H:i');
+        $effectiveEndTime = $payload['end_time'] ?? $timeEntry->end_time?->format('H:i');
+
+        if ($effectiveStartTime !== null) {
+            $payload['duration_minutes'] = $this->calculateDurationMinutes(
+                $effectiveDate,
+                $effectiveStartTime,
+                $effectiveEndTime,
+                (int) $timeEntry->duration_minutes
+            );
+        }
+
         $timeEntry->update($payload);
 
         return response()->json($timeEntry->fresh());
@@ -78,6 +101,7 @@ class TimesheetController extends Controller
             'jobcard_id' => $payload['jobcard_id'],
             'date' => now()->toDateString(),
             'start_time' => now()->format('H:i'),
+            'started_at' => now(),
             'status' => 'running',
             'description' => $payload['description'] ?? null,
         ]);
@@ -94,7 +118,11 @@ class TimesheetController extends Controller
             ->latest('id')
             ->firstOrFail();
 
-        $entry->update(['status' => 'paused']);
+        if ($entry->started_at) {
+            $entry->pauseTimer();
+        } else {
+            $entry->update(['status' => 'paused']);
+        }
 
         return response()->json($entry->fresh());
     }
@@ -108,7 +136,7 @@ class TimesheetController extends Controller
             ->latest('id')
             ->firstOrFail();
 
-        $entry->update(['status' => 'running']);
+        $entry->resumeTimer();
 
         return response()->json($entry->fresh());
     }
@@ -122,12 +150,36 @@ class TimesheetController extends Controller
             ->latest('id')
             ->firstOrFail();
 
-        $entry->update([
-            'status' => 'completed',
-            'end_time' => now()->format('H:i'),
-        ]);
+        if ($entry->status === 'running' && $entry->started_at) {
+            $entry->stopTimer();
+        } else {
+            $entry->update([
+                'status' => 'completed',
+                'end_time' => now()->format('H:i'),
+            ]);
+        }
 
         return response()->json($entry->fresh());
+    }
+
+    private function calculateDurationMinutes(
+        string $date,
+        string $startTime,
+        ?string $endTime,
+        int $fallbackMinutes
+    ): int {
+        if ($endTime === null) {
+            return $fallbackMinutes;
+        }
+
+        $start = Carbon::parse("{$date} {$startTime}");
+        $end = Carbon::parse("{$date} {$endTime}");
+
+        if ($end->lessThan($start)) {
+            $end->addDay();
+        }
+
+        return $start->diffInMinutes($end);
     }
 
     private function companyId(Request $request): int
