@@ -51,10 +51,7 @@ interface Props {
     };
     integration?: {
         public_url: string;
-        embed_script_url: string;
-        embed_html: string;
         contractor_public_url?: string | null;
-        contractor_embed_html?: string | null;
     } | null;
 }
 
@@ -161,25 +158,11 @@ function formatDate(value: string) {
                             <button type="button" class="rounded bg-blue-600 px-3 py-2 text-white hover:bg-blue-700" @click="copy(props.integration.public_url)">Copy</button>
                         </div>
                     </div>
-                    <div>
-                        <p class="mb-1 font-medium text-gray-800">Embed snippet</p>
-                        <div class="flex gap-2">
-                            <textarea :value="props.integration.embed_html" readonly rows="2" class="w-full rounded border border-gray-300 px-3 py-2 font-mono text-xs text-gray-700"></textarea>
-                            <button type="button" class="rounded bg-blue-600 px-3 py-2 text-white hover:bg-blue-700" @click="copy(props.integration.embed_html)">Copy</button>
-                        </div>
-                    </div>
                     <div v-if="props.integration.contractor_public_url">
                         <p class="mb-1 font-medium text-gray-800">Contractor Form URL (Licensing only)</p>
                         <div class="flex gap-2">
                             <input :value="props.integration.contractor_public_url" readonly class="w-full rounded border border-gray-300 px-3 py-2 text-xs text-gray-700" />
                             <button type="button" class="rounded bg-blue-600 px-3 py-2 text-white hover:bg-blue-700" @click="copy(props.integration.contractor_public_url)">Copy</button>
-                        </div>
-                    </div>
-                    <div v-if="props.integration.contractor_embed_html">
-                        <p class="mb-1 font-medium text-gray-800">Contractor embed snippet</p>
-                        <div class="flex gap-2">
-                            <textarea :value="props.integration.contractor_embed_html" readonly rows="2" class="w-full rounded border border-gray-300 px-3 py-2 font-mono text-xs text-gray-700"></textarea>
-                            <button type="button" class="rounded bg-blue-600 px-3 py-2 text-white hover:bg-blue-700" @click="copy(props.integration.contractor_embed_html)">Copy</button>
                         </div>
                     </div>
                 </div>

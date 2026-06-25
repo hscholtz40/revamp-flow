@@ -2,6 +2,7 @@
 
 ## 2026-06-25
 
+- **Queries integration UI simplification:** Removed embeddable snippet fields from the Queries integration panel and now display only copyable hosted public form URLs.
 - **API timesheet duration fix:** Fixed `/api/v1/time-entries` and timer endpoints to persist `duration_minutes` correctly (including pause/resume accumulation), preventing valid mobile time entries from appearing as `0m` in production.
 - **Contractor query type (licensing-only):** Added `contractor` queries with onboarding fields (contact person details plus company name/registration/address/email/contact/website), available only on licensing instances for hosted and embedded public forms.
 - **Contractor acceptance workflow:** Queries can now be accepted as contractor onboarding, which creates/links a `Customer` and primary `Contact`, marks the query accepted/closed, and stores linked record IDs.
