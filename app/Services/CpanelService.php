@@ -229,7 +229,7 @@ class CpanelService
                 'DB_DATABASE' => $fullDbName,
                 'DB_USERNAME' => $fullDbUser,
                 'DB_PASSWORD' => $dbPassword,
-            ], $this->buildDeployedPushEnvVariables($subdomainRoot)));
+            ], $this->buildDeployedMailEnvVariables(), $this->buildDeployedPushEnvVariables($subdomainRoot)));
             $steps[] = ['step' => 'Update .env file', 'result' => $result];
 
             if (! $result['success']) {
@@ -330,8 +330,8 @@ class CpanelService
             "EXTRACTED_DIR=\$(find . -maxdepth 1 -mindepth 1 -type d -name 'jobcardonline-v*' | head -1) && ".
             'if [ -n "$EXTRACTED_DIR" ]; then '.
             'echo "Found: $EXTRACTED_DIR" && '.
-            'rm "$EXTRACTED_DIR"/.env . && '.
-            "echo 'env file removed'; ".
+            'rm -f "$EXTRACTED_DIR/.env" && '.
+            "echo 'Package .env removed before merge'; ".
             'else '.
             "echo 'No extracted directory found. Contents:' && ls -la {$subdomainRoot}; ".
             'fi';
@@ -565,7 +565,7 @@ class CpanelService
             }
 
             $stringValue = (string) $value;
-            $escapedValue = str_replace(['\\', '&', '|'], ['\\\\', '\\&', '\\|'], $stringValue);
+            $escapedValue = $this->escapeEnvValueForSed($stringValue);
             $sedCommands[] = "if grep -q '^{$key}=' {$envPath}; then "
                 ."sed -i 's|^{$key}=.*|{$key}={$escapedValue}|' {$envPath}; "
                 ."else printf '%s\\n' '{$key}={$escapedValue}' >> {$envPath}; fi";
@@ -581,9 +581,24 @@ class CpanelService
     }
 
     /**
-     * Add env vars only when keys are missing, preserving existing instance overrides.
+     * Add env vars when keys are missing or still carry empty / package-template placeholders.
+     * Preserves non-empty instance-specific overrides.
      */
     private function appendMissingEnvVariables(string $subdomainRoot, array $variables): array
+    {
+        $commands = $this->buildAppendMissingEnvCommands($subdomainRoot, $variables);
+
+        if ($commands === []) {
+            return ['success' => true];
+        }
+
+        return $this->runShellCommand(implode(' && ', $commands));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function buildAppendMissingEnvCommands(string $subdomainRoot, array $variables): array
     {
         $envPath = "{$subdomainRoot}/.env";
         $commands = [];
@@ -593,15 +608,23 @@ class CpanelService
                 continue;
             }
 
-            $stringValue = str_replace("'", "'\"'\"'", (string) $value);
-            $commands[] = "if ! grep -q '^{$key}=' {$envPath}; then printf '%s\\n' '{$key}={$stringValue}' >> {$envPath}; fi";
+            $escapedValue = $this->escapeEnvValueForSed((string) $value);
+            $commands[] = "CURRENT=\$(grep -m1 '^{$key}=' {$envPath} 2>/dev/null | cut -d= -f2- | sed 's/^\"//;s/\"\$//' | sed \"s/^'//;s/'\$//\")"
+                ." && SHOULD_SET=0"
+                ." && if ! grep -q '^{$key}=' {$envPath}; then SHOULD_SET=1; fi"
+                ." && if [ -z \"\$CURRENT\" ] || [ \"\$CURRENT\" = 'null' ] || [ \"\$CURRENT\" = 'mailpit' ] || [ \"\$CURRENT\" = 'hello@example.com' ]; then SHOULD_SET=1; fi"
+                .' && if [ "$SHOULD_SET" -eq 1 ]; then '
+                ."if grep -q '^{$key}=' {$envPath}; then "
+                ."sed -i 's|^{$key}=.*|{$key}={$escapedValue}|' {$envPath}; "
+                ."else printf '%s\\n' '{$key}={$escapedValue}' >> {$envPath}; fi; fi";
         }
 
-        if ($commands === []) {
-            return ['success' => true];
-        }
+        return $commands;
+    }
 
-        return $this->runShellCommand(implode(' && ', $commands));
+    private function escapeEnvValueForSed(string $value): string
+    {
+        return str_replace(['\\', '&', '|', "\n"], ['\\\\', '\\&', '\\|', '\\n'], $value);
     }
 
     /**
@@ -614,6 +637,9 @@ class CpanelService
         $filename = (string) config('services.deploy.fcm_credentials_filename', 'revampjobcard-8f5fb37b5d39.json');
         $variables = [
             'FCM_CREDENTIALS_PATH' => "{$subdomainRoot}/storage/app/{$filename}",
+            'FCM_PROJECT_ID' => (string) (config('services.push.fcm_project_id') ?? ''),
+            'FCM_CLIENT_EMAIL' => (string) (config('services.push.fcm_client_email') ?? ''),
+            'FCM_PRIVATE_KEY' => (string) (config('services.push.fcm_private_key') ?? ''),
             'APNS_KEY_ID' => (string) (config('services.push.apns_key_id') ?? ''),
             'APNS_TEAM_ID' => (string) (config('services.push.apns_team_id') ?? ''),
             'APNS_APP_BUNDLE_ID' => (string) (config('services.push.apns_app_bundle_id') ?? ''),
