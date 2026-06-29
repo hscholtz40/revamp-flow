@@ -44,11 +44,17 @@ interface ChartOfAccount {
     account_type: string;
 }
 
+interface SupplierOption {
+    id: number;
+    name: string;
+}
+
 interface Props {
     product: Product;
     categories: Category[];
     currentCompany: Company;
     chartOfAccounts: ChartOfAccount[];
+    suppliers: SupplierOption[];
 }
 
 const props = defineProps<Props>();
@@ -70,6 +76,9 @@ const form = useForm({
     valuation_method: (props.product as any).valuation_method || 'fifo',
     is_active: props.product.is_active,
     category: props.product.category || '',
+    supplier_id: (props.product as { supplier_id?: number | null; supplier?: { id: number } | null }).supplier_id
+        ?? (props.product as { supplier?: { id: number } | null }).supplier?.id
+        ?? null,
     tags: Array.isArray(props.product.tags) ? [...props.product.tags] : [],
     image_path: props.product.image_path || '',
     notes: props.product.notes || '',
@@ -241,6 +250,29 @@ function getTypeColor(type: string) {
                                 </select>
                                 <div v-if="form.errors.category" class="mt-1 text-sm text-red-600">
                                     {{ form.errors.category }}
+                                </div>
+                            </div>
+
+                            <!-- Supplier -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">
+                                    Supplier
+                                </label>
+                                <select
+                                    v-model="form.supplier_id"
+                                    class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                >
+                                    <option :value="null">No supplier</option>
+                                    <option
+                                        v-for="supplier in props.suppliers"
+                                        :key="supplier.id"
+                                        :value="supplier.id"
+                                    >
+                                        {{ supplier.name }}
+                                    </option>
+                                </select>
+                                <div v-if="form.errors.supplier_id" class="mt-1 text-sm text-red-600">
+                                    {{ form.errors.supplier_id }}
                                 </div>
                             </div>
 

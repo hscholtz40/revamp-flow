@@ -9,6 +9,7 @@ use App\Models\EmailTemplate;
 use App\Models\SMSActivity;
 use App\Models\SMSSettings;
 use App\Services\BulkSMSService;
+use App\Support\CompanyMailer;
 use App\Support\CompanyScopedRules;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -424,11 +425,11 @@ class ContactController extends Controller
         }
 
         try {
-            Mail::mailer('smtp')->send([], [], function ($message) use ($contact, $subject, $renderedHtml, $currentCompany) {
-                $fromName = $currentCompany->name ?: config('mail.from.name');
+            $mailConfig = CompanyMailer::resolve($currentCompany);
+            Mail::mailer($mailConfig['mailer'])->send([], [], function ($message) use ($contact, $subject, $renderedHtml, $currentCompany, $mailConfig) {
                 $message->to($contact->email, $contact->name)
                     ->subject($subject)
-                    ->from(config('mail.from.address'), $fromName)
+                    ->from($mailConfig['from_address'], $mailConfig['from_name'])
                     ->html($renderedHtml);
 
                 if (! empty($currentCompany->email)) {

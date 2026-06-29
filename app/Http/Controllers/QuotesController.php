@@ -12,19 +12,23 @@ use App\Models\Note;
 use App\Models\Product;
 use App\Models\PurchaseOrder;
 use App\Models\Quote;
+use App\Models\Supplier;
 use App\Models\TaxRate;
 use App\Services\QuoteUpsertService;
 use App\Services\ReminderService;
 use App\Support\ColumnFilters;
+use App\Support\CompanyMailer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class QuotesController extends Controller
 {
+    private const EMAIL_RESPONSE_DECISIONS = ['accepted', 'rejected'];
     /**
      * Display a listing of the resource.
      */
@@ -166,7 +170,10 @@ class QuotesController extends Controller
         $products = Product::where('company_id', $currentCompany->id)
             ->where('is_active', true)
             ->orderBy('name')
-            ->get(['id', 'name', 'sku', 'price', 'type']);
+            ->get(['id', 'name', 'sku', 'price', 'cost', 'type', 'supplier_id']);
+        $suppliers = Supplier::where('company_id', $currentCompany->id)
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
         $taxRates = TaxRate::where('company_id', $currentCompany->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'rate', 'is_default_sales']);
         $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
@@ -201,10 +208,12 @@ class QuotesController extends Controller
                 $prefillLineItems = $sourceJobcard->lineItems->sortBy('sort_order')->map(function ($item) use ($groupIdToIndex) {
                     return [
                         'product_id' => $item->product_id,
+                        'supplier_id' => $item->product?->supplier_id,
                         'line_group_id' => $groupIdToIndex[$item->line_group_id] ?? 1,
                         'description' => $item->description,
                         'quantity' => (int) ($item->quantity ?? 1),
                         'unit_price' => (float) ($item->unit_price ?? 0),
+                        'cost' => 0,
                         'discount_amount' => (float) ($item->discount_amount ?? 0),
                         'discount_percentage' => (float) ($item->discount_percentage ?? 0),
                         'tax_rate_id' => $item->tax_rate_id,
@@ -215,10 +224,12 @@ class QuotesController extends Controller
                 if (empty($prefillLineItems)) {
                     $prefillLineItems = [[
                         'product_id' => null,
+                        'supplier_id' => null,
                         'line_group_id' => 1,
                         'description' => '',
                         'quantity' => 1,
                         'unit_price' => 0,
+                        'cost' => 0,
                         'discount_amount' => 0,
                         'discount_percentage' => 0,
                         'tax_rate_id' => $defaultSalesTaxRate?->id,
@@ -250,9 +261,20 @@ class QuotesController extends Controller
             }
         }
 
+        if ($request->filled('customer_id')) {
+            $requestedCustomer = Customer::query()
+                ->where('company_id', $currentCompany->id)
+                ->whereKey((int) $request->input('customer_id'))
+                ->first();
+            if ($requestedCustomer) {
+                $defaultSalesCustomer = $requestedCustomer;
+            }
+        }
+
         return Inertia::render('quotes/Create', [
             'customers' => $customers,
             'products' => $products,
+            'suppliers' => $suppliers,
             'currentCompany' => $currentCompany,
             'defaultTerms' => $currentCompany->default_quote_terms,
             'statusOptions' => $currentCompany->getQuoteStatusOptions(),
@@ -303,7 +325,7 @@ class QuotesController extends Controller
     {
         $this->authorize('view', $quote);
 
-        $quote->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineItems.lineGroup', 'lineGroups', 'company', 'invoice', 'source', 'signatures.user']);
+        $quote->load(['customer', 'contact', 'lineItems.product', 'lineItems.supplier', 'lineItems.taxRate', 'lineItems.lineGroup', 'lineGroups', 'company', 'invoice', 'source', 'signatures.user']);
 
         $currentCompany = auth()->user()->getCurrentCompany();
 
@@ -364,12 +386,15 @@ class QuotesController extends Controller
         $this->authorize('update', $quote);
 
         $currentCompany = auth()->user()->getCurrentCompany();
-        $quote->load(['customer', 'contact', 'lineItems.product', 'lineItems.lineGroup', 'lineGroups']);
+        $quote->load(['customer', 'contact', 'lineItems.product', 'lineItems.supplier', 'lineItems.lineGroup', 'lineGroups']);
         $customers = Customer::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name', 'email', 'phone', 'account_code']);
         $products = Product::where('company_id', $currentCompany->id)
             ->where('is_active', true)
             ->orderBy('name')
-            ->get(['id', 'name', 'sku', 'price', 'type']);
+            ->get(['id', 'name', 'sku', 'price', 'cost', 'type', 'supplier_id']);
+        $suppliers = Supplier::where('company_id', $currentCompany->id)
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
         $taxRates = TaxRate::where('company_id', $currentCompany->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'rate', 'is_default_sales']);
         $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
@@ -384,6 +409,7 @@ class QuotesController extends Controller
             'quote' => $quoteData,
             'customers' => $customers,
             'products' => $products,
+            'suppliers' => $suppliers,
             'currentCompany' => $currentCompany,
             'statusOptions' => $currentCompany->getQuoteStatusOptions(),
             'taxRates' => $taxRates,
@@ -552,20 +578,32 @@ class QuotesController extends Controller
                 ? "proforma-invoice-{$quote->quote_number}.pdf"
                 : "quote-{$quote->quote_number}.pdf";
             $subjectPrefix = $type === 'proforma-invoice' ? 'Proforma Invoice' : 'Quote';
+            $acceptUrl = URL::temporarySignedRoute(
+                'quotes.respond-email',
+                now()->addDays(30),
+                ['quoteId' => $quote->id, 'decision' => 'accepted']
+            );
+            $declineUrl = URL::temporarySignedRoute(
+                'quotes.respond-email',
+                now()->addDays(30),
+                ['quoteId' => $quote->id, 'decision' => 'rejected']
+            );
 
             $pdfService = new \App\Services\PdfGenerationService;
             $pdf = $pdfService->generatePdf($module, compact('quote', 'company'), $company, $templateId);
             $pdfContent = $pdf->output();
 
             // Send email
-            Mail::mailer('smtp')->send('emails.quote', [
+            $mailConfig = CompanyMailer::resolve($company);
+            Mail::mailer($mailConfig['mailer'])->send('emails.quote', [
                 'quote' => $quote,
                 'customMessage' => $validated['message'],
-            ], function ($message) use ($emails, $quote, $pdfContent, $filename, $subjectPrefix, $company) {
-                $fromName = $company?->name ?: config('mail.from.name');
+                'acceptUrl' => $acceptUrl,
+                'declineUrl' => $declineUrl,
+            ], function ($message) use ($emails, $quote, $pdfContent, $filename, $subjectPrefix, $company, $mailConfig) {
                 $message->to($emails)
                     ->subject("{$subjectPrefix} {$quote->quote_number} - {$quote->title}")
-                    ->from(config('mail.from.address'), $fromName)
+                    ->from($mailConfig['from_address'], $mailConfig['from_name'])
                     ->attachData($pdfContent, $filename, [
                         'mime' => 'application/pdf',
                     ]);
@@ -627,6 +665,63 @@ class QuotesController extends Controller
             }
 
             return redirect()->back()->withErrors(['message' => 'Failed to send email: '.$e->getMessage()]);
+        }
+    }
+
+    public function respondFromEmail(Request $request, int $quoteId, string $decision)
+    {
+        if (! in_array($decision, self::EMAIL_RESPONSE_DECISIONS, true)) {
+            abort(404);
+        }
+
+        $quote = Quote::query()->findOrFail($quoteId);
+        $quote->loadMissing(['company', 'customer', 'salesperson']);
+        $previousStatus = (string) $quote->status;
+        $didChange = $previousStatus !== $decision;
+
+        if ($didChange) {
+            $quote->update(['status' => $decision]);
+            $this->notifyQuoteCreatorOfCustomerResponse($quote, $decision, $previousStatus);
+        }
+
+        return response()->view('public.quote-response', [
+            'quote' => $quote,
+            'decision' => $decision,
+            'didChange' => $didChange,
+            'previousStatus' => $previousStatus,
+        ]);
+    }
+
+    private function notifyQuoteCreatorOfCustomerResponse(Quote $quote, string $decision, string $previousStatus): void
+    {
+        $creator = $quote->salesperson;
+        $company = $quote->company;
+        if (! $creator || ! $company || ! filled($creator->email)) {
+            return;
+        }
+
+        try {
+            $mailConfig = CompanyMailer::resolve($company);
+            Mail::mailer($mailConfig['mailer'])->send('emails.quote-response-notification', [
+                'quote' => $quote,
+                'decision' => $decision,
+                'previousStatus' => $previousStatus,
+                'creator' => $creator,
+            ], function ($message) use ($creator, $quote, $company, $mailConfig) {
+                $message->to($creator->email, $creator->name)
+                    ->subject("Quote {$quote->quote_number} was ".strtoupper((string) $quote->status))
+                    ->from($mailConfig['from_address'], $mailConfig['from_name']);
+
+                if (! empty($company->email)) {
+                    $message->replyTo($company->email, $company->name ?? null);
+                }
+            });
+        } catch (\Throwable $e) {
+            \Log::warning('Failed to send quote response notification to creator', [
+                'quote_id' => $quote->id,
+                'creator_id' => $creator->id,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 

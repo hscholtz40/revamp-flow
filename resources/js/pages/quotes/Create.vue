@@ -26,7 +26,16 @@
                     <h2 class="text-lg font-semibold text-gray-900 mb-4">Basic Information</h2>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div class="relative">
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Customer *</label>
+                            <div class="mb-1 flex items-center justify-between gap-2">
+                                <label class="block text-sm font-medium text-gray-700">Customer *</label>
+                                <button
+                                    type="button"
+                                    @click="openQuickCreateCustomerModal"
+                                    class="text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                                >
+                                    Quick Create Customer
+                                </button>
+                            </div>
                             <div class="relative">
                                 <input
                                     v-model="customerSearchQuery"
@@ -95,62 +104,11 @@
                             </div>
                         </div>
                         
-                        <!-- Quick Create Customer Modal -->
-                        <div
-                            v-if="showQuickCreateModal"
-                            class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-                            @click.self="showQuickCreateModal = false"
-                        >
-                            <div class="bg-white rounded-lg p-6 w-full max-w-md" @click.stop>
-                                <h3 class="text-lg font-semibold mb-4">Quick Create Customer</h3>
-                                <form @submit.prevent="quickCreateCustomer">
-                                    <div class="space-y-4">
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Name *</label>
-                                            <input
-                                                v-model="quickCreateForm.name"
-                                                type="text"
-                                                class="w-full rounded border px-3 py-2"
-                                                required
-                                            />
-                                        </div>
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Email *</label>
-                                            <input
-                                                v-model="quickCreateForm.email"
-                                                type="email"
-                                                class="w-full rounded border px-3 py-2"
-                                                required
-                                            />
-                                        </div>
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                                            <input
-                                                v-model="quickCreateForm.phone"
-                                                type="text"
-                                                class="w-full rounded border px-3 py-2"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div class="flex gap-3 mt-6">
-                                        <button
-                                            type="submit"
-                                            :disabled="quickCreateForm.processing"
-                                            class="flex-1 rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
-                                        >
-                                            Create
-                                        </button>
-                                        <button
-                                            type="button"
-                                            @click="showQuickCreateModal = false"
-                                            class="flex-1 rounded border px-4 py-2 hover:bg-gray-50"
-                                        >
-                                            Cancel
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
+                        <QuickCreateCustomerModal
+                            v-model="showQuickCreateModal"
+                            :form="quickCreateForm"
+                            @submit="quickCreateCustomer"
+                        />
 
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Title *</label>
@@ -301,19 +259,22 @@
                         {{ form.errors.line_items }}
                     </div>
 
-                    <!-- Table Header -->
-                    <div class="hidden md:grid md:grid-cols-[3.5rem_1fr_6.5rem_9rem_8rem_5.5rem_8rem_2rem] gap-2 px-3 pb-2 text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
-                        <div>Qty</div>
-                        <div>Description</div>
-                        <div>Price</div>
-                        <div>Discount</div>
-                        <div>Tax</div>
-                        <div>Account</div>
-                        <div class="text-right">Total</div>
-                        <div></div>
-                    </div>
+                    <div class="overflow-x-auto">
+                        <!-- Table Header -->
+                        <div :class="[quoteLineGridClass, 'min-w-[70rem] px-3 pb-2 text-xs font-medium text-gray-500 uppercase tracking-wider border-b']">
+                            <div>Qty</div>
+                            <div>Description</div>
+                            <div>Supplier</div>
+                            <div>Cost</div>
+                            <div>Price</div>
+                            <div>Discount</div>
+                            <div>Tax</div>
+                            <div>Account</div>
+                            <div class="text-right">Total</div>
+                            <div></div>
+                        </div>
 
-                    <div class="space-y-4">
+                    <div class="space-y-4 min-w-[70rem]">
                         <div
                             v-for="groupBlock in visibleGroupedLineItems"
                             :key="groupBlock.groupId"
@@ -338,8 +299,11 @@
                             <div
                                 v-for="groupedItem in groupBlock.items"
                                 :key="groupedItem.item._uid || groupedItem.itemIndex"
-                                class="grid grid-cols-1 md:grid-cols-[3.5rem_1fr_6.5rem_9rem_8rem_5.5rem_8rem_2rem] gap-2 items-start py-3 px-1 border-t border-gray-100 transition-colors"
-                                :class="{ 'bg-blue-50/60': dragOverItemIndex === groupedItem.itemIndex, 'opacity-60': activeDragIndex === groupedItem.itemIndex }"
+                                :class="[
+                                    quoteLineGridClass,
+                                    'py-2 px-1 border-t border-gray-100 transition-colors',
+                                    { 'bg-blue-50/60': dragOverItemIndex === groupedItem.itemIndex, 'opacity-60': activeDragIndex === groupedItem.itemIndex },
+                                ]"
                                 draggable="true"
                                 @dragstart="onDragStart(groupedItem.itemIndex, $event)"
                                 @dragend="onDragEnd"
@@ -351,19 +315,17 @@
                             <template v-if="groupedItem.item">
                             <!-- Qty -->
                             <div>
-                                <label class="block text-xs text-gray-500 mb-1 md:hidden">Qty</label>
                                 <input
                                     v-model.number="groupedItem.item.quantity"
                                     type="number"
                                     min="1"
-                                    class="w-full rounded border border-gray-300 px-2 py-1.5 text-sm text-center focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                    class="w-full rounded border border-gray-300 px-1.5 py-1 text-sm text-center focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                     required
                                 />
                             </div>
 
                             <!-- Description / Product Search -->
-                            <div class="relative">
-                                <label class="block text-xs text-gray-500 mb-1 md:hidden">Description</label>
+                            <div class="relative min-w-0">
                                 <div class="flex items-center gap-1">
                                     <input
                                         v-model="groupedItem.item.description"
@@ -410,21 +372,43 @@
                                 </div>
                             </div>
 
+                            <!-- Supplier -->
+                            <div class="min-w-0">
+                                <select
+                                    v-model="groupedItem.item.supplier_id"
+                                    class="w-full rounded border border-gray-300 px-1 py-1 text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500 truncate"
+                                >
+                                    <option :value="null">—</option>
+                                    <option v-for="supplier in props.suppliers" :key="supplier.id" :value="supplier.id">
+                                        {{ supplier.name }}
+                                    </option>
+                                </select>
+                            </div>
+
+                            <!-- Cost -->
+                            <div>
+                                <input
+                                    v-model.number="groupedItem.item.cost"
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    class="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                />
+                            </div>
+
                             <!-- Unit Price -->
                             <div>
-                                <label class="block text-xs text-gray-500 mb-1 md:hidden">Price</label>
                                 <input
                                     v-model.number="groupedItem.item.unit_price"
                                     type="number"
                                     step="0.01"
-                                    class="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                    class="w-full rounded border border-gray-300 px-1.5 py-1 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                     required
                                 />
                             </div>
 
                             <!-- Discount -->
                             <div>
-                                <label class="block text-xs text-gray-500 mb-1 md:hidden">Discount</label>
                                 <div class="flex">
                                     <input
                                         :value="getDiscountValue(groupedItem.itemIndex)"
@@ -449,10 +433,9 @@
 
                             <!-- Tax Rate -->
                             <div>
-                                <label class="block text-xs text-gray-500 mb-1 md:hidden">Tax</label>
                                 <select
                                     v-model="groupedItem.item.tax_rate_id"
-                                    class="w-full rounded border border-gray-300 px-1 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                    class="w-full rounded border border-gray-300 px-1 py-1 text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                 >
                                     <option :value="null">None</option>
                                     <option v-for="tr in props.taxRates" :key="tr.id" :value="tr.id">
@@ -463,10 +446,9 @@
 
                             <!-- Account -->
                             <div>
-                                <label class="block text-xs text-gray-500 mb-1 md:hidden">Account</label>
                                 <select
                                     v-model="groupedItem.item.account_id"
-                                    class="w-full rounded border border-gray-300 px-1 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                    class="w-full rounded border border-gray-300 px-1 py-1 text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                 >
                                     <option :value="null">None</option>
                                     <option v-for="acc in props.chartOfAccounts" :key="acc.id" :value="acc.id">
@@ -477,14 +459,16 @@
 
                             <!-- Total -->
                             <div>
-                                <label class="block text-xs text-gray-500 mb-1 md:hidden">Total</label>
-                                <div class="text-right text-sm font-medium text-gray-700 py-1.5">
+                                <div class="text-right text-sm font-medium text-gray-700 py-1 whitespace-nowrap">
                                     R{{ calculateLineTotalValue(groupedItem.item).toFixed(2) }}
+                                    <span class="ml-1 text-xs text-gray-500">
+                                        | P R{{ calculateLineProfitValue(groupedItem.item).toFixed(2) }}
+                                    </span>
                                 </div>
                             </div>
 
                             <!-- Remove -->
-                            <div class="flex items-center justify-center gap-2 md:pt-1.5">
+                            <div class="flex items-center justify-center gap-1">
                                 <DragHandleIcon />
                                 <button
                                     type="button"
@@ -500,6 +484,7 @@
                             </div>
                             </template>
                         </div>
+                    </div>
                     </div>
                     </div>
 
@@ -612,6 +597,7 @@
 </template>
 
 <script setup lang="ts">
+import QuickCreateCustomerModal from '@/components/QuickCreateCustomerModal.vue';
 import AiDocumentSuggestionPanel from '@/components/AiDocumentSuggestionPanel.vue';
 import AiDraftHelper from '@/components/AiDraftHelper.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -628,8 +614,15 @@ interface Product {
     id: number;
     name: string;
     price: number;
+    cost?: number | null;
     type: string;
     sku?: string | null;
+    supplier_id?: number | null;
+}
+
+interface SupplierOption {
+    id: number;
+    name: string;
 }
 
 interface Company {
@@ -648,6 +641,7 @@ type LineGroup = DocumentLineGroup;
 const props = defineProps<{
     customers: CustomerLookupCustomer[];
     products: Product[];
+    suppliers: SupplierOption[];
     currentCompany: Company;
     defaultTerms?: string;
     defaultSalesCustomerId?: number | null;
@@ -680,6 +674,7 @@ const props = defineProps<{
             description?: string | null;
             quantity?: number | null;
             unit_price?: number | null;
+            cost?: number | null;
             discount_amount?: number | null;
             discount_percentage?: number | null;
             tax_rate_id?: number | null;
@@ -733,10 +728,12 @@ const form = useForm({
         {
             _uid: createLineItemUid(),
             product_id: null,
+            supplier_id: null,
             line_group_id: 1,
             description: '',
             quantity: 1,
             unit_price: 0,
+            cost: 0,
             discount_amount: 0,
             discount_percentage: 0,
             tax_rate_id: props.defaultSalesTaxRateId || null,
@@ -778,6 +775,11 @@ const {
     },
 });
 
+const openQuickCreateCustomerModal = () => {
+    quickCreateForm.name = customerSearchQuery.value || '';
+    showQuickCreateModal.value = true;
+};
+
 if (props.defaultSalesCustomerId && !props.prefill) {
     const defaultCustomer = props.customers.find(c => c.id === props.defaultSalesCustomerId);
     if (defaultCustomer) {
@@ -816,10 +818,12 @@ if (props.prefill) {
     const prefillItems = (source.line_items || []).map((item) => ({
         _uid: createLineItemUid(),
         product_id: item.product_id != null ? String(item.product_id) : null,
+        supplier_id: item.supplier_id ?? null,
         line_group_id: Number(item.line_group_id ?? 1) || 1,
         description: item.description || '',
         quantity: Number(item.quantity ?? 1) || 1,
         unit_price: Number(item.unit_price ?? 0) || 0,
+        cost: Number(item.cost ?? 0) || 0,
         discount_amount: Number(item.discount_amount ?? 0) || 0,
         discount_percentage: Number(item.discount_percentage ?? 0) || 0,
         tax_rate_id: item.tax_rate_id ?? props.defaultSalesTaxRateId ?? null,
@@ -829,10 +833,12 @@ if (props.prefill) {
     form.line_items = prefillItems.length > 0 ? prefillItems : [{
         _uid: createLineItemUid(),
         product_id: null,
+        supplier_id: null,
         line_group_id: 1,
         description: '',
         quantity: 1,
         unit_price: 0,
+        cost: 0,
         discount_amount: 0,
         discount_percentage: 0,
         tax_rate_id: props.defaultSalesTaxRateId || null,
@@ -864,15 +870,19 @@ const normalizeLineItemOrder = () => {
     form.line_items = ordered;
 };
 
+const quoteLineGridClass = 'grid grid-cols-[2.25rem_minmax(10rem,1fr)_7rem_4rem_4rem_6rem_6rem_5.5rem_6.5rem_7rem_2rem] gap-1.5 items-center';
+
 const addLineItem = (groupIndex = 0) => {
     const defaultGroupId = getDefaultGroupId(groupIndex);
     form.line_items.push({
         _uid: createLineItemUid(),
         product_id: null,
+        supplier_id: null,
         line_group_id: defaultGroupId,
         description: '',
         quantity: 1,
         unit_price: 0,
+        cost: 0,
         discount_amount: 0,
         discount_percentage: 0,
         tax_rate_id: props.defaultSalesTaxRateId || null,
@@ -1075,6 +1085,10 @@ const selectProductSuggestion = (index: number, product: Product) => {
     item.product_id = product.id.toString();
     item.description = product.name;
     item.unit_price = product.price;
+    item.cost = Number(product.cost ?? 0) || 0;
+    if (product.supplier_id) {
+        item.supplier_id = product.supplier_id;
+    }
     showProductSuggestions.value[index] = false;
 };
 
@@ -1134,6 +1148,13 @@ const calculateLineTotalValue = (item: LineItem) => {
     }
     
     return subtotal - finalDiscount;
+};
+
+const calculateLineProfitValue = (item: LineItem) => {
+    const lineTotal = calculateLineTotalValue(item);
+    const quantity = Number(item.quantity) || 0;
+    const unitCost = Number(item.cost) || 0;
+    return lineTotal - (quantity * unitCost);
 };
 
 const isRoundingAdjustmentLine = (item: LineItem | undefined): boolean => {

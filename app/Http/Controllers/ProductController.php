@@ -8,6 +8,8 @@ use App\Models\Invoice;
 use App\Models\InvoiceLineItem;
 use App\Models\Product;
 use App\Models\PurchaseOrderItem;
+use App\Models\Supplier;
+use App\Support\CompanyScopedRules;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -125,11 +127,15 @@ class ProductController extends Controller
             ->where('is_active', true)
             ->ordered()
             ->get(['id', 'account_code', 'account_name', 'account_type']);
+        $suppliers = Supplier::where('company_id', $currentCompany->id)
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
         return Inertia::render('products/Create', [
             'categories' => $categories,
             'currentCompany' => $currentCompany,
             'chartOfAccounts' => $chartOfAccounts,
+            'suppliers' => $suppliers,
         ]);
     }
 
@@ -171,6 +177,7 @@ class ProductController extends Controller
             'tags.*' => ['string', 'max:50'],
             'image_path' => ['nullable', 'string', 'max:500'],
             'notes' => ['nullable', 'string'],
+            'supplier_id' => ['nullable', CompanyScopedRules::supplier($currentCompany->id)],
         ]);
 
         // For services, don't track stock
@@ -257,12 +264,16 @@ class ProductController extends Controller
             ->where('is_active', true)
             ->ordered()
             ->get(['id', 'account_code', 'account_name', 'account_type']);
+        $suppliers = Supplier::where('company_id', $currentCompany->id)
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
         return Inertia::render('products/Edit', [
-            'product' => $product,
+            'product' => $product->load('supplier'),
             'categories' => $categories,
             'currentCompany' => $currentCompany,
             'chartOfAccounts' => $chartOfAccounts,
+            'suppliers' => $suppliers,
         ]);
     }
 
@@ -310,6 +321,7 @@ class ProductController extends Controller
             'notes' => ['nullable', 'string'],
             'purchase_account_code' => ['nullable', 'string', 'max:50'],
             'sales_account_code' => ['nullable', 'string', 'max:50'],
+            'supplier_id' => ['nullable', CompanyScopedRules::supplier($currentCompany->id)],
         ]);
 
         // For services, don't track stock

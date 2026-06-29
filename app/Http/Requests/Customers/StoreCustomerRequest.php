@@ -19,6 +19,7 @@ class StoreCustomerRequest extends FormRequest
 
         return [
             'name' => ['required', 'string', 'max:255'],
+            'registration_number' => ['nullable', 'string', 'max:255'],
             'email' => [
                 'required',
                 'email',
@@ -26,6 +27,12 @@ class StoreCustomerRequest extends FormRequest
                 Rule::unique('customers', 'email')->where(fn ($query) => $query->where('company_id', $companyId)),
             ],
             'phone' => ['nullable', 'string', 'max:50'],
+            'company_cell' => ['nullable', 'string', 'max:50'],
+            'company_tel' => ['nullable', 'string', 'max:50'],
+            'contact_first_name' => ['nullable', 'string', 'max:100'],
+            'contact_last_name' => ['nullable', 'string', 'max:100'],
+            'contact_cell' => ['nullable', 'string', 'max:50'],
+            'contact_email' => ['nullable', 'email', 'max:255'],
             'address' => ['nullable', 'string', 'max:255'],
             'city' => ['nullable', 'string', 'max:100'],
             'country' => ['nullable', 'string', 'max:100'],

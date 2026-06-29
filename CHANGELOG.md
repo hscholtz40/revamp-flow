@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-06-29
+
+- **Customer company and contact fields:** Expanded customer records with company registration number, separate company cell/tel, and dedicated contact person name/surname/cell/email fields. Create/Edit/Show forms are grouped into company, contact person, and account sections; existing `phone` values are backfilled to company tel for compatibility.
+- **Customer quick-create fields:** Quick Create Customer modal (quotes, invoices, jobcards, credit notes) now includes the full company and contact person field set with address autocomplete, matching the main customer form.
+- **Address autocomplete field fill:** Google Places selection on customer address now parses street address, city, and country into their respective fields instead of only setting the full formatted address string.
+- **Product supplier link + quote line supplier:** Products now have a selectable default supplier on Create/Edit/Show. Quote line items store an optional per-line `supplier_id` (auto-filled from the linked product, overridable via dropdown). Quote Create/Edit use a single-row line grid with horizontal scroll when columns overflow; Quote Show displays supplier per line (not on PDF).
+- **Quote email accept/decline workflow:** Added secure signed `Accept Quote` / `Decline Quote` links in customer quote emails. Customer responses now update quote status from the email action page and automatically send a notification email to the quote creator (`salesperson`).
+- **Purchase orders supplier quick-create:** Added in-form `Quick Create Supplier` to Purchase Order Create/Edit, including inline modal creation and automatic supplier selection without leaving the PO screen.
+- **PDF textarea line breaks:** Updated quote, proforma invoice, invoice, jobcard, and purchase-order PDF templates to preserve textarea line breaks (`description`, `notes`, `terms_conditions`) so multi-line content no longer collapses into a single line.
+- **Quote line-item cost/profit:** Added `cost` support on quote line items (DB + backend validation/save), surfaced a compact cost input on Quote Create/Edit with inline per-line profit display, and added cost/profit columns on Quote Show. Quote PDFs remain unchanged (no cost/profit output).
+- **Quote line-item column order:** Reordered quote line-item layouts so `Cost` now appears before `Price` on Quote Create/Edit/Show for consistent operator workflow.
+- **Quotes customer quick-create shortcut:** Added an explicit `Quick Create Customer` action next to the customer field on Quote Create so users can open the same quick-create modal without relying on search dropdown state.
+- **Query attachment loading fix:** Query detail attachments now use relative `/storage/...` URLs instead of `Storage::disk('public')->url(...)`, preventing broken images/videos when `APP_URL` differs from the active instance host.
+- **Query → Quote action:** Added a `Quote` action on Query detail for enquiry/contractor queries. It now finds an existing customer first (email, then phone, then name), creates one when missing, and opens Quote Create with that customer preselected.
+- **New query email notifications:** When an enquiry or contractor query is submitted (API or hosted URL form), the system now sends a notification email to the target company email address (using company SMTP override when configured).
+- **Public query form thank-you state:** After hosted URL submission (enquiry and contractor), the page now shows `Thank you for submitting your enquiry` and hides the form instead of showing the form again; successful redirects also preserve `kind=contractor`.
+- **Upgrade env backfill:** License-server instance upgrades now backfill missing `.env` defaults for mail transport and push credentials (`MAIL_*`, `FCM_CREDENTIALS_PATH`, `APNS_*`, plus `APP_URL`) without overwriting keys that already exist on the instance.
+- **Per-company SMTP override:** Added company-level SMTP configuration fields in Company Settings and wired outbound email sending to use company SMTP credentials (and sender identity) when configured, falling back to `.env` mail settings otherwise.
+- **Sidebar footer logo:** The bottom sidebar logo now always shows the default JobCardOnline branding; only the top sidebar logo updates when a company uploads a custom logo.
+- **Deployment push env enforcement:** cPanel deploy now always writes `FCM_CREDENTIALS_PATH` (instance-specific path) and all `APNS_*` keys into the child instance `.env`, including `APNS_USE_SANDBOX`.
+- **Administration menu cleanup:** Hid PDF Templates and Email Templates cards from the Administration page menu for now.
+
 ## 2026-06-25
 
 - **Queries integration UI simplification:** Removed embeddable snippet fields from the Queries integration panel and now display only copyable hosted public form URLs.

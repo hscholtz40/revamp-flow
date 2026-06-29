@@ -17,8 +17,15 @@ class Customer extends Model
     protected $fillable = [
         'company_id',
         'name',
+        'registration_number',
         'email',
         'phone',
+        'company_cell',
+        'company_tel',
+        'contact_first_name',
+        'contact_last_name',
+        'contact_cell',
+        'contact_email',
         'address',
         'city',
         'country',
@@ -139,5 +146,17 @@ class Customer extends Model
         return static::where('company_id', $companyId)
             ->where('is_default_sales', true)
             ->first();
+    }
+
+    public function smsPhoneNumber(): ?string
+    {
+        return $this->company_cell ?: $this->company_tel ?: $this->phone;
+    }
+
+    public function contactPersonName(): ?string
+    {
+        $name = trim(trim((string) $this->contact_first_name).' '.trim((string) $this->contact_last_name));
+
+        return $name !== '' ? $name : null;
     }
 }

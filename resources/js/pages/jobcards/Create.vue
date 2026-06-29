@@ -94,62 +94,11 @@
                             </div>
                         </div>
                         
-                        <!-- Quick Create Customer Modal -->
-                        <div
-                            v-if="showQuickCreateModal"
-                            class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-                            @click.self="showQuickCreateModal = false"
-                        >
-                            <div class="bg-white rounded-lg p-6 w-full max-w-md" @click.stop>
-                                <h3 class="text-lg font-semibold mb-4">Quick Create Customer</h3>
-                                <form @submit.prevent="quickCreateCustomer">
-                                    <div class="space-y-4">
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Name *</label>
-                                            <input
-                                                v-model="quickCreateForm.name"
-                                                type="text"
-                                                class="w-full rounded border px-3 py-2"
-                                                required
-                                            />
-                                        </div>
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Email *</label>
-                                            <input
-                                                v-model="quickCreateForm.email"
-                                                type="email"
-                                                class="w-full rounded border px-3 py-2"
-                                                required
-                                            />
-                                        </div>
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                                            <input
-                                                v-model="quickCreateForm.phone"
-                                                type="text"
-                                                class="w-full rounded border px-3 py-2"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div class="flex gap-3 mt-6">
-                                        <button
-                                            type="submit"
-                                            :disabled="quickCreateForm.processing"
-                                            class="flex-1 rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
-                                        >
-                                            Create
-                                        </button>
-                                        <button
-                                            type="button"
-                                            @click="showQuickCreateModal = false"
-                                            class="flex-1 rounded border px-4 py-2 hover:bg-gray-50"
-                                        >
-                                            Cancel
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
+                        <QuickCreateCustomerModal
+                            v-model="showQuickCreateModal"
+                            :form="quickCreateForm"
+                            @submit="quickCreateCustomer"
+                        />
 
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Title *</label>
@@ -729,11 +678,13 @@
 </template>
 
 <script setup lang="ts">
+import QuickCreateCustomerModal from '@/components/QuickCreateCustomerModal.vue';
 import AiDocumentSuggestionPanel from '@/components/AiDocumentSuggestionPanel.vue';
 import AiDraftHelper from '@/components/AiDraftHelper.vue';
 import AddressAutocompleteInput from '@/components/AddressAutocompleteInput.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import ContactSelector from '@/components/ContactSelector.vue';
+import { createQuickCreateCustomerDefaults } from '@/types/customers';
 import { getCsrfToken } from '@/lib/csrf';
 import { matchesProductSearch } from '@/composables/productSearch';
 import { Head, Link, useForm } from '@inertiajs/vue3';
@@ -910,11 +861,7 @@ const customerSearchFocused = ref(false);
 const filteredCustomers = ref<Customer[]>([]);
 const selectedCustomer = ref<Customer | null>(null);
 const showQuickCreateModal = ref(false);
-const quickCreateForm = useForm({
-    name: '',
-    email: '',
-    phone: '',
-});
+const quickCreateForm = useForm(createQuickCreateCustomerDefaults());
 
 if (props.defaultSalesCustomerId) {
     const defaultCustomer = props.customers.find(c => c.id === props.defaultSalesCustomerId);
@@ -1080,7 +1027,8 @@ const quickCreateCustomer = async () => {
                 selectCustomer(data.customer);
                 showQuickCreateModal.value = false;
                 quickCreateForm.reset();
-                quickCreateForm.name = customerSearchQuery.value;
+                quickCreateForm.clearErrors();
+                Object.assign(quickCreateForm, createQuickCreateCustomerDefaults(customerSearchQuery.value));
             }
         } else {
             const errorData = await response.json();

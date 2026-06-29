@@ -49,6 +49,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('module.permission:queries,edit')
         ->name('queries.convert-to-jobcard');
 
+    Route::post('/queries/{query}/quote', [QueriesController::class, 'createQuote'])
+        ->middleware('module.permission:queries,edit')
+        ->name('queries.create-quote');
+
     Route::delete('/queries/{query}', [QueriesController::class, 'destroy'])
         ->middleware('module.permission:queries,delete')
         ->name('queries.destroy');

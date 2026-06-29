@@ -5,6 +5,8 @@ import { attachPlacesAutocomplete } from '@/lib/placesAutocomplete';
 
 const props = defineProps<{
     modelValue: string;
+    city?: string;
+    country?: string;
     placeholder?: string;
     /** Merged onto the input (e.g. border, padding). */
     inputClass?: string;
@@ -17,6 +19,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     'update:modelValue': [string];
+    'update:city': [string];
+    'update:country': [string];
 }>();
 
 const page = usePage();
@@ -35,8 +39,14 @@ async function bindAutocomplete() {
         return;
     }
     try {
-        teardown = await attachPlacesAutocomplete(el, key, (address) => {
-            emit('update:modelValue', address);
+        teardown = await attachPlacesAutocomplete(el, key, (parsed) => {
+            emit('update:modelValue', parsed.streetAddress);
+            if (props.city !== undefined) {
+                emit('update:city', parsed.city);
+            }
+            if (props.country !== undefined) {
+                emit('update:country', parsed.country);
+            }
         });
     } catch {
         /* Plain text input still works if Places fails or API not enabled */

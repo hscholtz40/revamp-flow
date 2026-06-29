@@ -30,7 +30,7 @@
         <p class="sub">{{ $kind === 'contractor' ? 'Submit your contractor details for review.' : 'Submit your enquiry and our team will get back to you.' }}</p>
 
         @if ($submitted)
-            <div class="success">Your query has been submitted. We will get back to you shortly.</div>
+            <div class="success">Thank you for submitting your enquiry</div>
         @endif
 
         @if ($errors && $errors->any())
@@ -44,6 +44,7 @@
             </div>
         @endif
 
+        @if (! $submitted)
         <form action="{{ route('queries.public.store', ['companyId' => $company->id, 'token' => $token]) }}" method="POST" enctype="multipart/form-data">
             @csrf
             <input type="hidden" name="kind" value="{{ $kind }}">
@@ -108,6 +109,7 @@
 
             <button class="btn" type="submit">Submit Query</button>
         </form>
+        @endif
     </div>
 </body>
 </html>

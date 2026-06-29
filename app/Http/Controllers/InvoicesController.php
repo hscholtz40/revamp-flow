@@ -22,6 +22,7 @@ use App\Models\User;
 use App\Services\InvoiceUpsertService;
 use App\Services\ReminderService;
 use App\Services\StockService;
+use App\Support\CompanyMailer;
 use App\Support\ColumnFilters;
 use App\Support\CompanyScopedRules;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -1143,14 +1144,14 @@ class InvoicesController extends Controller
             $pdfContent = $pdf->output();
 
             // Send email
-            Mail::mailer('smtp')->send('emails.invoice', [
+            $mailConfig = CompanyMailer::resolve($company);
+            Mail::mailer($mailConfig['mailer'])->send('emails.invoice', [
                 'invoice' => $invoice,
                 'customMessage' => $validated['customMessage'],
-            ], function ($message) use ($emails, $invoice, $pdfContent, $company) {
-                $fromName = $company?->name ?: config('mail.from.name');
+            ], function ($message) use ($emails, $invoice, $pdfContent, $company, $mailConfig) {
                 $message->to($emails)
                     ->subject("Invoice {$invoice->invoice_number} - {$invoice->title}")
-                    ->from(config('mail.from.address'), $fromName)
+                    ->from($mailConfig['from_address'], $mailConfig['from_name'])
                     ->attachData($pdfContent, "invoice-{$invoice->invoice_number}.pdf", [
                         'mime' => 'application/pdf',
                     ]);

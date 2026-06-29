@@ -473,7 +473,7 @@
     @if($jobcard->description)
     <div style="margin-bottom: 20px; font-size: 11px;">
         <h4 style="margin: 0 0 6px 0; font-size: 12px; font-weight: bold; color: #000;">Description</h4>
-        <p style="margin: 0; line-height: 1.4;">{{ $jobcard->description }}</p>
+        <p style="margin: 0; line-height: 1.4;">{!! nl2br(e($jobcard->description)) !!}</p>
     </div>
     @endif
     
@@ -623,10 +623,10 @@
     <div class="work-notes-section">
         <h4>Work Notes & Instructions</h4>
         @if($jobcard->notes)
-            <p><strong>Additional Notes:</strong> {{ $jobcard->notes }}</p>
+            <p><strong>Additional Notes:</strong><br>{!! nl2br(e($jobcard->notes)) !!}</p>
         @endif
         @if($jobcard->terms_conditions)
-            <p><strong>Terms & Conditions:</strong> {{ $jobcard->terms_conditions }}</p>
+            <p><strong>Terms & Conditions:</strong><br>{!! nl2br(e($jobcard->terms_conditions)) !!}</p>
         @endif
     </div>
     

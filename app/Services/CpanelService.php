@@ -299,6 +299,7 @@ class CpanelService
 
         try {
             $subdomainRoot = "{$this->homeDir}/{$this->username}/public_html/{$subdomain}";
+            $appUrl = "https://{$subdomain}.{$this->domain}";
 
             // 1. Upload zip file to subdomain directory
             $result = $this->uploadFile($zipPath, $subdomainRoot);
@@ -349,7 +350,23 @@ class CpanelService
                 ];
             }
 
-            // 4. Run artisan commands
+            // 4. Backfill missing deployment env defaults (do not overwrite existing instance values)
+            $result = $this->appendMissingEnvVariables($subdomainRoot, array_merge(
+                ['APP_URL' => $appUrl],
+                $this->buildDeployedMailEnvVariables(),
+                $this->buildDeployedPushEnvVariables($subdomainRoot)
+            ));
+            $steps[] = ['step' => 'Backfill missing .env defaults', 'result' => $result];
+
+            if (! $result['success']) {
+                return [
+                    'success' => false,
+                    'message' => 'Failed to backfill .env defaults: '.($result['error'] ?? 'Unknown error'),
+                    'details' => $steps,
+                ];
+            }
+
+            // 5. Run artisan commands
             $artisanCommands = [
                 'php artisan migrate --force',
                 'php artisan storage:link',
@@ -564,6 +581,30 @@ class CpanelService
     }
 
     /**
+     * Add env vars only when keys are missing, preserving existing instance overrides.
+     */
+    private function appendMissingEnvVariables(string $subdomainRoot, array $variables): array
+    {
+        $envPath = "{$subdomainRoot}/.env";
+        $commands = [];
+
+        foreach ($variables as $key => $value) {
+            if (! is_string($key) || $key === '' || ! is_scalar($value)) {
+                continue;
+            }
+
+            $stringValue = str_replace("'", "'\"'\"'", (string) $value);
+            $commands[] = "if ! grep -q '^{$key}=' {$envPath}; then printf '%s\\n' '{$key}={$stringValue}' >> {$envPath}; fi";
+        }
+
+        if ($commands === []) {
+            return ['success' => true];
+        }
+
+        return $this->runShellCommand(implode(' && ', $commands));
+    }
+
+    /**
      * Push notification env vars written to each deployed child instance.
      *
      * @return array<string, string>
@@ -573,24 +614,34 @@ class CpanelService
         $filename = (string) config('services.deploy.fcm_credentials_filename', 'revampjobcard-8f5fb37b5d39.json');
         $variables = [
             'FCM_CREDENTIALS_PATH' => "{$subdomainRoot}/storage/app/{$filename}",
+            'APNS_KEY_ID' => (string) (config('services.push.apns_key_id') ?? ''),
+            'APNS_TEAM_ID' => (string) (config('services.push.apns_team_id') ?? ''),
+            'APNS_APP_BUNDLE_ID' => (string) (config('services.push.apns_app_bundle_id') ?? ''),
+            'APNS_PRIVATE_KEY' => (string) (config('services.push.apns_private_key') ?? ''),
         ];
-
-        $pushMappings = [
-            'APNS_KEY_ID' => config('services.push.apns_key_id'),
-            'APNS_TEAM_ID' => config('services.push.apns_team_id'),
-            'APNS_APP_BUNDLE_ID' => config('services.push.apns_app_bundle_id'),
-            'APNS_PRIVATE_KEY' => config('services.push.apns_private_key'),
-        ];
-
-        foreach ($pushMappings as $envKey => $configValue) {
-            if (is_string($configValue) && $configValue !== '') {
-                $variables[$envKey] = $configValue;
-            }
-        }
-
-        $variables['APNS_USE_SANDBOX'] = config('services.push.apns_use_sandbox') ? 'true' : 'false';
+        $apnsUseSandbox = config('services.push.apns_use_sandbox', true);
+        $variables['APNS_USE_SANDBOX'] = filter_var($apnsUseSandbox, FILTER_VALIDATE_BOOL) ? 'true' : 'false';
 
         return $variables;
+    }
+
+    /**
+     * Default mail env vars copied into deployed/upgraded instances.
+     *
+     * @return array<string, string>
+     */
+    private function buildDeployedMailEnvVariables(): array
+    {
+        return [
+            'MAIL_MAILER' => (string) config('mail.default', 'smtp'),
+            'MAIL_HOST' => (string) config('mail.mailers.smtp.host', ''),
+            'MAIL_PORT' => (string) config('mail.mailers.smtp.port', ''),
+            'MAIL_USERNAME' => (string) config('mail.mailers.smtp.username', ''),
+            'MAIL_PASSWORD' => (string) config('mail.mailers.smtp.password', ''),
+            'MAIL_ENCRYPTION' => (string) config('mail.mailers.smtp.encryption', ''),
+            'MAIL_FROM_ADDRESS' => (string) config('mail.from.address', ''),
+            'MAIL_FROM_NAME' => (string) config('mail.from.name', ''),
+        ];
     }
 
     /**

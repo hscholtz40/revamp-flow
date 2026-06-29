@@ -8,7 +8,7 @@ import groups from '@/routes/groups';
 import companySettings from '@/routes/company-settings';
 import smsSettings from '@/routes/sms-settings';
 import whatsappSettings from '@/routes/whatsapp-settings';
-import { Users, UsersRound, Shield, Building2, UserCheck, Package, Tag, MessageSquare, Zap, FileText, ClipboardList, Database, Percent, BookOpen, CreditCard, ArrowUpCircle, Eye, KeyRound, Hash, Mail, Globe2, ListChecks, MapPin, Calculator, Upload } from 'lucide-vue-next';
+import { Users, UsersRound, Shield, Building2, UserCheck, Package, Tag, MessageSquare, Zap, ClipboardList, Database, Percent, BookOpen, CreditCard, ArrowUpCircle, Eye, KeyRound, Hash, Globe2, ListChecks, MapPin, Calculator, Upload } from 'lucide-vue-next';
 import auditLogs from '@/routes/audit-logs';
 import backups from '@/routes/backups/index';
 import { ref } from 'vue';
@@ -279,48 +279,6 @@ const props = defineProps<{
                             class="rounded bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
                         >
                             Configure QuickBooks
-                        </Link>
-                    </div>
-                </div>
-
-                <!-- PDF Templates Card -->
-                <div class="flex flex-col rounded-lg border bg-white p-6 shadow-sm">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <h2 class="text-lg font-semibold">PDF Templates</h2>
-                            <p class="text-sm text-gray-600">Manage PDF templates for invoices, quotes, jobcards, and proforma invoices</p>
-                        </div>
-                        <div class="rounded-full bg-primary/10 p-3">
-                            <FileText class="h-6 w-6 text-primary" />
-                        </div>
-                    </div>
-                    <div class="mt-auto pt-4">
-                        <Link 
-                            :href="administration.pdfTemplates.index().url" 
-                            class="rounded bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
-                        >
-                            Manage Templates
-                        </Link>
-                    </div>
-                </div>
-
-                <!-- Email Templates Card -->
-                <div class="flex flex-col rounded-lg border bg-white p-6 shadow-sm">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <h2 class="text-lg font-semibold">Email Templates</h2>
-                            <p class="text-sm text-gray-600">Create drag-and-drop templates with customer and contact variables</p>
-                        </div>
-                        <div class="rounded-full bg-primary/10 p-3">
-                            <Mail class="h-6 w-6 text-primary" />
-                        </div>
-                    </div>
-                    <div class="mt-auto pt-4">
-                        <Link
-                            href="/administration/email-templates"
-                            class="rounded bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
-                        >
-                            Manage Email Templates
                         </Link>
                     </div>
                 </div>

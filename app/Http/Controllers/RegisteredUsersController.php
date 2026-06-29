@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Customer;
 use App\Models\CustomerUpdateRequest;
 use App\Models\User;
+use App\Support\CompanyMailer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -394,8 +395,6 @@ class RegisteredUsersController extends Controller
 
             $customerName = e($customer->name);
             $companyDisplay = e($company?->name ?? config('app.name', 'the business'));
-            $fromName = $company?->name ?: config('mail.from.name');
-
             if ($outcome === 'approved') {
                 $subject = 'Your information update was approved';
                 $body = <<<HTML
@@ -418,10 +417,11 @@ HTML;
 HTML;
             }
 
-            Mail::mailer('smtp')->send([], [], function ($message) use ($to, $customer, $subject, $body, $fromName, $company) {
+            $mailConfig = CompanyMailer::resolve($company);
+            Mail::mailer($mailConfig['mailer'])->send([], [], function ($message) use ($to, $customer, $subject, $body, $company, $mailConfig) {
                 $message->to($to, $customer->name)
                     ->subject($subject)
-                    ->from(config('mail.from.address'), $fromName)
+                    ->from($mailConfig['from_address'], $mailConfig['from_name'])
                     ->html($body);
 
                 if ($company !== null && ! empty($company->email) && filter_var((string) $company->email, FILTER_VALIDATE_EMAIL)) {

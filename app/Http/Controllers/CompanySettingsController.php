@@ -68,6 +68,13 @@ class CompanySettingsController extends Controller
             'enable_pos' => ['boolean'],
             'enable_document_signing' => ['boolean'],
             'enable_dispatch' => ['boolean'],
+            'smtp_host' => ['nullable', 'string', 'max:255'],
+            'smtp_port' => ['nullable', 'integer', 'between:1,65535'],
+            'smtp_username' => ['nullable', 'string', 'max:255'],
+            'smtp_password' => ['nullable', 'string', 'max:2048'],
+            'smtp_encryption' => ['nullable', 'in:tls,ssl,starttls,none'],
+            'smtp_from_email' => ['nullable', 'email', 'max:255'],
+            'smtp_from_name' => ['nullable', 'string', 'max:255'],
             'logo' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg,ico,webp', 'max:2048'],
             'favicon' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg,ico,webp', 'max:2048'],
             'whatsapp_business_number' => ['nullable', 'string', 'max:20'],
@@ -76,6 +83,10 @@ class CompanySettingsController extends Controller
             'bank_account_number' => ['nullable', 'string', 'max:255'],
             'bank_sort_code' => ['nullable', 'string', 'max:50'],
         ]);
+
+        if (($validated['smtp_password'] ?? null) === '') {
+            $validated['smtp_password'] = null;
+        }
 
         if ($request->hasFile('logo')) {
             $validated['logo_path'] = $request->file('logo')->store('company-logos', 'public');
@@ -163,6 +174,13 @@ class CompanySettingsController extends Controller
                 'enable_pos' => $company->enable_pos,
                 'enable_document_signing' => $company->enable_document_signing,
                 'enable_dispatch' => $company->enable_dispatch,
+                'smtp_host' => $company->smtp_host,
+                'smtp_port' => $company->smtp_port,
+                'smtp_username' => $company->smtp_username,
+                'smtp_password' => $company->smtp_password,
+                'smtp_encryption' => $company->smtp_encryption,
+                'smtp_from_email' => $company->smtp_from_email,
+                'smtp_from_name' => $company->smtp_from_name,
             ];
 
             if ($request->hasFile('logo')) {
@@ -197,6 +215,13 @@ class CompanySettingsController extends Controller
             'enable_pos' => ['boolean'],
             'enable_document_signing' => ['boolean'],
             'enable_dispatch' => ['boolean'],
+            'smtp_host' => ['nullable', 'string', 'max:255'],
+            'smtp_port' => ['nullable', 'integer', 'between:1,65535'],
+            'smtp_username' => ['nullable', 'string', 'max:255'],
+            'smtp_password' => ['nullable', 'string', 'max:2048'],
+            'smtp_encryption' => ['nullable', 'in:tls,ssl,starttls,none'],
+            'smtp_from_email' => ['nullable', 'email', 'max:255'],
+            'smtp_from_name' => ['nullable', 'string', 'max:255'],
             'logo' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg,ico,webp', 'max:2048'],
             'favicon' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg,ico,webp', 'max:2048'],
             'whatsapp_business_number' => ['nullable', 'string', 'max:20'],
@@ -205,6 +230,11 @@ class CompanySettingsController extends Controller
             'bank_account_number' => ['nullable', 'string', 'max:255'],
             'bank_sort_code' => ['nullable', 'string', 'max:50'],
         ]);
+
+        if (($validated['smtp_password'] ?? null) === '') {
+            // Keep existing encrypted SMTP password unless explicitly replaced.
+            unset($validated['smtp_password']);
+        }
 
         if ($request->hasFile('logo')) {
             // Delete old logo if exists

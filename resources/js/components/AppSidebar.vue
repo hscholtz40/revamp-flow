@@ -392,19 +392,11 @@ const filteredNavItems = computed(() => {
 
         <SidebarFooter class="border-t border-sidebar-border/60 pt-3">
             <NavFooter v-if="userType !== 'limited' && filteredFooterNavItems.length > 0" :items="filteredFooterNavItems" />
-            <!-- Default Logo above user menu when company logo is uploaded -->
-                <img
-                    v-if="currentCompany?.logo_path"
-                    :src="`/storage/${currentCompany.logo_path}`"
-                    :alt="currentCompany.name"
-                    class="w-full h-auto max-h-16 object-contain rounded"
-                />
-                <img
-                    v-else
-                    src="/revamp-logo.png"
-                    alt="JobCardOnline"
-                    class="w-full h-auto max-h-12 object-contain opacity-80 hover:opacity-100 transition-opacity"
-                />
+            <img
+                src="/revamp-logo.png"
+                alt="JobCardOnline"
+                class="w-full h-auto max-h-12 object-contain opacity-80 hover:opacity-100 transition-opacity"
+            />
             <NavUser />
         </SidebarFooter>
     </Sidebar>

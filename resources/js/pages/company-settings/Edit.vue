@@ -31,6 +31,13 @@ interface Company {
     enable_pos: boolean;
     enable_document_signing: boolean;
     enable_dispatch: boolean;
+    smtp_host: string | null;
+    smtp_port: number | null;
+    smtp_username: string | null;
+    smtp_password: string | null;
+    smtp_encryption: string | null;
+    smtp_from_email: string | null;
+    smtp_from_name: string | null;
     whatsapp_business_number: string | null;
     bank_name: string | null;
     bank_account_name: string | null;
@@ -137,6 +144,13 @@ const form = useForm({
     enable_pos: props.company.enable_pos ?? false,
     enable_document_signing: props.company.enable_document_signing ?? false,
     enable_dispatch: props.company.enable_dispatch ?? false,
+    smtp_host: props.company.smtp_host || '',
+    smtp_port: props.company.smtp_port || null,
+    smtp_username: props.company.smtp_username || '',
+    smtp_password: props.company.smtp_password || '',
+    smtp_encryption: props.company.smtp_encryption || 'tls',
+    smtp_from_email: props.company.smtp_from_email || '',
+    smtp_from_name: props.company.smtp_from_name || '',
     logo: null as File | null,
     favicon: null as File | null,
     whatsapp_business_number: props.company.whatsapp_business_number || '',
@@ -202,6 +216,13 @@ function submit() {
         formData.append('enable_pos', form.enable_pos ? '1' : '0');
         formData.append('enable_document_signing', form.enable_document_signing ? '1' : '0');
         formData.append('enable_dispatch', form.enable_dispatch ? '1' : '0');
+        formData.append('smtp_host', form.smtp_host || '');
+        formData.append('smtp_port', form.smtp_port ? String(form.smtp_port) : '');
+        formData.append('smtp_username', form.smtp_username || '');
+        formData.append('smtp_password', form.smtp_password || '');
+        formData.append('smtp_encryption', form.smtp_encryption || '');
+        formData.append('smtp_from_email', form.smtp_from_email || '');
+        formData.append('smtp_from_name', form.smtp_from_name || '');
         formData.append('whatsapp_business_number', form.whatsapp_business_number || '');
         formData.append('bank_name', form.bank_name || '');
         formData.append('bank_account_name', form.bank_account_name || '');
@@ -796,9 +817,51 @@ function submitReminderSettings() {
                         <!-- Communication Settings -->
                         <div class="rounded-lg border bg-white p-6">
                             <h2 class="mb-4 text-lg font-semibold text-gray-900">Communication Settings</h2>
-                            <p class="mb-4 text-sm text-gray-600">Outgoing email transport is configured globally via environment settings. Company name and email are used as sender identity and reply-to.</p>
+                            <p class="mb-4 text-sm text-gray-600">Configure per-company SMTP here. When SMTP host, port, username, and password are set, this company uses these settings instead of global .env mail settings.</p>
                             
                             <div class="space-y-4">
+                                <div class="grid gap-4 md:grid-cols-2">
+                                    <div>
+                                        <label class="mb-1 block text-sm font-medium">SMTP Host</label>
+                                        <input v-model="form.smtp_host" type="text" class="w-full rounded border px-3 py-2" placeholder="mail.example.com" />
+                                        <div v-if="form.errors.smtp_host" class="mt-1 text-sm text-red-600">{{ form.errors.smtp_host }}</div>
+                                    </div>
+                                    <div>
+                                        <label class="mb-1 block text-sm font-medium">SMTP Port</label>
+                                        <input v-model.number="form.smtp_port" type="number" min="1" max="65535" class="w-full rounded border px-3 py-2" placeholder="587" />
+                                        <div v-if="form.errors.smtp_port" class="mt-1 text-sm text-red-600">{{ form.errors.smtp_port }}</div>
+                                    </div>
+                                    <div>
+                                        <label class="mb-1 block text-sm font-medium">SMTP Username</label>
+                                        <input v-model="form.smtp_username" type="text" class="w-full rounded border px-3 py-2" />
+                                        <div v-if="form.errors.smtp_username" class="mt-1 text-sm text-red-600">{{ form.errors.smtp_username }}</div>
+                                    </div>
+                                    <div>
+                                        <label class="mb-1 block text-sm font-medium">SMTP Password</label>
+                                        <input v-model="form.smtp_password" type="password" class="w-full rounded border px-3 py-2" />
+                                        <div v-if="form.errors.smtp_password" class="mt-1 text-sm text-red-600">{{ form.errors.smtp_password }}</div>
+                                    </div>
+                                    <div>
+                                        <label class="mb-1 block text-sm font-medium">Encryption</label>
+                                        <select v-model="form.smtp_encryption" class="w-full rounded border px-3 py-2">
+                                            <option value="tls">TLS</option>
+                                            <option value="ssl">SSL</option>
+                                            <option value="starttls">STARTTLS</option>
+                                            <option value="none">None</option>
+                                        </select>
+                                        <div v-if="form.errors.smtp_encryption" class="mt-1 text-sm text-red-600">{{ form.errors.smtp_encryption }}</div>
+                                    </div>
+                                    <div>
+                                        <label class="mb-1 block text-sm font-medium">From Email</label>
+                                        <input v-model="form.smtp_from_email" type="email" class="w-full rounded border px-3 py-2" placeholder="no-reply@example.com" />
+                                        <div v-if="form.errors.smtp_from_email" class="mt-1 text-sm text-red-600">{{ form.errors.smtp_from_email }}</div>
+                                    </div>
+                                    <div>
+                                        <label class="mb-1 block text-sm font-medium">From Name</label>
+                                        <input v-model="form.smtp_from_name" type="text" class="w-full rounded border px-3 py-2" placeholder="Company Name" />
+                                        <div v-if="form.errors.smtp_from_name" class="mt-1 text-sm text-red-600">{{ form.errors.smtp_from_name }}</div>
+                                    </div>
+                                </div>
                                 <div>
                                     <label class="mb-1 block text-sm font-medium">WhatsApp Business Number</label>
                                     <input

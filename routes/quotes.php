@@ -3,6 +3,10 @@
 use App\Http\Controllers\QuotesController;
 use Illuminate\Support\Facades\Route;
 
+Route::get('/quotes/respond/{quoteId}/{decision}', [QuotesController::class, 'respondFromEmail'])
+    ->middleware('signed')
+    ->name('quotes.respond-email');
+
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/quotes', [QuotesController::class, 'index'])->middleware('module.permission:quotes,view')->name('quotes.index');
     Route::get('/quotes/create', [QuotesController::class, 'create'])->middleware('module.permission:quotes,create')->name('quotes.create');

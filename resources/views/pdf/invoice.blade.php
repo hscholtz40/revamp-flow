@@ -482,7 +482,7 @@
     @if($invoice->description)
     <div style="margin-bottom: 20px; font-size: 11px;">
         <h4 style="margin: 0 0 6px 0; font-size: 12px; font-weight: bold; color: #000;">Description</h4>
-        <p style="margin: 0; line-height: 1.4;">{{ $invoice->description }}</p>
+        <p style="margin: 0; line-height: 1.4;">{!! nl2br(e($invoice->description)) !!}</p>
     </div>
     @endif
     
@@ -653,11 +653,11 @@
     <div class="terms-section">
         @if($invoice->notes)
             <h4>Notes</h4>
-            <p>{{ $invoice->notes }}</p>
+            <p>{!! nl2br(e($invoice->notes)) !!}</p>
         @endif
         @if($invoice->terms_conditions)
             <h4>Terms & Conditions</h4>
-            <p>{{ $invoice->terms_conditions }}</p>
+            <p>{!! nl2br(e($invoice->terms_conditions)) !!}</p>
         @endif
     </div>
     @endif

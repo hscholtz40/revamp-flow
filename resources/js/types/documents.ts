@@ -8,10 +8,12 @@ export interface DocumentLineItem {
     id?: number;
     _uid?: string;
     product_id: string | number | null;
+    supplier_id?: number | null;
     line_group_id?: number | null;
     description: string;
     quantity: number;
     unit_price: number;
+    cost?: number;
     discount_amount?: number;
     discount_percentage?: number;
     tax_rate_id?: number | null;

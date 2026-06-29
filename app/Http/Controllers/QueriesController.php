@@ -14,11 +14,14 @@ use App\Models\Query;
 use App\Services\CustomerUpsertService;
 use App\Services\JobQueryService;
 use App\Services\RevampWebhookService;
+use App\Support\CompanyMailer;
 use Illuminate\Contracts\View\View as ViewContract;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -93,6 +96,8 @@ class QueriesController extends Controller
                 'original_name' => $file->getClientOriginalName(),
             ]);
         }
+
+        $this->notifyCompanyOfNewQuery($company, $query);
 
         return response()->json([
             'message' => 'Your query has been submitted. We will get back to you shortly.',
@@ -187,10 +192,13 @@ class QueriesController extends Controller
             ]);
         }
 
+        $this->notifyCompanyOfNewQuery($company, $query);
+
         return redirect()
             ->route('queries.public.form', [
                 'companyId' => $company->id,
                 'token' => $token,
+                'kind' => $kind,
                 'submitted' => 1,
             ]);
     }
@@ -339,7 +347,7 @@ JS;
                 'accepted_contact_id' => $query->accepted_contact_id,
                 'attachments' => $query->attachments->map(fn ($attachment) => [
                     'id' => $attachment->id,
-                    'url' => Storage::disk('public')->url($attachment->path),
+                    'url' => '/storage/'.ltrim((string) $attachment->path, '/'),
                     'type' => $attachment->type,
                     'original_name' => $attachment->original_name,
                 ])->values(),
@@ -522,11 +530,16 @@ JS;
                 $customer = Customer::create([
                     'company_id' => $companyId,
                     'name' => $customerName !== '' ? $customerName : 'Contractor Prospect',
+                    'registration_number' => $query->company_registration_no ?: null,
                     'email' => $customerEmail ?: null,
+                    'company_tel' => $customerPhone ?: null,
                     'phone' => $customerPhone ?: null,
                     'address' => $query->company_address ?: null,
+                    'contact_first_name' => $query->name ?: null,
+                    'contact_last_name' => $query->surname ?: null,
+                    'contact_cell' => $query->cell ?: null,
+                    'contact_email' => $query->email ?: null,
                     'notes' => trim(collect([
-                        $query->company_registration_no ? 'Registration No: '.$query->company_registration_no : null,
                         $query->company_website ? 'Website: '.$query->company_website : null,
                         'Source Query #'.$query->id,
                     ])->filter()->implode("\n")),
@@ -585,6 +598,65 @@ JS;
         $query->update(['status' => $validated['status']]);
 
         return redirect()->back()->with('success', 'Query status updated.');
+    }
+
+    /**
+     * Create/open quote flow from an enquiry/contractor query.
+     * Finds existing customer first, otherwise creates one, then opens Quote Create.
+     */
+    public function createQuote(Query $query): RedirectResponse
+    {
+        $this->authorize('update', $query);
+        abort_if($query->isJob(), 403, 'Job queries cannot be converted to quotes from this action.');
+
+        $currentCompany = auth()->user()->getCurrentCompany();
+        abort_if($currentCompany === null, 403, 'No active company.');
+        abort_unless((int) $query->company_id === (int) $currentCompany->id, 404);
+
+        $customerEmail = trim((string) ($query->company_email ?: $query->email));
+        $customerPhone = trim((string) ($query->company_contact_number ?: $query->cell));
+        $customerName = trim((string) ($query->company_name ?: ($query->name.' '.$query->surname)));
+        $customerName = $customerName !== '' ? $customerName : 'Query Prospect';
+
+        $customer = Customer::query()
+            ->where('company_id', $currentCompany->id)
+            ->when($customerEmail !== '', fn ($q) => $q->where('email', $customerEmail))
+            ->first();
+
+        if (! $customer && $customerPhone !== '') {
+            $customer = Customer::query()
+                ->where('company_id', $currentCompany->id)
+                ->where('phone', $customerPhone)
+                ->first();
+        }
+
+        if (! $customer) {
+            $customer = Customer::query()
+                ->where('company_id', $currentCompany->id)
+                ->where('name', $customerName)
+                ->first();
+        }
+
+        if (! $customer) {
+            $customer = Customer::create([
+                'company_id' => $currentCompany->id,
+                'name' => $customerName,
+                'email' => $customerEmail !== '' ? $customerEmail : null,
+                'company_tel' => $customerPhone !== '' ? $customerPhone : null,
+                'phone' => $customerPhone !== '' ? $customerPhone : null,
+                'address' => $query->company_address ?: null,
+                'registration_number' => $query->company_registration_no ?: null,
+                'contact_first_name' => $query->name ?: null,
+                'contact_last_name' => $query->surname ?: null,
+                'contact_cell' => $query->cell ?: null,
+                'contact_email' => $query->email ?: null,
+                'account_code' => Customer::generateAccountCode($customerName, $currentCompany->id),
+            ]);
+        }
+
+        return redirect()->route('quotes.create', [
+            'customer_id' => $customer->id,
+        ])->with('success', "Quote started for customer {$customer->name}.");
     }
 
     /**
@@ -669,5 +741,38 @@ JS;
             'contractor_public_url' => $contractorPublicUrl,
             'contractor_embed_html' => $contractorEmbedHtml,
         ];
+    }
+
+    private function notifyCompanyOfNewQuery(Company $company, Query $query): void
+    {
+        if (! is_string($company->email) || ! filter_var($company->email, FILTER_VALIDATE_EMAIL)) {
+            return;
+        }
+
+        try {
+            $mailConfig = CompanyMailer::resolve($company);
+            $subject = $query->kind === Query::KIND_CONTRACTOR
+                ? "New contractor query submitted (#{$query->id})"
+                : "New enquiry submitted (#{$query->id})";
+
+            Mail::mailer($mailConfig['mailer'])->send('emails.query-notification', [
+                'company' => $company,
+                'query' => $query,
+            ], function ($message) use ($company, $mailConfig, $subject) {
+                $message->to($company->email, $company->name)
+                    ->subject($subject)
+                    ->from($mailConfig['from_address'], $mailConfig['from_name']);
+
+                if (is_string($company->email) && filter_var($company->email, FILTER_VALIDATE_EMAIL)) {
+                    $message->replyTo($company->email, $company->name ?: null);
+                }
+            });
+        } catch (\Throwable $e) {
+            Log::warning('Failed to send new query notification email.', [
+                'company_id' => $company->id,
+                'query_id' => $query->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

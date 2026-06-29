@@ -12,6 +12,7 @@ use App\Models\TaxRate;
 use App\Models\Jobcard;
 use App\Services\StockService;
 use App\Support\ColumnFilters;
+use App\Support\CompanyMailer;
 use App\Support\CompanyScopedRules;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -807,14 +808,14 @@ class PurchaseOrdersController extends Controller
             $pdfContent = $pdf->output();
 
             // Send email
-            \Illuminate\Support\Facades\Mail::mailer('smtp')->send('emails.purchase-order', [
+            $mailConfig = CompanyMailer::resolve($company);
+            \Illuminate\Support\Facades\Mail::mailer($mailConfig['mailer'])->send('emails.purchase-order', [
                 'purchaseOrder' => $purchaseOrder,
                 'customMessage' => $validated['customMessage'],
-            ], function ($message) use ($validated, $purchaseOrder, $pdfContent, $company) {
-                $fromName = $company?->name ?: config('mail.from.name');
+            ], function ($message) use ($validated, $purchaseOrder, $pdfContent, $company, $mailConfig) {
                 $message->to($validated['email'])
                     ->subject("Purchase Order {$purchaseOrder->po_number} - {$purchaseOrder->supplier->name}")
-                    ->from(config('mail.from.address'), $fromName)
+                    ->from($mailConfig['from_address'], $mailConfig['from_name'])
                     ->attachData($pdfContent, "purchase-order-{$purchaseOrder->po_number}.pdf", [
                         'mime' => 'application/pdf',
                     ]);

@@ -3,7 +3,7 @@ import { useNumberFormat } from '@/composables/useNumberFormat';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ArrowLeft } from 'lucide-vue-next';
-import { ref, computed } from 'vue';
+import { ref, computed, reactive } from 'vue';
 import purchaseOrders from '@/routes/purchase-orders';
 
 interface SupplierPickerSupplier {
@@ -124,6 +124,15 @@ const supplierSearchQuery = ref(props.initialSupplier?.name ?? '');
 const supplierSearchFocused = ref(false);
 const filteredSuppliers = ref<SupplierPickerSupplier[]>([]);
 const selectedSupplier = ref<SupplierPickerSupplier | null>(props.initialSupplier ?? null);
+const showQuickCreateSupplierModal = ref(false);
+const quickCreateSupplierForm = reactive({
+    name: '',
+    email: '',
+    phone: '',
+    vat_number: '',
+    processing: false,
+    errors: {} as Record<string, string>,
+});
 
 const handleSupplierSearch = async () => {
     if (!supplierSearchQuery.value.trim()) {
@@ -168,6 +177,61 @@ const clearSupplier = () => {
     form.supplier_id = '';
     supplierSearchQuery.value = '';
     filteredSuppliers.value = [];
+};
+
+const openQuickCreateSupplierModal = () => {
+    quickCreateSupplierForm.name = supplierSearchQuery.value.trim();
+    quickCreateSupplierForm.email = '';
+    quickCreateSupplierForm.phone = '';
+    quickCreateSupplierForm.vat_number = '';
+    quickCreateSupplierForm.errors = {};
+    showQuickCreateSupplierModal.value = true;
+};
+
+const quickCreateSupplier = async () => {
+    quickCreateSupplierForm.processing = true;
+    quickCreateSupplierForm.errors = {};
+
+    try {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+        const response = await fetch('/suppliers', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': csrfToken,
+            },
+            body: JSON.stringify({
+                name: quickCreateSupplierForm.name,
+                email: quickCreateSupplierForm.email || null,
+                phone: quickCreateSupplierForm.phone || null,
+                vat_number: quickCreateSupplierForm.vat_number || null,
+                is_active: true,
+            }),
+        });
+
+        if (response.ok) {
+            const supplier = (await response.json()) as SupplierPickerSupplier;
+            selectSupplier(supplier);
+            showQuickCreateSupplierModal.value = false;
+            return;
+        }
+
+        if (response.status === 422) {
+            const data = await response.json();
+            quickCreateSupplierForm.errors = Object.fromEntries(
+                Object.entries(data.errors || {}).map(([key, value]) => [key, Array.isArray(value) ? String(value[0]) : String(value)]),
+            );
+            return;
+        }
+
+        quickCreateSupplierForm.errors = { name: 'Failed to create supplier. Please try again.' };
+    } catch {
+        quickCreateSupplierForm.errors = { name: 'Failed to create supplier. Please try again.' };
+    } finally {
+        quickCreateSupplierForm.processing = false;
+    }
 };
 
 function normalizeLineItemOrder() {
@@ -528,9 +592,18 @@ function submit() {
                     <h2 class="mb-4 text-lg font-semibold text-gray-900">Basic Information</h2>
                     <div class="grid gap-6 md:grid-cols-2">
                         <div class="relative">
-                            <label class="mb-1 block text-sm font-medium text-gray-700">
-                                Supplier <span class="text-red-500">*</span>
-                            </label>
+                            <div class="mb-1 flex items-center justify-between gap-2">
+                                <label class="block text-sm font-medium text-gray-700">
+                                    Supplier <span class="text-red-500">*</span>
+                                </label>
+                                <button
+                                    type="button"
+                                    @click="openQuickCreateSupplierModal"
+                                    class="text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                                >
+                                    Quick Create Supplier
+                                </button>
+                            </div>
                             <p
                                 v-if="initialSupplier && initialSupplier.is_active === false"
                                 class="mb-1 text-xs text-amber-700"
@@ -565,6 +638,13 @@ function submit() {
                                 class="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border border-gray-300 bg-white shadow-lg"
                             >
                                 <div
+                                    v-if="supplierSearchQuery.trim()"
+                                    @mousedown.prevent="openQuickCreateSupplierModal"
+                                    class="cursor-pointer border-b border-gray-200 bg-blue-50 px-4 py-2 hover:bg-blue-100"
+                                >
+                                    <div class="text-sm font-medium text-blue-700">Quick Create: "{{ supplierSearchQuery.trim() }}"</div>
+                                </div>
+                                <div
                                     v-for="supplier in filteredSuppliers"
                                     :key="supplier.id"
                                     class="cursor-pointer px-4 py-2 hover:bg-gray-100"
@@ -590,6 +670,79 @@ function submit() {
                             </div>
                             <div v-if="form.errors.supplier_id" class="mt-1 text-sm text-red-600">
                                 {{ form.errors.supplier_id }}
+                            </div>
+                        </div>
+
+                        <div
+                            v-if="showQuickCreateSupplierModal"
+                            class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+                            @click.self="showQuickCreateSupplierModal = false"
+                        >
+                            <div class="w-full max-w-md rounded-lg bg-white p-6" @click.stop>
+                                <h3 class="mb-4 text-lg font-semibold">Quick Create Supplier</h3>
+                                <form @submit.prevent="quickCreateSupplier" class="space-y-4">
+                                    <div>
+                                        <label class="mb-1 block text-sm font-medium text-gray-700">Name *</label>
+                                        <input
+                                            v-model="quickCreateSupplierForm.name"
+                                            type="text"
+                                            class="w-full rounded border px-3 py-2"
+                                            required
+                                        />
+                                        <div v-if="quickCreateSupplierForm.errors.name" class="mt-1 text-sm text-red-600">
+                                            {{ quickCreateSupplierForm.errors.name }}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="mb-1 block text-sm font-medium text-gray-700">Email</label>
+                                        <input
+                                            v-model="quickCreateSupplierForm.email"
+                                            type="email"
+                                            class="w-full rounded border px-3 py-2"
+                                        />
+                                        <div v-if="quickCreateSupplierForm.errors.email" class="mt-1 text-sm text-red-600">
+                                            {{ quickCreateSupplierForm.errors.email }}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="mb-1 block text-sm font-medium text-gray-700">Phone</label>
+                                        <input
+                                            v-model="quickCreateSupplierForm.phone"
+                                            type="text"
+                                            class="w-full rounded border px-3 py-2"
+                                        />
+                                        <div v-if="quickCreateSupplierForm.errors.phone" class="mt-1 text-sm text-red-600">
+                                            {{ quickCreateSupplierForm.errors.phone }}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="mb-1 block text-sm font-medium text-gray-700">VAT Number</label>
+                                        <input
+                                            v-model="quickCreateSupplierForm.vat_number"
+                                            type="text"
+                                            class="w-full rounded border px-3 py-2"
+                                        />
+                                        <div v-if="quickCreateSupplierForm.errors.vat_number" class="mt-1 text-sm text-red-600">
+                                            {{ quickCreateSupplierForm.errors.vat_number }}
+                                        </div>
+                                    </div>
+                                    <div class="flex gap-3 pt-2">
+                                        <button
+                                            type="submit"
+                                            :disabled="quickCreateSupplierForm.processing"
+                                            class="flex-1 rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
+                                        >
+                                            {{ quickCreateSupplierForm.processing ? 'Creating...' : 'Create' }}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            @click="showQuickCreateSupplierModal = false"
+                                            class="flex-1 rounded border px-4 py-2 hover:bg-gray-50"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </form>
                             </div>
                         </div>
 

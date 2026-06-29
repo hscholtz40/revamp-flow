@@ -87,8 +87,15 @@ const props = defineProps<{
     customer: {
         id: number
         name: string
+        registration_number?: string | null
         email: string
         phone?: string | null
+        company_cell?: string | null
+        company_tel?: string | null
+        contact_first_name?: string | null
+        contact_last_name?: string | null
+        contact_cell?: string | null
+        contact_email?: string | null
         address?: string | null
         city?: string | null
         country?: string | null
@@ -169,6 +176,17 @@ const showSMSModal = ref(false);
 const showSMSResultModal = ref(false);
 const smsResult = ref<{ success: boolean; message: string } | null>(null);
 const showEmailModal = ref(false);
+
+const customerSmsPhone = computed(() =>
+    props.customer.company_cell || props.customer.company_tel || props.customer.phone || null,
+);
+
+const contactPersonName = computed(() => {
+    const name = [props.customer.contact_first_name, props.customer.contact_last_name]
+        .filter((part) => part && String(part).trim() !== '')
+        .join(' ');
+    return name || null;
+});
 
 const smsForm = useForm({
     message: '',
@@ -320,7 +338,7 @@ watchDebounced([contactSearch, contactsPerPage, smsSearch, smsStatus, smsPerPage
                             Email
                         </button>
                         <button 
-                            v-if="props.customer.phone"
+                            v-if="customerSmsPhone"
                             @click="openSMSModal"
                             class="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
                         >
@@ -355,38 +373,58 @@ watchDebounced([contactSearch, contactsPerPage, smsSearch, smsStatus, smsPerPage
             <div class="rounded-lg bg-white border border-gray-200 shadow-sm">
                 <div class="border-b border-gray-200 bg-gray-50 px-6 py-4">
                     <h2 class="text-lg font-semibold text-gray-900">Customer Information</h2>
-                    <p class="text-sm text-gray-600">Basic details and contact information</p>
+                    <p class="text-sm text-gray-600">Company and contact person details</p>
                 </div>
                 <div class="p-6">
                     <div class="grid gap-6 md:grid-cols-2">
                         <div class="space-y-4">
                             <div>
-                                <h3 class="text-sm font-medium text-gray-900 mb-3 flex items-center">
-                                    <svg class="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
-                                    </svg>
-                                    Contact Information
-                                </h3>
+                                <h3 class="text-sm font-medium text-gray-900 mb-3">Company</h3>
                                 <div class="space-y-3">
-                                    <div class="flex items-center">
-                                        <span class="text-sm font-medium text-gray-500 w-20">Email:</span>
+                                    <div class="flex items-start gap-3">
+                                        <span class="text-sm font-medium text-gray-500 w-36 shrink-0">Registration no:</span>
+                                        <span class="text-sm text-gray-900">{{ props.customer.registration_number || '-' }}</span>
+                                    </div>
+                                    <div class="flex items-start gap-3">
+                                        <span class="text-sm font-medium text-gray-500 w-36 shrink-0">Email:</span>
                                         <span class="text-sm text-gray-900">{{ props.customer.email }}</span>
                                     </div>
-                                    <div class="flex items-center">
-                                        <span class="text-sm font-medium text-gray-500 w-20">Phone:</span>
-                                        <span class="text-sm text-gray-900">{{ props.customer.phone || '-' }}</span>
+                                    <div class="flex items-start gap-3">
+                                        <span class="text-sm font-medium text-gray-500 w-36 shrink-0">Cell:</span>
+                                        <span class="text-sm text-gray-900">{{ props.customer.company_cell || '-' }}</span>
                                     </div>
-                                    <div class="flex items-center">
-                                        <span class="text-sm font-medium text-gray-500 w-20">Account:</span>
+                                    <div class="flex items-start gap-3">
+                                        <span class="text-sm font-medium text-gray-500 w-36 shrink-0">Tel:</span>
+                                        <span class="text-sm text-gray-900">{{ props.customer.company_tel || props.customer.phone || '-' }}</span>
+                                    </div>
+                                    <div class="flex items-start gap-3">
+                                        <span class="text-sm font-medium text-gray-500 w-36 shrink-0">Account code:</span>
                                         <span class="text-sm text-gray-900">{{ props.customer.account_code || '-' }}</span>
                                     </div>
-                                    <div class="flex items-center">
-                                        <span class="text-sm font-medium text-gray-500 w-20">VAT:</span>
+                                    <div class="flex items-start gap-3">
+                                        <span class="text-sm font-medium text-gray-500 w-36 shrink-0">VAT:</span>
                                         <span class="text-sm text-gray-900">{{ props.customer.vat_number || '-' }}</span>
                                     </div>
-                                    <div class="flex items-center">
-                                        <span class="text-sm font-medium text-gray-500 w-20">Terms:</span>
+                                    <div class="flex items-start gap-3">
+                                        <span class="text-sm font-medium text-gray-500 w-36 shrink-0">Terms:</span>
                                         <span class="text-sm text-gray-900">{{ props.customer.terms || 'COD' }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-medium text-gray-900 mb-3">Contact person</h3>
+                                <div class="space-y-3">
+                                    <div class="flex items-start gap-3">
+                                        <span class="text-sm font-medium text-gray-500 w-36 shrink-0">Name:</span>
+                                        <span class="text-sm text-gray-900">{{ contactPersonName || '-' }}</span>
+                                    </div>
+                                    <div class="flex items-start gap-3">
+                                        <span class="text-sm font-medium text-gray-500 w-36 shrink-0">Cell:</span>
+                                        <span class="text-sm text-gray-900">{{ props.customer.contact_cell || '-' }}</span>
+                                    </div>
+                                    <div class="flex items-start gap-3">
+                                        <span class="text-sm font-medium text-gray-500 w-36 shrink-0">Email:</span>
+                                        <span class="text-sm text-gray-900">{{ props.customer.contact_email || '-' }}</span>
                                     </div>
                                 </div>
                             </div>

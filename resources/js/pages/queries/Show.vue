@@ -126,12 +126,21 @@ function acceptContractor() {
 }
 
 const isConverting = ref(false);
+const isCreatingQuote = ref(false);
 
 function convertToJobcard() {
     router.post(`/queries/${props.query.id}/convert-to-jobcard`, {}, {
         preserveScroll: true,
         onStart: () => (isConverting.value = true),
         onFinish: () => (isConverting.value = false),
+    });
+}
+
+function createQuote() {
+    router.post(`/queries/${props.query.id}/quote`, {}, {
+        preserveScroll: true,
+        onStart: () => (isCreatingQuote.value = true),
+        onFinish: () => (isCreatingQuote.value = false),
     });
 }
 
@@ -488,6 +497,16 @@ function formatDate(value: string | null) {
                     <div v-else class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
                         <h2 class="mb-4 text-sm font-medium uppercase tracking-wider text-gray-500">Manage</h2>
                         <div class="space-y-3">
+                            <button
+                                v-if="canEdit"
+                                type="button"
+                                :disabled="isCreatingQuote"
+                                @click="createQuote"
+                                class="flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                <Briefcase class="h-4 w-4" />
+                                {{ isCreatingQuote ? 'Opening Quote…' : 'Quote' }}
+                            </button>
                             <button
                                 v-if="canEdit && query.status === 'open'"
                                 type="button"

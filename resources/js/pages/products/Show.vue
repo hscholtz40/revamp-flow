@@ -28,6 +28,8 @@ interface Product {
     tags: string[];
     image_path: string;
     notes: string;
+    supplier_id?: number | null;
+    supplier?: { id: number; name: string } | null;
     created_at: string;
     updated_at: string;
 }
@@ -231,6 +233,14 @@ function invoiceUsageSortIndicator(column: string) {
                                     <div>
                                         <div class="text-sm font-medium text-gray-500">Category</div>
                                         <div class="text-gray-900">{{ props.product.category }}</div>
+                                    </div>
+                                </div>
+
+                                <div v-if="props.product.supplier?.name" class="flex items-center gap-3">
+                                    <Package class="h-5 w-5 text-gray-400" />
+                                    <div>
+                                        <div class="text-sm font-medium text-gray-500">Supplier</div>
+                                        <div class="text-gray-900">{{ props.product.supplier.name }}</div>
                                     </div>
                                 </div>
 

@@ -477,7 +477,7 @@
     <div class="terms-section">
         @if($purchaseOrder->notes)
         <h4>Notes:</h4>
-        <p>{{ $purchaseOrder->notes }}</p>
+        <p>{!! nl2br(e($purchaseOrder->notes)) !!}</p>
         @endif
         
         @if($purchaseOrder->terms)

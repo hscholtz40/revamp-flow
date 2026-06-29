@@ -18,6 +18,7 @@ use App\Services\BulkSMSService;
 use App\Services\CustomerAccountBalanceCalculator;
 use App\Services\CustomerStatementService;
 use App\Services\CustomerUpsertService;
+use App\Support\CompanyMailer;
 use App\Support\CompanyScopedRules;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -368,7 +369,8 @@ class CustomersController extends Controller
         $currentCompany = auth()->user()->getCurrentCompany();
 
         // Check if customer has a phone number
-        if (! $customer->phone) {
+        $phoneNumber = $customer->smsPhoneNumber();
+        if (! $phoneNumber) {
             return redirect()->back()
                 ->withErrors(['message' => 'Customer does not have a phone number.']);
         }
@@ -386,7 +388,7 @@ class CustomersController extends Controller
             'contact_id' => null,
             'user_id' => auth()->id(),
             'company_id' => $currentCompany->id,
-            'phone_number' => $customer->phone,
+            'phone_number' => $phoneNumber,
             'message' => $validated['message'],
             'status' => 'pending',
         ]);
@@ -400,7 +402,7 @@ class CustomersController extends Controller
             );
 
             // Send SMS
-            $result = $smsService->sendSMS($customer->phone, $validated['message']);
+            $result = $smsService->sendSMS($phoneNumber, $validated['message']);
 
             if ($result['success']) {
                 // Update activity as successful
@@ -488,11 +490,11 @@ class CustomersController extends Controller
         }
 
         try {
-            Mail::mailer('smtp')->send([], [], function ($message) use ($customer, $subject, $renderedHtml, $currentCompany) {
-                $fromName = $currentCompany->name ?: config('mail.from.name');
+            $mailConfig = CompanyMailer::resolve($currentCompany);
+            Mail::mailer($mailConfig['mailer'])->send([], [], function ($message) use ($customer, $subject, $renderedHtml, $currentCompany, $mailConfig) {
                 $message->to($customer->email, $customer->name)
                     ->subject($subject)
-                    ->from(config('mail.from.address'), $fromName)
+                    ->from($mailConfig['from_address'], $mailConfig['from_name'])
                     ->html($renderedHtml);
 
                 if (! empty($currentCompany->email)) {

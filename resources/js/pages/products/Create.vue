@@ -23,10 +23,16 @@ interface ChartOfAccount {
     account_type: string;
 }
 
+interface SupplierOption {
+    id: number;
+    name: string;
+}
+
 const props = defineProps<{
     categories: Category[];
     currentCompany: Company;
     chartOfAccounts: ChartOfAccount[];
+    suppliers: SupplierOption[];
 }>();
 
 const form = useForm({
@@ -46,6 +52,7 @@ const form = useForm({
     valuation_method: 'fifo' as 'fifo' | 'lifo' | 'average_cost',
     is_active: true,
     category: '',
+    supplier_id: null as number | null,
     tags: [] as string[],
     image_path: '',
     notes: '',
@@ -216,6 +223,29 @@ function getTypeColor(type: string) {
                                 </select>
                                 <div v-if="form.errors.category" class="mt-1 text-sm text-red-600">
                                     {{ form.errors.category }}
+                                </div>
+                            </div>
+
+                            <!-- Supplier -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">
+                                    Supplier
+                                </label>
+                                <select
+                                    v-model="form.supplier_id"
+                                    class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                >
+                                    <option :value="null">No supplier</option>
+                                    <option
+                                        v-for="supplier in props.suppliers"
+                                        :key="supplier.id"
+                                        :value="supplier.id"
+                                    >
+                                        {{ supplier.name }}
+                                    </option>
+                                </select>
+                                <div v-if="form.errors.supplier_id" class="mt-1 text-sm text-red-600">
+                                    {{ form.errors.supplier_id }}
                                 </div>
                             </div>
 

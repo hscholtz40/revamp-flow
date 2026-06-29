@@ -106,7 +106,7 @@ class SuppliersController extends Controller
     /**
      * Store a newly created supplier.
      */
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request): RedirectResponse|\Illuminate\Http\JsonResponse
     {
         $currentCompany = auth()->user()->getCurrentCompany();
 
@@ -137,6 +137,16 @@ class SuppliersController extends Controller
             'supplier_id' => $supplier->id,
             'company_id' => $supplier->company_id,
         ]);
+
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'id' => $supplier->id,
+                'name' => $supplier->name,
+                'email' => $supplier->email,
+                'phone' => $supplier->phone,
+                'vat_number' => $supplier->vat_number,
+            ], 201);
+        }
 
         return redirect()->route('suppliers.index')->with('success', 'Supplier created successfully');
     }

@@ -473,7 +473,7 @@
     @if($quote->description)
     <div style="margin-bottom: 12px; font-size: 11px;">
         <h4 style="margin: 0 0 6px 0; font-size: 12px; font-weight: bold; color: #000;">Description</h4>
-        <p style="margin: 0; line-height: 1.4;">{{ $quote->description }}</p>
+        <p style="margin: 0; line-height: 1.4;">{!! nl2br(e($quote->description)) !!}</p>
     </div>
     @endif
     
@@ -619,12 +619,12 @@
     <div class="terms-section" style="text-align: center;">
         @if($quote->notes)
             <h4>Notes</h4>
-            <p>{{ $quote->notes }}</p>
+            <p>{!! nl2br(e($quote->notes)) !!}</p>
         @endif
         <h4>Terms & Conditions</h4>
         <p>This quote is valid for 30 days from the date of issue. Prices are subject to change without notice.</p>
         @if($quote->terms_conditions)
-            <p>{{ $quote->terms_conditions }}</p>
+            <p>{!! nl2br(e($quote->terms_conditions)) !!}</p>
         @endif
     </div>
     

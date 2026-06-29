@@ -15,6 +15,7 @@ use App\Notifications\SystemEventNotification;
 use App\Services\CustomerAccountBalanceCalculator;
 use App\Services\CustomerStatementService;
 use App\Services\PdfGenerationService;
+use App\Support\CompanyMailer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
@@ -691,12 +692,11 @@ class ClientZoneController extends Controller
         }
 
         try {
-            $fromName = $company->name ?: config('mail.from.name');
-
-            Mail::mailer('smtp')->send([], [], function ($message) use ($recipient, $subject, $bodyHtml, $fromName, $company) {
+            $mailConfig = CompanyMailer::resolve($company);
+            Mail::mailer($mailConfig['mailer'])->send([], [], function ($message) use ($recipient, $subject, $bodyHtml, $company, $mailConfig) {
                 $message->to($recipient['email'], $recipient['name'])
                     ->subject($subject)
-                    ->from(config('mail.from.address'), $fromName)
+                    ->from($mailConfig['from_address'], $mailConfig['from_name'])
                     ->html($bodyHtml);
 
                 if (! empty($company->email) && filter_var((string) $company->email, FILTER_VALIDATE_EMAIL)) {
@@ -848,12 +848,11 @@ HTML;
 <p><a href="{$reviewUrl}">Review request</a></p>
 HTML;
 
-            $fromName = $company->name ?: config('mail.from.name');
-
-            Mail::mailer('smtp')->send([], [], function ($message) use ($company, $subject, $body, $fromName) {
+            $mailConfig = CompanyMailer::resolve($company);
+            Mail::mailer($mailConfig['mailer'])->send([], [], function ($message) use ($company, $subject, $body, $mailConfig) {
                 $message->to($company->email, $company->name)
                     ->subject($subject)
-                    ->from(config('mail.from.address'), $fromName)
+                    ->from($mailConfig['from_address'], $mailConfig['from_name'])
                     ->html($body);
             });
         } catch (\Throwable $e) {

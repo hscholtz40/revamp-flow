@@ -1,5 +1,56 @@
 import { loadGoogleMapsJavaScriptApi } from '@/lib/googleMapsLoader';
 
+export interface ParsedPlaceAddress {
+    streetAddress: string;
+    city: string;
+    country: string;
+    formattedAddress: string;
+}
+
+function componentValue(
+    components: google.maps.GeocoderAddressComponent[],
+    type: string,
+    useShort = false,
+): string {
+    const match = components.find((component) => component.types.includes(type));
+
+    if (!match) {
+        return '';
+    }
+
+    return (useShort ? match.short_name : match.long_name)?.trim() ?? '';
+}
+
+export function parseAddressComponents(
+    components: google.maps.GeocoderAddressComponent[],
+    formattedAddress: string,
+    placeName?: string,
+): ParsedPlaceAddress {
+    const streetNumber = componentValue(components, 'street_number');
+    const route = componentValue(components, 'route');
+    const streetAddress = [streetNumber, route].filter(Boolean).join(' ').trim();
+
+    const city =
+        componentValue(components, 'locality') ||
+        componentValue(components, 'postal_town') ||
+        componentValue(components, 'administrative_area_level_2') ||
+        componentValue(components, 'sublocality') ||
+        componentValue(components, 'neighborhood');
+
+    const country = componentValue(components, 'country');
+
+    return {
+        streetAddress:
+            streetAddress ||
+            placeName?.trim() ||
+            formattedAddress.split(',')[0]?.trim() ||
+            formattedAddress,
+        city,
+        country,
+        formattedAddress,
+    };
+}
+
 /**
  * Attach Google Places Autocomplete to a text input. Returns a teardown function.
  * Requires Maps JavaScript API + Places API enabled for the same API key.
@@ -7,13 +58,13 @@ import { loadGoogleMapsJavaScriptApi } from '@/lib/googleMapsLoader';
 export async function attachPlacesAutocomplete(
     input: HTMLInputElement,
     apiKey: string,
-    onFormattedAddress: (address: string) => void,
+    onPlaceSelected: (address: ParsedPlaceAddress) => void,
 ): Promise<() => void> {
     const maps = await loadGoogleMapsJavaScriptApi(apiKey);
     const placesLib = (await maps.importLibrary('places')) as google.maps.PlacesLibrary;
 
     const autocomplete = new placesLib.Autocomplete(input, {
-        fields: ['formatted_address', 'geometry', 'name'],
+        fields: ['formatted_address', 'address_components', 'geometry', 'name'],
         types: ['address'],
         /** Prefer South African addresses (ISO 3166-1 alpha-2). */
         componentRestrictions: { country: 'za' },
@@ -21,10 +72,19 @@ export async function attachPlacesAutocomplete(
 
     const listener = autocomplete.addListener('place_changed', () => {
         const place = autocomplete.getPlace();
-        const addr = place.formatted_address?.trim();
-        if (addr) {
-            onFormattedAddress(addr);
+        const formattedAddress = place.formatted_address?.trim();
+
+        if (!formattedAddress) {
+            return;
         }
+
+        const parsed = parseAddressComponents(
+            place.address_components ?? [],
+            formattedAddress,
+            place.name,
+        );
+
+        onPlaceSelected(parsed);
     });
 
     return () => {

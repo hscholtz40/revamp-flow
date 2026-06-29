@@ -20,6 +20,7 @@ use App\Models\User;
 use App\Services\AssignmentNotificationService;
 use App\Services\ReminderService;
 use App\Services\StockService;
+use App\Support\CompanyMailer;
 use App\Support\ColumnFilters;
 use App\Support\SafeLog;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -1031,8 +1032,6 @@ class JobcardController extends Controller
             $jobcard->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company', 'signatures']);
 
             $subject = $validated['subject'] ?? "Jobcard #{$jobcard->job_number} - {$jobcard->title}";
-            $fromName = $currentCompany->name ?: config('mail.from.name');
-
             // Generate PDF
             $templateId = $request->get('template_id');
 
@@ -1046,14 +1045,15 @@ class JobcardController extends Controller
 
             $filename = 'jobcard-'.$jobcard->job_number.'.pdf';
 
-            Mail::mailer('smtp')->send('emails.jobcard-pdf', [
+            $mailConfig = CompanyMailer::resolve($currentCompany);
+            Mail::mailer($mailConfig['mailer'])->send('emails.jobcard-pdf', [
                 'jobcard' => $jobcard,
                 'company' => $currentCompany,
                 'customMessage' => $validated['message'] ?? '',
-            ], function ($message) use ($emails, $subject, $fromName, $pdf, $filename, $currentCompany) {
+            ], function ($message) use ($emails, $subject, $pdf, $filename, $currentCompany, $mailConfig) {
                 $message->to($emails)
                     ->subject($subject)
-                    ->from(config('mail.from.address'), $fromName)
+                    ->from($mailConfig['from_address'], $mailConfig['from_name'])
                     ->attachData($pdf->output(), $filename, [
                         'mime' => 'application/pdf',
                     ]);

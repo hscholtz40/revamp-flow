@@ -13,6 +13,7 @@ use App\Models\SMSActivity;
 use App\Models\SMSSettings;
 use App\Models\User;
 use App\Models\WhatsAppSettings;
+use App\Support\CompanyMailer;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -83,14 +84,20 @@ class ReminderService
 
     protected function applyCompanyMailIdentity($mail, Company $company): void
     {
+        $mailConfig = CompanyMailer::resolve($company);
         $mail->from(
-            config('mail.from.address'),
-            $company->name ?: config('mail.from.name')
+            $mailConfig['from_address'],
+            $mailConfig['from_name']
         );
 
         if (!empty($company->email)) {
             $mail->replyTo($company->email, $company->name ?? null);
         }
+    }
+
+    protected function companyMailerName(Company $company): string
+    {
+        return CompanyMailer::resolve($company)['mailer'];
     }
 
     protected function getRecipientEmail($document): ?string
@@ -306,7 +313,7 @@ class ReminderService
                 'company_name' => $invoice->company->name,
             ]);
 
-            Mail::mailer('smtp')->raw($message, function ($mail) use ($invoice, $recipientEmail) {
+            Mail::mailer($this->companyMailerName($invoice->company))->raw($message, function ($mail) use ($invoice, $recipientEmail) {
                 $mail->to($recipientEmail)
                     ->subject("Reminder: Invoice {$invoice->invoice_number} is Overdue");
                 $this->applyCompanyMailIdentity($mail, $invoice->company);
@@ -452,7 +459,7 @@ class ReminderService
                 'company_name' => $quote->company->name,
             ]);
 
-            Mail::mailer('smtp')->raw($message, function ($mail) use ($quote, $recipientEmail) {
+            Mail::mailer($this->companyMailerName($quote->company))->raw($message, function ($mail) use ($quote, $recipientEmail) {
                 $mail->to($recipientEmail)
                     ->subject("Reminder: Quote {$quote->quote_number} Expires Soon");
                 $this->applyCompanyMailIdentity($mail, $quote->company);
@@ -755,7 +762,7 @@ class ReminderService
                 'company_name' => $invoice->company->name,
             ]);
 
-            Mail::mailer('smtp')->raw($message, function ($mail) use ($invoice, $recipientEmail) {
+            Mail::mailer($this->companyMailerName($invoice->company))->raw($message, function ($mail) use ($invoice, $recipientEmail) {
                 $mail->to($recipientEmail)
                     ->subject("New Invoice {$invoice->invoice_number}");
                 $this->applyCompanyMailIdentity($mail, $invoice->company);
@@ -933,7 +940,7 @@ class ReminderService
                 'company_name' => $quote->company->name,
             ]);
 
-            Mail::mailer('smtp')->raw($message, function ($mail) use ($quote, $recipientEmail) {
+            Mail::mailer($this->companyMailerName($quote->company))->raw($message, function ($mail) use ($quote, $recipientEmail) {
                 $mail->to($recipientEmail)
                     ->subject("New Quote {$quote->quote_number}");
                 $this->applyCompanyMailIdentity($mail, $quote->company);
@@ -1112,7 +1119,7 @@ class ReminderService
                 'company_name' => $invoice->company->name,
             ]);
 
-            Mail::mailer('smtp')->raw($message, function ($mail) use ($invoice, $recipientEmail) {
+            Mail::mailer($this->companyMailerName($invoice->company))->raw($message, function ($mail) use ($invoice, $recipientEmail) {
                 $mail->to($recipientEmail)
                     ->subject("Payment Received - Invoice {$invoice->invoice_number}");
                 $this->applyCompanyMailIdentity($mail, $invoice->company);
@@ -1504,7 +1511,7 @@ class ReminderService
                 'company_name' => $jobcard->company->name,
             ]);
 
-            Mail::mailer('smtp')->raw($message, function ($mail) use ($jobcard, $recipientEmail) {
+            Mail::mailer($this->companyMailerName($jobcard->company))->raw($message, function ($mail) use ($jobcard, $recipientEmail) {
                 $mail->to($recipientEmail)
                     ->subject("New Jobcard {$jobcard->job_number}");
                 $this->applyCompanyMailIdentity($mail, $jobcard->company);
@@ -1683,7 +1690,7 @@ class ReminderService
                 'company_name' => $jobcard->company->name,
             ]);
 
-            Mail::mailer('smtp')->raw($message, function ($mail) use ($jobcard, $recipientEmail) {
+            Mail::mailer($this->companyMailerName($jobcard->company))->raw($message, function ($mail) use ($jobcard, $recipientEmail) {
                 $mail->to($recipientEmail)
                     ->subject("Jobcard {$jobcard->job_number} Status Updated");
                 $this->applyCompanyMailIdentity($mail, $jobcard->company);

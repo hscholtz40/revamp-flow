@@ -1,4 +1,5 @@
 import type { CustomerLookupCustomer, QuickCreateCustomerPayload, QuickCreateCustomerResponse } from '@/types/customers';
+import { createQuickCreateCustomerDefaults } from '@/types/customers';
 import { getCsrfToken } from '@/lib/csrf';
 import { useForm } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
@@ -32,12 +33,7 @@ export function useCustomerLookup({
         customers.find((customer) => customer.id === Number(initialCustomerId)) ?? null,
     );
     const showQuickCreateModal = ref(false);
-    const quickCreateForm = useForm<QuickCreateCustomerPayload>({
-        name: '',
-        email: '',
-        phone: '',
-        terms: '',
-    });
+    const quickCreateForm = useForm<QuickCreateCustomerPayload>(createQuickCreateCustomerDefaults());
 
     if (selectedCustomer.value) {
         customerSearchQuery.value = selectedCustomer.value.name;
@@ -142,7 +138,7 @@ export function useCustomerLookup({
                 showQuickCreateModal.value = false;
                 quickCreateForm.reset();
                 quickCreateForm.clearErrors();
-                quickCreateForm.name = customerSearchQuery.value;
+                Object.assign(quickCreateForm, createQuickCreateCustomerDefaults(customerSearchQuery.value));
             }
         } catch {
             toast.error(createErrorMessage);

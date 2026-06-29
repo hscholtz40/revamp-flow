@@ -187,6 +187,28 @@
         .next-steps li {
             margin-bottom: 5px;
         }
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0 30px;
+        }
+        .action-button {
+            flex: 1;
+            display: inline-block;
+            text-align: center;
+            padding: 12px 14px;
+            border-radius: 6px;
+            color: #ffffff !important;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .action-accept {
+            background-color: #059669;
+        }
+        .action-decline {
+            background-color: #dc2626;
+        }
         .footer {
             background-color: #f8fafc;
             padding: 20px 30px;
@@ -343,11 +365,18 @@
                 <h3>Next Steps</h3>
                 <ul>
                     <li>Review the quote details above</li>
-                    <li>Contact us to accept this quote or ask questions</li>
+                    <li>Use the buttons below to accept or decline this quote</li>
                     <li>We can convert this quote to a jobcard to begin work</li>
                     <li>Keep this email for your records</li>
                 </ul>
             </div>
+
+            @if(!empty($acceptUrl) && !empty($declineUrl))
+                <div class="actions">
+                    <a href="{{ $acceptUrl }}" class="action-button action-accept">Accept Quote</a>
+                    <a href="{{ $declineUrl }}" class="action-button action-decline">Decline Quote</a>
+                </div>
+            @endif
 
             @if($quote->notes)
                 <div class="customer-section">
