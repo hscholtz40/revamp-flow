@@ -259,7 +259,10 @@
                         {{ form.errors.line_items }}
                     </div>
 
-                    <div class="overflow-x-auto">
+                    <div
+                        :ref="(el) => registerLineItemsScrollParent(el as HTMLElement | null)"
+                        class="overflow-x-auto overflow-y-visible"
+                    >
                         <!-- Table Header -->
                         <div :class="[quoteLineGridClass, 'min-w-[70rem] px-3 pb-2 text-xs font-medium text-gray-500 uppercase tracking-wider border-b']">
                             <div>Qty</div>
@@ -328,9 +331,10 @@
                             <div class="relative min-w-0">
                                 <div class="flex items-center gap-1">
                                     <input
+                                        :ref="(el) => setDescriptionInputRef(groupedItem.itemIndex, el)"
                                         v-model="groupedItem.item.description"
                                         @input="handleDescriptionInput(groupedItem.itemIndex)"
-                                        @focus="showProductSuggestions[groupedItem.itemIndex] = true"
+                                        @focus="handleDescriptionFocus(groupedItem.itemIndex)"
                                         @blur="handleDescriptionBlur(groupedItem.itemIndex)"
                                         type="text"
                                         placeholder="Type description or search products..."
@@ -346,26 +350,6 @@
                                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
                                         <button type="button" @click="unlinkProduct(groupedItem.itemIndex)" class="ml-0.5 text-blue-400 hover:text-blue-600">&times;</button>
                                     </span>
-                                </div>
-                                <!-- Product Suggestions Dropdown -->
-                                <div
-                                    v-if="showProductSuggestions[groupedItem.itemIndex] && productSuggestions(groupedItem.itemIndex).length > 0"
-                                    class="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-auto"
-                                >
-                                    <div
-                                        v-for="product in productSuggestions(groupedItem.itemIndex)"
-                                        :key="product.id"
-                                        @mousedown.prevent="selectProductSuggestion(groupedItem.itemIndex, product)"
-                                        class="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm border-b border-gray-50 last:border-b-0"
-                                    >
-                                        <div class="flex items-center justify-between">
-                                            <div>
-                                                <span class="font-medium text-gray-900">{{ product.name }}</span>
-                                                <span v-if="product.sku" class="text-gray-400 ml-1 text-xs">({{ product.sku }})</span>
-                                            </div>
-                                            <span class="text-gray-500 text-xs ml-2">R{{ Number(product.price || 0).toFixed(2) }}</span>
-                                        </div>
-                                    </div>
                                 </div>
                                 <div v-if="form.errors[`line_items.${groupedItem.itemIndex}.description`]" class="text-red-500 text-xs mt-0.5">
                                     {{ form.errors[`line_items.${groupedItem.itemIndex}.description`] }}
@@ -593,6 +577,29 @@
                 </div>
             </form>
         </div>
+
+        <Teleport to="body">
+            <div
+                v-if="activeSuggestionIndex !== null && showProductSuggestions[activeSuggestionIndex] && productSuggestions(activeSuggestionIndex).length > 0 && dropdownStyle"
+                class="fixed z-[200] bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-auto"
+                :style="dropdownStyle"
+            >
+                <div
+                    v-for="product in productSuggestions(activeSuggestionIndex)"
+                    :key="product.id"
+                    @mousedown.prevent="selectProductSuggestion(activeSuggestionIndex, product)"
+                    class="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm border-b border-gray-50 last:border-b-0"
+                >
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <span class="font-medium text-gray-900">{{ product.name }}</span>
+                            <span v-if="product.sku" class="text-gray-400 ml-1 text-xs">({{ product.sku }})</span>
+                        </div>
+                        <span class="text-gray-500 text-xs ml-2">R{{ Number(product.price || 0).toFixed(2) }}</span>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
     </AppLayout>
 </template>
 
@@ -603,6 +610,7 @@ import AiDraftHelper from '@/components/AiDraftHelper.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import ContactSelector from '@/components/ContactSelector.vue';
 import { matchesProductSearch } from '@/composables/productSearch';
+import { useProductSuggestionDropdown } from '@/composables/useProductSuggestionDropdown';
 import { useCustomerLookup } from '@/composables/useCustomerLookup';
 import type { CustomerLookupCustomer } from '@/types/customers';
 import type { DocumentLineGroup, DocumentLineItem } from '@/types/documents';
@@ -691,7 +699,17 @@ const statusOptions = computed(() => props.statusOptions ?? []);
 const ROUNDING_LINE_DESCRIPTION = 'Rounding Adjustment';
 const createLineItemUid = () =>
     `line-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-const showProductSuggestions = ref<Record<number, boolean>>({});
+const {
+    activeSuggestionIndex,
+    closeProductSuggestions,
+    dropdownStyle,
+    handleDescriptionBlur,
+    handleDescriptionFocus,
+    handleDescriptionInput,
+    registerLineItemsScrollParent,
+    setDescriptionInputRef,
+    showProductSuggestions,
+} = useProductSuggestionDropdown();
 const discountTypes = ref<Record<number, 'amount' | 'percentage'>>({});
 const draggedItemIndex = ref<number | null>(null);
 const dragOverItemIndex = ref<number | null>(null);
@@ -1070,16 +1088,6 @@ const productSuggestions = (index: number) => {
     return props.products.filter(product => matchesProductSearch(product, query)).slice(0, 8);
 };
 
-const handleDescriptionInput = (index: number) => {
-    showProductSuggestions.value[index] = true;
-};
-
-const handleDescriptionBlur = (index: number) => {
-    setTimeout(() => {
-        showProductSuggestions.value[index] = false;
-    }, 200);
-};
-
 const selectProductSuggestion = (index: number, product: Product) => {
     const item = form.line_items[index];
     if (!item) return;
@@ -1090,7 +1098,7 @@ const selectProductSuggestion = (index: number, product: Product) => {
     if (product.supplier_id) {
         item.supplier_id = product.supplier_id;
     }
-    showProductSuggestions.value[index] = false;
+    closeProductSuggestions(index);
 };
 
 const getProductName = (productId: string | number | null | undefined) => {

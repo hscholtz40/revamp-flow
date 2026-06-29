@@ -3,6 +3,7 @@
 ## 2026-06-29
 
 - **Customer company and contact fields:** Expanded customer records with company registration number, separate company cell/tel, and dedicated contact person name/surname/cell/email fields. Create/Edit/Show forms are grouped into company, contact person, and account sections; existing `phone` values are backfilled to company tel for compatibility.
+- **Quote line-item product search dropdown:** Product suggestions on Quote Create/Edit now render in a fixed body overlay so they are not clipped by the horizontal line-item scroll container.
 - **Customer quick-create fields:** Quick Create Customer modal (quotes, invoices, jobcards, credit notes) now includes the full company and contact person field set with address autocomplete, matching the main customer form.
 - **Address autocomplete field fill:** Google Places selection on customer address now parses street address, city, and country into their respective fields instead of only setting the full formatted address string.
 - **Product supplier link + quote line supplier:** Products now have a selectable default supplier on Create/Edit/Show. Quote line items store an optional per-line `supplier_id` (auto-filled from the linked product, overridable via dropdown). Quote Create/Edit use a single-row line grid with horizontal scroll when columns overflow; Quote Show displays supplier per line (not on PDF).
