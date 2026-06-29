@@ -670,6 +670,7 @@ const props = defineProps<{
         line_groups?: { name?: string | null; sort_order?: number | null }[];
         line_items?: {
             product_id?: number | null;
+            supplier_id?: number | null;
             line_group_id?: number | null;
             description?: string | null;
             quantity?: number | null;
