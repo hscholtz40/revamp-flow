@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Contact;
 use App\Models\Customer;
 use App\Models\EmailActivity;
-use App\Models\EmailTemplate;
 use App\Models\SMSActivity;
 use App\Models\SMSSettings;
 use App\Services\BulkSMSService;
@@ -105,11 +104,6 @@ class ContactController extends Controller
                 'sort_dir' => $sortDir,
             ],
             'currentCompany' => $currentCompany,
-            'emailTemplates' => EmailTemplate::where('company_id', $currentCompany->id)
-                ->where('is_active', true)
-                ->orderByDesc('is_default')
-                ->orderBy('name')
-                ->get(['id', 'name', 'subject', 'html_template', 'css_styles', 'is_default']),
         ]);
     }
 
@@ -225,11 +219,6 @@ class ContactController extends Controller
             'filters' => [
                 'email_per_page' => $emailPerPage,
             ],
-            'emailTemplates' => EmailTemplate::where('company_id', $contact->company_id)
-                ->where('is_active', true)
-                ->orderByDesc('is_default')
-                ->orderBy('name')
-                ->get(['id', 'name', 'subject', 'html_template', 'css_styles', 'is_default']),
         ]);
     }
 
@@ -377,7 +366,7 @@ class ContactController extends Controller
     }
 
     /**
-     * Send email to a contact using an email template.
+     * Send email to a contact.
      */
     public function sendEmail(Request $request, Contact $contact): RedirectResponse
     {
@@ -386,20 +375,12 @@ class ContactController extends Controller
         $currentCompany = auth()->user()->getCurrentCompany();
 
         $validated = $request->validate([
-            'template_id' => ['nullable', CompanyScopedRules::emailTemplate($currentCompany->id)],
             'subject' => ['required', 'string', 'max:255'],
             'body' => ['required', 'string'],
         ]);
 
         if (empty($contact->email)) {
             return redirect()->back()->withErrors(['message' => 'Contact does not have an email address.']);
-        }
-
-        $template = null;
-        if (! empty($validated['template_id'])) {
-            $template = EmailTemplate::where('company_id', $currentCompany->id)
-                ->where('is_active', true)
-                ->findOrFail($validated['template_id']);
         }
 
         $contact->loadMissing('customer');
@@ -419,18 +400,15 @@ class ContactController extends Controller
         ];
 
         $subject = $this->renderTemplateString($validated['subject'], $context);
-        $renderedHtml = $this->renderTemplateString($validated['body'], $context);
-        if ($template && ! empty($template->css_styles)) {
-            $renderedHtml = "<style>{$template->css_styles}</style>\n{$renderedHtml}";
-        }
+        $renderedBody = $this->renderTemplateString($validated['body'], $context);
 
         try {
             $mailConfig = CompanyMailer::resolve($currentCompany);
-            Mail::mailer($mailConfig['mailer'])->send([], [], function ($message) use ($contact, $subject, $renderedHtml, $currentCompany, $mailConfig) {
+            Mail::mailer($mailConfig['mailer'])->send([], [], function ($message) use ($contact, $subject, $renderedBody, $currentCompany, $mailConfig) {
                 $message->to($contact->email, $contact->name)
                     ->subject($subject)
                     ->from($mailConfig['from_address'], $mailConfig['from_name'])
-                    ->html($renderedHtml);
+                    ->text($renderedBody);
 
                 if (! empty($currentCompany->email)) {
                     $message->replyTo($currentCompany->email, $currentCompany->name ?? null);
@@ -442,11 +420,11 @@ class ContactController extends Controller
                 'customer_id' => $contact->customer_id,
                 'contact_id' => $contact->id,
                 'user_id' => auth()->id(),
-                'email_template_id' => $template?->id,
+                'email_template_id' => null,
                 'recipient_email' => $contact->email,
                 'recipient_name' => $contact->name,
                 'subject' => $subject,
-                'body' => $renderedHtml,
+                'body' => $renderedBody,
                 'email_type' => 'direct',
                 'related_type' => 'contact',
                 'related_id' => $contact->id,
@@ -461,11 +439,11 @@ class ContactController extends Controller
                 'customer_id' => $contact->customer_id,
                 'contact_id' => $contact->id,
                 'user_id' => auth()->id(),
-                'email_template_id' => $template?->id,
+                'email_template_id' => null,
                 'recipient_email' => $contact->email,
                 'recipient_name' => $contact->name,
                 'subject' => $subject,
-                'body' => $renderedHtml,
+                'body' => $renderedBody,
                 'email_type' => 'direct',
                 'related_type' => 'contact',
                 'related_id' => $contact->id,

@@ -147,14 +147,6 @@ const props = defineProps<{
         email_per_page?: number
         account_history_per_page?: number
     }
-    emailTemplates: {
-        id: number
-        name: string
-        subject: string
-        html_template?: string | null
-        css_styles?: string | null
-        is_default?: boolean
-    }[]
 }>()
 
 const deleteCustomer = () => {
@@ -235,9 +227,6 @@ const openEmailModal = () => {
 
 const emailSendUrl = computed(() => `/customers/${props.customer.id}/send-email`);
 const emailModalTitle = computed(() => `Send Email to ${props.customer.name}`);
-const emailPreviewContext = computed(() => ({
-    customer: props.customer,
-}));
 
 // Filtering and pagination
 const contactSearch = ref(String(props.filters?.contact_search ?? ''));
@@ -1094,8 +1083,6 @@ watchDebounced([contactSearch, contactsPerPage, smsSearch, smsStatus, smsPerPage
             :open="showEmailModal"
             :title="emailModalTitle"
             :send-url="emailSendUrl"
-            :templates="props.emailTemplates"
-            :preview-context="emailPreviewContext"
             @close="showEmailModal = false"
         />
 

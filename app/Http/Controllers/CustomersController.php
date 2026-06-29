@@ -8,7 +8,6 @@ use App\Http\Requests\Customers\UpdateCustomerRequest;
 use App\Models\CreditNote;
 use App\Models\Customer;
 use App\Models\EmailActivity;
-use App\Models\EmailTemplate;
 use App\Models\Invoice;
 use App\Models\Jobcard;
 use App\Models\Quote;
@@ -84,11 +83,6 @@ class CustomersController extends Controller
                 'sort_dir' => $sortDir,
             ],
             'currentCompany' => $currentCompany,
-            'emailTemplates' => EmailTemplate::where('company_id', $currentCompany->id)
-                ->where('is_active', true)
-                ->orderByDesc('is_default')
-                ->orderBy('name')
-                ->get(['id', 'name', 'subject', 'html_template', 'css_styles', 'is_default']),
         ]);
     }
 
@@ -284,11 +278,6 @@ class CustomersController extends Controller
             'smsActivities' => $smsActivities,
             'emailActivities' => $emailActivities,
             'accountHistory' => $accountHistory,
-            'emailTemplates' => EmailTemplate::where('company_id', $currentCompany->id)
-                ->where('is_active', true)
-                ->orderByDesc('is_default')
-                ->orderBy('name')
-                ->get(['id', 'name', 'subject', 'html_template', 'css_styles', 'is_default']),
             'filters' => [
                 'contact_search' => $request->get('contact_search'),
                 'contacts_per_page' => $contactsPerPage,
@@ -439,7 +428,7 @@ class CustomersController extends Controller
     }
 
     /**
-     * Send email to a customer using an email template.
+     * Send email to a customer.
      */
     public function sendEmail(Request $request, Customer $customer): RedirectResponse
     {
@@ -448,20 +437,12 @@ class CustomersController extends Controller
         $currentCompany = auth()->user()->getCurrentCompany();
 
         $validated = $request->validate([
-            'template_id' => ['nullable', CompanyScopedRules::emailTemplate($currentCompany->id)],
             'subject' => ['required', 'string', 'max:255'],
             'body' => ['required', 'string'],
         ]);
 
         if (empty($customer->email)) {
             return redirect()->back()->withErrors(['message' => 'Customer does not have an email address.']);
-        }
-
-        $template = null;
-        if (! empty($validated['template_id'])) {
-            $template = EmailTemplate::where('company_id', $currentCompany->id)
-                ->where('is_active', true)
-                ->findOrFail($validated['template_id']);
         }
 
         $contact = $customer->contacts()
@@ -484,18 +465,15 @@ class CustomersController extends Controller
         ];
 
         $subject = $this->renderTemplateString($validated['subject'], $context);
-        $renderedHtml = $this->renderTemplateString($validated['body'], $context);
-        if ($template && ! empty($template->css_styles)) {
-            $renderedHtml = "<style>{$template->css_styles}</style>\n{$renderedHtml}";
-        }
+        $renderedBody = $this->renderTemplateString($validated['body'], $context);
 
         try {
             $mailConfig = CompanyMailer::resolve($currentCompany);
-            Mail::mailer($mailConfig['mailer'])->send([], [], function ($message) use ($customer, $subject, $renderedHtml, $currentCompany, $mailConfig) {
+            Mail::mailer($mailConfig['mailer'])->send([], [], function ($message) use ($customer, $subject, $renderedBody, $currentCompany, $mailConfig) {
                 $message->to($customer->email, $customer->name)
                     ->subject($subject)
                     ->from($mailConfig['from_address'], $mailConfig['from_name'])
-                    ->html($renderedHtml);
+                    ->text($renderedBody);
 
                 if (! empty($currentCompany->email)) {
                     $message->replyTo($currentCompany->email, $currentCompany->name ?? null);
@@ -507,11 +485,11 @@ class CustomersController extends Controller
                 'customer_id' => $customer->id,
                 'contact_id' => null,
                 'user_id' => auth()->id(),
-                'email_template_id' => $template?->id,
+                'email_template_id' => null,
                 'recipient_email' => $customer->email,
                 'recipient_name' => $customer->name,
                 'subject' => $subject,
-                'body' => $renderedHtml,
+                'body' => $renderedBody,
                 'email_type' => 'direct',
                 'related_type' => 'customer',
                 'related_id' => $customer->id,
@@ -526,11 +504,11 @@ class CustomersController extends Controller
                 'customer_id' => $customer->id,
                 'contact_id' => null,
                 'user_id' => auth()->id(),
-                'email_template_id' => $template?->id,
+                'email_template_id' => null,
                 'recipient_email' => $customer->email,
                 'recipient_name' => $customer->name,
                 'subject' => $subject,
-                'body' => $renderedHtml,
+                'body' => $renderedBody,
                 'email_type' => 'direct',
                 'related_type' => 'customer',
                 'related_id' => $customer->id,

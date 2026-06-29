@@ -41,14 +41,6 @@ const props = defineProps<{
         created_at: string;
         updated_at: string;
     };
-    emailTemplates: {
-        id: number;
-        name: string;
-        subject: string;
-        html_template?: string | null;
-        css_styles?: string | null;
-        is_default?: boolean;
-    }[];
     emailActivities: {
         data: EmailActivity[];
         links: { url: string | null; label: string; active: boolean }[];
@@ -119,10 +111,6 @@ const openEmailModal = () => {
 
 const emailSendUrl = computed(() => `/contacts/${props.contact.id}/send-email`);
 const emailModalTitle = computed(() => `Send Email to ${props.contact.name}`);
-const emailPreviewContext = computed(() => ({
-    contact: props.contact,
-    customer: props.contact.customer,
-}));
 
 const emailPerPage = ref(Number(props.filters?.email_per_page ?? 10));
 
@@ -497,8 +485,6 @@ watch(emailPerPage, () => {
             :open="showEmailModal"
             :title="emailModalTitle"
             :send-url="emailSendUrl"
-            :templates="props.emailTemplates"
-            :preview-context="emailPreviewContext"
             @close="showEmailModal = false"
         />
     </AppLayout>

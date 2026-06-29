@@ -42,14 +42,6 @@ const props = defineProps<{
     customers: PaginatedCustomers;
     filters: { search?: string; sort_by?: string; sort_dir?: 'asc' | 'desc' };
     currentCompany: Company;
-    emailTemplates: {
-        id: number;
-        name: string;
-        subject: string;
-        html_template?: string | null;
-        css_styles?: string | null;
-        is_default?: boolean;
-    }[];
 }>();
 
 const search = ref(props.filters?.search ?? '');
@@ -113,9 +105,6 @@ const openEmailModal = (customer: Customer) => {
 
 const emailSendUrl = computed(() => selectedCustomer.value ? `/customers/${selectedCustomer.value.id}/send-email` : null);
 const emailModalTitle = computed(() => `Send Email to ${selectedCustomer.value?.name || 'Customer'}`);
-const emailPreviewContext = computed(() => ({
-    customer: selectedCustomer.value ?? {},
-}));
 
 watch(search, (value) => {
     const params: Record<string, string> = {};
@@ -449,8 +438,6 @@ const deleteCustomer = (customer: Customer) => {
             :open="showEmailModal"
             :title="emailModalTitle"
             :send-url="emailSendUrl"
-            :templates="props.emailTemplates"
-            :preview-context="emailPreviewContext"
             @close="showEmailModal = false"
             @sent="selectedCustomer = null"
         />

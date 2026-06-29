@@ -42,14 +42,6 @@ const props = defineProps<{
     contacts: PaginatedContacts;
     filters: { search?: string; sort_by?: string; sort_dir?: 'asc' | 'desc' };
     currentCompany: Company;
-    emailTemplates: {
-        id: number;
-        name: string;
-        subject: string;
-        html_template?: string | null;
-        css_styles?: string | null;
-        is_default?: boolean;
-    }[];
 }>();
 
 const search = ref(props.filters?.search ?? '');
@@ -155,10 +147,6 @@ const openEmailModal = (contact: Contact) => {
 
 const emailSendUrl = computed(() => selectedContact.value ? `/contacts/${selectedContact.value.id}/send-email` : null);
 const emailModalTitle = computed(() => `Send Email to ${selectedContact.value?.name || 'Contact'}`);
-const emailPreviewContext = computed(() => ({
-    contact: selectedContact.value ?? {},
-    customer: selectedContact.value?.customer ?? {},
-}));
 </script>
 
 <template>
@@ -438,8 +426,6 @@ const emailPreviewContext = computed(() => ({
             :open="showEmailModal"
             :title="emailModalTitle"
             :send-url="emailSendUrl"
-            :templates="props.emailTemplates"
-            :preview-context="emailPreviewContext"
             @close="showEmailModal = false"
             @sent="selectedContact = null"
         />

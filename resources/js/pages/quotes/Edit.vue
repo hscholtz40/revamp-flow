@@ -263,11 +263,11 @@
                     >
                         <!-- Table Header -->
                         <div :class="[quoteLineGridClass, 'min-w-[70rem] px-3 pb-2 text-xs font-medium text-gray-500 uppercase tracking-wider border-b']">
-                            <div>Qty</div>
                             <div>Description</div>
                             <div>Supplier</div>
                             <div>Cost</div>
                             <div>Price</div>
+                            <div>Qty</div>
                             <div>Discount</div>
                             <div>Tax</div>
                             <div>Account</div>
@@ -315,18 +315,6 @@
                                 @drop.stop="onDropOnItem(groupedItem.itemIndex, groupBlock.groupId)"
                             >
                             <template v-if="groupedItem.item">
-                            <!-- Qty -->
-                            <div>
-                                <input
-                                    v-model.number="groupedItem.item.quantity"
-                                    type="number"
-                                    min="1"
-                                    class="w-full rounded border border-gray-300 px-1.5 py-1 text-sm text-center focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                                    required
-                                    :disabled="!canEdit"
-                                />
-                            </div>
-
                             <!-- Description / Product Search -->
                             <div class="relative min-w-0">
                                 <div class="flex items-center gap-1">
@@ -388,6 +376,18 @@
                                     type="number"
                                     step="0.01"
                                     class="w-full rounded border border-gray-300 px-1.5 py-1 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                    required
+                                    :disabled="!canEdit"
+                                />
+                            </div>
+
+                            <!-- Qty -->
+                            <div>
+                                <input
+                                    v-model.number="groupedItem.item.quantity"
+                                    type="number"
+                                    min="1"
+                                    class="w-full rounded border border-gray-300 px-1.5 py-1 text-sm text-center focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                     required
                                     :disabled="!canEdit"
                                 />
@@ -826,7 +826,7 @@ const normalizeLineItemOrder = () => {
     form.line_items = ordered;
 };
 
-const quoteLineGridClass = 'grid grid-cols-[2.25rem_minmax(10rem,1fr)_7rem_4rem_4rem_6rem_6rem_5.5rem_6.5rem_7rem_2rem] gap-1.5 items-center';
+const quoteLineGridClass = 'grid grid-cols-[minmax(10rem,1fr)_7rem_4rem_4rem_2.25rem_6rem_6rem_5.5rem_6.5rem_7rem_2rem] gap-1.5 items-center';
 
 const addLineItem = (groupIndex = 0) => {
     const defaultGroupId = getDefaultGroupId(groupIndex);
