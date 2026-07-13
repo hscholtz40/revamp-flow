@@ -107,3 +107,66 @@ test('embed script returns iframe loader javascript with valid token', function 
         ->assertHeader('Content-Type', 'application/javascript; charset=UTF-8')
         ->assertSee('createElement(\'iframe\')', false);
 });
+
+test('queries index shows hosted url without query keys using app key fallback on normal instances', function () {
+    $company = coverageCreateCompany();
+    $user = coverageCreateUserWithPermissions($company, [
+        'queries' => ['list', 'view'],
+    ]);
+
+    config([
+        'services.query_api.public_form_key' => '',
+        'services.query_api.key' => '',
+        'app.is_licensing_instance' => false,
+    ]);
+
+    $this->mock(\App\Services\InstanceLicenseService::class, function ($mock) {
+        $mock->shouldReceive('validate')->andReturn(['valid' => true, 'message' => null]);
+        $mock->shouldReceive('getUserLimitRestrictionMessage')->andReturn(null);
+    });
+
+    $appKey = (string) config('app.key');
+    expect($appKey)->not->toBe('');
+
+    $expectedToken = hash_hmac('sha256', 'company:'.$company->id, $appKey);
+    $expectedUrl = route('queries.public.form', [
+        'companyId' => $company->id,
+        'token' => $expectedToken,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('queries.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('queries/Index')
+            ->where('integration.public_url', $expectedUrl)
+            ->where('integration.contractor_public_url', null)
+        );
+});
+
+test('queries index includes contractor form url only on licensing instances', function () {
+    $company = coverageCreateCompany();
+    $user = coverageCreateUserWithPermissions($company, [
+        'queries' => ['list', 'view'],
+    ]);
+
+    config([
+        'services.query_api.public_form_key' => 'test-public-form-key',
+        'app.is_licensing_instance' => true,
+    ]);
+
+    $expectedToken = hash_hmac('sha256', 'company:'.$company->id, 'test-public-form-key');
+    $expectedUrl = route('queries.public.form', [
+        'companyId' => $company->id,
+        'token' => $expectedToken,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('queries.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('queries/Index')
+            ->where('integration.public_url', $expectedUrl)
+            ->where('integration.contractor_public_url', $expectedUrl.'?kind=contractor')
+        );
+});

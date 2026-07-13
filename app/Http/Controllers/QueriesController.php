@@ -683,7 +683,14 @@ JS;
             return $configured;
         }
 
-        return (string) config('services.query_api.key', '');
+        $apiKey = (string) config('services.query_api.key', '');
+        if ($apiKey !== '') {
+            return $apiKey;
+        }
+
+        // Fall back to APP_KEY so Hosted URL still appears on customer releases
+        // that ship without QUERY_PUBLIC_FORM_KEY / QUERY_API_KEY set.
+        return (string) config('app.key', '');
     }
 
     private function publicFormTokenForCompany(Company $company): ?string

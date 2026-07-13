@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-07-13
+
+- **Queries Hosted URL on normal releases:** Public Form Integration Hosted URL now still appears when `QUERY_PUBLIC_FORM_KEY` / `QUERY_API_KEY` are unset by falling back to `APP_KEY` for form tokens. Contractor Form URL remains licensing-only. Customer deploys force `IS_LICENSING_INSTANCE=false`; `.env.example` defaults to false.
+
 ## 2026-06-29
 
 - **Customer company and contact fields:** Expanded customer records with company registration number, separate company cell/tel, and dedicated contact person name/surname/cell/email fields. Create/Edit/Show forms are grouped into company, contact person, and account sections; existing `phone` values are backfilled to company tel for compatibility.
