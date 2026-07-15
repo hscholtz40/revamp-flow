@@ -49,7 +49,7 @@ defineProps<{
                         :tabindex="1"
                         autocomplete="email"
                         placeholder="Enter your email"
-                        class="h-12 px-4 text-base border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                        class="h-12 px-4 text-base border-gray-300 focus:border-[#f7941d] focus:ring-[#f7941d]"
                     />
                     <InputError :message="errors.email" />
                 </div>
@@ -60,7 +60,7 @@ defineProps<{
                         <TextLink
                             v-if="canResetPassword"
                             :href="request()"
-                            class="text-sm text-blue-600 hover:text-blue-500 font-medium"
+                            class="text-sm text-[#f7941d] hover:text-[#d97800] font-medium"
                             :tabindex="5"
                         >
                             Forgot password?
@@ -74,7 +74,7 @@ defineProps<{
                         :tabindex="2"
                         autocomplete="current-password"
                         placeholder="Enter your password"
-                        class="h-12 px-4 text-base border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                        class="h-12 px-4 text-base border-gray-300 focus:border-[#f7941d] focus:ring-[#f7941d]"
                     />
                     <InputError :message="errors.password" />
                 </div>
@@ -85,7 +85,7 @@ defineProps<{
                             id="remember"
                             name="remember"
                             :tabindex="3"
-                            class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                            class="h-4 w-4 text-[#f7941d] focus:ring-[#f7941d] border-gray-300 rounded"
                         />
                         <span class="text-sm text-gray-700">Remember me for 30 days</span>
                     </Label>
@@ -93,7 +93,7 @@ defineProps<{
 
                 <Button
                     type="submit"
-                    class="w-full h-12 text-base font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-200 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    class="w-full h-12 text-base font-medium bg-[#f7941d] hover:bg-[#d97800] text-white rounded-lg transition-colors duration-200 focus:ring-2 focus:ring-[#f7941d] focus:ring-offset-2"
                     :tabindex="4"
                     :disabled="processing"
                     data-test="client-login-button"
@@ -109,13 +109,13 @@ defineProps<{
             <div class="mt-6 text-center">
                 <p class="text-sm text-gray-600">
                     Staff user?
-                    <a href="/login" class="ml-1 font-medium text-blue-600 hover:text-blue-500">
+                    <a href="/login" class="ml-1 font-medium text-[#f7941d] hover:text-[#d97800]">
                         Staff Login
                     </a>
                 </p>
                 <p class="mt-2 text-sm text-gray-600">
                     Need client access?
-                    <a href="/client-zone/register" class="ml-1 font-medium text-blue-600 hover:text-blue-500">
+                    <a href="/client-zone/register" class="ml-1 font-medium text-[#f7941d] hover:text-[#d97800]">
                         Register
                     </a>
                 </p>
