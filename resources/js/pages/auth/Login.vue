@@ -20,7 +20,7 @@ defineProps<{
 <template>
     <AuthBase
         title="Welcome back"
-        description="Sign in to your JobCardOnline account to continue"
+        description="Sign in to your account to continue"
     >
         <Head title="Log in" />
 
