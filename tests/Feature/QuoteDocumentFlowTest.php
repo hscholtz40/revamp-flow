@@ -41,6 +41,91 @@ it('stores a quote through the controller', function () {
         ->and((float) $quote->total)->toBeGreaterThan(0);
 });
 
+it('autosaves a new quote draft with incomplete line items', function () {
+    $company = coverageCreateCompany();
+    $user = coverageCreateUserWithPermissions($company, [
+        'quotes' => ['view', 'create', 'edit', 'delete'],
+    ]);
+    $customer = coverageSeedCustomer($company);
+    coverageSeedChartOfAccount($company);
+
+    $response = $this->actingAs($user)->postJson(route('quotes.autosave.store'), [
+        'customer_id' => $customer->id,
+        'title' => '',
+        'status' => 'draft',
+        'line_groups' => [
+            ['id' => 1, 'name' => 'Items'],
+        ],
+        'line_items' => [
+            [
+                'description' => '',
+                'quantity' => 1,
+                'unit_price' => 0,
+                'line_group_id' => 1,
+            ],
+        ],
+    ]);
+
+    $response->assertOk()
+        ->assertJsonPath('quote.status', 'draft');
+
+    $quote = Quote::query()->findOrFail($response->json('quote.id'));
+    $quote->load('lineItems');
+
+    expect($quote->customer_id)->toBe($customer->id)
+        ->and($quote->title)->toBe('Untitled quote')
+        ->and($quote->lineItems)->toHaveCount(1)
+        ->and($quote->lineItems->first()->description)->toBe('');
+});
+
+it('autosaves updates to an existing quote draft', function () {
+    $company = coverageCreateCompany();
+    $user = coverageCreateUserWithPermissions($company, [
+        'quotes' => ['view', 'create', 'edit', 'delete'],
+    ]);
+    $customer = coverageSeedCustomer($company);
+    coverageSeedChartOfAccount($company);
+
+    $quote = app(QuoteUpsertService::class)->createForCompany([
+        'customer_id' => $customer->id,
+        'title' => 'Draft Quote',
+        'status' => 'draft',
+        'line_items' => [
+            [
+                'description' => 'Original line',
+                'quantity' => 1,
+                'unit_price' => 50,
+            ],
+        ],
+    ], $company->id, $user->id);
+
+    $this->actingAs($user)->putJson(route('quotes.autosave.update', $quote), [
+        'customer_id' => $customer->id,
+        'title' => 'Autosaved Quote',
+        'status' => 'draft',
+        'line_groups' => [
+            ['id' => 1, 'name' => 'Items'],
+        ],
+        'line_items' => [
+            [
+                'description' => 'Autosaved line',
+                'quantity' => 2,
+                'unit_price' => 75,
+                'line_group_id' => 1,
+            ],
+        ],
+    ])->assertOk()
+        ->assertJsonPath('quote.id', $quote->id)
+        ->assertJsonPath('quote.status', 'draft');
+
+    $quote->refresh()->load('lineItems');
+
+    expect($quote->title)->toBe('Autosaved Quote')
+        ->and($quote->lineItems)->toHaveCount(1)
+        ->and($quote->lineItems->first()->description)->toBe('Autosaved line')
+        ->and((float) $quote->total)->toBe(150.0);
+});
+
 it('updates and changes quote status', function () {
     $company = coverageCreateCompany();
     $user = coverageCreateUserWithPermissions($company, [

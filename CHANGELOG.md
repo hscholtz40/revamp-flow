@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-07-15
+
+- **System email branding:** Document and notification emails now use grey body text, embed the uploaded company logo inline, apply the company's Appearance primary/secondary/accent colours to headers, highlights, totals, links, and action buttons, and use email-client-safe quote header/date spacing.
+- **Quote draft autosave:** Quote Create/Edit now autosaves editable draft quotes after field and line-item changes, shows toast notifications when autosave succeeds or fails, and uses dedicated JSON autosave endpoints so drafts persist without triggering reminder emails or manual-save redirects.
+
 ## 2026-06-29
 
 - **Customer company and contact fields:** Expanded customer records with company registration number, separate company cell/tel, and dedicated contact person name/surname/cell/email fields. Create/Edit/Show forms are grouped into company, contact person, and account sections; existing `phone` values are backfilled to company tel for compatibility.

@@ -1,3 +1,10 @@
+@php
+    $emailCompany = $jobcard->company;
+    $emailBrand = $emailCompany->getEmailBranding();
+    $emailLogoSrc = $emailBrand['logo_path'] && isset($message)
+        ? $message->embed($emailBrand['logo_path'])
+        : $emailBrand['logo_url'];
+@endphp
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -10,7 +17,7 @@
             margin: 0;
             padding: 0;
             background-color: #f8fafc;
-            color: #334155;
+            color: {{ $emailBrand['text'] }};
             line-height: 1.6;
         }
         .container {
@@ -22,10 +29,16 @@
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
         .header {
-            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            background: linear-gradient(135deg, {{ $emailBrand['primary'] }} 0%, {{ $emailBrand['secondary'] }} 100%);
             color: white;
             padding: 30px;
             text-align: center;
+        }
+        .header-logo {
+            display: block;
+            max-height: 72px;
+            max-width: 180px;
+            margin: 0 auto 16px auto;
         }
         .header h1 {
             margin: 0;
@@ -57,7 +70,7 @@
         .company-name {
             font-size: 20px;
             font-weight: bold;
-            color: #1e293b;
+            color: {{ $emailBrand['heading'] }};
             margin-bottom: 8px;
         }
         .jobcard-info {
@@ -67,12 +80,12 @@
         .jobcard-number {
             font-size: 24px;
             font-weight: bold;
-            color: #f59e0b;
+            color: {{ $emailBrand['primary'] }};
             margin-bottom: 5px;
         }
         .jobcard-title {
             font-size: 18px;
-            color: #64748b;
+            color: {{ $emailBrand['muted'] }};
             margin-bottom: 10px;
         }
         .status-badge {
@@ -84,7 +97,7 @@
             text-transform: uppercase;
         }
         .status-draft { background-color: #f1f5f9; color: #475569; }
-        .status-in-progress { background-color: #dbeafe; color: #1e40af; }
+        .status-in-progress { background-color: #f3f4f6; color: #4b5563; }
         .status-completed { background-color: #dcfce7; color: #166534; }
         .status-on-hold { background-color: #fef3c7; color: #92400e; }
         .status-cancelled { background-color: #fecaca; color: #991b1b; }
@@ -94,9 +107,9 @@
         .section-title {
             font-size: 16px;
             font-weight: bold;
-            color: #1e293b;
+            color: {{ $emailBrand['heading'] }};
             margin-bottom: 10px;
-            border-bottom: 2px solid #e2e8f0;
+            border-bottom: 2px solid {{ $emailBrand['border'] }};
             padding-bottom: 5px;
         }
         .customer-info {
@@ -106,7 +119,7 @@
         }
         .customer-name {
             font-weight: bold;
-            color: #1e293b;
+            color: {{ $emailBrand['heading'] }};
             margin-bottom: 5px;
         }
         .line-items {
@@ -151,15 +164,15 @@
         .totals-row.total {
             font-weight: bold;
             font-size: 18px;
-            border-top: 2px solid #f59e0b;
+            border-top: 2px solid {{ $emailBrand['primary'] }};
             border-bottom: none;
             padding-top: 15px;
             margin-top: 10px;
-            color: #1e293b;
+            color: {{ $emailBrand['heading'] }};
         }
         .message {
             background-color: #fef3c7;
-            border-left: 4px solid #f59e0b;
+            border-left: 4px solid {{ $emailBrand['accent'] }};
             padding: 15px;
             margin-bottom: 30px;
             border-radius: 0 6px 6px 0;
@@ -168,21 +181,21 @@
             color: #92400e;
         }
         .next-steps {
-            background-color: #ecfdf5;
-            border-left: 4px solid #10b981;
+            background-color: {{ $emailBrand['surface'] }};
+            border-left: 4px solid {{ $emailBrand['accent'] }};
             padding: 20px;
             margin-bottom: 30px;
             border-radius: 0 6px 6px 0;
         }
         .next-steps h3 {
             margin: 0 0 10px 0;
-            color: #065f46;
+            color: {{ $emailBrand['heading'] }};
             font-size: 16px;
         }
         .next-steps ul {
             margin: 0;
             padding-left: 20px;
-            color: #047857;
+            color: {{ $emailBrand['text'] }};
         }
         .next-steps li {
             margin-bottom: 5px;
@@ -191,7 +204,7 @@
             background-color: #f8fafc;
             padding: 20px 30px;
             text-align: center;
-            color: #64748b;
+            color: {{ $emailBrand['muted'] }};
             font-size: 14px;
             border-top: 1px solid #e2e8f0;
         }
@@ -213,6 +226,9 @@
 <body>
     <div class="container">
         <div class="header">
+            @if($emailLogoSrc)
+                <img src="{{ $emailLogoSrc }}" alt="{{ $emailCompany->name }} logo" class="header-logo">
+            @endif
             <h1>Jobcard</h1>
             <p>{{ $jobcard->company->name }}</p>
         </div>

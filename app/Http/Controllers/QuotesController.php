@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Quotes\AutosaveQuoteRequest;
 use App\Http\Requests\Quotes\StoreQuoteRequest;
 use App\Http\Requests\Quotes\UpdateQuoteRequest;
 use App\Models\ChartOfAccount;
@@ -18,6 +19,7 @@ use App\Services\QuoteUpsertService;
 use App\Services\ReminderService;
 use App\Support\ColumnFilters;
 use App\Support\CompanyMailer;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
@@ -318,6 +320,20 @@ class QuotesController extends Controller
             ->with('success', 'Quote created successfully');
     }
 
+    public function autosaveStore(AutosaveQuoteRequest $request, QuoteUpsertService $quoteUpsertService): JsonResponse
+    {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        $quote = $quoteUpsertService->createForCompany(
+            $this->normalizeAutosavePayload($request->validated()),
+            $currentCompany->id,
+            (int) auth()->id()
+        );
+
+        return response()->json([
+            'quote' => $this->autosaveQuoteResponse($quote),
+        ]);
+    }
+
     /**
      * Display the specified resource.
      */
@@ -432,6 +448,15 @@ class QuotesController extends Controller
             ->with('success', 'Quote updated successfully');
     }
 
+    public function autosaveUpdate(AutosaveQuoteRequest $request, Quote $quote, QuoteUpsertService $quoteUpsertService): JsonResponse
+    {
+        $updatedQuote = $quoteUpsertService->update($quote, $this->normalizeAutosavePayload($request->validated()));
+
+        return response()->json([
+            'quote' => $this->autosaveQuoteResponse($updatedQuote),
+        ]);
+    }
+
     /**
      * Remove the specified resource from storage.
      */
@@ -459,6 +484,68 @@ class QuotesController extends Controller
         $quote->update(['status' => $validated['status']]);
 
         return redirect()->back()->with('success', 'Quote status updated successfully');
+    }
+
+    private function normalizeAutosavePayload(array $payload): array
+    {
+        $payload['status'] = 'draft';
+        $payload['title'] = trim((string) ($payload['title'] ?? '')) ?: 'Untitled quote';
+        $payload['tax_rate'] = $this->numericAutosaveValue($payload['tax_rate'] ?? 0);
+        $payload['discount_amount'] = $this->numericAutosaveValue($payload['discount_amount'] ?? 0);
+        $payload['discount_percentage'] = $this->numericAutosaveValue($payload['discount_percentage'] ?? 0);
+
+        $lineGroups = array_values($payload['line_groups'] ?? []);
+        if (empty($lineGroups)) {
+            $lineGroups = [['id' => 1, 'name' => 'Items', 'sort_order' => 0]];
+        }
+
+        $payload['line_groups'] = collect($lineGroups)
+            ->map(fn (array $group, int $index) => [
+                'id' => $group['id'] ?? ($index + 1),
+                'name' => trim((string) ($group['name'] ?? '')) ?: 'Items',
+                'sort_order' => $index,
+            ])
+            ->values()
+            ->all();
+
+        $defaultGroupId = $payload['line_groups'][0]['id'] ?? 1;
+        $payload['line_items'] = collect($payload['line_items'] ?? [])
+            ->map(fn (array $item, int $index) => [
+                'id' => $item['id'] ?? null,
+                'product_id' => $item['product_id'] ?? null,
+                'supplier_id' => $item['supplier_id'] ?? null,
+                'line_group_id' => $item['line_group_id'] ?? $defaultGroupId,
+                'description' => trim((string) ($item['description'] ?? '')),
+                'quantity' => max(1, (int) ($item['quantity'] ?? 1)),
+                'unit_price' => $this->numericAutosaveValue($item['unit_price'] ?? 0),
+                'cost' => $this->numericAutosaveValue($item['cost'] ?? 0),
+                'discount_amount' => $this->numericAutosaveValue($item['discount_amount'] ?? 0),
+                'discount_percentage' => $this->numericAutosaveValue($item['discount_percentage'] ?? 0),
+                'tax_rate_id' => $item['tax_rate_id'] ?? null,
+                'account_id' => $item['account_id'] ?? null,
+                'sort_order' => $index,
+            ])
+            ->values()
+            ->all();
+
+        return $payload;
+    }
+
+    private function numericAutosaveValue(mixed $value): float
+    {
+        return is_numeric($value) ? (float) $value : 0.0;
+    }
+
+    private function autosaveQuoteResponse(Quote $quote): array
+    {
+        $quote->refresh();
+
+        return [
+            'id' => $quote->id,
+            'quote_number' => $quote->quote_number,
+            'status' => $quote->status,
+            'updated_at' => $quote->updated_at?->toIso8601String(),
+        ];
     }
 
     /**

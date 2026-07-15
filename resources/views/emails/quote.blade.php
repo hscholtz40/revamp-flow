@@ -1,3 +1,10 @@
+@php
+    $emailCompany = $quote->company;
+    $emailBrand = $emailCompany->getEmailBranding();
+    $emailLogoSrc = $emailBrand['logo_path'] && isset($message)
+        ? $message->embed($emailBrand['logo_path'])
+        : $emailBrand['logo_url'];
+@endphp
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -10,7 +17,7 @@
             margin: 0;
             padding: 0;
             background-color: #f8fafc;
-            color: #334155;
+            color: {{ $emailBrand['text'] }};
             line-height: 1.6;
         }
         .container {
@@ -22,10 +29,16 @@
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
         .header {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            background: linear-gradient(135deg, {{ $emailBrand['primary'] }} 0%, {{ $emailBrand['secondary'] }} 100%);
             color: white;
             padding: 30px;
             text-align: center;
+        }
+        .header-logo {
+            display: block;
+            max-height: 72px;
+            max-width: 180px;
+            margin: 0 auto 16px auto;
         }
         .header h1 {
             margin: 0;
@@ -45,34 +58,38 @@
             padding: 20px;
             margin-bottom: 30px;
         }
-        .quote-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
+        .quote-summary-table {
+            width: 100%;
+            border-collapse: collapse;
             margin-bottom: 20px;
         }
+        .quote-summary-table td {
+            vertical-align: top;
+        }
         .company-info {
-            flex: 1;
+            width: 55%;
+            padding-right: 24px;
         }
         .company-name {
             font-size: 20px;
             font-weight: bold;
-            color: #1e293b;
+            color: {{ $emailBrand['heading'] }};
             margin-bottom: 8px;
         }
         .quote-info {
             text-align: right;
-            flex: 1;
+            width: 45%;
+            padding-left: 24px;
         }
         .quote-number {
             font-size: 24px;
             font-weight: bold;
-            color: #10b981;
+            color: {{ $emailBrand['primary'] }};
             margin-bottom: 5px;
         }
         .quote-title {
             font-size: 18px;
-            color: #64748b;
+            color: {{ $emailBrand['muted'] }};
             margin-bottom: 10px;
         }
         .status-badge {
@@ -84,7 +101,7 @@
             text-transform: uppercase;
         }
         .status-draft { background-color: #f1f5f9; color: #475569; }
-        .status-sent { background-color: #dbeafe; color: #1e40af; }
+        .status-sent { background-color: #f3f4f6; color: #4b5563; }
         .status-accepted { background-color: #dcfce7; color: #166534; }
         .status-rejected { background-color: #fecaca; color: #991b1b; }
         .status-expired { background-color: #f1f5f9; color: #475569; }
@@ -94,9 +111,9 @@
         .section-title {
             font-size: 16px;
             font-weight: bold;
-            color: #1e293b;
+            color: {{ $emailBrand['heading'] }};
             margin-bottom: 10px;
-            border-bottom: 2px solid #e2e8f0;
+            border-bottom: 2px solid {{ $emailBrand['border'] }};
             padding-bottom: 5px;
         }
         .customer-info {
@@ -106,7 +123,7 @@
         }
         .customer-name {
             font-weight: bold;
-            color: #1e293b;
+            color: {{ $emailBrand['heading'] }};
             margin-bottom: 5px;
         }
         .line-items {
@@ -151,15 +168,15 @@
         .totals-row.total {
             font-weight: bold;
             font-size: 18px;
-            border-top: 2px solid #10b981;
+            border-top: 2px solid {{ $emailBrand['primary'] }};
             border-bottom: none;
             padding-top: 15px;
             margin-top: 10px;
-            color: #1e293b;
+            color: {{ $emailBrand['heading'] }};
         }
         .message {
             background-color: #fef3c7;
-            border-left: 4px solid #f59e0b;
+            border-left: 4px solid {{ $emailBrand['accent'] }};
             padding: 15px;
             margin-bottom: 30px;
             border-radius: 0 6px 6px 0;
@@ -168,32 +185,29 @@
             color: #92400e;
         }
         .next-steps {
-            background-color: #ecfdf5;
-            border-left: 4px solid #10b981;
+            background-color: {{ $emailBrand['surface'] }};
+            border-left: 4px solid {{ $emailBrand['accent'] }};
             padding: 20px;
             margin-bottom: 30px;
             border-radius: 0 6px 6px 0;
         }
         .next-steps h3 {
             margin: 0 0 10px 0;
-            color: #065f46;
+            color: {{ $emailBrand['heading'] }};
             font-size: 16px;
         }
         .next-steps ul {
             margin: 0;
             padding-left: 20px;
-            color: #047857;
+            color: {{ $emailBrand['text'] }};
         }
         .next-steps li {
             margin-bottom: 5px;
         }
         .actions {
-            display: flex;
-            gap: 10px;
             margin: 20px 0 30px;
         }
         .action-button {
-            flex: 1;
             display: inline-block;
             text-align: center;
             padding: 12px 14px;
@@ -204,16 +218,16 @@
             font-size: 14px;
         }
         .action-accept {
-            background-color: #059669;
+            background-color: {{ $emailBrand['primary'] }};
         }
         .action-decline {
-            background-color: #dc2626;
+            background-color: {{ $emailBrand['secondary'] }};
         }
         .footer {
             background-color: #f8fafc;
             padding: 20px 30px;
             text-align: center;
-            color: #64748b;
+            color: {{ $emailBrand['muted'] }};
             font-size: 14px;
             border-top: 1px solid #e2e8f0;
         }
@@ -235,14 +249,18 @@
 <body>
     <div class="container">
         <div class="header">
+            @if($emailLogoSrc)
+                <img src="{{ $emailLogoSrc }}" alt="{{ $emailCompany->name }} logo" class="header-logo">
+            @endif
             <h1>Quote</h1>
             <p>{{ $quote->company->name }}</p>
         </div>
 
         <div class="content">
             <div class="quote-details">
-                <div class="quote-header">
-                    <div class="company-info">
+                <table class="quote-summary-table" cellpadding="0" cellspacing="0" role="presentation" style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                    <tr>
+                    <td class="company-info" style="vertical-align: top; width: 55%; padding-right: 24px;">
                         <div class="company-name">{{ $quote->company->name }}</div>
                         @if($quote->company->address)
                             <div>{{ $quote->company->address }}</div>
@@ -253,23 +271,24 @@
                         @if($quote->company->email)
                             <div>{{ $quote->company->email }}</div>
                         @endif
-                    </div>
+                    </td>
                     
-                    <div class="quote-info">
+                    <td class="quote-info" style="vertical-align: top; width: 45%; padding-left: 24px; text-align: right;">
                         <div class="quote-number">{{ $quote->quote_number }}</div>
                         <div class="quote-title">{{ $quote->title }}</div>
                         <div>
                             <span class="status-badge status-{{ $quote->status }}">{{ $quote->status }}</span>
                         </div>
-                    </div>
-                </div>
+                    </td>
+                    </tr>
+                </table>
 
-                <div style="display: flex; justify-content: space-between; margin-top: 20px;">
-                    <div>
+                <div style="margin-top: 20px;">
+                    <div style="display: block; margin-bottom: 6px;">
                         <strong>Created:</strong> {{ \Carbon\Carbon::parse($quote->created_at)->format('M d, Y') }}
                     </div>
                     @if($quote->expiry_date)
-                        <div>
+                        <div style="display: block;">
                             <strong>Expires:</strong> {{ \Carbon\Carbon::parse($quote->expiry_date)->format('M d, Y') }}
                         </div>
                     @endif
@@ -373,8 +392,17 @@
 
             @if(!empty($acceptUrl) && !empty($declineUrl))
                 <div class="actions">
-                    <a href="{{ $acceptUrl }}" class="action-button action-accept">Accept Quote</a>
-                    <a href="{{ $declineUrl }}" class="action-button action-decline">Decline Quote</a>
+                    <table cellpadding="0" cellspacing="0" role="presentation" style="border-collapse: collapse;">
+                        <tr>
+                            <td>
+                                <a href="{{ $acceptUrl }}" class="action-button action-accept">Accept Quote</a>
+                            </td>
+                            <td style="width: 14px; font-size: 0; line-height: 0;">&nbsp;</td>
+                            <td>
+                                <a href="{{ $declineUrl }}" class="action-button action-decline">Decline Quote</a>
+                            </td>
+                        </tr>
+                    </table>
                 </div>
             @endif
 

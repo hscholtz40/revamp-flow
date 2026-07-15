@@ -187,6 +187,15 @@ class Company extends Model
         return null;
     }
 
+    public function getEmailLogoUrl(): ?string
+    {
+        if (! $this->logo_path) {
+            return null;
+        }
+
+        return url('/storage/'.ltrim($this->logo_path, '/'));
+    }
+
     /**
      * Get the favicon URL (accessor)
      */
@@ -222,6 +231,57 @@ class Company extends Model
         $mimeType = $imageInfo['mime'] ?? 'image/png';
 
         return 'data:'.$mimeType.';base64,'.base64_encode($imageData);
+    }
+
+    public function getEmailBranding(): array
+    {
+        return [
+            'primary' => $this->getThemeColorHex('primary'),
+            'secondary' => $this->getThemeColorHex('secondary'),
+            'accent' => $this->getThemeColorHex('accent'),
+            'text' => '#4b5563',
+            'heading' => '#374151',
+            'muted' => '#6b7280',
+            'surface' => '#f9fafb',
+            'border' => '#e5e7eb',
+            'logo_url' => $this->getEmailLogoUrl(),
+            'logo_path' => $this->resolvePublicLogoFilePath(),
+        ];
+    }
+
+    public function getThemeColorHex(string $family): string
+    {
+        $defaults = [
+            'primary' => ['hue' => 215, 'saturation' => 59, 'lightness' => 41],
+            'secondary' => ['hue' => 178, 'saturation' => 62, 'lightness' => 46],
+            'accent' => ['hue' => 215, 'saturation' => 48, 'lightness' => 48],
+        ];
+
+        $default = $defaults[$family] ?? $defaults['primary'];
+        $prefix = 'theme_'.$family.'_';
+
+        return $this->hslToHex(
+            (int) ($this->{$prefix.'hue'} ?? $default['hue']),
+            (int) ($this->{$prefix.'saturation'} ?? $default['saturation']),
+            (int) ($this->{$prefix.'lightness'} ?? $default['lightness']),
+        );
+    }
+
+    private function hslToHex(int $hue, int $saturation, int $lightness): string
+    {
+        $h = max(0, min(360, $hue));
+        $s = max(0, min(100, $saturation)) / 100;
+        $l = max(0, min(100, $lightness)) / 100;
+        $a = $s * min($l, 1 - $l);
+
+        $toHex = function (int $n) use ($h, $l, $a): string {
+            $k = fmod($n + ($h / 30), 12);
+            $color = $l - $a * max(min($k - 3, 9 - $k, 1), -1);
+
+            return str_pad(dechex((int) round(255 * $color)), 2, '0', STR_PAD_LEFT);
+        };
+
+        return '#'.$toHex(0).$toHex(8).$toHex(4);
     }
 
     /**

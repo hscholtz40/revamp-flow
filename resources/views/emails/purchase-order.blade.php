@@ -1,3 +1,10 @@
+@php
+    $emailCompany = $purchaseOrder->company;
+    $emailBrand = $emailCompany->getEmailBranding();
+    $emailLogoSrc = $emailBrand['logo_path'] && isset($message)
+        ? $message->embed($emailBrand['logo_path'])
+        : $emailBrand['logo_url'];
+@endphp
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -10,7 +17,7 @@
             margin: 0;
             padding: 0;
             background-color: #f8fafc;
-            color: #334155;
+            color: {{ $emailBrand['text'] }};
             line-height: 1.6;
         }
         .container {
@@ -22,10 +29,16 @@
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
         .header {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            background: linear-gradient(135deg, {{ $emailBrand['primary'] }} 0%, {{ $emailBrand['secondary'] }} 100%);
             color: white;
             padding: 30px;
             text-align: center;
+        }
+        .header-logo {
+            display: block;
+            max-height: 72px;
+            max-width: 180px;
+            margin: 0 auto 16px auto;
         }
         .header h1 {
             margin: 0;
@@ -50,15 +63,15 @@
             justify-content: space-between;
             margin-bottom: 20px;
             padding-bottom: 15px;
-            border-bottom: 2px solid #e2e8f0;
+            border-bottom: 2px solid {{ $emailBrand['border'] }};
         }
         .po-number {
             font-size: 24px;
             font-weight: bold;
-            color: #059669;
+            color: {{ $emailBrand['primary'] }};
         }
         .po-date {
-            color: #64748b;
+            color: {{ $emailBrand['muted'] }};
             font-size: 14px;
         }
         .detail-row {
@@ -69,14 +82,14 @@
         }
         .detail-label {
             font-weight: 600;
-            color: #475569;
+            color: {{ $emailBrand['heading'] }};
         }
         .detail-value {
-            color: #1e293b;
+            color: {{ $emailBrand['text'] }};
         }
         .message-box {
-            background-color: #eff6ff;
-            border-left: 4px solid #3b82f6;
+            background-color: {{ $emailBrand['surface'] }};
+            border-left: 4px solid {{ $emailBrand['accent'] }};
             padding: 15px;
             margin: 20px 0;
             border-radius: 4px;
@@ -85,13 +98,13 @@
             background-color: #f8fafc;
             padding: 20px;
             text-align: center;
-            color: #64748b;
+            color: {{ $emailBrand['muted'] }};
             font-size: 12px;
         }
         .button {
             display: inline-block;
             padding: 12px 24px;
-            background-color: #059669;
+            background-color: {{ $emailBrand['primary'] }};
             color: white;
             text-decoration: none;
             border-radius: 6px;
@@ -103,6 +116,9 @@
 <body>
     <div class="container">
         <div class="header">
+            @if($emailLogoSrc)
+                <img src="{{ $emailLogoSrc }}" alt="{{ $emailCompany->name }} logo" class="header-logo">
+            @endif
             <h1>Purchase Order</h1>
             <p>{{ $purchaseOrder->company->name }}</p>
         </div>
@@ -135,7 +151,7 @@
                 
                 <div class="detail-row">
                     <span class="detail-label">Total Amount:</span>
-                    <span class="detail-value" style="font-weight: bold; font-size: 18px; color: #059669;">
+                    <span class="detail-value" style="font-weight: bold; font-size: 18px; color: {{ $emailBrand['primary'] }};">
                         {{ $purchaseOrder->company->formatCurrencyZar($purchaseOrder->total) }}
                     </span>
                 </div>

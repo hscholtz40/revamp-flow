@@ -567,6 +567,9 @@
 
                 <!-- Form Actions -->
                 <div class="flex items-center justify-end gap-3">
+                    <div class="mr-auto text-xs text-gray-500" aria-live="polite">
+                        {{ autosaveLabel }}
+                    </div>
                     <Link :href="quotes.index().url" class="rounded bg-gray-500 px-4 py-2 text-white hover:bg-gray-600">
                     Cancel
                     </Link>
@@ -612,11 +615,13 @@ import ContactSelector from '@/components/ContactSelector.vue';
 import { matchesProductSearch } from '@/composables/productSearch';
 import { useProductSuggestionDropdown } from '@/composables/useProductSuggestionDropdown';
 import { useCustomerLookup } from '@/composables/useCustomerLookup';
+import { getCsrfToken } from '@/lib/csrf';
 import type { CustomerLookupCustomer } from '@/types/customers';
 import type { DocumentLineGroup, DocumentLineItem } from '@/types/documents';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import quotes from '@/routes/quotes';
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { toast } from 'vue-sonner';
 
 interface Product {
     id: number;
@@ -715,6 +720,11 @@ const draggedItemIndex = ref<number | null>(null);
 const dragOverItemIndex = ref<number | null>(null);
 const dragOverGroupId = ref<number | null>(null);
 const activeDragIndex = ref<number | null>(null);
+const autosavedQuoteId = ref<number | null>(null);
+const autosaveStatus = ref<'idle' | 'saving' | 'saved' | 'error'>('idle');
+const autosaveTimer = ref<number | null>(null);
+const lastAutosaveSnapshot = ref<string | null>(null);
+const autosaveInFlightSnapshot = ref<string | null>(null);
 
 // Calculate default expiry date (30 days from today)
 const getDefaultExpiryDate = () => {
@@ -909,6 +919,7 @@ const addLineItem = (groupIndex = 0) => {
         total: 0,
     });
     normalizeLineItemOrder();
+    scheduleAutosave();
 };
 
 const getDefaultGroupId = (groupIndex = 0) => {
@@ -943,6 +954,7 @@ const addLineGroup = () => {
         name: `Group ${nextSortOrder + 1}`,
         sort_order: nextSortOrder,
     });
+    scheduleAutosave();
 };
 
 const removeLineGroup = (index: number) => {
@@ -965,6 +977,7 @@ const removeLineGroup = (index: number) => {
         }
     });
     normalizeLineItemOrder();
+    scheduleAutosave();
 };
 
 const removeLineItem = (index: number) => {
@@ -976,6 +989,7 @@ const removeLineItem = (index: number) => {
     if (nonRoundingCount > 1) {
         form.line_items.splice(index, 1);
         normalizeLineItemOrder();
+        scheduleAutosave();
     }
 };
 
@@ -1099,6 +1113,7 @@ const selectProductSuggestion = (index: number, product: Product) => {
         item.supplier_id = product.supplier_id;
     }
     closeProductSuggestions(index);
+    scheduleAutosave();
 };
 
 const getProductName = (productId: string | number | null | undefined) => {
@@ -1109,7 +1124,10 @@ const getProductName = (productId: string | number | null | undefined) => {
 
 const unlinkProduct = (index: number) => {
     const item = form.line_items[index];
-    if (item) item.product_id = null;
+    if (item) {
+        item.product_id = null;
+        scheduleAutosave();
+    }
 };
 
 const getDiscountValue = (index: number) => {
@@ -1131,6 +1149,7 @@ const setDiscountValue = (index: number, event: Event) => {
         item.discount_amount = value;
         item.discount_percentage = 0;
     }
+    scheduleAutosave();
 };
 
 const handleDiscountTypeChange = (index: number, event: Event) => {
@@ -1141,6 +1160,7 @@ const handleDiscountTypeChange = (index: number, event: Event) => {
         item.discount_amount = 0;
         item.discount_percentage = 0;
     }
+    scheduleAutosave();
 };
 
 const calculateLineTotalValue = (item: LineItem) => {
@@ -1330,7 +1350,124 @@ const formatCurrency = (value: number | null | undefined) => {
     return numValue.toFixed(2);
 };
 
+const autosaveLabel = computed(() => {
+    if (!form.customer_id) return 'Select a customer to autosave a draft';
+    if (autosaveStatus.value === 'saving') return 'Saving draft...';
+    if (autosaveStatus.value === 'saved') return 'Draft saved';
+    if (autosaveStatus.value === 'error') return 'Draft autosave failed';
+    return 'Draft autosaves after changes';
+});
+
+const buildQuoteAutosavePayload = () => ({
+    customer_id: form.customer_id,
+    contact_id: form.contact_id ?? null,
+    email: form.email,
+    phone: form.phone,
+    source_type: form.source_type ?? null,
+    source_id: form.source_id ?? null,
+    order_number: form.order_number,
+    title: form.title,
+    description: form.description,
+    status: 'draft',
+    expiry_date: form.expiry_date,
+    tax_rate: form.tax_rate,
+    discount_amount: form.discount_amount,
+    discount_percentage: form.discount_percentage,
+    notes: form.notes,
+    terms_conditions: form.terms_conditions,
+    line_groups: form.line_groups.map((group, index) => ({
+        id: group.id,
+        name: group.name,
+        sort_order: index,
+    })),
+    line_items: form.line_items.map((item) => {
+        const { _uid, ...rest } = item as LineItem;
+        void _uid;
+        return {
+            ...rest,
+            line_group_id: item.line_group_id ?? 1,
+        };
+    }),
+});
+
+const canAutosaveDraft = () => Boolean(form.customer_id) && form.status === 'draft';
+
+const scheduleAutosave = () => {
+    if (autosaveTimer.value !== null) {
+        window.clearTimeout(autosaveTimer.value);
+    }
+
+    autosaveTimer.value = window.setTimeout(() => {
+        autosaveTimer.value = null;
+        void runAutosave();
+    }, 1000);
+};
+
+const runAutosave = async () => {
+    if (!canAutosaveDraft() || form.processing) {
+        return;
+    }
+
+    const payload = buildQuoteAutosavePayload();
+    const snapshot = JSON.stringify(payload);
+    if (snapshot === lastAutosaveSnapshot.value || snapshot === autosaveInFlightSnapshot.value) {
+        return;
+    }
+
+    autosaveInFlightSnapshot.value = snapshot;
+    autosaveStatus.value = 'saving';
+
+    try {
+        const quoteId = autosavedQuoteId.value;
+        const response = await fetch(quoteId ? `/quotes/${quoteId}/autosave` : '/quotes/autosave', {
+            method: quoteId ? 'PUT' : 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': getCsrfToken(),
+            },
+            body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+            throw new Error('Quote draft autosave failed');
+        }
+
+        const data = await response.json() as { quote?: { id?: number } };
+        if (data.quote?.id) {
+            autosavedQuoteId.value = data.quote.id;
+        }
+
+        lastAutosaveSnapshot.value = snapshot;
+        autosaveStatus.value = 'saved';
+        toast.success('Quote draft autosaved.');
+    } catch {
+        autosaveStatus.value = 'error';
+        toast.error('Quote draft autosave failed.');
+    } finally {
+        autosaveInFlightSnapshot.value = null;
+        if (autosaveStatus.value !== 'error' && JSON.stringify(buildQuoteAutosavePayload()) !== lastAutosaveSnapshot.value) {
+            scheduleAutosave();
+        }
+    }
+};
+
+watch(() => buildQuoteAutosavePayload(), () => {
+    scheduleAutosave();
+}, { deep: true });
+
+onBeforeUnmount(() => {
+    if (autosaveTimer.value !== null) {
+        window.clearTimeout(autosaveTimer.value);
+    }
+});
+
 const submit = () => {
+    if (autosaveTimer.value !== null) {
+        window.clearTimeout(autosaveTimer.value);
+    }
+
     const nonRoundingItems = form.line_items.filter((item) => !isRoundingAdjustmentLine(item));
     if (nonRoundingItems.length === 0) {
         form.setError('line_items', 'At least one non-rounding line item is required.');
@@ -1354,7 +1491,13 @@ const submit = () => {
                 line_group_id: item.line_group_id ?? 1,
             };
         }),
-    }))
-        .post(quotes.store().url);
+    }));
+
+    if (autosavedQuoteId.value) {
+        form.put(quotes.update(autosavedQuoteId.value).url);
+        return;
+    }
+
+    form.post(quotes.store().url);
 };
 </script>

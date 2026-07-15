@@ -11,9 +11,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/quotes', [QuotesController::class, 'index'])->middleware('module.permission:quotes,view')->name('quotes.index');
     Route::get('/quotes/create', [QuotesController::class, 'create'])->middleware('module.permission:quotes,create')->name('quotes.create');
     Route::post('/quotes', [QuotesController::class, 'store'])->middleware('module.permission:quotes,create')->name('quotes.store');
+    Route::post('/quotes/autosave', [QuotesController::class, 'autosaveStore'])->middleware('module.permission:quotes,create')->name('quotes.autosave.store');
     Route::get('/quotes/{quote}', [QuotesController::class, 'show'])->middleware('module.permission:quotes,view')->name('quotes.show');
     Route::get('/quotes/{quote}/edit', [QuotesController::class, 'edit'])->middleware('module.permission:quotes,edit')->name('quotes.edit');
     Route::put('/quotes/{quote}', [QuotesController::class, 'update'])->middleware('module.permission:quotes,edit')->name('quotes.update');
+    Route::put('/quotes/{quote}/autosave', [QuotesController::class, 'autosaveUpdate'])->middleware('module.permission:quotes,edit')->name('quotes.autosave.update');
     Route::delete('/quotes/{quote}', [QuotesController::class, 'destroy'])->middleware('module.permission:quotes,delete')->name('quotes.destroy');
 
     Route::post('/quotes/{quote}/convert-to-jobcard', [QuotesController::class, 'convertToJobcard'])
