@@ -505,6 +505,12 @@
                                     <span class="text-base font-semibold">Total:</span>
                                     <span class="text-base font-semibold">R{{ formatCurrency(total) }}</span>
                                 </div>
+                                <div class="flex justify-between">
+                                    <span class="text-sm text-gray-600">Total Profit:</span>
+                                    <span class="text-sm font-medium" :class="totalProfit >= 0 ? 'text-green-700' : 'text-red-700'">
+                                        R{{ formatCurrency(totalProfit) }}
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1267,6 +1273,16 @@ const taxAmount = computed(() => {
 const total = computed(() => {
     // Subtotal already has discounts applied; rounding is added separately.
     return subtotal.value + taxAmount.value + roundingAdjustment.value;
+});
+
+const totalProfit = computed(() => {
+    return form.line_items.reduce((sum, item) => {
+        if (isRoundingAdjustmentLine(item)) {
+            return sum;
+        }
+
+        return sum + calculateLineProfitValue(item);
+    }, 0);
 });
 
 const roundingAdjustment = computed(() => {

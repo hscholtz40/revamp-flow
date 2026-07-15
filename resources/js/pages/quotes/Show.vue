@@ -394,6 +394,12 @@
                                     <span class="text-base font-semibold text-gray-900">R{{ formatCurrency(props.quote.total) }}</span>
                                 </div>
                                 <div class="mt-2 flex justify-between">
+                                    <span class="text-sm text-gray-500">Total Profit:</span>
+                                    <span class="text-sm font-medium" :class="totalProfit >= 0 ? 'text-green-700' : 'text-red-700'">
+                                        R{{ formatCurrency(totalProfit) }}
+                                    </span>
+                                </div>
+                                <div class="mt-2 flex justify-between">
                                     <span class="text-sm text-gray-500">Purchasing Total:</span>
                                     <span class="text-sm font-medium text-gray-900">R{{ formatCurrency(purchaseOrdersTotal) }}</span>
                                 </div>
@@ -774,6 +780,10 @@ const calculateLineProfit = (item: LineItem) => {
     const lineCost = (Number(item.quantity) || 0) * (Number(item.cost) || 0);
     return lineTotal - lineCost;
 };
+
+const totalProfit = computed(() => {
+    return visibleQuoteLineItems.value.reduce((sum, item) => sum + calculateLineProfit(item), 0);
+});
 
 const showEmailModal = ref(false);
 
