@@ -229,6 +229,8 @@ class CpanelService
                 'DB_DATABASE' => $fullDbName,
                 'DB_USERNAME' => $fullDbUser,
                 'DB_PASSWORD' => $dbPassword,
+                // Customer instances must never inherit licensing mode from the package .env.
+                'IS_LICENSING_INSTANCE' => 'false',
             ], $this->buildDeployedMailEnvVariables(), $this->buildDeployedPushEnvVariables($subdomainRoot)));
             $steps[] = ['step' => 'Update .env file', 'result' => $result];
 
@@ -352,7 +354,10 @@ class CpanelService
 
             // 4. Backfill missing deployment env defaults (do not overwrite existing instance values)
             $result = $this->appendMissingEnvVariables($subdomainRoot, array_merge(
-                ['APP_URL' => $appUrl],
+                [
+                    'APP_URL' => $appUrl,
+                    'IS_LICENSING_INSTANCE' => 'false',
+                ],
                 $this->buildDeployedMailEnvVariables(),
                 $this->buildDeployedPushEnvVariables($subdomainRoot)
             ));
