@@ -14,6 +14,24 @@ test('public hosted query form is accessible with valid token', function () {
     ]))->assertOk()->assertSee('Submit your enquiry');
 });
 
+test('public hosted query form shows the company logo when configured', function () {
+    $company = coverageCreateCompany([
+        'name' => 'Logo Co',
+        'logo_path' => 'company-logos/public-form-logo.png',
+    ]);
+    config(['services.query_api.public_form_key' => 'test-public-form-key']);
+
+    $token = hash_hmac('sha256', 'company:'.$company->id, 'test-public-form-key');
+
+    $this->get(route('queries.public.form', [
+        'companyId' => $company->id,
+        'token' => $token,
+    ]))
+        ->assertOk()
+        ->assertSee('src="/storage/company-logos/public-form-logo.png"', false)
+        ->assertSee('alt="Logo Co logo"', false);
+});
+
 test('public hosted query form rejects invalid token', function () {
     $company = coverageCreateCompany();
     config(['services.query_api.public_form_key' => 'test-public-form-key']);

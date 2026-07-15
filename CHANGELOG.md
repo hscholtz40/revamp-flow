@@ -4,6 +4,7 @@
 
 - **System email branding:** Document and notification emails now use grey body text, embed the uploaded company logo inline, apply the company's Appearance primary/secondary/accent colours to headers, highlights, totals, links, and action buttons, and use email-client-safe quote header/date spacing.
 - **Quote draft autosave:** Quote Create/Edit now autosaves editable draft quotes after field and line-item changes, shows toast notifications when autosave succeeds or fails, and uses dedicated JSON autosave endpoints so drafts persist without triggering reminder emails or manual-save redirects.
+- **Public query form branding:** Hosted and embedded enquiry/contractor query forms now show the configured company logo above the form heading.
 
 ## 2026-07-13
 

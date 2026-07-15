@@ -8,6 +8,8 @@
     <style>
         body { font-family: Arial, sans-serif; margin: 0; background: #f8fafc; color: #111827; }
         .container { max-width: 760px; margin: 24px auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 20px; }
+        .brand { display: flex; justify-content: center; margin-bottom: 18px; }
+        .company-logo { max-width: 180px; max-height: 90px; object-fit: contain; }
         h1 { margin: 0 0 6px; font-size: 24px; }
         p.sub { margin: 0 0 20px; color: #6b7280; }
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
@@ -26,6 +28,12 @@
 </head>
 <body>
     <div class="container">
+        @if ($company->logo)
+            <div class="brand">
+                <img src="{{ $company->logo }}" alt="{{ $company->name }} logo" class="company-logo">
+            </div>
+        @endif
+
         <h1>{{ $kind === 'contractor' ? 'Contractor Onboarding' : 'Contact '.$company->name }}</h1>
         <p class="sub">{{ $kind === 'contractor' ? 'Submit your contractor details for review.' : 'Submit your enquiry and our team will get back to you.' }}</p>
 
