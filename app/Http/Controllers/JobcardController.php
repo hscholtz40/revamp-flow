@@ -6,6 +6,7 @@ use App\Http\Requests\Jobcards\StoreJobcardRequest;
 use App\Http\Requests\Jobcards\UpdateJobcardRequest;
 use App\Models\ChartOfAccount;
 use App\Models\Customer;
+use App\Models\DeliveryNote;
 use App\Models\EmailActivity;
 use App\Models\Jobcard;
 use App\Models\JobcardLineItem;
@@ -513,6 +514,13 @@ class JobcardController extends Controller
                 ->get(['id', 'po_number', 'status', 'total', 'created_at'])
             : collect();
 
+        $relatedDeliveryNotes = $authUser->hasModulePermission('delivery-notes', 'view')
+            ? DeliveryNote::where('company_id', $currentCompany->id)
+                ->where('jobcard_id', $jobcard->id)
+                ->latest()
+                ->get(['id', 'delivery_note_number', 'status', 'delivery_date', 'created_at'])
+            : collect();
+
         // Get running timer for current user and this jobcard
         $runningTimer = \App\Models\TimeEntry::getRunningEntry(auth()->id(), $jobcard->id);
 
@@ -559,6 +567,13 @@ class JobcardController extends Controller
                 'created_at' => $po->created_at?->toIso8601String(),
             ])->toArray(),
             'purchaseOrdersTotal' => (float) $relatedPurchaseOrders->sum('total'),
+            'relatedDeliveryNotes' => $relatedDeliveryNotes->map(fn ($note) => [
+                'id' => $note->id,
+                'delivery_note_number' => $note->delivery_note_number,
+                'status' => $note->status,
+                'delivery_date' => $note->delivery_date?->format('Y-m-d'),
+                'created_at' => $note->created_at?->toIso8601String(),
+            ])->toArray(),
             'runningTimer' => $runningTimer,
             'timeSummary' => $timeSummary,
             'statusDurations' => $statusDurations,
@@ -1160,6 +1175,18 @@ class JobcardController extends Controller
         return redirect()->route('invoices.create', [
             'source_type' => 'jobcard',
             'source_id' => $jobcard->id,
+        ]);
+    }
+
+    /**
+     * Convert jobcard to delivery note
+     */
+    public function convertToDeliveryNote(Jobcard $jobcard): RedirectResponse
+    {
+        $this->authorize('convertToDeliveryNote', $jobcard);
+
+        return redirect()->route('delivery-notes.create', [
+            'jobcard_id' => $jobcard->id,
         ]);
     }
 

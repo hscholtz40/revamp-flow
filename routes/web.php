@@ -38,6 +38,7 @@ require __DIR__.'/quickbooks.php';
 require __DIR__.'/suppliers.php';
 require __DIR__.'/stock-movements.php';
 require __DIR__.'/purchase-orders.php';
+require __DIR__.'/delivery-notes.php';
 require __DIR__.'/time-entries.php';
 require __DIR__.'/messages.php';
 require __DIR__.'/dispatch.php';

@@ -38,6 +38,7 @@ class PdfTemplate extends Model
             'jobcard' => 'Jobcard',
             'proforma-invoice' => 'Proforma Invoice',
             'purchase-order' => 'Purchase Order',
+            'delivery-note' => 'Delivery Note',
         ];
     }
 

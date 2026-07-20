@@ -345,6 +345,13 @@ class HandleInertiaRequests extends Middleware
                     'edit' => $user->hasModulePermission('purchase-orders', 'edit'),
                     'delete' => $user->hasModulePermission('purchase-orders', 'delete'),
                 ],
+                'delivery-notes' => [
+                    'list' => $user->hasModulePermission('delivery-notes', 'list'),
+                    'view' => $user->hasModulePermission('delivery-notes', 'view'),
+                    'create' => $user->hasModulePermission('delivery-notes', 'create'),
+                    'edit' => $user->hasModulePermission('delivery-notes', 'edit'),
+                    'delete' => $user->hasModulePermission('delivery-notes', 'delete'),
+                ],
                 'jobcards' => [
                     'list' => $user->hasModulePermission('jobcards', 'list'),
                     'view' => $user->hasModulePermission('jobcards', 'view'),

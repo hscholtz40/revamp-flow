@@ -60,6 +60,12 @@ class JobcardPolicy
             && $user->hasModulePermission('invoices', 'create');
     }
 
+    public function convertToDeliveryNote(User $user, Jobcard $jobcard): bool
+    {
+        return $this->ownsCompanyResource($user, $jobcard)
+            && $user->hasModulePermission('delivery-notes', 'create');
+    }
+
     protected function limitedUserMayAccessJobcard(User $user, Jobcard $jobcard): bool
     {
         if (! $user->isLimitedUser()) {

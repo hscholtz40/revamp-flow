@@ -187,6 +187,7 @@ class PdfGenerationService
             'jobcard' => 'pdf.jobcard',
             'proforma-invoice' => 'pdf.proforma-invoice',
             'purchase-order' => 'pdf.purchase-order',
+            'delivery-note' => 'pdf.delivery-note',
         ];
 
         $view = $viewMap[$module] ?? 'pdf.invoice';

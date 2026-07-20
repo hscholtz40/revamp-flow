@@ -5,6 +5,7 @@ export const modules = [
     { key: 'suppliers', label: 'Suppliers' },
     { key: 'stock-movements', label: 'Stock Movements' },
     { key: 'purchase-orders', label: 'Purchase Orders' },
+    { key: 'delivery-notes', label: 'Delivery Notes' },
     { key: 'jobcards', label: 'Jobcards' },
     { key: 'quotes', label: 'Quotes' },
     { key: 'invoices', label: 'Invoices' },

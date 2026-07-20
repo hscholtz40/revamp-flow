@@ -101,6 +101,13 @@
                         >
                             Create PO
                         </button>
+                        <button
+                            v-if="hasDeliveryNotesCreate"
+                            @click="createDeliveryNote"
+                            class="rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2"
+                        >
+                            Create Delivery Note
+                        </button>
                         <template v-if="!isLimitedUser">
                             <button
                                 v-if="hasJobcardEdit && !props.convertedQuoteId"
@@ -570,6 +577,24 @@
                         </div>
                     </div>
 
+                    <div v-if="!isLimitedUser && hasDeliveryNotesView && props.relatedDeliveryNotes && props.relatedDeliveryNotes.length > 0" class="rounded-lg bg-white border border-gray-200 shadow-sm">
+                        <div class="border-b border-gray-200 bg-gray-50 px-6 py-4">
+                            <h2 class="text-lg font-semibold text-gray-900">Related Delivery Notes</h2>
+                            <p class="text-sm text-gray-600">Delivery notes linked to this jobcard</p>
+                        </div>
+                        <div class="p-6 space-y-2">
+                            <div v-for="note in props.relatedDeliveryNotes" :key="note.id" class="flex items-center justify-between rounded border border-gray-200 px-3 py-2">
+                                <div class="flex items-center gap-3">
+                                    <Link :href="deliveryNotes.show(note.id).url" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline">
+                                        {{ note.delivery_note_number }}
+                                    </Link>
+                                    <span class="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700 capitalize">{{ note.status }}</span>
+                                </div>
+                                <span class="text-sm text-gray-600">{{ note.delivery_date || '—' }}</span>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Actions -->
                     <div v-if="!isLimitedUser" class="rounded-lg bg-white border border-gray-200 shadow-sm">
                         <div class="border-b border-gray-200 bg-gray-50 px-6 py-4">
@@ -783,6 +808,7 @@ import jobcards from '@/routes/jobcards';
 import invoices from '@/routes/invoices';
 import quotes from '@/routes/quotes';
 import purchaseOrders from '@/routes/purchase-orders';
+import deliveryNotes from '@/routes/delivery-notes';
 import products from '@/routes/products';
 import customers from '@/routes/customers';
 import TimeTracking from '@/components/TimeTracking.vue';
@@ -796,6 +822,8 @@ const hasJobcardDelete = useAuthAbility('jobcards', 'delete');
 const canEmailJobcard = useAuthAbility('jobcards', 'view');
 const hasPurchaseOrdersCreate = useAuthAbility('purchase-orders', 'create');
 const hasPurchaseOrdersList = useAuthAbility('purchase-orders', 'list');
+const hasDeliveryNotesCreate = useAuthAbility('delivery-notes', 'create');
+const hasDeliveryNotesView = useAuthAbility('delivery-notes', 'view');
 
 interface Product {
     id: number;
@@ -911,6 +939,13 @@ interface Props {
         created_at: string | null;
     }>;
     purchaseOrdersTotal?: number;
+    relatedDeliveryNotes?: Array<{
+        id: number;
+        delivery_note_number: string;
+        status: string;
+        delivery_date: string | null;
+        created_at: string | null;
+    }>;
     runningTimer?: TimeEntry | null;
     timeSummary?: {
         total_hours: number;
@@ -1211,6 +1246,10 @@ const convertToQuote = () => {
 
 const createPurchaseOrder = () => {
     window.location.href = `${purchaseOrders.create().url}?source_type=jobcard&source_id=${props.jobcard.id}`;
+};
+
+const createDeliveryNote = () => {
+    window.location.href = `${deliveryNotes.create().url}?jobcard_id=${props.jobcard.id}`;
 };
 
 const sendEmail = () => {

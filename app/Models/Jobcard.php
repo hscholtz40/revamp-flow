@@ -157,6 +157,11 @@ class Jobcard extends Model
         return $this->hasMany(PurchaseOrder::class, 'source_id')->where('source_type', 'jobcard');
     }
 
+    public function deliveryNotes(): HasMany
+    {
+        return $this->hasMany(DeliveryNote::class);
+    }
+
     public function statusTransitions(): HasMany
     {
         return $this->hasMany(JobcardStatusTransition::class)->orderBy('transitioned_at');

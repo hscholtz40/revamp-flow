@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-07-20
+
+- **Delivery notes (jobcard-linked):** Added a delivery notes module linked only to jobcards — no sidebar menu entry. Users can create a delivery note from a jobcard (prefilled line items), view/edit/delete it, update status, download PDF, and see related delivery notes on the jobcard detail page. Group permissions include `delivery-notes` for access control.
+
 ## 2026-07-15
 
 - **System email branding:** Document and notification emails now use grey body text, embed the uploaded company logo inline, apply the company's Appearance primary/secondary/accent colours to headers, highlights, totals, links, and action buttons, and use email-client-safe quote header/date spacing.

@@ -18,5 +18,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/jobcards/{jobcard}/sign', [JobcardController::class, 'sign'])->middleware('module.permission:jobcards,edit')->name('jobcards.sign');
     Route::post('/jobcards/{jobcard}/convert-to-quote', [JobcardController::class, 'convertToQuote'])->middleware('module.permission:jobcards,edit')->name('jobcards.convert-to-quote');
     Route::post('/jobcards/{jobcard}/convert-to-invoice', [JobcardController::class, 'convertToInvoice'])->middleware('module.permission:jobcards,edit')->name('jobcards.convert-to-invoice');
+    Route::post('/jobcards/{jobcard}/convert-to-delivery-note', [JobcardController::class, 'convertToDeliveryNote'])->middleware('module.permission:jobcards,edit')->name('jobcards.convert-to-delivery-note');
     Route::delete('/jobcards/{jobcard}', [JobcardController::class, 'destroy'])->middleware('module.permission:jobcards,delete')->name('jobcards.destroy');
 });
