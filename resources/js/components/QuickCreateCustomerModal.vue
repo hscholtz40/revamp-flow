@@ -37,7 +37,7 @@ function close() {
                         <h4 class="mb-3 text-sm font-semibold text-gray-900">Company details</h4>
                         <div class="grid gap-4 md:grid-cols-2">
                             <label class="block md:col-span-2">
-                                <span class="mb-1 block text-sm font-medium text-gray-700">Company name *</span>
+                                <span class="mb-1 block text-sm font-medium text-gray-700">Account Name *</span>
                                 <input v-model="form.name" type="text" class="w-full rounded border px-3 py-2" required />
                                 <div v-if="form.errors.name" class="mt-1 text-sm text-red-600">{{ form.errors.name }}</div>
                             </label>
