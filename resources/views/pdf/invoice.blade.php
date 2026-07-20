@@ -711,7 +711,11 @@
     
     <div class="footer">
         <div class="footer-left">
-            JobCard Online (Registered to {{ $company->name ?? 'Company' }})
+            @if($company->invoice_footer)
+                {!! nl2br(e($company->invoice_footer)) !!}
+            @else
+                JobCard Online (Registered to {{ $company->name ?? 'Company' }})
+            @endif
         </div>
         <div class="footer-right">
             {{ $company->formatLocalizedDateTime(now()) }}

@@ -58,6 +58,7 @@ class PdfGenerationService
         // Process Handlebars syntax in template
         $html = $this->processHandlebarsTemplate($template->html_template, $data);
         $html = $this->sanitizeRenderedTemplateHtml($html);
+        $html = $this->injectCompanyFooter($html, $template->module, $company);
         $css = $template->css_styles ?? '';
 
         // Convert relative image paths to absolute URLs for dompdf
@@ -104,7 +105,6 @@ class PdfGenerationService
      */
     protected function convertImagePathsToAbsolute(string $html): string
     {
-        // Convert img src attributes from relative paths to base64 data URIs for better PDF compatibility
         $html = preg_replace_callback(
             '/<img([^>]*)\s+src=["\']([^"\']+)["\']([^>]*)>/i',
             function ($matches) {
@@ -194,8 +194,46 @@ class PdfGenerationService
 
         $html = View::make($view, $data)->render();
         $html = $this->convertImagePathsToAbsolute($html);
+        $html = $this->injectCompanyFooter($html, $module, $company);
 
         return Pdf::loadHTML($html);
+    }
+
+    /**
+     * Inject company-configured PDF footer text when set in company settings.
+     */
+    protected function injectCompanyFooter(string $html, string $module, Company $company): string
+    {
+        $footerText = match ($module) {
+            'invoice' => $company->invoice_footer,
+            'quote', 'proforma-invoice' => $company->quote_footer,
+            'jobcard' => $company->jobcard_footer,
+            default => null,
+        };
+
+        $footerText = trim((string) $footerText);
+        if ($footerText === '') {
+            return $html;
+        }
+
+        $formattedFooter = nl2br(e($footerText), false);
+
+        if (preg_match('/(<div\s+class="footer-left"[^>]*>)([\s\S]*?)(<\/div>)/i', $html)) {
+            return preg_replace(
+                '/(<div\s+class="footer-left"[^>]*>)([\s\S]*?)(<\/div>)/i',
+                '$1'.$formattedFooter.'$3',
+                $html,
+                1
+            ) ?? $html;
+        }
+
+        $footerBlock = '<div class="footer"><div class="footer-left">'.$formattedFooter.'</div></div>';
+
+        if (stripos($html, '</body>') !== false) {
+            return str_ireplace('</body>', $footerBlock.'</body>', $html);
+        }
+
+        return $html.$footerBlock;
     }
 
     /**

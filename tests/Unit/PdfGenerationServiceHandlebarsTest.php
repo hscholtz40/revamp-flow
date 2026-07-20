@@ -82,4 +82,44 @@ class PdfGenerationServiceHandlebarsTest extends TestCase
         $this->assertStringContainsString('&lt;b&gt;', $out);
         $this->assertStringNotContainsString('<b>Hi</b>', $out);
     }
+
+    public function test_inject_company_footer_replaces_footer_left_content(): void
+    {
+        $service = new class extends PdfGenerationService
+        {
+            public function expose(string $html, string $module, \App\Models\Company $company): string
+            {
+                return $this->injectCompanyFooter($html, $module, $company);
+            }
+        };
+
+        $company = new \App\Models\Company([
+            'invoice_footer' => "Thank you for your business.\nPayment due in 30 days.",
+        ]);
+
+        $html = '<div class="footer"><div class="footer-left">JobCard Online (Registered to Acme)</div></div>';
+        $out = $service->expose($html, 'invoice', $company);
+
+        $this->assertStringContainsString('Thank you for your business.', $out);
+        $this->assertStringContainsString('Payment due in 30 days.', $out);
+        $this->assertStringContainsString('<br>', $out);
+        $this->assertStringNotContainsString('JobCard Online', $out);
+    }
+
+    public function test_inject_company_footer_leaves_html_unchanged_when_footer_empty(): void
+    {
+        $service = new class extends PdfGenerationService
+        {
+            public function expose(string $html, string $module, \App\Models\Company $company): string
+            {
+                return $this->injectCompanyFooter($html, $module, $company);
+            }
+        };
+
+        $company = new \App\Models\Company(['invoice_footer' => '']);
+        $html = '<div class="footer"><div class="footer-left">Default footer</div></div>';
+        $out = $service->expose($html, 'invoice', $company);
+
+        $this->assertSame($html, $out);
+    }
 }
