@@ -133,8 +133,15 @@ class CompanySettingsController extends Controller
 
         $reminderSettings = $company->getReminderSettings();
 
+        // Never send the decrypted SMTP password to the browser. The form uses an
+        // empty password field + "leave blank to keep" semantics, with a flag so
+        // operators know a password is already stored.
+        $companyPayload = $company->toArray();
+        unset($companyPayload['smtp_password']);
+        $companyPayload['has_smtp_password'] = \App\Support\CompanyMailer::companyHasStoredSmtpPassword($company);
+
         return Inertia::render('company-settings/Edit', [
-            'company' => $company,
+            'company' => $companyPayload,
             'reminderSettings' => $reminderSettings,
         ]);
     }

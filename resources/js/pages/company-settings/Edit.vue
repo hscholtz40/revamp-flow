@@ -34,7 +34,8 @@ interface Company {
     smtp_host: string | null;
     smtp_port: number | null;
     smtp_username: string | null;
-    smtp_password: string | null;
+    smtp_password?: string | null;
+    has_smtp_password?: boolean;
     smtp_encryption: string | null;
     smtp_from_email: string | null;
     smtp_from_name: string | null;
@@ -147,7 +148,7 @@ const form = useForm({
     smtp_host: props.company.smtp_host || '',
     smtp_port: props.company.smtp_port || null,
     smtp_username: props.company.smtp_username || '',
-    smtp_password: props.company.smtp_password || '',
+    smtp_password: '',
     smtp_encryption: props.company.smtp_encryption || 'tls',
     smtp_from_email: props.company.smtp_from_email || '',
     smtp_from_name: props.company.smtp_from_name || '',
@@ -817,7 +818,7 @@ function submitReminderSettings() {
                         <!-- Communication Settings -->
                         <div class="rounded-lg border bg-white p-6">
                             <h2 class="mb-4 text-lg font-semibold text-gray-900">Communication Settings</h2>
-                            <p class="mb-4 text-sm text-gray-600">Configure per-company SMTP here. When SMTP host, port, username, and password are set, this company uses these settings instead of global .env mail settings.</p>
+                            <p class="mb-4 text-sm text-gray-600">Configure per-company SMTP here. When SMTP host and port are set, this company uses these settings instead of global .env mail settings. If a username is set, a password is also required.</p>
                             
                             <div class="space-y-4">
                                 <div class="grid gap-4 md:grid-cols-2">
@@ -838,7 +839,15 @@ function submitReminderSettings() {
                                     </div>
                                     <div>
                                         <label class="mb-1 block text-sm font-medium">SMTP Password</label>
-                                        <input v-model="form.smtp_password" type="password" class="w-full rounded border px-3 py-2" />
+                                        <input
+                                            v-model="form.smtp_password"
+                                            type="password"
+                                            class="w-full rounded border px-3 py-2"
+                                            :placeholder="props.company.has_smtp_password ? 'Leave blank to keep current password' : 'Enter SMTP password'"
+                                            autocomplete="new-password"
+                                        />
+                                        <p v-if="props.company.has_smtp_password" class="mt-1 text-xs text-green-700">A password is already saved for this company.</p>
+                                        <p v-else class="mt-1 text-xs text-amber-700">No password saved yet. Enter one if your SMTP server requires authentication.</p>
                                         <div v-if="form.errors.smtp_password" class="mt-1 text-sm text-red-600">{{ form.errors.smtp_password }}</div>
                                     </div>
                                     <div>

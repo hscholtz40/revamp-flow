@@ -5,6 +5,7 @@
 - **Delivery notes (jobcard-linked):** Added a delivery notes module linked only to jobcards — no sidebar menu entry. Users can create a delivery note from a jobcard (prefilled line items), view/edit/delete it, update status, download PDF, and see related delivery notes on the jobcard detail page. Group permissions include `delivery-notes` for access control.
 - **PDF company footers:** Invoice, quote, jobcard, and proforma invoice PDFs now render the footer text configured in Company Settings (`invoice_footer`, `quote_footer`, `jobcard_footer`). Custom PDF templates also receive the configured footer automatically.
 - **Customer account name label:** Renamed the customer field label from "Company name" to "Account Name" on Create, Edit, and quick-create customer forms.
+- **Company SMTP fallback fix:** Company mail now uses configured SMTP when host + port are set. If a username is set without a saved password, it no longer silently falls back to `.env` (often `mailpit`) without logging. Company Settings no longer exposes the SMTP password to the browser and shows whether a password is already saved.
 
 ## 2026-07-15
 
