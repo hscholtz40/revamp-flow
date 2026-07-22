@@ -252,10 +252,10 @@ function submit() {
             }
         });
     } else {
-        const payload = { ...form.data() };
-        if (!payload.smtp_password) {
-            delete payload.smtp_password;
-        }
+        const { smtp_password, ...payloadWithoutPassword } = form.data();
+        const payload = smtp_password
+            ? { ...payloadWithoutPassword, smtp_password }
+            : payloadWithoutPassword;
         router.put(companySettings.update(props.company.id).url, payload, {
             preserveScroll: true,
             onSuccess: () => {
