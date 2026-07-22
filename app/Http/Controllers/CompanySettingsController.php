@@ -75,6 +75,7 @@ class CompanySettingsController extends Controller
             'smtp_encryption' => ['nullable', 'in:tls,ssl,starttls,none'],
             'smtp_from_email' => ['nullable', 'email', 'max:255'],
             'smtp_from_name' => ['nullable', 'string', 'max:255'],
+            'smtp_verify_peer' => ['boolean'],
             'logo' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg,ico,webp', 'max:2048'],
             'favicon' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg,ico,webp', 'max:2048'],
             'whatsapp_business_number' => ['nullable', 'string', 'max:20'],
@@ -184,10 +185,10 @@ class CompanySettingsController extends Controller
                 'smtp_host' => $company->smtp_host,
                 'smtp_port' => $company->smtp_port,
                 'smtp_username' => $company->smtp_username,
-                'smtp_password' => $company->smtp_password,
                 'smtp_encryption' => $company->smtp_encryption,
                 'smtp_from_email' => $company->smtp_from_email,
                 'smtp_from_name' => $company->smtp_from_name,
+                'smtp_verify_peer' => $company->smtp_verify_peer ?? true,
             ];
 
             if ($request->hasFile('logo')) {
@@ -229,6 +230,7 @@ class CompanySettingsController extends Controller
             'smtp_encryption' => ['nullable', 'in:tls,ssl,starttls,none'],
             'smtp_from_email' => ['nullable', 'email', 'max:255'],
             'smtp_from_name' => ['nullable', 'string', 'max:255'],
+            'smtp_verify_peer' => ['boolean'],
             'logo' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg,ico,webp', 'max:2048'],
             'favicon' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg,ico,webp', 'max:2048'],
             'whatsapp_business_number' => ['nullable', 'string', 'max:20'],
@@ -238,8 +240,9 @@ class CompanySettingsController extends Controller
             'bank_sort_code' => ['nullable', 'string', 'max:50'],
         ]);
 
-        if (($validated['smtp_password'] ?? null) === '') {
-            // Keep existing encrypted SMTP password unless explicitly replaced.
+        // ConvertEmptyStringsToNull turns blank password fields into null.
+        // In both cases, keep the existing encrypted password unless a new one was entered.
+        if (! filled($validated['smtp_password'] ?? null)) {
             unset($validated['smtp_password']);
         }
 

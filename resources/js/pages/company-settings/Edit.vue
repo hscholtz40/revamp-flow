@@ -39,6 +39,7 @@ interface Company {
     smtp_encryption: string | null;
     smtp_from_email: string | null;
     smtp_from_name: string | null;
+    smtp_verify_peer?: boolean;
     whatsapp_business_number: string | null;
     bank_name: string | null;
     bank_account_name: string | null;
@@ -152,6 +153,7 @@ const form = useForm({
     smtp_encryption: props.company.smtp_encryption || 'tls',
     smtp_from_email: props.company.smtp_from_email || '',
     smtp_from_name: props.company.smtp_from_name || '',
+    smtp_verify_peer: props.company.smtp_verify_peer ?? true,
     logo: null as File | null,
     favicon: null as File | null,
     whatsapp_business_number: props.company.whatsapp_business_number || '',
@@ -220,10 +222,13 @@ function submit() {
         formData.append('smtp_host', form.smtp_host || '');
         formData.append('smtp_port', form.smtp_port ? String(form.smtp_port) : '');
         formData.append('smtp_username', form.smtp_username || '');
-        formData.append('smtp_password', form.smtp_password || '');
+        if (form.smtp_password) {
+            formData.append('smtp_password', form.smtp_password);
+        }
         formData.append('smtp_encryption', form.smtp_encryption || '');
         formData.append('smtp_from_email', form.smtp_from_email || '');
         formData.append('smtp_from_name', form.smtp_from_name || '');
+        formData.append('smtp_verify_peer', form.smtp_verify_peer ? '1' : '0');
         formData.append('whatsapp_business_number', form.whatsapp_business_number || '');
         formData.append('bank_name', form.bank_name || '');
         formData.append('bank_account_name', form.bank_account_name || '');
@@ -247,7 +252,11 @@ function submit() {
             }
         });
     } else {
-        router.put(companySettings.update(props.company.id).url, form.data(), {
+        const payload = { ...form.data() };
+        if (!payload.smtp_password) {
+            delete payload.smtp_password;
+        }
+        router.put(companySettings.update(props.company.id).url, payload, {
             preserveScroll: true,
             onSuccess: () => {
                 console.log('Company updated successfully');
@@ -870,6 +879,26 @@ function submitReminderSettings() {
                                         <input v-model="form.smtp_from_name" type="text" class="w-full rounded border px-3 py-2" placeholder="Company Name" />
                                         <div v-if="form.errors.smtp_from_name" class="mt-1 text-sm text-red-600">{{ form.errors.smtp_from_name }}</div>
                                     </div>
+                                </div>
+                                <div class="rounded border border-amber-200 bg-amber-50 px-4 py-3">
+                                    <label class="flex items-start gap-3">
+                                        <input
+                                            v-model="form.smtp_verify_peer"
+                                            type="checkbox"
+                                            class="mt-1 rounded border-gray-300"
+                                            :true-value="true"
+                                            :false-value="false"
+                                        />
+                                        <span>
+                                            <span class="block text-sm font-medium text-gray-900">Verify TLS certificate</span>
+                                            <span class="mt-1 block text-xs text-gray-600">
+                                                Leave enabled when possible. Turn this off only if your mail host presents a certificate for a different hostname
+                                                (common on shared hosting). Example: connecting to <code class="rounded bg-white px-1">mail.example.com</code>
+                                                but the cert is for another domain.
+                                            </span>
+                                        </span>
+                                    </label>
+                                    <div v-if="form.errors.smtp_verify_peer" class="mt-1 text-sm text-red-600">{{ form.errors.smtp_verify_peer }}</div>
                                 </div>
                                 <div>
                                     <label class="mb-1 block text-sm font-medium">WhatsApp Business Number</label>

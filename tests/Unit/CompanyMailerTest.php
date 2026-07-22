@@ -59,3 +59,27 @@ it('uses company smtp when username and stored password are present', function (
         ->and(config('mail.mailers.company_smtp.username'))->toBe('user@example.com')
         ->and(config('mail.mailers.company_smtp.password'))->toBe('secret-password');
 });
+
+it('normalizes starttls encryption to tls', function () {
+    expect(CompanyMailer::normalizeEncryption('starttls'))->toBe('tls')
+        ->and(CompanyMailer::normalizeEncryption('none'))->toBeNull()
+        ->and(CompanyMailer::normalizeEncryption('ssl'))->toBe('ssl');
+});
+
+it('disables tls peer verification when smtp_verify_peer is false', function () {
+    $company = new Company([
+        'name' => 'Acme',
+        'smtp_host' => 'mail.si-casa.co.za',
+        'smtp_port' => 587,
+        'smtp_encryption' => 'starttls',
+        'smtp_verify_peer' => false,
+    ]);
+
+    $resolved = CompanyMailer::resolve($company);
+
+    expect($resolved['mailer'])->toBe('company_smtp')
+        ->and(config('mail.mailers.company_smtp.encryption'))->toBe('tls')
+        ->and(config('mail.mailers.company_smtp.verify_peer'))->toBeFalse()
+        ->and(config('mail.mailers.company_smtp.stream.ssl.verify_peer'))->toBeFalse()
+        ->and(config('mail.mailers.company_smtp.stream.ssl.verify_peer_name'))->toBeFalse();
+});

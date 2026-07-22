@@ -6,6 +6,8 @@
 - **PDF company footers:** Invoice, quote, jobcard, and proforma invoice PDFs now render the footer text configured in Company Settings (`invoice_footer`, `quote_footer`, `jobcard_footer`). Custom PDF templates also receive the configured footer automatically.
 - **Customer account name label:** Renamed the customer field label from "Company name" to "Account Name" on Create, Edit, and quick-create customer forms.
 - **Company SMTP fallback fix:** Company mail now uses configured SMTP when host + port are set. If a username is set without a saved password, it no longer silently falls back to `.env` (often `mailpit`) without logging. Company Settings no longer exposes the SMTP password to the browser and shows whether a password is already saved.
+- **Company SMTP TLS cert mismatch:** Added a “Verify TLS certificate” option in Company Settings. Shared hosts that present a certificate for a different hostname (CN mismatch on STARTTLS) can turn verification off. `starttls` is also normalized to Symfony’s `tls` mode.
+- **SMTP password keep-on-blank:** Saving Company Settings with an empty SMTP password field no longer clears the stored password (Laravel was converting blank values to `null`).
 
 ## 2026-07-15
 

@@ -36,22 +36,35 @@ class CompanyMailer
             ];
         }
 
-        $encryption = is_string($company->smtp_encryption) ? strtolower(trim($company->smtp_encryption)) : '';
-        if ($encryption === '' || $encryption === 'none') {
-            $encryption = null;
+        $encryption = self::normalizeEncryption($company->smtp_encryption);
+        $verifyPeer = $company->smtp_verify_peer !== false;
+
+        $mailerConfig = [
+            'transport' => 'smtp',
+            'host' => (string) $company->smtp_host,
+            'port' => (int) $company->smtp_port,
+            'encryption' => $encryption,
+            'username' => filled($company->smtp_username) ? (string) $company->smtp_username : null,
+            'password' => self::companyHasStoredSmtpPassword($company) ? (string) $company->smtp_password : null,
+            'timeout' => null,
+            'local_domain' => env('MAIL_EHLO_DOMAIN'),
+            'verify_peer' => $verifyPeer,
+        ];
+
+        // Shared/hosted mail often presents a cert for a different hostname.
+        // When peer verification is disabled, also relax stream SSL checks.
+        if (! $verifyPeer) {
+            $mailerConfig['stream'] = [
+                'ssl' => [
+                    'allow_self_signed' => true,
+                    'verify_peer' => false,
+                    'verify_peer_name' => false,
+                ],
+            ];
         }
 
         config([
-            'mail.mailers.company_smtp' => [
-                'transport' => 'smtp',
-                'host' => (string) $company->smtp_host,
-                'port' => (int) $company->smtp_port,
-                'encryption' => $encryption,
-                'username' => filled($company->smtp_username) ? (string) $company->smtp_username : null,
-                'password' => self::companyHasStoredSmtpPassword($company) ? (string) $company->smtp_password : null,
-                'timeout' => null,
-                'local_domain' => env('MAIL_EHLO_DOMAIN'),
-            ],
+            'mail.mailers.company_smtp' => $mailerConfig,
         ]);
 
         return [
@@ -59,6 +72,22 @@ class CompanyMailer
             'from_address' => (string) ($company->smtp_from_email ?: $defaultFromAddress),
             'from_name' => (string) ($company->smtp_from_name ?: ($company->name ?: $defaultFromName)),
         ];
+    }
+
+    /**
+     * Map UI encryption values to Symfony/Laravel SMTP encryption modes.
+     * "starttls" is treated as STARTTLS ("tls"); "ssl" is implicit TLS (usually port 465).
+     */
+    public static function normalizeEncryption(mixed $encryption): ?string
+    {
+        $encryption = is_string($encryption) ? strtolower(trim($encryption)) : '';
+
+        return match ($encryption) {
+            '', 'none' => null,
+            'starttls' => 'tls',
+            'tls', 'ssl' => $encryption,
+            default => $encryption !== '' ? $encryption : null,
+        };
     }
 
     /**

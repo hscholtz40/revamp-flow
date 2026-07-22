@@ -88,6 +88,7 @@ class Company extends Model
         'smtp_encryption',
         'smtp_from_email',
         'smtp_from_name',
+        'smtp_verify_peer',
         'whatsapp_business_number',
         'visible_modules',
         'bank_name',
@@ -175,6 +176,7 @@ class Company extends Model
         'purchase_order_number_next' => 'integer',
         'delivery_note_number_next' => 'integer',
         'smtp_password' => 'encrypted',
+        'smtp_verify_peer' => 'boolean',
         'jobcard_status_labels' => 'array',
         'quote_status_labels' => 'array',
     ];
