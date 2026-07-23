@@ -65,6 +65,18 @@
                         <td><strong>Company Contact:</strong></td>
                         <td>{{ $query->company_contact_number ?? 'N/A' }}</td>
                     </tr>
+                    <tr>
+                        <td><strong>Address:</strong></td>
+                        <td>{{ trim(implode(', ', array_filter([$query->company_address ?? null, $query->company_city ?? null, $query->company_province ?? null]))) ?: 'N/A' }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Website:</strong></td>
+                        <td>{{ $query->websiteStatusLabel() ?? 'N/A' }}@if($query->company_website) — {{ $query->company_website }}@endif</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Package:</strong></td>
+                        <td>{{ $query->selectedPackageLabel() ?? 'N/A' }}</td>
+                    </tr>
                 @endif
             </table>
 

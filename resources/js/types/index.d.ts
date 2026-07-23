@@ -181,6 +181,13 @@ export type AppPageProps<
         status?: string | null;
     };
     sidebarOpen: boolean;
+    isLicensingInstance?: boolean;
+    /** Client license expiry warning; null when no expiry date is set or on licensing instances. */
+    licenseExpiry?: {
+        expires_at: string;
+        days_remaining: number;
+        message: string;
+    } | null;
     /** Count of unread database notifications for the signed-in user (shared via HandleInertiaRequests). */
     unreadNotificationCount?: number;
     /** Browser Maps JavaScript API key for Places Autocomplete (from Google integration settings). */

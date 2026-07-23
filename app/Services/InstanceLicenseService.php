@@ -6,6 +6,7 @@ use App\Helpers\Version;
 use App\Models\InstanceLicense;
 use App\Models\User;
 use App\Support\LicenseApiSigning;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -169,6 +170,7 @@ class InstanceLicenseService
         $settings->licensed_url = null;
         $settings->limited_users = null;
         $settings->standard_users = null;
+        $settings->expires_at = null;
         $settings->last_validated_at = null;
         $settings->save();
 
@@ -262,6 +264,42 @@ class InstanceLicenseService
             . 'Access is restricted to User Management until user types are updated to comply with your license.';
     }
 
+    /**
+     * Client-instance license expiry warning for the UI.
+     * Null when this is a licensing instance, or when no expiry date is set.
+     *
+     * @return array{expires_at: string, days_remaining: int, message: string}|null
+     */
+    public function getExpiryWarning(): ?array
+    {
+        if (config('app.is_licensing_instance')) {
+            return null;
+        }
+
+        $settings = $this->getSettings();
+        if (! $settings->expires_at) {
+            return null;
+        }
+
+        $daysRemaining = (int) now()->startOfDay()->diffInDays(
+            $settings->expires_at->copy()->startOfDay(),
+            false
+        );
+
+        $message = match (true) {
+            $daysRemaining < 0 => 'Your license has expired.',
+            $daysRemaining === 0 => 'Your license expires today.',
+            $daysRemaining === 1 => '1 day before your license expires',
+            default => "{$daysRemaining} days before your license expires",
+        };
+
+        return [
+            'expires_at' => $settings->expires_at->toIso8601String(),
+            'days_remaining' => $daysRemaining,
+            'message' => $message,
+        ];
+    }
+
     private function persistValidationResult(InstanceLicense $settings, array $result): void
     {
         $licenseData = $result['license'];
@@ -270,8 +308,22 @@ class InstanceLicenseService
         $settings->licensed_url = is_array($licenseData) ? (string) data_get($licenseData, 'url') : null;
         $settings->limited_users = is_array($licenseData) ? (int) data_get($licenseData, 'limited_users') : null;
         $settings->standard_users = is_array($licenseData) ? (int) data_get($licenseData, 'standard_users') : null;
+        $settings->expires_at = $this->parseExpiresAt(is_array($licenseData) ? data_get($licenseData, 'expires_at') : null);
         $settings->last_validated_at = now();
         $settings->save();
+    }
+
+    private function parseExpiresAt(mixed $value): ?Carbon
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($value);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function shouldRefreshValidation(InstanceLicense $settings): bool
@@ -298,6 +350,7 @@ class InstanceLicenseService
                 'url' => $settings->licensed_url,
                 'limited_users' => $settings->limited_users,
                 'standard_users' => $settings->standard_users,
+                'expires_at' => $settings->expires_at?->toIso8601String(),
             ];
         }
 

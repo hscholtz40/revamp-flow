@@ -6,6 +6,7 @@ use App\Exceptions\JobQueryNotActionableException;
 use App\Models\Company;
 use App\Models\Contact;
 use App\Models\Customer;
+use App\Models\GoogleIntegrationSettings;
 use App\Models\Jobcard;
 use App\Models\JobcardLineItem;
 use App\Models\LineGroup;
@@ -37,6 +38,9 @@ class QueriesController extends Controller
      */
     public function apiStore(Request $request): JsonResponse
     {
+        $this->normalizeCompanyWebsiteInput($request);
+        $this->normalizeSouthAfricanPhoneInput($request, 'company_contact_number');
+
         $validated = $request->validate([
             'company_id' => ['nullable', 'integer', 'exists:companies,id'],
             'name' => ['required', 'string', 'max:255'],
@@ -48,15 +52,33 @@ class QueriesController extends Controller
             'company_name' => ['nullable', 'required_if:kind,contractor', 'string', 'max:255'],
             'company_registration_no' => ['nullable', 'required_if:kind,contractor', 'string', 'max:255'],
             'company_address' => ['nullable', 'required_if:kind,contractor', 'string', 'max:500'],
+            'company_city' => ['nullable', 'required_if:kind,contractor', 'string', 'max:100'],
+            'company_province' => ['nullable', 'required_if:kind,contractor', 'string', 'max:100'],
             'company_email' => ['nullable', 'required_if:kind,contractor', 'email', 'max:255'],
-            'company_contact_number' => ['nullable', 'required_if:kind,contractor', 'string', 'max:100'],
-            'company_website' => ['nullable', 'required_if:kind,contractor', 'url', 'max:255'],
+            'company_contact_number' => ['nullable', 'required_if:kind,contractor', 'string', 'size:10', 'regex:/^0[1-9][0-9]{8}$/'],
+            'website_status' => ['nullable', 'required_if:kind,contractor', 'in:have_website,need_website'],
+            'company_website' => ['nullable', 'required_if:website_status,have_website', 'url', 'max:255'],
+            'selected_package' => ['nullable', 'required_if:kind,contractor', 'in:option_1,option_2,custom'],
+            'document_company_ck' => ['nullable', 'required_if:kind,contractor', 'file', 'max:51200', 'mimes:pdf,jpg,jpeg,png'],
+            'document_proof_of_residence' => ['nullable', 'required_if:kind,contractor', 'file', 'max:51200', 'mimes:pdf,jpg,jpeg,png'],
             'attachments' => ['nullable', 'array', 'max:10'],
             'attachments.*' => ['file', 'max:51200', 'mimes:jpg,jpeg,png,gif,webp,mp4,mov,avi,webm'],
         ], [
             'attachments.max' => 'You can upload a maximum of 10 files.',
             'attachments.*.max' => 'Each file may not be larger than 50MB.',
             'attachments.*.mimes' => 'Each file must be an image or video.',
+            'document_company_ck.required_if' => 'The Company CK document is required.',
+            'document_proof_of_residence.required_if' => 'The proof of residence for company document is required.',
+            'document_company_ck.mimes' => 'Company CK must be a PDF or image (JPG/PNG).',
+            'document_proof_of_residence.mimes' => 'Proof of residence must be a PDF or image (JPG/PNG).',
+            'selected_package.required_if' => 'Please select a package.',
+            'website_status.required_if' => 'Please select a website option.',
+            'company_website.required_if' => 'The company website URL is required.',
+            'company_city.required_if' => 'The company city field is required.',
+            'company_province.required_if' => 'The company province field is required.',
+            'company_contact_number.size' => 'The company contact number must be a 10-digit South African number.',
+            'company_contact_number.regex' => 'Enter a valid South African contact number, e.g. 0211234567 or 0821234567.',
+            ...$this->contractorFieldRequiredMessages(),
         ]);
 
         // Route to the requested active company, or fall back to the default company.
@@ -71,6 +93,11 @@ class QueriesController extends Controller
             abort(403, 'Contractor queries are only available on licensing instances.');
         }
 
+        $websiteStatus = $validated['website_status'] ?? null;
+        $companyWebsite = $websiteStatus === Query::WEBSITE_STATUS_HAVE
+            ? ($validated['company_website'] ?? null)
+            : null;
+
         $query = Query::create([
             'company_id' => $company->id,
             'kind' => $kind,
@@ -82,12 +109,21 @@ class QueriesController extends Controller
             'company_name' => $validated['company_name'] ?? null,
             'company_registration_no' => $validated['company_registration_no'] ?? null,
             'company_address' => $validated['company_address'] ?? null,
+            'company_city' => $validated['company_city'] ?? null,
+            'company_province' => $validated['company_province'] ?? null,
             'company_email' => $validated['company_email'] ?? null,
             'company_contact_number' => $validated['company_contact_number'] ?? null,
-            'company_website' => $validated['company_website'] ?? null,
+            'company_website' => $companyWebsite,
+            'website_status' => $websiteStatus,
+            'selected_package' => $validated['selected_package'] ?? null,
             'status' => Query::STATUS_OPEN,
             'response' => $kind === Query::KIND_CONTRACTOR ? Query::RESPONSE_PENDING : null,
         ]);
+
+        if ($kind === Query::KIND_CONTRACTOR) {
+            $this->storeContractorDocument($query, $request->file('document_company_ck'), 'company_ck');
+            $this->storeContractorDocument($query, $request->file('document_proof_of_residence'), 'proof_of_residence');
+        }
 
         foreach ((array) $request->file('attachments', []) as $file) {
             $query->attachments()->create([
@@ -127,6 +163,7 @@ class QueriesController extends Controller
             'kind' => $kind,
             'submitted' => (bool) $request->boolean('submitted'),
             'errors' => session('errors'),
+            'googleMapsApiKey' => GoogleIntegrationSettings::mapsApiKey(),
         ]);
     }
 
@@ -139,6 +176,9 @@ class QueriesController extends Controller
         abort_unless($company->is_active, 404);
         abort_unless($this->isValidPublicFormToken($company, $token), 403, 'Invalid form token.');
 
+        $this->normalizeCompanyWebsiteInput($request);
+        $this->normalizeSouthAfricanPhoneInput($request, 'company_contact_number');
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'surname' => ['required', 'string', 'max:255'],
@@ -149,9 +189,15 @@ class QueriesController extends Controller
             'company_name' => ['nullable', 'required_if:kind,contractor', 'string', 'max:255'],
             'company_registration_no' => ['nullable', 'required_if:kind,contractor', 'string', 'max:255'],
             'company_address' => ['nullable', 'required_if:kind,contractor', 'string', 'max:500'],
+            'company_city' => ['nullable', 'required_if:kind,contractor', 'string', 'max:100'],
+            'company_province' => ['nullable', 'required_if:kind,contractor', 'string', 'max:100'],
             'company_email' => ['nullable', 'required_if:kind,contractor', 'email', 'max:255'],
-            'company_contact_number' => ['nullable', 'required_if:kind,contractor', 'string', 'max:100'],
-            'company_website' => ['nullable', 'required_if:kind,contractor', 'url', 'max:255'],
+            'company_contact_number' => ['nullable', 'required_if:kind,contractor', 'string', 'size:10', 'regex:/^0[1-9][0-9]{8}$/'],
+            'website_status' => ['nullable', 'required_if:kind,contractor', 'in:have_website,need_website'],
+            'company_website' => ['nullable', 'required_if:website_status,have_website', 'url', 'max:255'],
+            'selected_package' => ['nullable', 'required_if:kind,contractor', 'in:option_1,option_2,custom'],
+            'document_company_ck' => ['nullable', 'required_if:kind,contractor', 'file', 'max:51200', 'mimes:pdf,jpg,jpeg,png'],
+            'document_proof_of_residence' => ['nullable', 'required_if:kind,contractor', 'file', 'max:51200', 'mimes:pdf,jpg,jpeg,png'],
             self::PUBLIC_FORM_HONEYPOT_FIELD => ['nullable', 'max:0'],
             'attachments' => ['nullable', 'array', 'max:10'],
             'attachments.*' => ['file', 'max:51200', 'mimes:jpg,jpeg,png,gif,webp,mp4,mov,avi,webm'],
@@ -159,12 +205,29 @@ class QueriesController extends Controller
             'attachments.max' => 'You can upload a maximum of 10 files.',
             'attachments.*.max' => 'Each file may not be larger than 50MB.',
             'attachments.*.mimes' => 'Each file must be an image or video.',
+            'document_company_ck.required_if' => 'The Company CK document is required.',
+            'document_proof_of_residence.required_if' => 'The proof of residence for company document is required.',
+            'document_company_ck.mimes' => 'Company CK must be a PDF or image (JPG/PNG).',
+            'document_proof_of_residence.mimes' => 'Proof of residence must be a PDF or image (JPG/PNG).',
+            'selected_package.required_if' => 'Please select a package.',
+            'website_status.required_if' => 'Please select a website option.',
+            'company_website.required_if' => 'The company website URL is required.',
+            'company_city.required_if' => 'The company city field is required.',
+            'company_province.required_if' => 'The company province field is required.',
+            'company_contact_number.size' => 'The company contact number must be a 10-digit South African number.',
+            'company_contact_number.regex' => 'Enter a valid South African contact number, e.g. 0211234567 or 0821234567.',
+            ...$this->contractorFieldRequiredMessages(),
         ]);
 
         $kind = (string) ($validated['kind'] ?? Query::KIND_ENQUIRY);
         if ($kind === Query::KIND_CONTRACTOR && ! config('app.is_licensing_instance')) {
             abort(403, 'Contractor queries are only available on licensing instances.');
         }
+
+        $websiteStatus = $validated['website_status'] ?? null;
+        $companyWebsite = $websiteStatus === Query::WEBSITE_STATUS_HAVE
+            ? ($validated['company_website'] ?? null)
+            : null;
 
         $query = Query::create([
             'company_id' => $company->id,
@@ -177,12 +240,21 @@ class QueriesController extends Controller
             'company_name' => $validated['company_name'] ?? null,
             'company_registration_no' => $validated['company_registration_no'] ?? null,
             'company_address' => $validated['company_address'] ?? null,
+            'company_city' => $validated['company_city'] ?? null,
+            'company_province' => $validated['company_province'] ?? null,
             'company_email' => $validated['company_email'] ?? null,
             'company_contact_number' => $validated['company_contact_number'] ?? null,
-            'company_website' => $validated['company_website'] ?? null,
+            'company_website' => $companyWebsite,
+            'website_status' => $websiteStatus,
+            'selected_package' => $validated['selected_package'] ?? null,
             'status' => Query::STATUS_OPEN,
             'response' => $kind === Query::KIND_CONTRACTOR ? Query::RESPONSE_PENDING : null,
         ]);
+
+        if ($kind === Query::KIND_CONTRACTOR) {
+            $this->storeContractorDocument($query, $request->file('document_company_ck'), 'company_ck');
+            $this->storeContractorDocument($query, $request->file('document_proof_of_residence'), 'proof_of_residence');
+        }
 
         foreach ((array) $request->file('attachments', []) as $file) {
             $query->attachments()->create([
@@ -210,12 +282,12 @@ class QueriesController extends Controller
     {
         $companyId = (int) $request->query('company', 0);
         $token = (string) $request->query('token', '');
-        $height = (int) $request->query('height', 820);
-        $height = max(500, min(1800, $height));
         $kind = (string) $request->query('kind', Query::KIND_ENQUIRY);
         if (! in_array($kind, [Query::KIND_ENQUIRY, Query::KIND_CONTRACTOR], true)) {
             $kind = Query::KIND_ENQUIRY;
         }
+        $height = (int) $request->query('height', $kind === Query::KIND_CONTRACTOR ? 1600 : 820);
+        $height = max(500, min(1800, $height));
 
         abort_unless($companyId > 0 && $token !== '', 422, 'Missing embed parameters.');
 
@@ -324,9 +396,15 @@ JS;
                 'company_name' => $query->company_name,
                 'company_registration_no' => $query->company_registration_no,
                 'company_address' => $query->company_address,
+                'company_city' => $query->company_city,
+                'company_province' => $query->company_province,
                 'company_email' => $query->company_email,
                 'company_contact_number' => $query->company_contact_number,
                 'company_website' => $query->company_website,
+                'website_status' => $query->website_status,
+                'website_status_label' => $query->websiteStatusLabel(),
+                'selected_package' => $query->selected_package,
+                'selected_package_label' => $query->selectedPackageLabel(),
                 'status' => $query->status,
                 'created_at' => $query->created_at?->toIso8601String(),
                 // Job fields (null for public enquiries). For job queries these
@@ -781,5 +859,87 @@ JS;
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * User-facing messages for contractor-only required fields.
+     * Avoid Laravel's default "when kind is contractor" wording on public forms.
+     *
+     * @return array<string, string>
+     */
+    private function contractorFieldRequiredMessages(): array
+    {
+        return [
+            'company_name.required_if' => 'The company name field is required.',
+            'company_registration_no.required_if' => 'The company registration no field is required.',
+            'company_address.required_if' => 'The company address field is required.',
+            'company_email.required_if' => 'The company email field is required.',
+            'company_contact_number.required_if' => 'The company contact number field is required.',
+        ];
+    }
+
+    private function storeContractorDocument(Query $query, mixed $file, string $type): void
+    {
+        if (! $file) {
+            return;
+        }
+
+        $mime = (string) $file->getMimeType();
+        $attachmentType = str_starts_with($mime, 'image/') ? 'image' : 'document';
+
+        $query->attachments()->create([
+            'path' => $file->store('query-attachments', 'public'),
+            'type' => $type.':'.$attachmentType,
+            'original_name' => $file->getClientOriginalName(),
+        ]);
+    }
+
+    /**
+     * Allow users to enter www.example.com; ensure a scheme so URL validation passes.
+     */
+    private function normalizeCompanyWebsiteInput(Request $request): void
+    {
+        $website = $request->input('company_website');
+        if (! is_string($website)) {
+            return;
+        }
+
+        $website = trim($website);
+        if ($website === '') {
+            $request->merge(['company_website' => null]);
+
+            return;
+        }
+
+        if (! preg_match('#^https?://#i', $website)) {
+            $website = 'http://'.ltrim($website, '/');
+        }
+
+        $request->merge(['company_website' => $website]);
+    }
+
+    /**
+     * Normalize SA phone numbers to local 10-digit format (0XXXXXXXXX).
+     * Accepts spaces/dashes and +27 / 27 country-code forms.
+     */
+    private function normalizeSouthAfricanPhoneInput(Request $request, string $field): void
+    {
+        $value = $request->input($field);
+        if (! is_string($value)) {
+            return;
+        }
+
+        $digits = preg_replace('/\D+/', '', $value) ?? '';
+        if ($digits === '') {
+            $request->merge([$field => null]);
+
+            return;
+        }
+
+        if (str_starts_with($digits, '27') && strlen($digits) === 11) {
+            $digits = '0'.substr($digits, 2);
+        }
+
+        $request->merge([$field => $digits]);
     }
 }

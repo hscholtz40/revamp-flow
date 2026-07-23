@@ -3,6 +3,7 @@ import { loadGoogleMapsJavaScriptApi } from '@/lib/googleMapsLoader';
 export interface ParsedPlaceAddress {
     streetAddress: string;
     city: string;
+    province: string;
     country: string;
     formattedAddress: string;
 }
@@ -37,6 +38,8 @@ export function parseAddressComponents(
         componentValue(components, 'sublocality') ||
         componentValue(components, 'neighborhood');
 
+    const province = componentValue(components, 'administrative_area_level_1');
+
     const country = componentValue(components, 'country');
 
     return {
@@ -46,6 +49,7 @@ export function parseAddressComponents(
             formattedAddress.split(',')[0]?.trim() ||
             formattedAddress,
         city,
+        province,
         country,
         formattedAddress,
     };

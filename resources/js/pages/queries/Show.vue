@@ -38,9 +38,15 @@ interface QueryItem {
     company_name: string | null;
     company_registration_no: string | null;
     company_address: string | null;
+    company_city: string | null;
+    company_province: string | null;
     company_email: string | null;
     company_contact_number: string | null;
     company_website: string | null;
+    website_status: string | null;
+    website_status_label: string | null;
+    selected_package: string | null;
+    selected_package_label: string | null;
     accepted_at: string | null;
     accepted_customer_id: number | null;
     accepted_contact_id: number | null;
@@ -59,6 +65,20 @@ const attachments = computed(() => props.query.attachments ?? []);
 const attachmentView = ref<'grid' | 'list'>('grid');
 const hasCoordinates = computed(() => props.query.job_latitude != null && props.query.job_longitude != null);
 const hasStructuredQuote = computed(() => isJob.value && Array.isArray(props.query.quote_line_items) && props.query.quote_line_items.length > 0);
+
+function attachmentKind(type: string | null): 'video' | 'image' | 'document' {
+    if (!type) return 'document';
+    if (type === 'video' || type.endsWith(':video')) return 'video';
+    if (type === 'image' || type.endsWith(':image')) return 'image';
+    return 'document';
+}
+
+function attachmentLabel(type: string | null): string {
+    if (!type) return 'file';
+    if (type.startsWith('company_ck')) return 'Company CK';
+    if (type.startsWith('proof_of_residence')) return 'Proof of residence';
+    return type;
+}
 
 const groupedLineItems = computed(() => {
     if (!hasStructuredQuote.value) return [];
@@ -339,7 +359,11 @@ function formatDate(value: string | null) {
                                 <div><dt class="text-xs text-gray-500">Company Email</dt><dd class="text-sm text-gray-900">{{ query.company_email || '—' }}</dd></div>
                                 <div><dt class="text-xs text-gray-500">Company Contact</dt><dd class="text-sm text-gray-900">{{ query.company_contact_number || '—' }}</dd></div>
                                 <div class="sm:col-span-2"><dt class="text-xs text-gray-500">Company Address</dt><dd class="text-sm text-gray-900">{{ query.company_address || '—' }}</dd></div>
-                                <div class="sm:col-span-2"><dt class="text-xs text-gray-500">Company Website</dt><dd class="text-sm text-gray-900">{{ query.company_website || '—' }}</dd></div>
+                                <div><dt class="text-xs text-gray-500">City</dt><dd class="text-sm text-gray-900">{{ query.company_city || '—' }}</dd></div>
+                                <div><dt class="text-xs text-gray-500">Province</dt><dd class="text-sm text-gray-900">{{ query.company_province || '—' }}</dd></div>
+                                <div><dt class="text-xs text-gray-500">Website</dt><dd class="text-sm text-gray-900">{{ query.website_status_label || '—' }}</dd></div>
+                                <div><dt class="text-xs text-gray-500">Website URL</dt><dd class="text-sm text-gray-900">{{ query.company_website || '—' }}</dd></div>
+                                <div class="sm:col-span-2"><dt class="text-xs text-gray-500">Selected Package</dt><dd class="text-sm text-gray-900">{{ query.selected_package_label || '—' }}</dd></div>
                             </dl>
                         </div>
                     </div>
@@ -377,8 +401,12 @@ function formatDate(value: string | null) {
                         <!-- Grid view -->
                         <div v-if="attachmentView === 'grid'" class="grid grid-cols-1 gap-6 sm:grid-cols-2">
                             <div v-for="attachment in attachments" :key="attachment.id" class="space-y-2">
-                                <video v-if="attachment.type === 'video'" :src="attachment.url" controls class="max-h-[360px] w-full rounded-md bg-black" />
-                                <img v-else :src="attachment.url" :alt="attachment.original_name || 'Query attachment'" class="max-h-[360px] w-full rounded-md object-contain" />
+                                <video v-if="attachmentKind(attachment.type) === 'video'" :src="attachment.url" controls class="max-h-[360px] w-full rounded-md bg-black" />
+                                <img v-else-if="attachmentKind(attachment.type) === 'image'" :src="attachment.url" :alt="attachment.original_name || 'Query attachment'" class="max-h-[360px] w-full rounded-md object-contain" />
+                                <div v-else class="flex h-40 w-full items-center justify-center rounded-md border border-dashed border-gray-300 bg-gray-50 text-sm text-gray-600">
+                                    {{ attachmentLabel(attachment.type) }}
+                                </div>
+                                <p class="text-xs uppercase tracking-wide text-gray-400">{{ attachmentLabel(attachment.type) }}</p>
                                 <a :href="attachment.url" target="_blank" class="inline-block truncate text-sm text-blue-600 hover:underline">
                                     {{ attachment.original_name || 'Open in new tab' }}
                                 </a>
@@ -389,14 +417,15 @@ function formatDate(value: string | null) {
                         <ul v-else class="divide-y divide-gray-200">
                             <li v-for="attachment in attachments" :key="attachment.id" class="flex items-center gap-3 py-3">
                                 <div class="h-14 w-14 shrink-0 overflow-hidden rounded-md border border-gray-200 bg-gray-50">
-                                    <img v-if="attachment.type !== 'video'" :src="attachment.url" :alt="attachment.original_name || 'Query attachment'" class="h-full w-full object-cover" />
+                                    <img v-if="attachmentKind(attachment.type) === 'image'" :src="attachment.url" :alt="attachment.original_name || 'Query attachment'" class="h-full w-full object-cover" />
                                     <div v-else class="flex h-full w-full items-center justify-center text-gray-400">
-                                        <FileVideo class="h-6 w-6" />
+                                        <FileVideo v-if="attachmentKind(attachment.type) === 'video'" class="h-6 w-6" />
+                                        <ExternalLink v-else class="h-6 w-6" />
                                     </div>
                                 </div>
                                 <div class="min-w-0 flex-1">
                                     <p class="truncate text-sm font-medium text-gray-900">{{ attachment.original_name || 'Attachment' }}</p>
-                                    <p class="text-xs uppercase tracking-wide text-gray-400">{{ attachment.type || 'file' }}</p>
+                                    <p class="text-xs uppercase tracking-wide text-gray-400">{{ attachmentLabel(attachment.type) }}</p>
                                 </div>
                                 <a
                                     :href="attachment.url"

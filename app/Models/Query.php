@@ -30,8 +30,17 @@ class Query extends Model
 
     public const RESPONSE_DECLINED = 'declined';
 
-    // The job was claimed by another contractor first; this copy is locked out.
     public const RESPONSE_EXPIRED = 'expired';
+
+    public const WEBSITE_STATUS_HAVE = 'have_website';
+
+    public const WEBSITE_STATUS_NEED = 'need_website';
+
+    public const PACKAGE_OPTION_1 = 'option_1';
+
+    public const PACKAGE_OPTION_2 = 'option_2';
+
+    public const PACKAGE_CUSTOM = 'custom';
 
     protected $fillable = [
         'company_id',
@@ -47,9 +56,13 @@ class Query extends Model
         'company_name',
         'company_registration_no',
         'company_address',
+        'company_city',
+        'company_province',
         'company_email',
         'company_contact_number',
         'company_website',
+        'website_status',
+        'selected_package',
         'status',
         'response',
         'responded_at',
@@ -94,6 +107,33 @@ class Query extends Model
     public function isContractorQuery(): bool
     {
         return $this->kind === self::KIND_CONTRACTOR;
+    }
+
+    public static function packageLabels(): array
+    {
+        return [
+            self::PACKAGE_OPTION_1 => 'Option 1 - R 550 pm incl VAT (60 day trial)',
+            self::PACKAGE_OPTION_2 => 'Option 2 - R 850 pm incl VAT (60 day trial)',
+            self::PACKAGE_CUSTOM => 'Custom package - request contact',
+        ];
+    }
+
+    public function selectedPackageLabel(): ?string
+    {
+        if (! $this->selected_package) {
+            return null;
+        }
+
+        return self::packageLabels()[$this->selected_package] ?? $this->selected_package;
+    }
+
+    public function websiteStatusLabel(): ?string
+    {
+        return match ($this->website_status) {
+            self::WEBSITE_STATUS_HAVE => 'I have a website',
+            self::WEBSITE_STATUS_NEED => 'I need a website',
+            default => null,
+        };
     }
 
     /**

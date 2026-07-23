@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Models\Company;
 use App\Models\GoogleIntegrationSettings;
 use App\Services\AI\AiAccessService;
+use App\Services\InstanceLicenseService;
 use DateTimeZone;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
@@ -97,6 +98,7 @@ class HandleInertiaRequests extends Middleware
                 ],
                 'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
                 'isLicensingInstance' => config('app.is_licensing_instance'),
+                'licenseExpiry' => null,
                 'unreadNotificationCount' => 0,
                 'google_maps_api_key' => '',
             ];
@@ -272,10 +274,27 @@ class HandleInertiaRequests extends Middleware
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'isLicensingInstance' => config('app.is_licensing_instance'),
+            'licenseExpiry' => $this->licenseExpiryShare($isInstalled, $isInstallerRoute),
             'unreadNotificationCount' => $unreadNotificationCount,
             'google_maps_api_key' => $googleMapsApiKey,
             'ai' => $aiCapabilities,
         ];
+    }
+
+    /**
+     * @return array{expires_at: string, days_remaining: int, message: string}|null
+     */
+    private function licenseExpiryShare(bool $isInstalled, bool $isInstallerRoute): ?array
+    {
+        if (! $isInstalled || $isInstallerRoute || config('app.is_licensing_instance')) {
+            return null;
+        }
+
+        try {
+            return app(InstanceLicenseService::class)->getExpiryWarning();
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-07-23
+
+- **License expiry warning (client instances):** When a license has an expiry date, client instances show a header warning icon with days remaining (e.g. “X days before your license expires”). No expiry date means no warning. Expiry is stored from license validation and shown on Administration → License.
+- **Contractor contact number:** Company contact number must be a valid 10-digit South African number (`0XXXXXXXXX`). Spaces/dashes and `+27`/`27` forms are normalized before validation.
+- **Contractor form validation copy:** Public contractor onboarding validation errors no longer include the technical “when kind is contractor” suffix.
+- **Contractor onboarding form fields:** Website is now a have/need dropdown (URL required when they have a website). Required document uploads for Company CK and proof of residence. Company address uses Google Places with city/province. Package selection added (Option 1 R550, Option 2 R850, or Custom).
+- **Contractor website URL:** Website entries without a scheme (e.g. `www.test.com`) automatically get `http://` prepended on the form and server.
+
 ## 2026-07-20
 
 - **Delivery notes (jobcard-linked):** Added a delivery notes module linked only to jobcards — no sidebar menu entry. Users can create a delivery note from a jobcard (prefilled line items), view/edit/delete it, update status, download PDF, and see related delivery notes on the jobcard detail page. Group permissions include `delivery-notes` for access control.

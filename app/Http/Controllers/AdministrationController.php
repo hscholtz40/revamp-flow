@@ -130,6 +130,7 @@ class AdministrationController extends Controller
                 'licensed_url' => $settings->licensed_url,
                 'limited_users' => $settings->limited_users,
                 'standard_users' => $settings->standard_users,
+                'expires_at' => $settings->expires_at?->toIso8601String(),
                 'last_validated_at' => $settings->last_validated_at?->toIso8601String(),
                 'valid' => $validation['valid'],
                 'validation_message' => $validation['message'],

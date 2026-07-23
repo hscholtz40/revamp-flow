@@ -11,6 +11,7 @@ const props = defineProps<{
         licensed_url: string | null;
         limited_users: number | null;
         standard_users: number | null;
+        expires_at: string | null;
         last_validated_at: string | null;
         valid: boolean;
         validation_message: string;
@@ -57,6 +58,10 @@ const submit = () => {
                     <div>
                         <p class="text-xs uppercase text-gray-500">Last Validated</p>
                         <p class="text-sm text-gray-800">{{ props.license.last_validated_at || '-' }}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs uppercase text-gray-500">Expires</p>
+                        <p class="text-sm text-gray-800">{{ props.license.expires_at || 'Never' }}</p>
                     </div>
                     <div>
                         <p class="text-xs uppercase text-gray-500">Standard Users</p>
