@@ -54,7 +54,7 @@ test('public hosted query form can submit enquiry', function () {
         'name' => 'Jane',
         'surname' => 'Doe',
         'email' => 'jane@example.com',
-        'cell' => '0123456789',
+        'cell' => '0821234567',
         'description' => 'Need help with a repair',
     ])->assertRedirect();
 
@@ -98,7 +98,7 @@ test('public hosted contractor form stores contractor-specific fields', function
         'name' => 'Jane',
         'surname' => 'Doe',
         'email' => 'jane@example.com',
-        'cell' => '0123456789',
+        'cell' => '0821234567',
         'description' => 'Contractor onboarding',
         'company_name' => 'Doe Plumbing',
         'company_registration_no' => '2024/123456/07',
@@ -145,7 +145,7 @@ test('public hosted contractor form prepends http to website without scheme', fu
         'name' => 'Jane',
         'surname' => 'Doe',
         'email' => 'jane@example.com',
-        'cell' => '0123456789',
+        'cell' => '0821234567',
         'description' => 'Contractor onboarding',
         'company_name' => 'Doe Plumbing',
         'company_registration_no' => '2024/123456/07',
@@ -182,7 +182,7 @@ test('public hosted contractor form rejects invalid company contact numbers', fu
         'name' => 'Jane',
         'surname' => 'Doe',
         'email' => 'jane@example.com',
-        'cell' => '0123456789',
+        'cell' => '0821234567',
         'description' => 'Contractor onboarding',
         'company_name' => 'Doe Plumbing',
         'company_registration_no' => '2024/123456/07',
@@ -238,7 +238,7 @@ test('public hosted contractor form normalizes +27 company contact numbers', fun
         'name' => 'Jane',
         'surname' => 'Doe',
         'email' => 'jane@example.com',
-        'cell' => '0123456789',
+        'cell' => '0821234567',
         'description' => 'Contractor onboarding',
         'company_name' => 'Doe Plumbing',
         'company_registration_no' => '2024/123456/07',
@@ -256,6 +256,28 @@ test('public hosted contractor form normalizes +27 company contact numbers', fun
     $query = Query::query()->where('company_id', $company->id)->latest('id')->first();
     expect($query)->not->toBeNull()
         ->and($query->company_contact_number)->toBe('0821234567');
+});
+
+test('public hosted query form rejects invalid cell and email', function () {
+    $company = coverageCreateCompany();
+    config(['services.query_api.public_form_key' => 'test-public-form-key']);
+    $token = hash_hmac('sha256', 'company:'.$company->id, 'test-public-form-key');
+
+    $this->from(route('queries.public.form', [
+        'companyId' => $company->id,
+        'token' => $token,
+    ]))->post(route('queries.public.store', [
+        'companyId' => $company->id,
+        'token' => $token,
+    ]), [
+        'name' => 'Jane',
+        'surname' => 'Doe',
+        'email' => 'not-an-email',
+        'cell' => '0211234567',
+        'description' => 'Need help with a repair',
+    ])
+        ->assertRedirect()
+        ->assertSessionHasErrors(['email', 'cell']);
 });
 
 test('public hosted contractor form validation omits when kind is contractor wording', function () {
@@ -278,7 +300,7 @@ test('public hosted contractor form validation omits when kind is contractor wor
         'name' => 'Jane',
         'surname' => 'Doe',
         'email' => 'jane@example.com',
-        'cell' => '0123456789',
+        'cell' => '0821234567',
         'description' => 'Contractor onboarding',
     ]);
 

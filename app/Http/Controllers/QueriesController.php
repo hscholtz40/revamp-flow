@@ -40,13 +40,14 @@ class QueriesController extends Controller
     {
         $this->normalizeCompanyWebsiteInput($request);
         $this->normalizeSouthAfricanPhoneInput($request, 'company_contact_number');
+        $this->normalizeSouthAfricanPhoneInput($request, 'cell');
 
         $validated = $request->validate([
             'company_id' => ['nullable', 'integer', 'exists:companies,id'],
             'name' => ['required', 'string', 'max:255'],
             'surname' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255'],
-            'cell' => ['required', 'string', 'max:50'],
+            'email' => ['required', 'email:rfc,filter', 'max:255'],
+            'cell' => ['required', 'string', 'size:10', 'regex:/^0[6-8][0-9]{8}$/'],
             'description' => ['required', 'string', 'max:5000'],
             'kind' => ['nullable', 'in:enquiry,contractor'],
             'company_name' => ['nullable', 'required_if:kind,contractor', 'string', 'max:255'],
@@ -54,7 +55,7 @@ class QueriesController extends Controller
             'company_address' => ['nullable', 'required_if:kind,contractor', 'string', 'max:500'],
             'company_city' => ['nullable', 'required_if:kind,contractor', 'string', 'max:100'],
             'company_province' => ['nullable', 'required_if:kind,contractor', 'string', 'max:100'],
-            'company_email' => ['nullable', 'required_if:kind,contractor', 'email', 'max:255'],
+            'company_email' => ['nullable', 'required_if:kind,contractor', 'email:rfc,filter', 'max:255'],
             'company_contact_number' => ['nullable', 'required_if:kind,contractor', 'string', 'size:10', 'regex:/^0[1-9][0-9]{8}$/'],
             'website_status' => ['nullable', 'required_if:kind,contractor', 'in:have_website,need_website'],
             'company_website' => ['nullable', 'required_if:website_status,have_website', 'url', 'max:255'],
@@ -76,6 +77,10 @@ class QueriesController extends Controller
             'company_website.required_if' => 'The company website URL is required.',
             'company_city.required_if' => 'The company city field is required.',
             'company_province.required_if' => 'The company province field is required.',
+            'email.email' => 'Enter a valid email address, e.g. name@example.com.',
+            'company_email.email' => 'Enter a valid company email address, e.g. hello@example.com.',
+            'cell.size' => 'The cell number must be a 10-digit South African mobile number.',
+            'cell.regex' => 'Enter a valid South African mobile number, e.g. 0821234567.',
             'company_contact_number.size' => 'The company contact number must be a 10-digit South African number.',
             'company_contact_number.regex' => 'Enter a valid South African contact number, e.g. 0211234567 or 0821234567.',
             ...$this->contractorFieldRequiredMessages(),
@@ -178,12 +183,13 @@ class QueriesController extends Controller
 
         $this->normalizeCompanyWebsiteInput($request);
         $this->normalizeSouthAfricanPhoneInput($request, 'company_contact_number');
+        $this->normalizeSouthAfricanPhoneInput($request, 'cell');
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'surname' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255'],
-            'cell' => ['required', 'string', 'max:50'],
+            'email' => ['required', 'email:rfc,filter', 'max:255'],
+            'cell' => ['required', 'string', 'size:10', 'regex:/^0[6-8][0-9]{8}$/'],
             'description' => ['required', 'string', 'max:5000'],
             'kind' => ['nullable', 'in:enquiry,contractor'],
             'company_name' => ['nullable', 'required_if:kind,contractor', 'string', 'max:255'],
@@ -191,7 +197,7 @@ class QueriesController extends Controller
             'company_address' => ['nullable', 'required_if:kind,contractor', 'string', 'max:500'],
             'company_city' => ['nullable', 'required_if:kind,contractor', 'string', 'max:100'],
             'company_province' => ['nullable', 'required_if:kind,contractor', 'string', 'max:100'],
-            'company_email' => ['nullable', 'required_if:kind,contractor', 'email', 'max:255'],
+            'company_email' => ['nullable', 'required_if:kind,contractor', 'email:rfc,filter', 'max:255'],
             'company_contact_number' => ['nullable', 'required_if:kind,contractor', 'string', 'size:10', 'regex:/^0[1-9][0-9]{8}$/'],
             'website_status' => ['nullable', 'required_if:kind,contractor', 'in:have_website,need_website'],
             'company_website' => ['nullable', 'required_if:website_status,have_website', 'url', 'max:255'],
@@ -214,6 +220,10 @@ class QueriesController extends Controller
             'company_website.required_if' => 'The company website URL is required.',
             'company_city.required_if' => 'The company city field is required.',
             'company_province.required_if' => 'The company province field is required.',
+            'email.email' => 'Enter a valid email address, e.g. name@example.com.',
+            'company_email.email' => 'Enter a valid company email address, e.g. hello@example.com.',
+            'cell.size' => 'The cell number must be a 10-digit South African mobile number.',
+            'cell.regex' => 'Enter a valid South African mobile number, e.g. 0821234567.',
             'company_contact_number.size' => 'The company contact number must be a 10-digit South African number.',
             'company_contact_number.regex' => 'Enter a valid South African contact number, e.g. 0211234567 or 0821234567.',
             ...$this->contractorFieldRequiredMessages(),

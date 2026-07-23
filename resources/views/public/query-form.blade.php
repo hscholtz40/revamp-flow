@@ -24,10 +24,33 @@
         .btn:hover { background: #1d4ed8; }
         .success { margin-bottom: 14px; padding: 10px 12px; border-radius: 8px; background: #ecfdf5; border: 1px solid #10b981; color: #065f46; }
         .error { margin-bottom: 10px; padding: 10px 12px; border-radius: 8px; background: #fef2f2; border: 1px solid #ef4444; color: #991b1b; font-size: 14px; }
-        .package-option { border: 1px solid #d1d5db; border-radius: 10px; padding: 14px; margin-bottom: 10px; background: #f9fafb; }
-        .package-option.selected { border-color: #2563eb; background: #eff6ff; }
-        .package-option label.title { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; cursor: pointer; margin-bottom: 8px; }
-        .package-option ul { margin: 0; padding-left: 28px; color: #374151; font-size: 13px; line-height: 1.45; }
+        .package-option {
+            display: block;
+            border: 2px solid #d1d5db;
+            border-radius: 10px;
+            padding: 14px 16px;
+            margin-bottom: 10px;
+            background: #fff;
+            cursor: pointer;
+            transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
+        }
+        .package-option:hover { border-color: #93c5fd; background: #f8fbff; }
+        .package-option.selected {
+            border-color: #2563eb;
+            background: #eff6ff;
+            box-shadow: 0 0 0 1px #2563eb;
+        }
+        .package-option input[type="radio"] {
+            position: absolute;
+            opacity: 0;
+            width: 0;
+            height: 0;
+            pointer-events: none;
+        }
+        .package-option .package-title { display: block; font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #111827; }
+        .package-option .package-title span { font-weight: 400; color: #374151; }
+        .package-option ul { margin: 0; padding-left: 18px; color: #374151; font-size: 13px; line-height: 1.45; }
+        .package-option.selected .package-title { color: #1e40af; }
         .docs-list { margin: 0 0 10px; padding-left: 18px; color: #374151; font-size: 13px; }
         @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
     </style>
@@ -73,11 +96,12 @@
                 </div>
                 <div class="field">
                     <label for="email">Email</label>
-                    <input id="email" name="email" type="email" required value="{{ old('email') }}" maxlength="255">
+                    <input id="email" name="email" type="email" required value="{{ old('email') }}" maxlength="255" autocomplete="email" placeholder="name@example.com" pattern="[^\s@]+@[^\s@]+\.[^\s@]+" title="Enter a valid email address, e.g. name@example.com">
                 </div>
                 <div class="field">
                     <label for="cell">Cell</label>
-                    <input id="cell" name="cell" type="text" required value="{{ old('cell') }}" maxlength="50">
+                    <input id="cell" name="cell" type="tel" required value="{{ old('cell') }}" maxlength="16" inputmode="numeric" pattern="0[6-8][0-9]{8}" title="Enter a valid 10-digit South African mobile number, e.g. 0821234567" placeholder="0821234567" autocomplete="tel-national">
+                    <div class="help">10-digit South African mobile number, e.g. 0821234567 (+27 also accepted).</div>
                 </div>
                 <div class="field full">
                     <label for="description">Description</label>
@@ -95,14 +119,14 @@
                     </div>
                     <div class="field">
                         <label for="company_email">Company Email</label>
-                        <input id="company_email" name="company_email" type="email" required value="{{ old('company_email') }}" maxlength="255">
+                        <input id="company_email" name="company_email" type="email" required value="{{ old('company_email') }}" maxlength="255" autocomplete="email" placeholder="hello@example.com" pattern="[^\s@]+@[^\s@]+\.[^\s@]+" title="Enter a valid email address">
                     </div>
                     <div class="field">
                         <label for="company_contact_number">Company Contact Number</label>
                         <input id="company_contact_number" name="company_contact_number" type="tel" required value="{{ old('company_contact_number') }}" maxlength="16" inputmode="numeric" pattern="0[1-9][0-9]{8}" title="Enter a 10-digit South African number, e.g. 0211234567" placeholder="0211234567" autocomplete="tel-national">
                         <div class="help">Enter a valid 10-digit South African number, e.g. 0211234567 or 0821234567 (+27 also accepted).</div>
                     </div>
-                    <div class="field">
+                    <div class="field full">
                         <label for="website_status">Website</label>
                         <select id="website_status" name="website_status" required>
                             <option value="">Select an option</option>
@@ -110,10 +134,10 @@
                             <option value="need_website" @selected(old('website_status') === 'need_website')>I need a website</option>
                         </select>
                     </div>
-                    <div class="field" id="company_website_field" style="{{ old('website_status', '') === 'have_website' ? '' : 'display:none;' }}">
-                        <label for="company_website">Company Website</label>
-                        <input id="company_website" name="company_website" type="text" value="{{ old('company_website') }}" maxlength="255" placeholder="www.example.com" inputmode="url" autocomplete="url">
-                        <div class="help">Enter your site as www.example.com — http:// is added automatically.</div>
+                    <div class="field full" id="company_website_field" style="{{ old('website_status', '') === 'have_website' ? '' : 'display:none;' }}">
+                        <label for="company_website">Website address</label>
+                        <input id="company_website" name="company_website" type="text" value="{{ old('company_website') ? preg_replace('#^https?://#i', '', old('company_website')) : '' }}" maxlength="255" placeholder="www.example.com" inputmode="url" autocomplete="url">
+                        <div class="help">Enter the address without http:// or https:// — e.g. www.example.com</div>
                     </div>
                     <div class="field full">
                         <label for="company_address">Company Address</label>
@@ -150,11 +174,9 @@
                     <div class="field full">
                         <h2 class="section">Select package *</h2>
                         @php $selectedPackage = old('selected_package'); @endphp
-                        <div class="package-option {{ $selectedPackage === 'option_1' ? 'selected' : '' }}">
-                            <label class="title">
-                                <input type="radio" name="selected_package" value="option_1" required @checked($selectedPackage === 'option_1')>
-                                <span><strong>Option 1</strong> — R 550 pm incl VAT · 60 day trial</span>
-                            </label>
+                        <label class="package-option {{ $selectedPackage === 'option_1' ? 'selected' : '' }}">
+                            <input type="radio" name="selected_package" value="option_1" required @checked($selectedPackage === 'option_1')>
+                            <span class="package-title"><strong>Option 1</strong> <span>— R 550 pm incl VAT · 60 day trial</span></span>
                             <ul>
                                 <li>1 Main user — Full access</li>
                                 <li>5 Sub users — Restricted access</li>
@@ -163,12 +185,10 @@
                                 <li>Access to new business via Revamp© user interface</li>
                                 <li>8 Design previews included per month — R10 incl VAT per additional design preview out of bundle</li>
                             </ul>
-                        </div>
-                        <div class="package-option {{ $selectedPackage === 'option_2' ? 'selected' : '' }}">
-                            <label class="title">
-                                <input type="radio" name="selected_package" value="option_2" required @checked($selectedPackage === 'option_2')>
-                                <span><strong>Option 2</strong> — R 850 pm incl VAT · 60 day trial</span>
-                            </label>
+                        </label>
+                        <label class="package-option {{ $selectedPackage === 'option_2' ? 'selected' : '' }}">
+                            <input type="radio" name="selected_package" value="option_2" required @checked($selectedPackage === 'option_2')>
+                            <span class="package-title"><strong>Option 2</strong> <span>— R 850 pm incl VAT · 60 day trial</span></span>
                             <ul>
                                 <li>2 Main users — Full access</li>
                                 <li>10 Sub users — Restricted access</li>
@@ -177,13 +197,11 @@
                                 <li>Access to new business via Revamp© user interface</li>
                                 <li>12 Design previews included per month — R10 incl VAT per additional design preview out of bundle</li>
                             </ul>
-                        </div>
-                        <div class="package-option {{ $selectedPackage === 'custom' ? 'selected' : '' }}">
-                            <label class="title">
-                                <input type="radio" name="selected_package" value="custom" required @checked($selectedPackage === 'custom')>
-                                <span><strong>Custom package</strong> — Select to request Revamp© to contact you to discuss a custom package</span>
-                            </label>
-                        </div>
+                        </label>
+                        <label class="package-option {{ $selectedPackage === 'custom' ? 'selected' : '' }}">
+                            <input type="radio" name="selected_package" value="custom" required @checked($selectedPackage === 'custom')>
+                            <span class="package-title"><strong>Custom package</strong> <span>— Select to request Revamp© to contact you to discuss a custom package</span></span>
+                        </label>
                     </div>
                 @else
                     <div class="field full">
@@ -204,12 +222,29 @@
         @endif
     </div>
 
-    @if($kind === 'contractor' && ! $submitted)
+    @if(! $submitted)
     <script>
         (function () {
+            var form = document.querySelector('form');
             var statusEl = document.getElementById('website_status');
             var websiteField = document.getElementById('company_website_field');
             var websiteInput = document.getElementById('company_website');
+            var cellInput = document.getElementById('cell');
+            var contactInput = document.getElementById('company_contact_number');
+
+            function normalizeSaPhone(input, mobileOnly) {
+                if (!input) {
+                    return;
+                }
+                var digits = (input.value || '').replace(/\D+/g, '');
+                if (digits.indexOf('27') === 0 && digits.length >= 11) {
+                    digits = '0' + digits.slice(2);
+                }
+                input.value = digits.slice(0, 10);
+                if (mobileOnly && input.value.length === 10 && !/^0[6-8]/.test(input.value)) {
+                    // leave value; HTML pattern / server validation will reject
+                }
+            }
 
             function syncWebsiteField() {
                 var haveWebsite = statusEl && statusEl.value === 'have_website';
@@ -217,14 +252,14 @@
                     websiteField.style.display = haveWebsite ? '' : 'none';
                 }
                 if (websiteInput) {
-                    websiteInput.required = haveWebsite;
+                    websiteInput.required = !!haveWebsite;
                     if (!haveWebsite) {
                         websiteInput.value = '';
                     }
                 }
             }
 
-            function ensureWebsiteProtocol() {
+            function stripWebsiteProtocol() {
                 if (!websiteInput) {
                     return;
                 }
@@ -232,59 +267,61 @@
                 if (!value) {
                     return;
                 }
-                if (!/^https?:\/\//i.test(value)) {
-                    websiteInput.value = 'http://' + value.replace(/^\/+/, '');
-                }
+                websiteInput.value = value.replace(/^https?:\/\//i, '').replace(/^\/+/, '');
             }
 
-            var contactInput = document.getElementById('company_contact_number');
-
-            function normalizeSaPhone() {
-                if (!contactInput) {
+            function ensureWebsiteProtocolForSubmit() {
+                if (!websiteInput || !websiteInput.required) {
                     return;
                 }
-                var digits = (contactInput.value || '').replace(/\D+/g, '');
-                if (digits.indexOf('27') === 0 && digits.length >= 11) {
-                    digits = '0' + digits.slice(2);
+                stripWebsiteProtocol();
+                var value = (websiteInput.value || '').trim();
+                if (!value) {
+                    return;
                 }
-                contactInput.value = digits.slice(0, 10);
+                websiteInput.value = 'http://' + value;
             }
 
-            if (websiteInput) {
-                websiteInput.addEventListener('blur', ensureWebsiteProtocol);
+            if (cellInput) {
+                cellInput.addEventListener('blur', function () { normalizeSaPhone(cellInput, true); });
+                cellInput.addEventListener('input', function () { normalizeSaPhone(cellInput, true); });
             }
 
             if (contactInput) {
-                contactInput.addEventListener('blur', normalizeSaPhone);
-                contactInput.addEventListener('input', normalizeSaPhone);
+                contactInput.addEventListener('blur', function () { normalizeSaPhone(contactInput, false); });
+                contactInput.addEventListener('input', function () { normalizeSaPhone(contactInput, false); });
             }
 
-            var form = document.querySelector('form');
+            if (websiteInput) {
+                websiteInput.addEventListener('blur', stripWebsiteProtocol);
+                websiteInput.addEventListener('input', stripWebsiteProtocol);
+            }
+
             if (form) {
                 form.addEventListener('submit', function () {
-                    ensureWebsiteProtocol();
-                    normalizeSaPhone();
+                    normalizeSaPhone(cellInput, true);
+                    normalizeSaPhone(contactInput, false);
+                    ensureWebsiteProtocolForSubmit();
                 });
             }
 
             if (statusEl) {
                 statusEl.addEventListener('change', syncWebsiteField);
                 syncWebsiteField();
+                stripWebsiteProtocol();
             }
 
             document.querySelectorAll('input[name="selected_package"]').forEach(function (radio) {
                 radio.addEventListener('change', function () {
                     document.querySelectorAll('.package-option').forEach(function (el) {
-                        el.classList.remove('selected');
+                        var input = el.querySelector('input[type="radio"]');
+                        el.classList.toggle('selected', !!(input && input.checked));
                     });
-                    if (radio.checked) {
-                        radio.closest('.package-option').classList.add('selected');
-                    }
                 });
             });
 
             var mapsKey = @json($googleMapsApiKey ?? '');
-            if (!mapsKey) {
+            if (!mapsKey || !statusEl) {
                 return;
             }
 
