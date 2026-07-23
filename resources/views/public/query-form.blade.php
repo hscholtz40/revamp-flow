@@ -17,14 +17,19 @@
         .field { margin-bottom: 14px; }
         .field.full { grid-column: 1 / -1; }
         label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
-        input, textarea, select { width: 100%; box-sizing: border-box; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px 12px; font-size: 14px; background: #fff; }
+        input:not([type="radio"]):not([type="checkbox"]):not([type="file"]), textarea, select {
+            width: 100%; box-sizing: border-box; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px 12px; font-size: 14px; background: #fff;
+        }
+        input[type="file"] { width: 100%; box-sizing: border-box; font-size: 14px; }
         textarea { min-height: 140px; resize: vertical; }
         .help { font-size: 12px; color: #6b7280; margin-top: 4px; }
         .btn { appearance: none; border: 0; background: #2563eb; color: #fff; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; }
         .btn:hover { background: #1d4ed8; }
         .success { margin-bottom: 14px; padding: 10px 12px; border-radius: 8px; background: #ecfdf5; border: 1px solid #10b981; color: #065f46; }
         .error { margin-bottom: 10px; padding: 10px 12px; border-radius: 8px; background: #fef2f2; border: 1px solid #ef4444; color: #991b1b; font-size: 14px; }
+        .is-hidden { display: none !important; }
         .package-option {
+            position: relative;
             display: block;
             border: 2px solid #d1d5db;
             border-radius: 10px;
@@ -32,9 +37,11 @@
             margin-bottom: 10px;
             background: #fff;
             cursor: pointer;
+            font-weight: 400;
             transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
         }
         .package-option:hover { border-color: #93c5fd; background: #f8fbff; }
+        .package-option:has(input[type="radio"]:checked),
         .package-option.selected {
             border-color: #2563eb;
             background: #eff6ff;
@@ -42,15 +49,21 @@
         }
         .package-option input[type="radio"] {
             position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            margin: 0;
             opacity: 0;
-            width: 0;
-            height: 0;
-            pointer-events: none;
+            cursor: pointer;
+            z-index: 1;
         }
-        .package-option .package-title { display: block; font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #111827; }
+        .package-option .package-title { display: block; font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #111827; position: relative; z-index: 0; }
         .package-option .package-title span { font-weight: 400; color: #374151; }
-        .package-option ul { margin: 0; padding-left: 18px; color: #374151; font-size: 13px; line-height: 1.45; }
+        .package-option ul { margin: 0; padding-left: 18px; color: #374151; font-size: 13px; line-height: 1.45; position: relative; z-index: 0; }
+        .package-option:has(input[type="radio"]:checked) .package-title,
         .package-option.selected .package-title { color: #1e40af; }
+        /* Google Places dropdown must sit above the form card */
+        .pac-container { z-index: 10000 !important; }
         .docs-list { margin: 0 0 10px; padding-left: 18px; color: #374151; font-size: 13px; }
         @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
     </style>
@@ -134,7 +147,7 @@
                             <option value="need_website" @selected(old('website_status') === 'need_website')>I need a website</option>
                         </select>
                     </div>
-                    <div class="field full" id="company_website_field" style="{{ old('website_status', '') === 'have_website' ? '' : 'display:none;' }}">
+                    <div class="field full {{ old('website_status') === 'have_website' ? '' : 'is-hidden' }}" id="company_website_field">
                         <label for="company_website">Website address</label>
                         <input id="company_website" name="company_website" type="text" value="{{ old('company_website') ? preg_replace('#^https?://#i', '', old('company_website')) : '' }}" maxlength="255" placeholder="www.example.com" inputmode="url" autocomplete="url">
                         <div class="help">Enter the address without http:// or https:// — e.g. www.example.com</div>
@@ -142,7 +155,13 @@
                     <div class="field full">
                         <label for="company_address">Company Address</label>
                         <input id="company_address" name="company_address" type="text" required value="{{ old('company_address') }}" maxlength="500" autocomplete="street-address">
-                        <div class="help">Start typing and select an address from Google Maps suggestions.</div>
+                        <div class="help" id="company_address_help">
+                            @if(! empty($googleMapsApiKey))
+                                Start typing and select an address from Google Maps suggestions.
+                            @else
+                                Type the street address manually. (Google Maps suggestions are unavailable — configure a Maps API key in Google Integration.)
+                            @endif
+                        </div>
                     </div>
                     <div class="field">
                         <label for="company_city">City</label>
@@ -223,7 +242,7 @@
     </div>
 
     @if(! $submitted)
-    <script>
+    <script nonce="{{ request()->attributes->get('csp_nonce') }}">
         (function () {
             var form = document.querySelector('form');
             var statusEl = document.getElementById('website_status');
@@ -232,7 +251,7 @@
             var cellInput = document.getElementById('cell');
             var contactInput = document.getElementById('company_contact_number');
 
-            function normalizeSaPhone(input, mobileOnly) {
+            function normalizeSaPhone(input) {
                 if (!input) {
                     return;
                 }
@@ -241,22 +260,27 @@
                     digits = '0' + digits.slice(2);
                 }
                 input.value = digits.slice(0, 10);
-                if (mobileOnly && input.value.length === 10 && !/^0[6-8]/.test(input.value)) {
-                    // leave value; HTML pattern / server validation will reject
-                }
             }
 
             function syncWebsiteField() {
-                var haveWebsite = statusEl && statusEl.value === 'have_website';
-                if (websiteField) {
-                    websiteField.style.display = haveWebsite ? '' : 'none';
+                if (!websiteField) {
+                    return;
                 }
+                var haveWebsite = !!(statusEl && statusEl.value === 'have_website');
+                websiteField.classList.toggle('is-hidden', !haveWebsite);
                 if (websiteInput) {
-                    websiteInput.required = !!haveWebsite;
+                    websiteInput.required = haveWebsite;
                     if (!haveWebsite) {
                         websiteInput.value = '';
                     }
                 }
+            }
+
+            function syncPackageHighlight() {
+                document.querySelectorAll('.package-option').forEach(function (el) {
+                    var input = el.querySelector('input[type="radio"]');
+                    el.classList.toggle('selected', !!(input && input.checked));
+                });
             }
 
             function stripWebsiteProtocol() {
@@ -283,13 +307,13 @@
             }
 
             if (cellInput) {
-                cellInput.addEventListener('blur', function () { normalizeSaPhone(cellInput, true); });
-                cellInput.addEventListener('input', function () { normalizeSaPhone(cellInput, true); });
+                cellInput.addEventListener('blur', function () { normalizeSaPhone(cellInput); });
+                cellInput.addEventListener('input', function () { normalizeSaPhone(cellInput); });
             }
 
             if (contactInput) {
-                contactInput.addEventListener('blur', function () { normalizeSaPhone(contactInput, false); });
-                contactInput.addEventListener('input', function () { normalizeSaPhone(contactInput, false); });
+                contactInput.addEventListener('blur', function () { normalizeSaPhone(contactInput); });
+                contactInput.addEventListener('input', function () { normalizeSaPhone(contactInput); });
             }
 
             if (websiteInput) {
@@ -299,29 +323,28 @@
 
             if (form) {
                 form.addEventListener('submit', function () {
-                    normalizeSaPhone(cellInput, true);
-                    normalizeSaPhone(contactInput, false);
+                    normalizeSaPhone(cellInput);
+                    normalizeSaPhone(contactInput);
                     ensureWebsiteProtocolForSubmit();
                 });
             }
 
             if (statusEl) {
                 statusEl.addEventListener('change', syncWebsiteField);
+                statusEl.addEventListener('input', syncWebsiteField);
                 syncWebsiteField();
                 stripWebsiteProtocol();
             }
 
             document.querySelectorAll('input[name="selected_package"]').forEach(function (radio) {
-                radio.addEventListener('change', function () {
-                    document.querySelectorAll('.package-option').forEach(function (el) {
-                        var input = el.querySelector('input[type="radio"]');
-                        el.classList.toggle('selected', !!(input && input.checked));
-                    });
-                });
+                radio.addEventListener('change', syncPackageHighlight);
+                radio.addEventListener('click', syncPackageHighlight);
             });
+            syncPackageHighlight();
 
             var mapsKey = @json($googleMapsApiKey ?? '');
-            if (!mapsKey || !statusEl) {
+            var addressInput = document.getElementById('company_address');
+            if (!mapsKey || !addressInput) {
                 return;
             }
 
@@ -334,16 +357,57 @@
                 return '';
             }
 
-            function initPlaces() {
-                var addressInput = document.getElementById('company_address');
-                var cityInput = document.getElementById('company_city');
-                var provinceInput = document.getElementById('company_province');
-                if (!addressInput || !window.google || !google.maps || !google.maps.places) {
-                    return;
+            function waitForImportLibrary(timeoutMs) {
+                var start = Date.now();
+                return new Promise(function (resolve, reject) {
+                    (function tick() {
+                        if (window.google && google.maps && typeof google.maps.importLibrary === 'function') {
+                            resolve(google.maps);
+                            return;
+                        }
+                        if (Date.now() - start > timeoutMs) {
+                            reject(new Error('Timed out waiting for Google Maps'));
+                            return;
+                        }
+                        requestAnimationFrame(tick);
+                    })();
+                });
+            }
+
+            function loadGoogleMaps(apiKey) {
+                if (window.google && google.maps && typeof google.maps.importLibrary === 'function') {
+                    return Promise.resolve(google.maps);
                 }
 
-                var autocomplete = new google.maps.places.Autocomplete(addressInput, {
-                    fields: ['formatted_address', 'address_components', 'name'],
+                return new Promise(function (resolve, reject) {
+                    var existing = document.getElementById('google-maps-js-api');
+                    if (existing) {
+                        waitForImportLibrary(15000).then(resolve).catch(reject);
+                        return;
+                    }
+
+                    var script = document.createElement('script');
+                    script.id = 'google-maps-js-api';
+                    script.async = true;
+                    script.defer = true;
+                    script.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(apiKey) + '&loading=async';
+                    script.onload = function () {
+                        waitForImportLibrary(15000).then(resolve).catch(reject);
+                    };
+                    script.onerror = function () {
+                        reject(new Error('Failed to load Google Maps script'));
+                    };
+                    document.head.appendChild(script);
+                });
+            }
+
+            function initPlaces(placesLib) {
+                var cityInput = document.getElementById('company_city');
+                var provinceInput = document.getElementById('company_province');
+                var helpEl = document.getElementById('company_address_help');
+
+                var autocomplete = new placesLib.Autocomplete(addressInput, {
+                    fields: ['formatted_address', 'address_components', 'geometry', 'name'],
                     types: ['address'],
                     componentRestrictions: { country: 'za' }
                 });
@@ -367,14 +431,23 @@
                         provinceInput.value = componentValue(components, 'administrative_area_level_1') || '';
                     }
                 });
+
+                if (helpEl) {
+                    helpEl.textContent = 'Start typing and select an address from Google Maps suggestions.';
+                }
             }
 
-            var script = document.createElement('script');
-            script.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(mapsKey) + '&libraries=places';
-            script.async = true;
-            script.defer = true;
-            script.onload = initPlaces;
-            document.head.appendChild(script);
+            loadGoogleMaps(mapsKey)
+                .then(function (maps) {
+                    return maps.importLibrary('places');
+                })
+                .then(initPlaces)
+                .catch(function () {
+                    var helpEl = document.getElementById('company_address_help');
+                    if (helpEl) {
+                        helpEl.textContent = 'Address suggestions could not be loaded. Type the street address manually.';
+                    }
+                });
         })();
     </script>
     @endif

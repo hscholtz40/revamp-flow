@@ -2,7 +2,7 @@
 
 ## 2026-07-23
 
-- **Contractor form UX:** Package options are full selectable cards (no visible radios; selected option is highlighted). “I have a website” shows a website address field entered without http/https. Cell requires a valid SA mobile number; email fields use stricter validation.
+- **Contractor form UX:** Package options are full selectable cards (no visible radios; selected option is highlighted via CSS). “I have a website” toggles a website address field (entered without http/https). Cell requires a valid SA mobile number; email fields use stricter validation. Public form Maps address suggestions use the same async Places loader as the app, include a CSP nonce, and surface a clear message if the Maps API key is missing.
 - **License expiry warning (client instances):** When a license has an expiry date, client instances show a header warning icon with days remaining (e.g. “X days before your license expires”). No expiry date means no warning. Expiry is stored from license validation and shown on Administration → License.
 - **Contractor contact number:** Company contact number must be a valid 10-digit South African number (`0XXXXXXXXX`). Spaces/dashes and `+27`/`27` forms are normalized before validation.
 - **Contractor form validation copy:** Public contractor onboarding validation errors no longer include the technical “when kind is contractor” suffix.

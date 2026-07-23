@@ -64,6 +64,29 @@ test('public hosted query form can submit enquiry', function () {
         ->and($query->status)->toBe(Query::STATUS_OPEN);
 });
 
+test('public hosted contractor form renders website url field and package cards', function () {
+    $company = coverageCreateCompany();
+    config([
+        'services.query_api.public_form_key' => 'test-public-form-key',
+        'app.is_licensing_instance' => true,
+    ]);
+    $token = hash_hmac('sha256', 'company:'.$company->id, 'test-public-form-key');
+
+    $this->get(route('queries.public.form', [
+        'companyId' => $company->id,
+        'token' => $token,
+        'kind' => 'contractor',
+    ]))
+        ->assertOk()
+        ->assertSee('id="company_website_field"', false)
+        ->assertSee('id="company_website"', false)
+        ->assertSee('Website address', false)
+        ->assertSee('package-option', false)
+        ->assertSee('name="selected_package"', false)
+        ->assertSee('nonce="', false)
+        ->assertSee('importLibrary', false);
+});
+
 test('public hosted contractor form is only available on licensing instances', function () {
     $company = coverageCreateCompany();
     config([
