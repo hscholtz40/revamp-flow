@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-08-04
+
+- **Deploy .env quoting:** Values with spaces (e.g. `MAIL_FROM_NAME=JobCard Online`) are now double-quoted when writing remote `.env` files during cPanel deploy/upgrade, so dotenv no longer fails with “unexpected whitespace”.
+
 ## 2026-07-23
 
 - **Contractor form UX:** Package options are full selectable cards (no visible radios; selected option is highlighted via CSS). “I have a website” toggles a website address field (entered without http/https). Cell requires a valid SA mobile number; email fields use stricter validation. Public form Maps address suggestions use the same async Places loader as the app, include a CSP nonce, and surface a clear message if the Maps API key is missing.

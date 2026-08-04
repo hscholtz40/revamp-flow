@@ -627,9 +627,28 @@ class CpanelService
         return $commands;
     }
 
+    /**
+     * Format a value for writing into a remote .env file via sed/printf.
+     * Dotenv requires quotes when the value contains whitespace or special characters
+     * (e.g. MAIL_FROM_NAME="JobCard Online").
+     */
     private function escapeEnvValueForSed(string $value): string
     {
-        return str_replace(['\\', '&', '|', "\n"], ['\\\\', '\\&', '\\|', '\\n'], $value);
+        $needsQuotes = $value === ''
+            || (bool) preg_match('/[\s#"\'\\\\$`!]/', $value)
+            || str_contains($value, '=');
+
+        if ($needsQuotes) {
+            $escaped = str_replace(
+                ['\\', '"', "\r\n", "\n", "\r"],
+                ['\\\\', '\\"', '\\n', '\\n', ''],
+                $value
+            );
+            $value = '"'.$escaped.'"';
+        }
+
+        // Escape sed replacement metacharacters (| is our delimiter).
+        return str_replace(['\\', '&', '|'], ['\\\\', '\\&', '\\|'], $value);
     }
 
     /**

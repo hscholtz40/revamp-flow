@@ -59,6 +59,32 @@ test('cpanel deploy writes push env vars for child instances', function () {
     ]);
 });
 
+test('cpanel env escape quotes values that contain whitespace', function () {
+    $service = new CpanelService;
+    $method = new ReflectionMethod(CpanelService::class, 'escapeEnvValueForSed');
+    $method->setAccessible(true);
+
+    expect($method->invoke($service, 'JobCard Online'))->toBe('"JobCard Online"')
+        ->and($method->invoke($service, 'mail.example.com'))->toBe('mail.example.com')
+        ->and($method->invoke($service, 'simple'))->toBe('simple')
+        ->and($method->invoke($service, 'has=equals'))->toBe('"has=equals"')
+        // Newlines become dotenv \n, then sed-escapes the backslash → \\n in the sed payload.
+        ->and($method->invoke($service, 'line1'."\n".'line2'))->toBe('"line1\\\\nline2"');
+});
+
+test('cpanel upgrade env backfill quotes mail from name with spaces', function () {
+    $service = new CpanelService;
+    $method = new ReflectionMethod(CpanelService::class, 'buildAppendMissingEnvCommands');
+    $method->setAccessible(true);
+
+    $commands = $method->invoke($service, '/home/jcrevamp/public_html/client1', [
+        'MAIL_FROM_NAME' => 'JobCard Online',
+    ]);
+
+    expect($commands)->toHaveCount(1)
+        ->and($commands[0])->toContain('MAIL_FROM_NAME="JobCard Online"');
+});
+
 test('cpanel upgrade env backfill replaces empty and package placeholder values', function () {
     $service = new CpanelService;
     $method = new ReflectionMethod(CpanelService::class, 'buildAppendMissingEnvCommands');
