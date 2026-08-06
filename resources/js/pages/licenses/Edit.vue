@@ -24,6 +24,15 @@ interface License {
     status: string;
     notes: string | null;
     expires_at: string | null;
+    billing_cycle: string | null;
+    pricing_model: string | null;
+    price_standard_monthly: string | number | null;
+    price_limited_monthly: string | number | null;
+    price_standard_annual: string | number | null;
+    price_limited_annual: string | number | null;
+    fixed_amount_monthly: string | number | null;
+    fixed_amount_annual: string | number | null;
+    auto_email_invoice: boolean;
     customer: Customer | null;
 }
 
@@ -63,6 +72,15 @@ const form = useForm({
     status: props.license.status,
     notes: props.license.notes || '',
     expires_at: props.license.expires_at ? props.license.expires_at.substring(0, 10) : '',
+    billing_cycle: (props.license.billing_cycle || '') as '' | 'monthly' | 'annual',
+    pricing_model: (props.license.pricing_model || '') as '' | 'per_user' | 'fixed',
+    price_standard_monthly: props.license.price_standard_monthly ?? '',
+    price_limited_monthly: props.license.price_limited_monthly ?? '',
+    price_standard_annual: props.license.price_standard_annual ?? '',
+    price_limited_annual: props.license.price_limited_annual ?? '',
+    fixed_amount_monthly: props.license.fixed_amount_monthly ?? '',
+    fixed_amount_annual: props.license.fixed_amount_annual ?? '',
+    auto_email_invoice: props.license.auto_email_invoice ?? true,
 });
 
 function submit() {
@@ -249,6 +267,72 @@ function submit() {
                                 />
                                 <p class="mt-1 text-xs text-gray-500">Leave blank for no expiry.</p>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Billing -->
+                    <div>
+                        <h2 class="mb-4 text-lg font-semibold text-gray-900">Billing</h2>
+                        <p class="mb-4 text-xs text-gray-500">When billing is newly enabled, the first invoice is created on save. Recurring invoices recalculate from current seats and prices.</p>
+                        <div class="grid gap-6 md:grid-cols-2">
+                            <div>
+                                <label class="mb-1 block text-sm font-medium text-gray-700">Billing Cycle</label>
+                                <select
+                                    v-model="form.billing_cycle"
+                                    class="w-full rounded border px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                                >
+                                    <option value="">No billing</option>
+                                    <option value="monthly">Monthly</option>
+                                    <option value="annual">Annual</option>
+                                </select>
+                            </div>
+                            <div v-if="form.billing_cycle">
+                                <label class="mb-1 block text-sm font-medium text-gray-700">Pricing Model</label>
+                                <select
+                                    v-model="form.pricing_model"
+                                    required
+                                    class="w-full rounded border px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                                >
+                                    <option value="">— Select —</option>
+                                    <option value="per_user">Per user</option>
+                                    <option value="fixed">Fixed amount</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div v-if="form.billing_cycle === 'monthly' && form.pricing_model === 'per_user'" class="mt-4 grid gap-6 md:grid-cols-2">
+                            <div>
+                                <label class="mb-1 block text-sm font-medium text-gray-700">Standard user price (monthly)</label>
+                                <input v-model="form.price_standard_monthly" type="number" min="0" step="0.01" class="w-full rounded border px-3 py-2" />
+                            </div>
+                            <div>
+                                <label class="mb-1 block text-sm font-medium text-gray-700">Limited user price (monthly)</label>
+                                <input v-model="form.price_limited_monthly" type="number" min="0" step="0.01" class="w-full rounded border px-3 py-2" />
+                            </div>
+                        </div>
+                        <div v-if="form.billing_cycle === 'annual' && form.pricing_model === 'per_user'" class="mt-4 grid gap-6 md:grid-cols-2">
+                            <div>
+                                <label class="mb-1 block text-sm font-medium text-gray-700">Standard user price (annual)</label>
+                                <input v-model="form.price_standard_annual" type="number" min="0" step="0.01" class="w-full rounded border px-3 py-2" />
+                            </div>
+                            <div>
+                                <label class="mb-1 block text-sm font-medium text-gray-700">Limited user price (annual)</label>
+                                <input v-model="form.price_limited_annual" type="number" min="0" step="0.01" class="w-full rounded border px-3 py-2" />
+                            </div>
+                        </div>
+                        <div v-if="form.billing_cycle === 'monthly' && form.pricing_model === 'fixed'" class="mt-4">
+                            <label class="mb-1 block text-sm font-medium text-gray-700">Fixed monthly amount</label>
+                            <input v-model="form.fixed_amount_monthly" type="number" min="0" step="0.01" class="w-full rounded border px-3 py-2 md:max-w-xs" />
+                        </div>
+                        <div v-if="form.billing_cycle === 'annual' && form.pricing_model === 'fixed'" class="mt-4">
+                            <label class="mb-1 block text-sm font-medium text-gray-700">Fixed annual amount</label>
+                            <input v-model="form.fixed_amount_annual" type="number" min="0" step="0.01" class="w-full rounded border px-3 py-2 md:max-w-xs" />
+                        </div>
+                        <div v-if="form.billing_cycle" class="mt-4">
+                            <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+                                <input v-model="form.auto_email_invoice" type="checkbox" class="rounded border-gray-300" />
+                                Automatically email invoices to the customer
+                            </label>
                         </div>
                     </div>
 

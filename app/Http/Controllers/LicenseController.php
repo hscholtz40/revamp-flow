@@ -5,11 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\Customer;
 use App\Models\License;
 use App\Services\CpanelService;
+use App\Services\LicenseBillingService;
 use App\Support\CompanyScopedRules;
 use App\Support\SafeLog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -94,30 +96,33 @@ class LicenseController extends Controller
                 ->withErrors(['message' => 'No company selected. Please select a company first.']);
         }
 
-        $validated = $request->validate([
-            'customer_id' => ['required', CompanyScopedRules::customer($currentCompany->id)],
-            'url' => ['nullable', 'url', 'max:255'],
-            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
-            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
-            'location_address' => ['nullable', 'string', 'max:255'],
-            'limited_users' => ['required', 'integer', 'min:0'],
-            'standard_users' => ['required', 'integer', 'min:0'],
-            'status' => ['required', 'in:active,suspended,expired,revoked'],
-            'notes' => ['nullable', 'string'],
-            'expires_at' => ['nullable', 'date'],
-        ]);
+        $validated = $request->validate($this->licenseValidationRules($currentCompany->id));
 
         $validated['company_id'] = $currentCompany->id;
         $validated['license_key'] = License::generateLicenseKey();
+        $validated['auto_email_invoice'] = $request->boolean('auto_email_invoice', true);
+        $validated = $this->normalizeBillingFields($validated);
 
         $license = License::create($validated);
+
+        $billingMessage = '';
+        if ($license->billingEnabled() && $license->status === 'active') {
+            $result = app(LicenseBillingService::class)->createAndOptionallyEmail($license);
+            if (! $result['skipped'] && $result['invoice']) {
+                $billingMessage = $result['emailed']
+                    ? ' First invoice created and emailed.'
+                    : ' First invoice created.';
+            } elseif ($result['skipped'] && $result['message'] !== 'License billing is not configured.') {
+                $billingMessage = ' '.$result['message'];
+            }
+        }
 
         $message = auth()->user()->isAdministrator()
             ? 'License created successfully. Key: '.$license->license_key
             : 'License created successfully. Ask an administrator for the license key.';
 
         return redirect()->route('licenses.show', $license)
-            ->with('success', $message);
+            ->with('success', $message.$billingMessage);
     }
 
     /**
@@ -127,12 +132,18 @@ class LicenseController extends Controller
     {
         $this->authorize('view', $license);
 
-        $license->load('customer');
+        $license->load(['customer']);
 
         $maskKey = ! auth()->user()->isAdministrator();
 
+        $invoices = $license->invoices()
+            ->orderByDesc('invoice_date')
+            ->orderByDesc('id')
+            ->get(['id', 'invoice_number', 'invoice_date', 'due_date', 'status', 'total', 'created_at']);
+
         return Inertia::render('licenses/Show', [
             'license' => $this->licenseToPageArray($license, $maskKey),
+            'linkedInvoices' => $invoices,
             'canManageLicenseInfrastructure' => auth()->user()->isAdministrator(),
             'canViewFullLicenseKey' => ! $maskKey,
         ]);
@@ -169,23 +180,27 @@ class LicenseController extends Controller
     {
         $this->authorize('view', $license);
 
-        $validated = $request->validate([
-            'customer_id' => ['required', CompanyScopedRules::customer($license->company_id)],
-            'url' => ['nullable', 'url', 'max:255'],
-            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
-            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
-            'location_address' => ['nullable', 'string', 'max:255'],
-            'limited_users' => ['required', 'integer', 'min:0'],
-            'standard_users' => ['required', 'integer', 'min:0'],
-            'status' => ['required', 'in:active,suspended,expired,revoked'],
-            'notes' => ['nullable', 'string'],
-            'expires_at' => ['nullable', 'date'],
-        ]);
+        $validated = $request->validate($this->licenseValidationRules($license->company_id));
+        $validated['auto_email_invoice'] = $request->boolean('auto_email_invoice', true);
+        $validated = $this->normalizeBillingFields($validated);
+
+        $hadInvoices = $license->invoices()->exists();
 
         $license->update($validated);
+        $license->refresh();
+
+        $billingMessage = '';
+        if ($license->billingEnabled() && $license->status === 'active' && ! $hadInvoices) {
+            $result = app(LicenseBillingService::class)->createAndOptionallyEmail($license);
+            if (! $result['skipped'] && $result['invoice']) {
+                $billingMessage = $result['emailed']
+                    ? ' First invoice created and emailed.'
+                    : ' First invoice created.';
+            }
+        }
 
         return redirect()->route('licenses.show', $license)
-            ->with('success', 'License updated successfully.');
+            ->with('success', 'License updated successfully.'.$billingMessage);
     }
 
     /**
@@ -445,5 +460,78 @@ class LicenseController extends Controller
         }
 
         return $data;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function licenseValidationRules(int $companyId): array
+    {
+        return [
+            'customer_id' => ['required', CompanyScopedRules::customer($companyId)],
+            'url' => ['nullable', 'url', 'max:255'],
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'location_address' => ['nullable', 'string', 'max:255'],
+            'limited_users' => ['required', 'integer', 'min:0'],
+            'standard_users' => ['required', 'integer', 'min:0'],
+            'status' => ['required', 'in:active,suspended,expired,revoked'],
+            'notes' => ['nullable', 'string'],
+            'expires_at' => ['nullable', 'date'],
+            'billing_cycle' => ['nullable', Rule::in([License::BILLING_CYCLE_MONTHLY, License::BILLING_CYCLE_ANNUAL])],
+            'pricing_model' => ['nullable', 'required_with:billing_cycle', Rule::in([License::PRICING_MODEL_PER_USER, License::PRICING_MODEL_FIXED])],
+            'price_standard_monthly' => ['nullable', 'numeric', 'min:0'],
+            'price_limited_monthly' => ['nullable', 'numeric', 'min:0'],
+            'price_standard_annual' => ['nullable', 'numeric', 'min:0'],
+            'price_limited_annual' => ['nullable', 'numeric', 'min:0'],
+            'fixed_amount_monthly' => ['nullable', 'numeric', 'min:0'],
+            'fixed_amount_annual' => ['nullable', 'numeric', 'min:0'],
+            'auto_email_invoice' => ['sometimes', 'boolean'],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    private function normalizeBillingFields(array $validated): array
+    {
+        if (empty($validated['billing_cycle'])) {
+            $validated['billing_cycle'] = null;
+            $validated['pricing_model'] = null;
+            $validated['price_standard_monthly'] = null;
+            $validated['price_limited_monthly'] = null;
+            $validated['price_standard_annual'] = null;
+            $validated['price_limited_annual'] = null;
+            $validated['fixed_amount_monthly'] = null;
+            $validated['fixed_amount_annual'] = null;
+            $validated['next_invoice_date'] = null;
+
+            return $validated;
+        }
+
+        if (($validated['pricing_model'] ?? null) === License::PRICING_MODEL_FIXED) {
+            $validated['price_standard_monthly'] = null;
+            $validated['price_limited_monthly'] = null;
+            $validated['price_standard_annual'] = null;
+            $validated['price_limited_annual'] = null;
+            if (($validated['billing_cycle'] ?? null) === License::BILLING_CYCLE_MONTHLY) {
+                $validated['fixed_amount_annual'] = null;
+            } else {
+                $validated['fixed_amount_monthly'] = null;
+            }
+        } else {
+            $validated['fixed_amount_monthly'] = null;
+            $validated['fixed_amount_annual'] = null;
+            if (($validated['billing_cycle'] ?? null) === License::BILLING_CYCLE_MONTHLY) {
+                $validated['price_standard_annual'] = null;
+                $validated['price_limited_annual'] = null;
+            } else {
+                $validated['price_standard_monthly'] = null;
+                $validated['price_limited_monthly'] = null;
+            }
+        }
+
+        return $validated;
     }
 }

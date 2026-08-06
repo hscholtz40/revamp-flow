@@ -515,6 +515,21 @@
                                         View Original Jobcard
                                     </Link>
                                 </div>
+                                <div v-else-if="props.invoice.source_type === 'license'">
+                                    <Link
+                                        v-if="props.invoice.source_id != null"
+                                        :href="licenses.show(props.invoice.source_id).url"
+                                        class="text-blue-600 hover:text-blue-800"
+                                    >
+                                        View License
+                                    </Link>
+                                    <span
+                                        v-if="props.invoice.source?.license_key"
+                                        class="ml-2 font-mono text-gray-500"
+                                    >
+                                        ({{ props.invoice.source.license_key }})
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -794,6 +809,7 @@ import EmailRecipientsInput from '@/components/EmailRecipientsInput.vue';
 import invoices from '@/routes/invoices';
 import quotes from '@/routes/quotes';
 import jobcards from '@/routes/jobcards';
+import licenses from '@/routes/licenses';
 import products from '@/routes/products';
 import customers from '@/routes/customers';
 import { useNumberFormat } from '@/composables/useNumberFormat';

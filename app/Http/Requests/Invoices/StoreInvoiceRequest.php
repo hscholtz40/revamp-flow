@@ -34,7 +34,7 @@ class StoreInvoiceRequest extends FormRequest
             'notes' => ['nullable', 'string'],
             'terms' => ['nullable', 'string', 'max:255'],
             'terms_conditions' => ['nullable', 'string'],
-            'source_type' => ['nullable', 'in:quote,jobcard'],
+            'source_type' => ['nullable', 'in:quote,jobcard,license'],
             'source_id' => ['nullable', 'integer'],
             'line_groups' => ['nullable', 'array', 'min:1'],
             'line_groups.*.id' => ['nullable', 'integer'],

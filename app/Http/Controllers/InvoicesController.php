@@ -11,6 +11,7 @@ use App\Models\EmailActivity;
 use App\Models\Invoice;
 use App\Models\InvoiceLineItem;
 use App\Models\Jobcard;
+use App\Models\License;
 use App\Models\LineGroup;
 use App\Models\Note;
 use App\Models\Payment;
@@ -19,6 +20,7 @@ use App\Models\Quote;
 use App\Models\RecurringDocument;
 use App\Models\TaxRate;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use App\Services\InvoiceUpsertService;
 use App\Services\ReminderService;
 use App\Services\StockService;
@@ -144,7 +146,7 @@ class InvoicesController extends Controller
             $sortBy = 'created_at';
         }
 
-        $invoicesQuery = $query->with(['customer', 'salesperson', 'source', 'source.source']);
+        $invoicesQuery = $query->with(['customer', 'salesperson', ...$this->invoiceSourceEagerLoads()]);
         if ($sortBy === 'customer_name') {
             $invoicesQuery->orderBy(
                 Customer::select('name')->whereColumn('customers.id', 'invoices.customer_id')->limit(1),
@@ -691,7 +693,7 @@ class InvoicesController extends Controller
 
         $currentCompany = auth()->user()->getCurrentCompany();
 
-        $invoice->load(['customer', 'contact', 'salesperson', 'lineItems.product', 'lineItems.taxRate', 'lineItems.lineGroup', 'lineGroups', 'company', 'source', 'source.source', 'payments', 'creditNotes', 'signatures.user']);
+        $invoice->load(['customer', 'contact', 'salesperson', 'lineItems.product', 'lineItems.taxRate', 'lineItems.lineGroup', 'lineGroups', 'company', ...$this->invoiceSourceEagerLoads(), 'payments', 'creditNotes', 'signatures.user']);
 
         // Load serial numbers for line items that have serial_number_ids
         $invoice->load('lineItems');
@@ -1020,7 +1022,7 @@ class InvoicesController extends Controller
     {
         $this->authorize('view', $invoice);
 
-        $invoice->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company', 'source', 'source.source', 'signatures']);
+        $invoice->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company', ...$this->invoiceSourceEagerLoads(), 'signatures']);
 
         // Load serial numbers for line items that have serial_number_ids
         foreach ($invoice->lineItems as $lineItem) {
@@ -1064,7 +1066,7 @@ class InvoicesController extends Controller
     {
         $this->authorize('view', $invoice);
 
-        $invoice->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company', 'source', 'source.source', 'signatures']);
+        $invoice->load(['customer', 'contact', 'lineItems.product', 'lineItems.taxRate', 'lineGroups', 'company', ...$this->invoiceSourceEagerLoads(), 'signatures']);
 
         foreach ($invoice->lineItems as $lineItem) {
             if (! empty($lineItem->serial_number_ids)) {
@@ -1330,6 +1332,24 @@ class InvoicesController extends Controller
         $days = $this->extractNetDaysFromTerms($terms);
 
         return $invoiceDate->copy()->addDays($days);
+    }
+
+    /**
+     * Eager-load invoice morph source. Only quote/jobcard have nested `source`; licenses do not.
+     *
+     * @return array<string, callable>
+     */
+    private function invoiceSourceEagerLoads(): array
+    {
+        return [
+            'source' => function (MorphTo $morphTo) {
+                $morphTo->morphWith([
+                    Quote::class => ['source'],
+                    Jobcard::class => ['source'],
+                    License::class => [],
+                ]);
+            },
+        ];
     }
 
     private function extractNetDaysFromTerms(string $terms): int

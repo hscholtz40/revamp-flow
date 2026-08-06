@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-08-06
+
+- **License invoice billing:** Licenses support monthly/annual billing with per-user or fixed pricing (separate annual rates). Creating a billed license generates the first invoice (linked via `source_type=license`), emails the customer PDF when enabled, and schedules the next period. Daily `licenses:generate-invoices` recalculates amounts from current seats/prices. License Show includes billing summary and linked invoices. Invoice Show/index no longer crash when loading license-sourced invoices (nested `source.source` only for quote/jobcard).
+
 ## 2026-08-04
 
 - **Deploy .env quoting:** Values with spaces (e.g. `MAIL_FROM_NAME=JobCard Online`) are now double-quoted when writing remote `.env` files during cPanel deploy/upgrade, so dotenv no longer fails with “unexpected whitespace”.

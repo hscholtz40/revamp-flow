@@ -6,11 +6,20 @@ use App\Traits\ScopedToCurrentCompanyRouteBinding;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Str;
 
 class License extends Model
 {
     use HasFactory, ScopedToCurrentCompanyRouteBinding;
+
+    public const BILLING_CYCLE_MONTHLY = 'monthly';
+
+    public const BILLING_CYCLE_ANNUAL = 'annual';
+
+    public const PRICING_MODEL_PER_USER = 'per_user';
+
+    public const PRICING_MODEL_FIXED = 'fixed';
 
     protected $fillable = [
         'company_id',
@@ -27,6 +36,17 @@ class License extends Model
         'status',
         'notes',
         'expires_at',
+        'billing_cycle',
+        'pricing_model',
+        'price_standard_monthly',
+        'price_limited_monthly',
+        'price_standard_annual',
+        'price_limited_annual',
+        'fixed_amount_monthly',
+        'fixed_amount_annual',
+        'auto_email_invoice',
+        'next_invoice_date',
+        'last_invoiced_at',
     ];
 
     protected $casts = [
@@ -36,6 +56,15 @@ class License extends Model
         'longitude' => 'decimal:7',
         'deployed_at' => 'datetime',
         'expires_at' => 'datetime',
+        'price_standard_monthly' => 'decimal:2',
+        'price_limited_monthly' => 'decimal:2',
+        'price_standard_annual' => 'decimal:2',
+        'price_limited_annual' => 'decimal:2',
+        'fixed_amount_monthly' => 'decimal:2',
+        'fixed_amount_annual' => 'decimal:2',
+        'auto_email_invoice' => 'boolean',
+        'next_invoice_date' => 'date',
+        'last_invoiced_at' => 'datetime',
     ];
 
     /**
@@ -87,6 +116,12 @@ class License extends Model
         return true;
     }
 
+    public function billingEnabled(): bool
+    {
+        return in_array($this->billing_cycle, [self::BILLING_CYCLE_MONTHLY, self::BILLING_CYCLE_ANNUAL], true)
+            && in_array($this->pricing_model, [self::PRICING_MODEL_PER_USER, self::PRICING_MODEL_FIXED], true);
+    }
+
     /**
      * Get the company that owns the license.
      */
@@ -101,5 +136,13 @@ class License extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    /**
+     * Invoices generated for this license.
+     */
+    public function invoices(): MorphMany
+    {
+        return $this->morphMany(Invoice::class, 'source', 'source_type', 'source_id');
     }
 }

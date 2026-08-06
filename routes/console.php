@@ -51,6 +51,9 @@ Schedule::command('reminders:send')->dailyAt('09:00');
 // Generate recurring documents daily.
 Schedule::command('recurring:generate-documents')->dailyAt('00:10');
 
+// Generate due license billing invoices (recalculated from current seats/prices).
+Schedule::command('licenses:generate-invoices')->dailyAt('00:20');
+
 // Schedule automated backups
 Schedule::call(function () {
     $schedules = \App\Models\BackupSchedule::where('is_active', true)

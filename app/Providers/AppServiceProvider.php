@@ -26,6 +26,7 @@ class AppServiceProvider extends ServiceProvider
             'purchase_order' => \App\Models\PurchaseOrder::class,
             'invoice' => \App\Models\Invoice::class,
             'query' => \App\Models\Query::class,
+            'license' => \App\Models\License::class,
         ]);
     }
 }

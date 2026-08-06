@@ -2,7 +2,7 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
-import { ArrowLeft, Edit, Trash2, Copy, Check, Key, Users, Calendar, Clock, Globe, Rocket, ArrowUpCircle, Tag, ShieldCheck, Lock } from 'lucide-vue-next';
+import { ArrowLeft, Edit, Trash2, Copy, Check, Key, Users, Calendar, Clock, Globe, Rocket, ArrowUpCircle, Tag, ShieldCheck, Lock, Receipt } from 'lucide-vue-next';
 import { getSafeExternalUrl } from '@/composables/useSafeExternalUrl';
 import {
     Dialog,
@@ -13,6 +13,14 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import licenses from '@/routes/licenses';
+
+function formatMoney(value: string | number | null | undefined): string {
+    const n = Number(value ?? 0);
+    if (Number.isNaN(n)) {
+        return '—';
+    }
+    return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 interface Customer {
     id: number;
@@ -32,18 +40,41 @@ interface License {
     status: 'active' | 'suspended' | 'expired' | 'revoked';
     notes: string | null;
     expires_at: string | null;
+    billing_cycle: string | null;
+    pricing_model: string | null;
+    price_standard_monthly: string | number | null;
+    price_limited_monthly: string | number | null;
+    price_standard_annual: string | number | null;
+    price_limited_annual: string | number | null;
+    fixed_amount_monthly: string | number | null;
+    fixed_amount_annual: string | number | null;
+    auto_email_invoice: boolean;
+    next_invoice_date: string | null;
+    last_invoiced_at: string | null;
     created_at: string;
     updated_at: string;
     customer: Customer | null;
 }
 
+interface LinkedInvoice {
+    id: number;
+    invoice_number: string;
+    invoice_date: string | null;
+    due_date: string | null;
+    status: string;
+    total: string | number;
+    created_at: string;
+}
+
 interface Props {
     license: License;
+    linkedInvoices?: LinkedInvoice[];
     canManageLicenseInfrastructure?: boolean;
     canViewFullLicenseKey?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
+    linkedInvoices: () => [],
     canManageLicenseInfrastructure: false,
     canViewFullLicenseKey: false,
 });
@@ -340,6 +371,42 @@ function formatDateTime(dateString: string | null): string {
                     </div>
                 </div>
 
+                <!-- Billing Card -->
+                <div class="rounded-lg border border-gray-200 bg-white p-6">
+                    <div class="flex items-center gap-2 mb-4">
+                        <Receipt class="h-5 w-5 text-gray-500" />
+                        <h2 class="text-lg font-semibold text-gray-900">Billing</h2>
+                    </div>
+                    <div v-if="props.license.billing_cycle" class="space-y-2 text-sm">
+                        <p><span class="text-gray-500">Cycle:</span> <span class="font-medium capitalize">{{ props.license.billing_cycle }}</span></p>
+                        <p><span class="text-gray-500">Model:</span> <span class="font-medium">{{ props.license.pricing_model === 'fixed' ? 'Fixed amount' : 'Per user' }}</span></p>
+                        <template v-if="props.license.pricing_model === 'fixed'">
+                            <p v-if="props.license.billing_cycle === 'monthly'">
+                                <span class="text-gray-500">Fixed monthly:</span>
+                                <span class="font-medium">{{ formatMoney(props.license.fixed_amount_monthly) }}</span>
+                            </p>
+                            <p v-else>
+                                <span class="text-gray-500">Fixed annual:</span>
+                                <span class="font-medium">{{ formatMoney(props.license.fixed_amount_annual) }}</span>
+                            </p>
+                        </template>
+                        <template v-else>
+                            <p v-if="props.license.billing_cycle === 'monthly'">
+                                <span class="text-gray-500">Std / Limited (monthly):</span>
+                                <span class="font-medium">{{ formatMoney(props.license.price_standard_monthly) }} / {{ formatMoney(props.license.price_limited_monthly) }}</span>
+                            </p>
+                            <p v-else>
+                                <span class="text-gray-500">Std / Limited (annual):</span>
+                                <span class="font-medium">{{ formatMoney(props.license.price_standard_annual) }} / {{ formatMoney(props.license.price_limited_annual) }}</span>
+                            </p>
+                        </template>
+                        <p><span class="text-gray-500">Auto-email:</span> <span class="font-medium">{{ props.license.auto_email_invoice ? 'Yes' : 'No' }}</span></p>
+                        <p><span class="text-gray-500">Next invoice:</span> <span class="font-medium">{{ formatDate(props.license.next_invoice_date) }}</span></p>
+                        <p><span class="text-gray-500">Last invoiced:</span> <span class="font-medium">{{ formatDate(props.license.last_invoiced_at) }}</span></p>
+                    </div>
+                    <p v-else class="text-gray-400">Billing is not configured for this license.</p>
+                </div>
+
                 <!-- Dates Card -->
                 <div class="rounded-lg border border-gray-200 bg-white p-6">
                     <div class="flex items-center gap-2 mb-4">
@@ -368,6 +435,47 @@ function formatDateTime(dateString: string | null): string {
                             </span>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Linked Invoices -->
+            <div class="mt-6 rounded-lg border border-gray-200 bg-white p-6">
+                <div class="mb-4 flex items-center gap-2">
+                    <Receipt class="h-5 w-5 text-gray-500" />
+                    <h2 class="text-lg font-semibold text-gray-900">Linked Invoices</h2>
+                </div>
+                <div v-if="props.linkedInvoices.length === 0" class="text-sm text-gray-400">
+                    No invoices linked to this license yet.
+                </div>
+                <div v-else class="overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead>
+                            <tr class="border-b text-left text-gray-500">
+                                <th class="py-2 pr-4 font-medium">Invoice</th>
+                                <th class="py-2 pr-4 font-medium">Date</th>
+                                <th class="py-2 pr-4 font-medium">Due</th>
+                                <th class="py-2 pr-4 font-medium">Status</th>
+                                <th class="py-2 pr-4 font-medium text-right">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr
+                                v-for="invoice in props.linkedInvoices"
+                                :key="invoice.id"
+                                class="border-b border-gray-100"
+                            >
+                                <td class="py-2 pr-4">
+                                    <Link :href="`/invoices/${invoice.id}`" class="font-medium text-blue-600 hover:text-blue-800">
+                                        {{ invoice.invoice_number }}
+                                    </Link>
+                                </td>
+                                <td class="py-2 pr-4 text-gray-700">{{ formatDate(invoice.invoice_date) }}</td>
+                                <td class="py-2 pr-4 text-gray-700">{{ formatDate(invoice.due_date) }}</td>
+                                <td class="py-2 pr-4 capitalize text-gray-700">{{ invoice.status }}</td>
+                                <td class="py-2 pr-4 text-right font-medium text-gray-900">{{ formatMoney(invoice.total) }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
