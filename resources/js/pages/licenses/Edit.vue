@@ -21,6 +21,7 @@ interface License {
     customer_id: number;
     limited_users: number;
     standard_users: number;
+    monthly_credits?: number;
     status: string;
     notes: string | null;
     expires_at: string | null;
@@ -69,6 +70,7 @@ const form = useForm({
     location_address: props.license.location_address || '',
     limited_users: props.license.limited_users,
     standard_users: props.license.standard_users,
+    monthly_credits: props.license.monthly_credits ?? 0,
     status: props.license.status,
     notes: props.license.notes || '',
     expires_at: props.license.expires_at ? props.license.expires_at.substring(0, 10) : '',
@@ -237,6 +239,20 @@ function submit() {
                                 <div v-if="form.errors.standard_users" class="mt-1 text-sm text-red-600">
                                     {{ form.errors.standard_users }}
                                 </div>
+                            </div>
+
+                            <div>
+                                <label class="mb-1 block text-sm font-medium text-gray-700">
+                                    Monthly credits
+                                </label>
+                                <input
+                                    v-model.number="form.monthly_credits"
+                                    type="number"
+                                    min="0"
+                                    class="w-full rounded border px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                                    :class="{ 'border-red-500': form.errors.monthly_credits }"
+                                />
+                                <p class="mt-1 text-xs text-gray-500">Allocated from the selected package and synced to the contractor instance.</p>
                             </div>
                         </div>
                     </div>

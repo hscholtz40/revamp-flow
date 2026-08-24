@@ -17,6 +17,7 @@ interface License {
     url: string | null;
     limited_users: number;
     standard_users: number;
+    deployed_at: string | null;
     status: 'active' | 'suspended' | 'expired' | 'revoked';
     notes: string | null;
     expires_at: string | null;
@@ -36,6 +37,7 @@ interface Props {
     filters?: {
         search?: string;
         status?: string;
+        deployed?: string;
     };
     canViewFullLicenseKey?: boolean;
 }
@@ -48,6 +50,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const search = ref(props.filters?.search || '');
 const statusFilter = ref(props.filters?.status || '');
+const deployedFilter = ref(props.filters?.deployed || '');
 const copiedId = ref<number | null>(null);
 
 const hasLicenses = computed(() => {
@@ -78,6 +81,7 @@ function applyFilters() {
     const params: Record<string, string> = {};
     if (search.value && search.value.trim()) params.search = search.value.trim();
     if (statusFilter.value) params.status = statusFilter.value;
+    if (deployedFilter.value) params.deployed = deployedFilter.value;
 
     router.get(licenses.index().url, params, {
         preserveState: true,
@@ -88,6 +92,7 @@ function applyFilters() {
 function clearFilters() {
     search.value = '';
     statusFilter.value = '';
+    deployedFilter.value = '';
     applyFilters();
 }
 
@@ -164,6 +169,18 @@ function formatDate(dateString: string | null): string {
                         </div>
                     </div>
                     <div class="min-w-[150px]">
+                        <label class="mb-1 block text-sm font-medium text-gray-700">Deployment</label>
+                        <select
+                            v-model="deployedFilter"
+                            class="w-full rounded border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                            @change="applyFilters"
+                        >
+                            <option value="">All</option>
+                            <option value="not_deployed">Not Deployed</option>
+                            <option value="deployed">Deployed</option>
+                        </select>
+                    </div>
+                    <div class="min-w-[150px]">
                         <label class="mb-1 block text-sm font-medium text-gray-700">Status</label>
                         <select
                             v-model="statusFilter"
@@ -204,6 +221,7 @@ function formatDate(dateString: string | null): string {
                             <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">URL</th>
                             <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Users</th>
                             <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Status</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Deployed</th>
                             <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Expires</th>
                             <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Created</th>
                             <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Actions</th>
@@ -255,6 +273,20 @@ function formatDate(dateString: string | null): string {
                                         class="inline-flex rounded-full px-2 py-1 text-xs font-semibold capitalize"
                                     >
                                         {{ license.status }}
+                                    </span>
+                                </td>
+                                <td class="whitespace-nowrap px-6 py-4 text-sm">
+                                    <span
+                                        v-if="license.deployed_at"
+                                        class="inline-flex rounded-full bg-green-100 px-2 py-1 text-xs font-semibold text-green-800"
+                                    >
+                                        Deployed
+                                    </span>
+                                    <span
+                                        v-else
+                                        class="inline-flex rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800"
+                                    >
+                                        Not Deployed
                                     </span>
                                 </td>
                                 <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">

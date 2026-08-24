@@ -63,6 +63,7 @@ class Query extends Model
         'company_website',
         'website_status',
         'selected_package',
+        'selected_product_id',
         'status',
         'response',
         'responded_at',
@@ -125,6 +126,57 @@ class Query extends Model
         }
 
         return self::packageLabels()[$this->selected_package] ?? $this->selected_package;
+    }
+
+    /**
+     * Fallback package cards when no licensing products are configured.
+     *
+     * @return list<array{id:int|null,code:string,name:string,price_label:string,features:list<string>}>
+     */
+    public static function defaultPackageCards(): array
+    {
+        return [
+            [
+                'id' => null,
+                'code' => self::PACKAGE_OPTION_1,
+                'name' => 'Option 1',
+                'price_label' => 'R 550 pm incl VAT · 60 day trial',
+                'features' => [
+                    '1 Main user — Full access',
+                    '5 Sub users — Restricted access',
+                    'Unlimited "limited users" use on tracking app',
+                    'Access to Revamp© automated quote generator and enquiry form link',
+                    'Access to new business via Revamp© user interface',
+                    '8 Design previews included per month — R10 incl VAT per additional design preview out of bundle',
+                ],
+            ],
+            [
+                'id' => null,
+                'code' => self::PACKAGE_OPTION_2,
+                'name' => 'Option 2',
+                'price_label' => 'R 850 pm incl VAT · 60 day trial',
+                'features' => [
+                    '2 Main users — Full access',
+                    '10 Sub users — Restricted access',
+                    'Unlimited "limited users" use on tracking app',
+                    'Access to Revamp© automated quote generator and enquiry form link',
+                    'Access to new business via Revamp© user interface',
+                    '12 Design previews included per month — R10 incl VAT per additional design preview out of bundle',
+                ],
+            ],
+            [
+                'id' => null,
+                'code' => self::PACKAGE_CUSTOM,
+                'name' => 'Custom package',
+                'price_label' => 'Select to request Revamp© to contact you to discuss a custom package',
+                'features' => [],
+            ],
+        ];
+    }
+
+    public function selectedProduct(): BelongsTo
+    {
+        return $this->belongsTo(Product::class, 'selected_product_id');
     }
 
     public function websiteStatusLabel(): ?string

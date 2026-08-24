@@ -210,12 +210,12 @@ class QuotesController extends Controller
                 $prefillLineItems = $sourceJobcard->lineItems->sortBy('sort_order')->map(function ($item) use ($groupIdToIndex) {
                     return [
                         'product_id' => $item->product_id,
-                        'supplier_id' => $item->product?->supplier_id,
+                        'supplier_id' => $item->supplier_id ?? $item->product?->supplier_id,
                         'line_group_id' => $groupIdToIndex[$item->line_group_id] ?? 1,
                         'description' => $item->description,
                         'quantity' => (int) ($item->quantity ?? 1),
                         'unit_price' => (float) ($item->unit_price ?? 0),
-                        'cost' => 0,
+                        'cost' => (float) ($item->cost ?? 0),
                         'discount_amount' => (float) ($item->discount_amount ?? 0),
                         'discount_percentage' => (float) ($item->discount_percentage ?? 0),
                         'tax_rate_id' => $item->tax_rate_id,

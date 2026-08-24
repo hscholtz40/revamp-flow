@@ -273,9 +273,10 @@
                     </div>
 
                     <!-- Table Header -->
-                    <div class="hidden md:grid md:grid-cols-[3.5rem_1fr_6.5rem_9rem_8rem_8rem_5.5rem_2rem] gap-2 px-3 pb-2 text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
+                    <div class="hidden md:grid md:grid-cols-[3.5rem_minmax(8rem,1fr)_5.5rem_6.5rem_9rem_8rem_8rem_6.5rem_2rem] gap-2 px-3 pb-2 text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
                         <div>Qty</div>
                         <div>Description</div>
+                        <div title="Internal cost — not shown on printed invoices">Ghost</div>
                         <div>Price</div>
                         <div>Discount</div>
                         <div>Tax</div>
@@ -320,7 +321,7 @@
                                 @dragleave="onDragLeaveItem(index)"
                                 @drop.stop="onDropOnItem(index, groupBlock.groupId)"
                             >
-                            <div class="grid grid-cols-1 md:grid-cols-[3.5rem_1fr_6.5rem_9rem_8rem_8rem_5.5rem_2rem] gap-2 items-start">
+                            <div class="grid grid-cols-1 md:grid-cols-[3.5rem_minmax(8rem,1fr)_5.5rem_6.5rem_9rem_8rem_8rem_6.5rem_2rem] gap-2 items-start">
                                 <!-- Qty -->
                                 <div>
                                     <label class="block text-xs text-gray-500 mb-1 md:hidden">Qty</label>
@@ -382,6 +383,20 @@
                                     <div v-if="form.errors[`line_items.${index}.description`]" class="text-red-500 text-xs mt-0.5">
                                         {{ form.errors[`line_items.${index}.description`] }}
                                     </div>
+                                </div>
+
+                                <!-- Ghost cost (internal) -->
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1 md:hidden">Ghost cost</label>
+                                    <input
+                                        v-model.number="item.cost"
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        title="Internal cost — not shown on printed invoices"
+                                        class="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                        :disabled="!canEdit || isRoundingLineAtIndex(index)"
+                                    />
                                 </div>
 
                                 <!-- Unit Price -->
@@ -458,8 +473,11 @@
                                 <!-- Total -->
                                 <div>
                                     <label class="block text-xs text-gray-500 mb-1 md:hidden">Total</label>
-                                    <div class="text-right text-sm font-medium text-gray-700 py-1.5">
+                                    <div class="text-right text-sm font-medium text-gray-700 py-1.5 whitespace-nowrap">
                                         {{ formatCurrency(calculateLineTotalValue(item)) }}
+                                        <span class="ml-1 text-xs text-gray-500">
+                                            | P {{ formatCurrency(calculateLineProfitValue(item)) }}
+                                        </span>
                                     </div>
                                 </div>
 
@@ -551,6 +569,12 @@
                         <div class="flex justify-between text-lg font-semibold border-t pt-2">
                             <span>Total:</span>
                             <span>{{ formatCurrency(total) }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Total Profit:</span>
+                            <span class="font-medium" :class="totalProfit >= 0 ? 'text-green-700' : 'text-red-700'">
+                                {{ formatCurrency(totalProfit) }}
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -667,6 +691,7 @@ interface Product {
     id: number;
     name: string;
     price: number;
+    cost?: number | null;
     sku: string | null;
     stock_quantity: number;
     track_stock: boolean;
@@ -796,6 +821,7 @@ const form = useForm({
         description: item.description,
         quantity: Number(item.quantity) || 0,
         unit_price: Number(item.unit_price) || 0,
+        cost: Number(item.cost) || 0,
         discount_amount: Number(item.discount_amount) || 0,
         discount_percentage: Number(item.discount_percentage) || 0,
         total: Number(item.total) || 0,
@@ -1085,6 +1111,7 @@ function ensureRoundingAdjustmentLine() {
         description: ROUNDING_LINE_DESCRIPTION,
         quantity: 1,
         unit_price: adjustment,
+        cost: 0,
         discount_amount: 0,
         discount_percentage: 0,
         total: adjustment,
@@ -1131,6 +1158,7 @@ const addLineItem = (groupIndex = 0) => {
         description: '',
         quantity: 1,
         unit_price: 0,
+        cost: 0,
         discount_amount: 0,
         discount_percentage: 0,
         total: 0,
@@ -1304,6 +1332,22 @@ const calculateLineTotalValue = (item: LineItem) => {
     return subtotal - finalDiscount;
 };
 
+const calculateLineProfitValue = (item: LineItem) => {
+    const lineTotal = calculateLineTotalValue(item);
+    const quantity = Number(item.quantity) || 0;
+    const unitCost = Number(item.cost) || 0;
+    return lineTotal - (quantity * unitCost);
+};
+
+const totalProfit = computed(() => {
+    return form.line_items.reduce((sum, item) => {
+        if (isRoundingAdjustmentLine(item)) {
+            return sum;
+        }
+        return sum + calculateLineProfitValue(item);
+    }, 0);
+});
+
 // Product suggestions based on description text
 const productSuggestions = (index: number) => {
     const query = form.line_items[index]?.description || '';
@@ -1326,6 +1370,7 @@ const selectProductSuggestion = (index: number, product: Product) => {
     item.product_id = product.id.toString();
     item.description = product.name;
     item.unit_price = product.price;
+    item.cost = Number(product.cost ?? 0) || 0;
     if (!item.serial_number_ids) {
         item.serial_number_ids = [];
     }

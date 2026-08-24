@@ -9,6 +9,7 @@ use App\Models\Invoice;
 use App\Models\InvoiceLineItem;
 use App\Models\License;
 use App\Models\LineGroup;
+use App\Models\ReminderLog;
 use App\Models\TaxRate;
 use App\Support\CompanyMailer;
 use Carbon\Carbon;
@@ -26,7 +27,7 @@ class LicenseBillingService
      */
     public function createAndOptionallyEmail(License $license): array
     {
-        $license->loadMissing(['customer', 'company']);
+        $license->loadMissing(['customer', 'company', 'product']);
 
         if (! $license->billingEnabled()) {
             return [
@@ -88,6 +89,7 @@ class LicenseBillingService
         $failed = 0;
 
         $due = License::query()
+            ->with('product')
             ->where('status', 'active')
             ->whereNotNull('billing_cycle')
             ->whereNotNull('pricing_model')
@@ -135,11 +137,17 @@ class LicenseBillingService
             $amount = (float) ($isAnnual ? $license->fixed_amount_annual : $license->fixed_amount_monthly);
             if ($amount > 0) {
                 $period = $isAnnual ? 'Annual' : 'Monthly';
+                $productName = $license->product?->name;
+                $description = $productName
+                    ? "{$productName} ({$period})"
+                    : "Revamp Jobcards {$period} license fee ({$license->license_key})";
                 $lines[] = [
-                    'description' => "Revamp Jobcards {$period} license fee ({$license->license_key})",
+                    'description' => $description,
                     'quantity' => 1,
                     'unit_price' => $amount,
                     'total' => $amount,
+                    'product_id' => $license->product_id,
+                    'skip_tax' => (bool) $license->product_id,
                 ];
             }
 
@@ -227,21 +235,22 @@ class LicenseBillingService
             $group = LineGroup::createDefaultFor($invoice);
 
             foreach ($lines as $index => $line) {
-                $lineTax = $taxRateId
+                $skipTax = (bool) ($line['skip_tax'] ?? false);
+                $lineTax = (! $skipTax && $taxRateId)
                     ? round((float) $line['total'] * ($taxRatePercent / 100), 2)
                     : 0;
 
                 InvoiceLineItem::create([
                     'invoice_id' => $invoice->id,
                     'line_group_id' => $group->id,
-                    'product_id' => null,
+                    'product_id' => $line['product_id'] ?? null,
                     'description' => $line['description'],
                     'quantity' => $line['quantity'],
                     'unit_price' => $line['unit_price'],
                     'discount_amount' => 0,
                     'discount_percentage' => 0,
                     'total' => $line['total'],
-                    'tax_rate_id' => $taxRateId,
+                    'tax_rate_id' => $skipTax ? null : $taxRateId,
                     'tax_amount' => $lineTax,
                     'account_id' => null,
                     'sort_order' => $index,
@@ -410,5 +419,105 @@ class LicenseBillingService
         $userId = $company->users()->orderBy('users.id')->value('users.id');
 
         return $userId ? (int) $userId : null;
+    }
+
+    /**
+     * Email company admins when a license invoice is unpaid after its due date.
+     */
+    public function notifyAdminsOfOverdueLicenseInvoices(?Carbon $runDate = null): int
+    {
+        $today = ($runDate ?? now())->copy()->startOfDay();
+        $sent = 0;
+
+        $invoices = Invoice::query()
+            ->where('source_type', 'license')
+            ->whereNotIn('status', ['paid', 'cancelled'])
+            ->whereDate('due_date', '<', $today->toDateString())
+            ->with(['customer', 'company'])
+            ->get();
+
+        foreach ($invoices as $invoice) {
+            if (! $invoice->isOverdue()) {
+                continue;
+            }
+
+            $alreadySentToday = ReminderLog::query()
+                ->where('company_id', $invoice->company_id)
+                ->where('reminder_type', 'overdue_license_invoice_admin')
+                ->where('remindable_type', Invoice::class)
+                ->where('remindable_id', $invoice->id)
+                ->where('status', 'sent')
+                ->whereDate('sent_at', $today->toDateString())
+                ->exists();
+            if ($alreadySentToday) {
+                continue;
+            }
+
+            $adminEmail = $this->resolveAdminEmail((int) $invoice->company_id);
+            if ($adminEmail === null) {
+                continue;
+            }
+
+            $company = $invoice->company;
+            $customerName = $invoice->customer?->name ?: 'Unknown customer';
+            $message = "License invoice {$invoice->invoice_number} for {$customerName} is overdue.\n"
+                ."Due date: {$invoice->due_date?->toDateString()}\n"
+                .'Amount: R'.number_format((float) $invoice->total, 2)."\n"
+                .'Please follow up or update the invoice if payment has been received.';
+
+            try {
+                $mailConfig = CompanyMailer::resolve($company);
+                Mail::mailer($mailConfig['mailer'])->raw($message, function ($mail) use ($adminEmail, $invoice, $mailConfig, $company) {
+                    $mail->to($adminEmail)
+                        ->subject("Overdue license invoice {$invoice->invoice_number}")
+                        ->from($mailConfig['from_address'], $mailConfig['from_name']);
+                    if (! empty($company?->email)) {
+                        $mail->replyTo($company->email, $company->name ?? null);
+                    }
+                });
+
+                ReminderLog::create([
+                    'company_id' => $invoice->company_id,
+                    'reminder_type' => 'overdue_license_invoice_admin',
+                    'channel' => 'email',
+                    'remindable_type' => Invoice::class,
+                    'remindable_id' => $invoice->id,
+                    'recipient_email' => $adminEmail,
+                    'message_sent' => $message,
+                    'status' => 'sent',
+                    'sent_at' => now(),
+                ]);
+                $sent++;
+            } catch (\Throwable $e) {
+                Log::warning('Overdue license invoice admin email failed', [
+                    'invoice_id' => $invoice->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return $sent;
+    }
+
+    private function resolveAdminEmail(int $companyId): ?string
+    {
+        $company = Company::query()->find($companyId);
+        if (! $company) {
+            return null;
+        }
+
+        $adminEmail = $company->users()
+            ->whereHas('groups', fn ($q) => $q->where('is_administrator', true))
+            ->orderBy('users.id')
+            ->value('users.email');
+        if (is_string($adminEmail) && filter_var($adminEmail, FILTER_VALIDATE_EMAIL)) {
+            return $adminEmail;
+        }
+
+        $companyEmail = trim((string) $company->email);
+
+        return $companyEmail !== '' && filter_var($companyEmail, FILTER_VALIDATE_EMAIL)
+            ? $companyEmail
+            : null;
     }
 }

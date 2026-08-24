@@ -14,9 +14,11 @@ class GenerateLicenseInvoices extends Command
     public function handle(LicenseBillingService $service): int
     {
         $result = $service->generateDueInvoices();
+        $adminNotified = $service->notifyAdminsOfOverdueLicenseInvoices();
         $this->info(
             "License invoice generation complete. Created: {$result['created']}, "
-            ."Emailed: {$result['emailed']}, Skipped: {$result['skipped']}, Failed: {$result['failed']}"
+            ."Emailed: {$result['emailed']}, Skipped: {$result['skipped']}, Failed: {$result['failed']}. "
+            ."Overdue admin notices: {$adminNotified}"
         );
 
         return self::SUCCESS;

@@ -329,16 +329,19 @@
                                         <tr>
                                             <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Qty</th>
                                             <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                                            <th v-if="!isLimitedUser" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Supplier</th>
+                                            <th v-if="!isLimitedUser" class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Cost</th>
                                             <th v-if="!isLimitedUser" class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Price</th>
                                             <th v-if="!isLimitedUser" class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Discount</th>
                                             <th v-if="!isLimitedUser" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">Tax</th>
+                                            <th v-if="!isLimitedUser" class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Profit</th>
                                             <th v-if="!isLimitedUser" class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Total</th>
                                         </tr>
                                     </thead>
                                     <tbody class="bg-white divide-y divide-gray-200">
                                         <template v-for="group in groupedVisibleJobcardLineItems" :key="`group-${group.groupId}`">
                                             <tr class="bg-gray-100">
-                                                <td :colspan="isLimitedUser ? 2 : 6" class="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-700">
+                                                <td :colspan="isLimitedUser ? 2 : 9" class="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-700">
                                                     {{ group.groupName }}
                                                 </td>
                                             </tr>
@@ -356,6 +359,13 @@
                                                 </Link>
                                                 <span v-else>{{ item.description }}{{ (item.product?.sku || item.product?.barcode) ? ` (${item.product.sku || item.product.barcode})` : '' }}</span>
                                             </td>
+                                            <td v-if="!isLimitedUser" class="px-3 py-3 whitespace-nowrap text-sm text-gray-900">
+                                                <span v-if="item.supplier?.name">{{ item.supplier.name }}</span>
+                                                <span v-else class="text-gray-400">&mdash;</span>
+                                            </td>
+                                            <td v-if="!isLimitedUser" class="px-3 py-3 whitespace-nowrap text-sm text-gray-900 text-right">
+                                                R{{ (Number(item.cost) || 0).toFixed(2) }}
+                                            </td>
                                             <td v-if="!isLimitedUser" class="px-3 py-3 whitespace-nowrap text-sm text-gray-900 text-right">
                                                 {{ item.formatted_unit_price }}
                                             </td>
@@ -367,6 +377,9 @@
                                             <td v-if="!isLimitedUser" class="px-3 py-3 whitespace-nowrap text-sm text-gray-900">
                                                 <span v-if="item.tax_rate" class="inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-700">{{ item.tax_rate.name }} ({{ item.tax_rate.rate }}%)</span>
                                                 <span v-else class="text-gray-400">&mdash;</span>
+                                            </td>
+                                            <td v-if="!isLimitedUser" class="px-3 py-3 whitespace-nowrap text-sm text-right" :class="calculateLineProfit(item) >= 0 ? 'text-green-700' : 'text-red-700'">
+                                                R{{ calculateLineProfit(item).toFixed(2) }}
                                             </td>
                                             <td v-if="!isLimitedUser" class="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900 text-right">
                                                 {{ item.formatted_total }}
@@ -542,6 +555,12 @@
                                 <div class="flex justify-between border-t pt-3">
                                     <span class="text-base font-semibold">Total:</span>
                                     <span class="text-base font-semibold">{{ props.jobcard.formatted_total }}</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-sm text-gray-600">Total Profit:</span>
+                                    <span class="text-sm font-medium" :class="totalProfit >= 0 ? 'text-green-700' : 'text-red-700'">
+                                        R{{ totalProfit.toFixed(2) }}
+                                    </span>
                                 </div>
                                 <template v-if="hasPurchaseOrdersList">
                                     <div class="flex justify-between">
@@ -837,10 +856,13 @@ interface LineItem {
     description: string;
     quantity: number;
     unit_price: number | null;
+    cost?: number | null;
     total: number | null;
     product_id?: number | null;
+    supplier_id?: number | null;
     line_group_id?: number | null;
     product?: Product | null;
+    supplier?: { id: number; name: string } | null;
     formatted_unit_price: string;
     formatted_total: string;
     discount_amount?: number;
@@ -976,6 +998,16 @@ const isRoundingAdjustmentLine = (item: LineItem) => {
 
 const visibleJobcardLineItems = computed(() => {
     return (props.jobcard.line_items || []).filter((item) => !isRoundingAdjustmentLine(item));
+});
+
+const calculateLineProfit = (item: LineItem) => {
+    const lineTotal = Number(item.total) || 0;
+    const lineCost = (Number(item.quantity) || 0) * (Number(item.cost) || 0);
+    return lineTotal - lineCost;
+};
+
+const totalProfit = computed(() => {
+    return visibleJobcardLineItems.value.reduce((sum, item) => sum + calculateLineProfit(item), 0);
 });
 
 const groupedVisibleJobcardLineItems = computed(() => {

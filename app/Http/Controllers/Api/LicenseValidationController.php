@@ -120,6 +120,7 @@ class LicenseValidationController extends Controller
             'status' => $license->status,
             'limited_users' => $license->limited_users,
             'standard_users' => $license->standard_users,
+            'monthly_credits' => $license->monthly_credits,
             'customer' => $license->customer ? $license->customer->name : null,
             'expires_at' => $license->expires_at?->toIso8601String(),
             'url' => $license->url,

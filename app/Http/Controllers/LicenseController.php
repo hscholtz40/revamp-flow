@@ -30,6 +30,7 @@ class LicenseController extends Controller
                 'filters' => [
                     'search' => $request->input('search', ''),
                     'status' => $request->input('status', ''),
+                    'deployed' => $request->input('deployed', ''),
                 ],
                 'canViewFullLicenseKey' => auth()->user()->isAdministrator(),
             ]);
@@ -37,6 +38,7 @@ class LicenseController extends Controller
 
         $search = $request->input('search');
         $status = $request->input('status');
+        $deployed = $request->input('deployed');
 
         $licenses = License::where('company_id', $currentCompany->id)
             ->with('customer')
@@ -51,6 +53,12 @@ class LicenseController extends Controller
             ->when($status, function ($query) use ($status) {
                 $query->where('status', $status);
             })
+            ->when($deployed === 'not_deployed', function ($query) {
+                $query->whereNull('deployed_at');
+            })
+            ->when($deployed === 'deployed', function ($query) {
+                $query->whereNotNull('deployed_at');
+            })
             ->orderBy('created_at', 'desc')
             ->paginate(15)
             ->withQueryString();
@@ -63,6 +71,7 @@ class LicenseController extends Controller
             'filters' => [
                 'search' => $search ?? '',
                 'status' => $status ?? '',
+                'deployed' => $deployed ?? '',
             ],
             'canViewFullLicenseKey' => ! $maskKey,
         ]);
@@ -475,6 +484,7 @@ class LicenseController extends Controller
             'location_address' => ['nullable', 'string', 'max:255'],
             'limited_users' => ['required', 'integer', 'min:0'],
             'standard_users' => ['required', 'integer', 'min:0'],
+            'monthly_credits' => ['nullable', 'integer', 'min:0'],
             'status' => ['required', 'in:active,suspended,expired,revoked'],
             'notes' => ['nullable', 'string'],
             'expires_at' => ['nullable', 'date'],

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import { ArrowLeft, Package, Wrench } from 'lucide-vue-next';
 import products from '@/routes/products';
@@ -58,11 +58,17 @@ const form = useForm({
     notes: '',
     purchase_account_code: '',
     sales_account_code: '',
+    is_licensing_package: false,
+    package_code: '',
+    license_standard_users: 0,
+    license_limited_users: 0,
+    monthly_credits: 0,
 });
 
 const newTag = ref('');
 
 const isService = computed(() => form.type === 'service');
+const isLicensingInstance = computed(() => Boolean(usePage().props.isLicensingInstance));
 
 const commonUnits = [
     'piece', 'kg', 'lb', 'g', 'oz', 'liter', 'gallon', 'meter', 'foot', 'hour', 'day', 'month', 'year'
@@ -373,6 +379,40 @@ function getTypeColor(type: string) {
                                     {{ form.errors.cost }}
                                 </div>
                                 <p class="mt-1 text-sm text-gray-500">Used for profit margin calculation</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="isLicensingInstance" class="rounded-lg border bg-white p-6">
+                        <h2 class="mb-4 text-lg font-semibold text-gray-900">Licensing package</h2>
+                        <p class="mb-4 text-sm text-gray-500">
+                            Tick this when the product is a contractor signup option. Approval will create a Not Deployed license, allocate seats/credits, and schedule monthly invoices 60 days after signup.
+                        </p>
+                        <label class="mb-4 flex items-center gap-2 text-sm text-gray-700">
+                            <input v-model="form.is_licensing_package" type="checkbox" class="rounded border-gray-300">
+                            Use as contractor signup package
+                        </label>
+                        <div v-if="form.is_licensing_package" class="grid gap-6 md:grid-cols-2">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Package code</label>
+                                <select v-model="form.package_code" class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2">
+                                    <option value="">Custom / other</option>
+                                    <option value="option_1">option_1 (Option 1)</option>
+                                    <option value="option_2">option_2 (Option 2)</option>
+                                    <option value="custom">custom</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Standard users</label>
+                                <input v-model.number="form.license_standard_users" type="number" min="0" class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Limited users</label>
+                                <input v-model.number="form.license_limited_users" type="number" min="0" class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Monthly credits</label>
+                                <input v-model.number="form.monthly_credits" type="number" min="0" class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2">
                             </div>
                         </div>
                     </div>

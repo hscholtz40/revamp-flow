@@ -177,6 +177,11 @@ class ProductController extends Controller
             'tags.*' => ['string', 'max:50'],
             'image_path' => ['nullable', 'string', 'max:500'],
             'notes' => ['nullable', 'string'],
+            'is_licensing_package' => ['sometimes', 'boolean'],
+            'package_code' => ['nullable', 'string', 'max:50'],
+            'license_standard_users' => ['nullable', 'integer', 'min:0'],
+            'license_limited_users' => ['nullable', 'integer', 'min:0'],
+            'monthly_credits' => ['nullable', 'integer', 'min:0'],
             'supplier_id' => ['nullable', CompanyScopedRules::supplier($currentCompany->id)],
         ]);
 
@@ -187,6 +192,7 @@ class ProductController extends Controller
         }
 
         $validated['company_id'] = $currentCompany->id;
+        $validated['is_licensing_package'] = $request->boolean('is_licensing_package');
         Product::create($validated);
 
         return redirect()->route('products.index')
@@ -321,6 +327,11 @@ class ProductController extends Controller
             'notes' => ['nullable', 'string'],
             'purchase_account_code' => ['nullable', 'string', 'max:50'],
             'sales_account_code' => ['nullable', 'string', 'max:50'],
+            'is_licensing_package' => ['sometimes', 'boolean'],
+            'package_code' => ['nullable', 'string', 'max:50'],
+            'license_standard_users' => ['nullable', 'integer', 'min:0'],
+            'license_limited_users' => ['nullable', 'integer', 'min:0'],
+            'monthly_credits' => ['nullable', 'integer', 'min:0'],
             'supplier_id' => ['nullable', CompanyScopedRules::supplier($currentCompany->id)],
         ]);
 
@@ -330,6 +341,7 @@ class ProductController extends Controller
             $validated['stock_quantity'] = 0;
         }
 
+        $validated['is_licensing_package'] = $request->boolean('is_licensing_package');
         $product->update($validated);
 
         return redirect()->route('products.show', $product)

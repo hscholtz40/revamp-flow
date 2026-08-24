@@ -216,6 +216,7 @@ class InvoiceUpsertService
                 'description' => $lineItemData['description'],
                 'quantity' => $quantity,
                 'unit_price' => $unitPrice,
+                'cost' => (float) ($lineItemData['cost'] ?? 0),
                 'discount_amount' => $lineItemData['discount_amount'] ?? 0,
                 'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
                 'total' => $total,

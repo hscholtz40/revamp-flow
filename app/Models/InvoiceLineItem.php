@@ -17,6 +17,7 @@ class InvoiceLineItem extends Model
         'description',
         'quantity',
         'unit_price',
+        'cost',
         'discount_amount',
         'discount_percentage',
         'total',
@@ -30,6 +31,7 @@ class InvoiceLineItem extends Model
     protected $casts = [
         'quantity' => 'integer',
         'unit_price' => 'decimal:2',
+        'cost' => 'decimal:2',
         'discount_amount' => 'decimal:2',
         'discount_percentage' => 'decimal:2',
         'total' => 'decimal:2',

@@ -308,6 +308,8 @@ class InstanceLicenseService
         $settings->licensed_url = is_array($licenseData) ? (string) data_get($licenseData, 'url') : null;
         $settings->limited_users = is_array($licenseData) ? (int) data_get($licenseData, 'limited_users') : null;
         $settings->standard_users = is_array($licenseData) ? (int) data_get($licenseData, 'standard_users') : null;
+        $settings->monthly_credits = is_array($licenseData) ? (int) data_get($licenseData, 'monthly_credits', 0) : null;
+        $settings->customer_name = is_array($licenseData) ? data_get($licenseData, 'customer') : null;
         $settings->expires_at = $this->parseExpiresAt(is_array($licenseData) ? data_get($licenseData, 'expires_at') : null);
         $settings->last_validated_at = now();
         $settings->save();
@@ -350,6 +352,8 @@ class InstanceLicenseService
                 'url' => $settings->licensed_url,
                 'limited_users' => $settings->limited_users,
                 'standard_users' => $settings->standard_users,
+                'monthly_credits' => $settings->monthly_credits,
+                'customer' => $settings->customer_name,
                 'expires_at' => $settings->expires_at?->toIso8601String(),
             ];
         }

@@ -11,6 +11,8 @@ const props = defineProps<{
         licensed_url: string | null;
         limited_users: number | null;
         standard_users: number | null;
+        monthly_credits: number | null;
+        customer_name: string | null;
         expires_at: string | null;
         last_validated_at: string | null;
         valid: boolean;
@@ -70,6 +72,14 @@ const submit = () => {
                     <div>
                         <p class="text-xs uppercase text-gray-500">Limited Users</p>
                         <p class="text-sm text-gray-800">{{ props.license.limited_users ?? '-' }}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs uppercase text-gray-500">Monthly Credits</p>
+                        <p class="text-sm text-gray-800">{{ props.license.monthly_credits ?? '-' }}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs uppercase text-gray-500">Customer</p>
+                        <p class="text-sm text-gray-800">{{ props.license.customer_name || '-' }}</p>
                     </div>
                 </div>
 

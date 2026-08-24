@@ -37,6 +37,7 @@ interface License {
     customer_id: number;
     limited_users: number;
     standard_users: number;
+    monthly_credits?: number;
     status: 'active' | 'suspended' | 'expired' | 'revoked';
     notes: string | null;
     expires_at: string | null;
@@ -368,6 +369,10 @@ function formatDateTime(dateString: string | null): string {
                             <p class="text-3xl font-bold text-indigo-600">{{ props.license.standard_users }}</p>
                             <p class="mt-1 text-sm text-indigo-800">Standard Users</p>
                         </div>
+                    </div>
+                    <div class="mt-4 rounded-lg bg-emerald-50 p-4 text-center">
+                        <p class="text-3xl font-bold text-emerald-700">{{ props.license.monthly_credits ?? 0 }}</p>
+                        <p class="mt-1 text-sm text-emerald-800">Monthly credits</p>
                     </div>
                 </div>
 

@@ -13,6 +13,8 @@ class InstanceLicense extends Model
         'licensed_url',
         'limited_users',
         'standard_users',
+        'monthly_credits',
+        'customer_name',
         'expires_at',
         'last_validated_at',
     ];
@@ -20,6 +22,7 @@ class InstanceLicense extends Model
     protected $casts = [
         'limited_users' => 'integer',
         'standard_users' => 'integer',
+        'monthly_credits' => 'integer',
         'expires_at' => 'datetime',
         'last_validated_at' => 'datetime',
     ];

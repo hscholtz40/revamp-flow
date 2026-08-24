@@ -44,6 +44,7 @@ class StoreInvoiceRequest extends FormRequest
             'line_items.*.description' => ['required', 'string'],
             'line_items.*.quantity' => ['required', 'integer', 'min:1'],
             'line_items.*.unit_price' => ['required', 'numeric'],
+            'line_items.*.cost' => ['nullable', 'numeric', 'min:0'],
             'line_items.*.discount_amount' => ['nullable', 'numeric', 'min:0'],
             'line_items.*.discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'line_items.*.tax_rate_id' => ['nullable', CompanyScopedRules::taxRate($companyId)],

@@ -26,6 +26,11 @@ class Product extends Model
         'min_stock_level',
         'track_stock',
         'is_active',
+        'is_licensing_package',
+        'package_code',
+        'license_standard_users',
+        'license_limited_users',
+        'monthly_credits',
         'category',
         'tags',
         'image_path',
@@ -54,6 +59,10 @@ class Product extends Model
         'min_stock_level' => 'integer',
         'track_stock' => 'boolean',
         'is_active' => 'boolean',
+        'is_licensing_package' => 'boolean',
+        'license_standard_users' => 'integer',
+        'license_limited_users' => 'integer',
+        'monthly_credits' => 'integer',
         'tags' => 'array',
         'track_batches' => 'boolean',
         'track_serial_numbers' => 'boolean',
@@ -163,5 +172,65 @@ class Product extends Model
     public function getFormattedCostAttribute(): ?string
     {
         return $this->cost ? '$'.number_format((float) $this->cost, 2) : null;
+    }
+
+    /**
+     * @return array{standard:int,limited:int,credits:int,price:float}
+     */
+    public static function defaultPackageEntitlements(string $code): array
+    {
+        return match ($code) {
+            'option_1' => ['standard' => 1, 'limited' => 5, 'credits' => 8, 'price' => 550.0],
+            'option_2' => ['standard' => 2, 'limited' => 10, 'credits' => 12, 'price' => 850.0],
+            default => ['standard' => 0, 'limited' => 0, 'credits' => 0, 'price' => 0.0],
+        };
+    }
+
+    public function resolvedPackageCode(): ?string
+    {
+        if (filled($this->package_code)) {
+            return (string) $this->package_code;
+        }
+
+        $sku = strtolower((string) preg_replace('/[\s\-]+/', '_', (string) $this->sku));
+        if (in_array($sku, ['option_1', 'option1'], true)) {
+            return 'option_1';
+        }
+        if (in_array($sku, ['option_2', 'option2'], true)) {
+            return 'option_2';
+        }
+        if ($sku === 'custom') {
+            return 'custom';
+        }
+
+        $name = strtolower((string) $this->name);
+        if (str_contains($name, 'option 2') || str_contains($name, 'option_2')) {
+            return 'option_2';
+        }
+        if (str_contains($name, 'option 1') || str_contains($name, 'option_1')) {
+            return 'option_1';
+        }
+        if (str_contains($name, 'custom')) {
+            return 'custom';
+        }
+
+        return $this->is_licensing_package ? 'product_'.$this->id : null;
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, Product>
+     */
+    public static function licensingPackagesForCompany(int $companyId)
+    {
+        return static::query()
+            ->where('company_id', $companyId)
+            ->where('is_active', true)
+            ->orderBy('price')
+            ->orderBy('name')
+            ->get()
+            ->filter(function (self $product) {
+                return $product->is_licensing_package || $product->resolvedPackageCode() !== null;
+            })
+            ->values();
     }
 }

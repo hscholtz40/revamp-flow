@@ -24,6 +24,8 @@ class License extends Model
     protected $fillable = [
         'company_id',
         'customer_id',
+        'product_id',
+        'source_query_id',
         'license_key',
         'url',
         'latitude',
@@ -33,6 +35,7 @@ class License extends Model
         'deployed_at',
         'limited_users',
         'standard_users',
+        'monthly_credits',
         'status',
         'notes',
         'expires_at',
@@ -52,6 +55,7 @@ class License extends Model
     protected $casts = [
         'limited_users' => 'integer',
         'standard_users' => 'integer',
+        'monthly_credits' => 'integer',
         'latitude' => 'decimal:7',
         'longitude' => 'decimal:7',
         'deployed_at' => 'datetime',
@@ -136,6 +140,16 @@ class License extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class);
+    }
+
+    public function sourceQuery(): BelongsTo
+    {
+        return $this->belongsTo(Query::class, 'source_query_id');
     }
 
     /**

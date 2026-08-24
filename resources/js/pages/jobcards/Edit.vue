@@ -358,9 +358,11 @@
                     </div>
 
                     <!-- Table Header -->
-                    <div class="hidden md:grid md:grid-cols-[3.5rem_1fr_6.5rem_9rem_8rem_8rem_5.5rem_2rem] gap-2 px-3 pb-2 text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
+                    <div class="hidden md:grid md:grid-cols-[3.5rem_minmax(8rem,1fr)_7rem_4.5rem_5.5rem_8rem_7rem_7rem_7rem_2rem] gap-2 px-3 pb-2 text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
                         <div>Qty</div>
                         <div>Description</div>
+                        <div>Supplier</div>
+                        <div>Cost</div>
                         <div>Price</div>
                         <div>Discount</div>
                         <div>Tax</div>
@@ -394,7 +396,7 @@
                             <div
                                 v-for="({ item, index }) in groupBlock.items"
                                 :key="item._uid || index"
-                                class="grid grid-cols-1 md:grid-cols-[3.5rem_1fr_6.5rem_9rem_8rem_8rem_5.5rem_2rem] gap-2 items-start border-t border-gray-100 py-3 px-1 transition-colors"
+                                class="grid grid-cols-1 md:grid-cols-[3.5rem_minmax(8rem,1fr)_7rem_4.5rem_5.5rem_8rem_7rem_7rem_7rem_2rem] gap-2 items-start border-t border-gray-100 py-3 px-1 transition-colors"
                                 :class="{ 'bg-blue-50/60': dragOverItemIndex === index, 'opacity-60': activeDragIndex === index }"
                                 draggable="true"
                                 @dragstart="onDragStart(index, $event)"
@@ -465,6 +467,32 @@
                                 </div>
                             </div>
 
+                            <!-- Supplier -->
+                            <div class="min-w-0">
+                                <label class="block text-xs text-gray-500 mb-1 md:hidden">Supplier</label>
+                                <select
+                                    v-model="item.supplier_id"
+                                    class="w-full rounded border border-gray-300 px-1 py-1 text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500 truncate"
+                                >
+                                    <option :value="null">—</option>
+                                    <option v-for="supplier in props.suppliers" :key="supplier.id" :value="supplier.id">
+                                        {{ supplier.name }}
+                                    </option>
+                                </select>
+                            </div>
+
+                            <!-- Cost -->
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1 md:hidden">Cost</label>
+                                <input
+                                    v-model.number="item.cost"
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    class="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                />
+                            </div>
+
                             <!-- Unit Price -->
                             <div>
                                 <label class="block text-xs text-gray-500 mb-1 md:hidden">Price</label>
@@ -533,8 +561,11 @@
                             <!-- Total -->
                             <div>
                                 <label class="block text-xs text-gray-500 mb-1 md:hidden">Total</label>
-                                <div class="text-right text-sm font-medium text-gray-700 py-1.5">
+                                <div class="text-right text-sm font-medium text-gray-700 py-1.5 whitespace-nowrap">
                                     R{{ calculateLineTotal(item).toFixed(2) }}
+                                    <span class="ml-1 text-xs text-gray-500">
+                                        | P R{{ calculateLineProfit(item).toFixed(2) }}
+                                    </span>
                                 </div>
                             </div>
 
@@ -589,6 +620,12 @@
                                 <div class="flex justify-between border-t pt-2">
                                     <span class="text-base font-semibold">Total:</span>
                                     <span class="text-base font-semibold">R{{ total.toFixed(2) }}</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-sm text-gray-600">Total Profit:</span>
+                                    <span class="text-sm font-medium" :class="totalProfit >= 0 ? 'text-green-700' : 'text-red-700'">
+                                        R{{ totalProfit.toFixed(2) }}
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -700,18 +737,22 @@ interface Product {
     id: number;
     name: string;
     price: number;
+    cost?: number | null;
     type: string;
     sku?: string | null;
+    supplier_id?: number | null;
 }
 
 interface LineItem {
     id?: number;
     _uid: string;
     product_id?: number | null;
+    supplier_id?: number | null;
     line_group_id?: number | null;
     description: string;
     quantity: number;
     unit_price: number;
+    cost?: number | null;
     discount_amount?: number;
     discount_percentage?: number;
     tax_rate_id?: number | null;
@@ -766,6 +807,7 @@ interface Props {
     jobcard: Jobcard;
     customers: Customer[];
     products: Product[];
+    suppliers: { id: number; name: string }[];
     users: AppUser[];
     teams: TeamOption[];
     currentCompany: {
@@ -856,10 +898,12 @@ const form = useForm({
         id: item.id,
         _uid: item.id ? `line-${item.id}` : createLineItemUid(),
         product_id: item.product_id,
+        supplier_id: item.supplier_id ?? null,
         line_group_id: item.line_group_id != null ? Number(item.line_group_id) : 1,
         description: item.description,
         quantity: item.quantity,
         unit_price: item.unit_price,
+        cost: Number(item.cost ?? 0) || 0,
         discount_amount: item.discount_amount ?? 0,
         discount_percentage: item.discount_percentage ?? 0,
         tax_rate_id: item.tax_rate_id != null ? Number(item.tax_rate_id) : null,
@@ -918,10 +962,12 @@ const addLineItem = (groupIndex = 0) => {
         id: undefined,
         _uid: createLineItemUid(),
         product_id: null,
+        supplier_id: null,
         line_group_id: getGroupValueByIndex(groupIndex),
         description: '',
         quantity: 1,
         unit_price: 0,
+        cost: 0,
         discount_amount: 0,
         discount_percentage: 0,
         tax_rate_id: props.defaultSalesTaxRateId || null,
@@ -1092,6 +1138,10 @@ const selectProductSuggestion = (index: number, product: Product) => {
     item.product_id = product.id;
     item.description = product.name;
     item.unit_price = product.price;
+    item.cost = Number(product.cost ?? 0) || 0;
+    if (product.supplier_id) {
+        item.supplier_id = product.supplier_id;
+    }
     showProductSuggestions.value[index] = false;
 };
 
@@ -1261,6 +1311,22 @@ const calculateLineTotal = (item: LineItem) => {
     return subtotal - finalDiscount;
 };
 
+const calculateLineProfit = (item: LineItem) => {
+    const lineTotal = calculateLineTotal(item);
+    const quantity = Number(item.quantity) || 0;
+    const unitCost = Number(item.cost) || 0;
+    return lineTotal - (quantity * unitCost);
+};
+
+const totalProfit = computed(() => {
+    return form.line_items.reduce((sum, item) => {
+        if (isRoundingAdjustmentLine(item)) {
+            return sum;
+        }
+        return sum + calculateLineProfit(item);
+    }, 0);
+});
+
 const isRoundingAdjustmentLine = (item: LineItem | undefined): boolean => {
     if (!item) return false;
     return (item.description || '').trim().toLowerCase() === ROUNDING_LINE_DESCRIPTION.toLowerCase();
@@ -1373,10 +1439,12 @@ const ensureRoundingAdjustmentLine = () => {
         id: form.line_items[roundingIndex]?.id,
         _uid: form.line_items[roundingIndex]?._uid || createLineItemUid(),
         product_id: null,
+        supplier_id: null,
         line_group_id: getGroupValueByIndex(0),
         description: ROUNDING_LINE_DESCRIPTION,
         quantity: 1,
         unit_price: adjustment,
+        cost: 0,
         discount_amount: 0,
         discount_percentage: 0,
         tax_rate_id: null,

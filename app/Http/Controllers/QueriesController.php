@@ -9,9 +9,12 @@ use App\Models\Customer;
 use App\Models\GoogleIntegrationSettings;
 use App\Models\Jobcard;
 use App\Models\JobcardLineItem;
+use App\Models\License;
 use App\Models\LineGroup;
 use App\Models\Note;
+use App\Models\Product;
 use App\Models\Query;
+use App\Services\ContractorLicenseProvisioningService;
 use App\Services\CustomerUpsertService;
 use App\Services\JobQueryService;
 use App\Services\RevampWebhookService;
@@ -59,7 +62,8 @@ class QueriesController extends Controller
             'company_contact_number' => ['nullable', 'required_if:kind,contractor', 'string', 'size:10', 'regex:/^0[1-9][0-9]{8}$/'],
             'website_status' => ['nullable', 'required_if:kind,contractor', 'in:have_website,need_website'],
             'company_website' => ['nullable', 'required_if:website_status,have_website', 'url', 'max:255'],
-            'selected_package' => ['nullable', 'required_if:kind,contractor', 'in:option_1,option_2,custom'],
+            'selected_package' => ['nullable', 'required_if:kind,contractor', 'string', 'max:50'],
+            'selected_product_id' => ['nullable', 'integer'],
             'document_company_ck' => ['nullable', 'required_if:kind,contractor', 'file', 'max:51200', 'mimes:pdf,jpg,jpeg,png'],
             'document_proof_of_residence' => ['nullable', 'required_if:kind,contractor', 'file', 'max:51200', 'mimes:pdf,jpg,jpeg,png'],
             'attachments' => ['nullable', 'array', 'max:10'],
@@ -121,6 +125,7 @@ class QueriesController extends Controller
             'company_website' => $companyWebsite,
             'website_status' => $websiteStatus,
             'selected_package' => $validated['selected_package'] ?? null,
+            'selected_product_id' => $validated['selected_product_id'] ?? null,
             'status' => Query::STATUS_OPEN,
             'response' => $kind === Query::KIND_CONTRACTOR ? Query::RESPONSE_PENDING : null,
         ]);
@@ -162,6 +167,8 @@ class QueriesController extends Controller
             abort(403, 'Contractor queries are only available on licensing instances.');
         }
 
+        $branding = $company->getEmailBranding();
+
         return view('public.query-form', [
             'company' => $company,
             'token' => $token,
@@ -169,6 +176,8 @@ class QueriesController extends Controller
             'submitted' => (bool) $request->boolean('submitted'),
             'errors' => session('errors'),
             'googleMapsApiKey' => GoogleIntegrationSettings::mapsApiKey(),
+            'brandPrimary' => $branding['primary'],
+            'contractorPackages' => $this->contractorPackageCards($company),
         ]);
     }
 
@@ -201,7 +210,8 @@ class QueriesController extends Controller
             'company_contact_number' => ['nullable', 'required_if:kind,contractor', 'string', 'size:10', 'regex:/^0[1-9][0-9]{8}$/'],
             'website_status' => ['nullable', 'required_if:kind,contractor', 'in:have_website,need_website'],
             'company_website' => ['nullable', 'required_if:website_status,have_website', 'url', 'max:255'],
-            'selected_package' => ['nullable', 'required_if:kind,contractor', 'in:option_1,option_2,custom'],
+            'selected_package' => ['nullable', 'required_if:kind,contractor', 'string', 'max:50'],
+            'selected_product_id' => ['nullable', 'integer'],
             'document_company_ck' => ['nullable', 'required_if:kind,contractor', 'file', 'max:51200', 'mimes:pdf,jpg,jpeg,png'],
             'document_proof_of_residence' => ['nullable', 'required_if:kind,contractor', 'file', 'max:51200', 'mimes:pdf,jpg,jpeg,png'],
             self::PUBLIC_FORM_HONEYPOT_FIELD => ['nullable', 'max:0'],
@@ -257,6 +267,7 @@ class QueriesController extends Controller
             'company_website' => $companyWebsite,
             'website_status' => $websiteStatus,
             'selected_package' => $validated['selected_package'] ?? null,
+            'selected_product_id' => $validated['selected_product_id'] ?? null,
             'status' => Query::STATUS_OPEN,
             'response' => $kind === Query::KIND_CONTRACTOR ? Query::RESPONSE_PENDING : null,
         ]);
@@ -604,7 +615,7 @@ JS;
 
         $companyId = (int) $query->company_id;
 
-        [$customer, $contact] = DB::transaction(function () use ($query, $companyId) {
+        [$customer, $contact, $license] = DB::transaction(function () use ($query, $companyId) {
             $customerEmail = $query->company_email ?: $query->email;
             $customerPhone = $query->company_contact_number ?: $query->cell;
             $customerName = trim((string) ($query->company_name ?: ($query->name.' '.$query->surname)));
@@ -663,10 +674,18 @@ JS;
                 'status' => Query::STATUS_CLOSED,
             ]);
 
-            return [$customer, $contact];
+            $license = app(ContractorLicenseProvisioningService::class)
+                ->provisionFromAcceptedQuery($query->fresh(), $customer->id);
+
+            return [$customer, $contact, $license];
         });
 
-        return redirect()->back()->with('success', "Contractor accepted and converted to customer {$customer->name} with contact {$contact->name}.");
+        $message = "Contractor accepted. {$customer->name} is ready under Licensing → Not Deployed. Monthly invoicing starts 60 days after signup.";
+        if (auth()->user()?->can('viewAny', License::class)) {
+            return redirect()->route('licenses.index', ['deployed' => 'not_deployed'])->with('success', $message);
+        }
+
+        return redirect()->back()->with('success', $message);
     }
 
     /**
@@ -951,5 +970,39 @@ JS;
         }
 
         $request->merge([$field => $digits]);
+    }
+
+    /**
+     * @return list<array{id:int|null,code:string,name:string,price_label:string,features:list<string>}>
+     */
+    private function contractorPackageCards(Company $company): array
+    {
+        $products = Product::licensingPackagesForCompany($company->id);
+        if ($products->isEmpty()) {
+            return Query::defaultPackageCards();
+        }
+
+        return $products->map(function (Product $product) {
+            $code = $product->resolvedPackageCode() ?: Query::PACKAGE_CUSTOM;
+            $defaults = Query::defaultPackageCards();
+            $fallback = collect($defaults)->firstWhere('code', $code);
+            $features = array_values(array_filter(preg_split('/\r\n|\r|\n/', (string) $product->description) ?: []));
+            if ($features === [] && is_array($fallback)) {
+                $features = $fallback['features'];
+            }
+
+            $price = (float) $product->price;
+            $priceLabel = $price > 0
+                ? 'R '.number_format($price, 2).' pm · 60 day trial'
+                : (string) ($fallback['price_label'] ?? '');
+
+            return [
+                'id' => $product->id,
+                'code' => $code,
+                'name' => $product->name,
+                'price_label' => $priceLabel,
+                'features' => $features,
+            ];
+        })->all();
     }
 }

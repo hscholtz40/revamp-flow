@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-08-24
+
+- **Public enquiry/contractor form branding:** Submit button and selected package highlight now use the company’s Appearance primary colour (the same settings admins configure for the app).
+- **Jobcard cost, supplier, and profit:** Jobcard line items store cost and supplier like quotes. Create/Edit/Show show supplier, cost, per-line profit, and total profit. Values copy from quotes and through to invoices. Jobcard PDFs still omit cost/supplier/profit.
+- **Invoice ghost costing:** Invoice line items have an internal `cost` (Ghost) field for staff costing and profit. It is not rendered on printed invoices or proforma PDFs.
+- **Contractor licensing + automated invoicing:** Accepting contractor queries now provisions a Not Deployed instance license from the selected licensing package, allocates monthly credits, schedules the first invoice 60 days after signup (then monthly), and emails the admin when license invoices are overdue. Administration → License now displays monthly credits and customer name.
+
 ## 2026-08-06
 
 - **License invoice billing:** Licenses support monthly/annual billing with per-user or fixed pricing (separate annual rates). Creating a billed license generates the first invoice (linked via `source_type=license`), emails the customer PDF when enabled, and schedules the next period. Daily `licenses:generate-invoices` recalculates amounts from current seats/prices. License Show includes billing summary and linked invoices. Invoice Show/index no longer crash when loading license-sourced invoices (nested `source.source` only for quote/jobcard).

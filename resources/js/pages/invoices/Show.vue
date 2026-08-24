@@ -191,16 +191,18 @@
                                         <tr>
                                             <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Qty</th>
                                             <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24" title="Internal cost — not shown on printed invoices">Ghost</th>
                                             <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Price</th>
                                             <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Discount</th>
                                             <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">Tax</th>
+                                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Profit</th>
                                             <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Total</th>
                                         </tr>
                                     </thead>
                                     <tbody class="bg-white divide-y divide-gray-200">
                                         <template v-for="group in groupedVisibleInvoiceLineItems" :key="`group-${group.groupId}`">
                                             <tr class="bg-gray-100">
-                                                <td colspan="6" class="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-700">
+                                                <td colspan="8" class="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-700">
                                                     {{ group.groupName }}
                                                 </td>
                                             </tr>
@@ -243,6 +245,9 @@
                                                     </div>
                                                 </td>
                                                 <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900 text-right">
+                                                    {{ formatCurrency(item.cost ?? 0) }}
+                                                </td>
+                                                <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900 text-right">
                                                     {{ formatCurrency(item.unit_price) }}
                                                 </td>
                                                 <td class="px-3 py-3 whitespace-nowrap text-sm text-right">
@@ -253,6 +258,9 @@
                                                 <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900">
                                                     <span v-if="item.tax_rate" class="inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-700">{{ item.tax_rate.name }} ({{ item.tax_rate.rate }}%)</span>
                                                     <span v-else class="text-gray-400">&mdash;</span>
+                                                </td>
+                                                <td class="px-3 py-3 whitespace-nowrap text-sm text-right" :class="calculateLineProfit(item) >= 0 ? 'text-green-700' : 'text-red-700'">
+                                                    {{ formatCurrency(calculateLineProfit(item)) }}
                                                 </td>
                                                 <td class="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900 text-right">
                                                     {{ formatCurrency(item.total) }}
@@ -375,6 +383,12 @@
                                 <div class="flex justify-between text-lg font-semibold border-t pt-2">
                                     <span>Total:</span>
                                     <span>{{ formatCurrency(props.invoice.total) }}</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Total Profit:</span>
+                                    <span class="font-medium" :class="totalProfit >= 0 ? 'text-green-700' : 'text-red-700'">
+                                        {{ formatCurrency(totalProfit) }}
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -838,6 +852,7 @@ interface LineItem {
     description: string;
     quantity: number;
     unit_price: number;
+    cost?: number | null;
     discount_amount?: number;
     discount_percentage?: number;
     total: number;
@@ -1034,6 +1049,16 @@ const isRoundingAdjustmentLine = (item: LineItem) => {
 
 const visibleInvoiceLineItems = computed(() => {
     return (props.invoice.line_items || []).filter((item) => !isRoundingAdjustmentLine(item));
+});
+
+const calculateLineProfit = (item: LineItem) => {
+    const lineTotal = Number(item.total) || 0;
+    const lineCost = (Number(item.quantity) || 0) * (Number(item.cost) || 0);
+    return lineTotal - lineCost;
+};
+
+const totalProfit = computed(() => {
+    return visibleInvoiceLineItems.value.reduce((sum, item) => sum + calculateLineProfit(item), 0);
 });
 
 const groupedVisibleInvoiceLineItems = computed(() => {

@@ -23,8 +23,8 @@
         input[type="file"] { width: 100%; box-sizing: border-box; font-size: 14px; }
         textarea { min-height: 140px; resize: vertical; }
         .help { font-size: 12px; color: #6b7280; margin-top: 4px; }
-        .btn { appearance: none; border: 0; background: #2563eb; color: #fff; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; }
-        .btn:hover { background: #1d4ed8; }
+        .btn { appearance: none; border: 0; background: {{ $brandPrimary ?? '#2563eb' }}; color: #fff; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+        .btn:hover { filter: brightness(0.9); }
         .success { margin-bottom: 14px; padding: 10px 12px; border-radius: 8px; background: #ecfdf5; border: 1px solid #10b981; color: #065f46; }
         .error { margin-bottom: 10px; padding: 10px 12px; border-radius: 8px; background: #fef2f2; border: 1px solid #ef4444; color: #991b1b; font-size: 14px; }
         .is-hidden { display: none !important; }
@@ -40,12 +40,12 @@
             font-weight: 400;
             transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
         }
-        .package-option:hover { border-color: #93c5fd; background: #f8fbff; }
+        .package-option:hover { border-color: {{ $brandPrimary ?? '#2563eb' }}; background: #f8fbff; }
         .package-option:has(input[type="radio"]:checked),
         .package-option.selected {
-            border-color: #2563eb;
+            border-color: {{ $brandPrimary ?? '#2563eb' }};
             background: #eff6ff;
-            box-shadow: 0 0 0 1px #2563eb;
+            box-shadow: 0 0 0 1px {{ $brandPrimary ?? '#2563eb' }};
         }
         .package-option input[type="radio"] {
             position: absolute;
@@ -61,7 +61,7 @@
         .package-option .package-title span { font-weight: 400; color: #374151; }
         .package-option ul { margin: 0; padding-left: 18px; color: #374151; font-size: 13px; line-height: 1.45; position: relative; z-index: 0; }
         .package-option:has(input[type="radio"]:checked) .package-title,
-        .package-option.selected .package-title { color: #1e40af; }
+        .package-option.selected .package-title { color: {{ $brandPrimary ?? '#2563eb' }}; }
         /* Google Places dropdown must sit above the form card */
         .pac-container { z-index: 10000 !important; }
         .docs-list { margin: 0 0 10px; padding-left: 18px; color: #374151; font-size: 13px; }
@@ -192,35 +192,31 @@
 
                     <div class="field full">
                         <h2 class="section">Select package *</h2>
-                        @php $selectedPackage = old('selected_package'); @endphp
-                        <label class="package-option {{ $selectedPackage === 'option_1' ? 'selected' : '' }}">
-                            <input type="radio" name="selected_package" value="option_1" required @checked($selectedPackage === 'option_1')>
-                            <span class="package-title"><strong>Option 1</strong> <span>— R 550 pm incl VAT · 60 day trial</span></span>
-                            <ul>
-                                <li>1 Main user — Full access</li>
-                                <li>5 Sub users — Restricted access</li>
-                                <li>Unlimited "limited users" use on tracking app</li>
-                                <li>Access to Revamp© automated quote generator and enquiry form link</li>
-                                <li>Access to new business via Revamp© user interface</li>
-                                <li>8 Design previews included per month — R10 incl VAT per additional design preview out of bundle</li>
-                            </ul>
-                        </label>
-                        <label class="package-option {{ $selectedPackage === 'option_2' ? 'selected' : '' }}">
-                            <input type="radio" name="selected_package" value="option_2" required @checked($selectedPackage === 'option_2')>
-                            <span class="package-title"><strong>Option 2</strong> <span>— R 850 pm incl VAT · 60 day trial</span></span>
-                            <ul>
-                                <li>2 Main users — Full access</li>
-                                <li>10 Sub users — Restricted access</li>
-                                <li>Unlimited "limited users" use on tracking app</li>
-                                <li>Access to Revamp© automated quote generator and enquiry form link</li>
-                                <li>Access to new business via Revamp© user interface</li>
-                                <li>12 Design previews included per month — R10 incl VAT per additional design preview out of bundle</li>
-                            </ul>
-                        </label>
-                        <label class="package-option {{ $selectedPackage === 'custom' ? 'selected' : '' }}">
-                            <input type="radio" name="selected_package" value="custom" required @checked($selectedPackage === 'custom')>
-                            <span class="package-title"><strong>Custom package</strong> <span>— Select to request Revamp© to contact you to discuss a custom package</span></span>
-                        </label>
+                        @php
+                            $selectedPackage = old('selected_package');
+                            $packageCards = $contractorPackages ?? \App\Models\Query::defaultPackageCards();
+                        @endphp
+                        @foreach ($packageCards as $package)
+                            <label class="package-option {{ $selectedPackage === $package['code'] ? 'selected' : '' }}">
+                                <input
+                                    type="radio"
+                                    name="selected_package"
+                                    value="{{ $package['code'] }}"
+                                    data-product-id="{{ $package['id'] ?? '' }}"
+                                    required
+                                    @checked($selectedPackage === $package['code'])
+                                >
+                                <span class="package-title"><strong>{{ $package['name'] }}</strong> <span>— {{ $package['price_label'] }}</span></span>
+                                @if (!empty($package['features']))
+                                    <ul>
+                                        @foreach ($package['features'] as $feature)
+                                            <li>{{ $feature }}</li>
+                                        @endforeach
+                                    </ul>
+                                @endif
+                            </label>
+                        @endforeach
+                        <input type="hidden" name="selected_product_id" id="selected_product_id" value="{{ old('selected_product_id') }}">
                     </div>
                 @else
                     <div class="field full">
@@ -281,6 +277,13 @@
                     var input = el.querySelector('input[type="radio"]');
                     el.classList.toggle('selected', !!(input && input.checked));
                 });
+                var checked = document.querySelector('input[name="selected_package"]:checked');
+                var productInput = document.getElementById('selected_product_id');
+                if (productInput) {
+                    productInput.value = checked && checked.getAttribute('data-product-id')
+                        ? checked.getAttribute('data-product-id')
+                        : '';
+                }
             }
 
             function stripWebsiteProtocol() {

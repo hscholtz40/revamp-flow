@@ -15,6 +15,7 @@ use App\Models\Product;
 use App\Models\PurchaseOrder;
 use App\Models\Quote;
 use App\Models\RecurringDocument;
+use App\Models\Supplier;
 use App\Models\TaxRate;
 use App\Models\Team;
 use App\Models\User;
@@ -253,12 +254,15 @@ class JobcardController extends Controller
         $products = Product::where('company_id', $currentCompany->id)
             ->where('is_active', true)
             ->orderBy('name')
-            ->get(['id', 'name', 'sku', 'price', 'type']);
+            ->get(['id', 'name', 'sku', 'price', 'cost', 'type', 'supplier_id']);
         $users = User::query()
             ->staffSelectableForCompany($currentCompany->id)
             ->orderBy('name')
             ->get(['id', 'name']);
         $teams = Team::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name']);
+        $suppliers = Supplier::where('company_id', $currentCompany->id)
+            ->orderBy('name')
+            ->get(['id', 'name']);
         $taxRates = TaxRate::where('company_id', $currentCompany->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'rate', 'is_default_sales']);
         $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
         $chartOfAccounts = ChartOfAccount::where('company_id', $currentCompany->id)->where('is_active', true)->ordered()->get(['id', 'account_code', 'account_name', 'account_type', 'is_default_sales']);
@@ -296,6 +300,8 @@ class JobcardController extends Controller
                         'description' => $item->description,
                         'quantity' => (int) ($item->quantity ?? 1),
                         'unit_price' => (float) ($item->unit_price ?? 0),
+                        'cost' => (float) ($item->cost ?? 0),
+                        'supplier_id' => $item->supplier_id,
                         'discount_amount' => (float) ($item->discount_amount ?? 0),
                         'discount_percentage' => (float) ($item->discount_percentage ?? 0),
                         'tax_rate_id' => $item->tax_rate_id,
@@ -309,6 +315,8 @@ class JobcardController extends Controller
                         'description' => '',
                         'quantity' => 1,
                         'unit_price' => 0,
+                        'cost' => 0,
+                        'supplier_id' => null,
                         'discount_amount' => 0,
                         'discount_percentage' => 0,
                         'tax_rate_id' => $defaultSalesTaxRate?->id,
@@ -342,6 +350,7 @@ class JobcardController extends Controller
         return Inertia::render('jobcards/Create', [
             'customers' => $customers,
             'products' => $products,
+            'suppliers' => $suppliers,
             'users' => $users,
             'teams' => $teams,
             'statusOptions' => $currentCompany->getJobcardStatusOptions(),
@@ -404,9 +413,11 @@ class JobcardController extends Controller
                 $lineItem = new JobcardLineItem([
                     'line_group_id' => $groupMap[(string) ($lineItemData['line_group_id'] ?? '')] ?? $defaultGroupId,
                     'product_id' => $lineItemData['product_id'] ?? null,
+                    'supplier_id' => $lineItemData['supplier_id'] ?? null,
                     'description' => $lineItemData['description'],
                     'quantity' => $lineItemData['quantity'],
                     'unit_price' => $lineItemData['unit_price'],
+                    'cost' => $lineItemData['cost'] ?? 0,
                     'discount_amount' => $lineItemData['discount_amount'] ?? 0,
                     'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
                     'tax_rate_id' => $lineItemData['tax_rate_id'] ?? null,
@@ -480,6 +491,7 @@ class JobcardController extends Controller
             'assignedUser',
             'assignedTeam',
             'lineItems.product',
+            'lineItems.supplier',
             'lineItems.taxRate',
             'lineItems.lineGroup',
             'lineGroups',
@@ -708,23 +720,27 @@ class JobcardController extends Controller
         $products = Product::where('company_id', $currentCompany->id)
             ->where('is_active', true)
             ->orderBy('name')
-            ->get(['id', 'name', 'sku', 'price', 'type']);
+            ->get(['id', 'name', 'sku', 'price', 'cost', 'type', 'supplier_id']);
         $users = User::query()
             ->staffSelectableForCompany($currentCompany->id)
             ->orderBy('name')
             ->get(['id', 'name']);
         $teams = Team::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name']);
+        $suppliers = Supplier::where('company_id', $currentCompany->id)
+            ->orderBy('name')
+            ->get(['id', 'name']);
         $taxRates = TaxRate::where('company_id', $currentCompany->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'rate', 'is_default_sales']);
         $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
         $chartOfAccounts = ChartOfAccount::where('company_id', $currentCompany->id)->where('is_active', true)->ordered()->get(['id', 'account_code', 'account_name', 'account_type', 'is_default_sales']);
         $defaultSalesAccount = ChartOfAccount::getDefaultSalesForCompany($currentCompany->id);
         $defaultRoundingAccount = ChartOfAccount::getDefaultRoundingForCompany($currentCompany->id);
-        $jobcard->load(['customer', 'contact', 'lineItems.product', 'lineItems.lineGroup', 'lineGroups']);
+        $jobcard->load(['customer', 'contact', 'lineItems.product', 'lineItems.supplier', 'lineItems.lineGroup', 'lineGroups']);
 
         return Inertia::render('jobcards/Edit', [
             'jobcard' => $jobcard->toArray(),
             'customers' => $customers,
             'products' => $products,
+            'suppliers' => $suppliers,
             'users' => $users,
             'teams' => $teams,
             'statusOptions' => $currentCompany->getJobcardStatusOptions(),
@@ -779,9 +795,11 @@ class JobcardController extends Controller
                     $lineItem->update([
                         'line_group_id' => $groupId,
                         'product_id' => $lineItemData['product_id'] ?? null,
+                        'supplier_id' => $lineItemData['supplier_id'] ?? null,
                         'description' => $lineItemData['description'],
                         'quantity' => $lineItemData['quantity'],
                         'unit_price' => $lineItemData['unit_price'],
+                        'cost' => $lineItemData['cost'] ?? 0,
                         'discount_amount' => $lineItemData['discount_amount'] ?? 0,
                         'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
                         'tax_rate_id' => $lineItemData['tax_rate_id'] ?? null,
@@ -795,9 +813,11 @@ class JobcardController extends Controller
                     $lineItem = new JobcardLineItem([
                         'line_group_id' => $groupMap[(string) ($lineItemData['line_group_id'] ?? '')] ?? $defaultGroupId,
                         'product_id' => $lineItemData['product_id'] ?? null,
+                        'supplier_id' => $lineItemData['supplier_id'] ?? null,
                         'description' => $lineItemData['description'],
                         'quantity' => $lineItemData['quantity'],
                         'unit_price' => $lineItemData['unit_price'],
+                        'cost' => $lineItemData['cost'] ?? 0,
                         'discount_amount' => $lineItemData['discount_amount'] ?? 0,
                         'discount_percentage' => $lineItemData['discount_percentage'] ?? 0,
                         'tax_rate_id' => $lineItemData['tax_rate_id'] ?? null,

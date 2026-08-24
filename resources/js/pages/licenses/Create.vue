@@ -24,6 +24,7 @@ const form = useForm({
     location_address: '',
     limited_users: 0,
     standard_users: 0,
+    monthly_credits: 0,
     status: 'active',
     notes: '',
     expires_at: '',
@@ -189,6 +190,15 @@ function submit() {
                                     {{ form.errors.standard_users }}
                                 </div>
                             </div>
+                        </div>
+                        <div class="mt-4">
+                            <label class="mb-1 block text-sm font-medium text-gray-700">Monthly credits</label>
+                            <input
+                                v-model.number="form.monthly_credits"
+                                type="number"
+                                min="0"
+                                class="w-full max-w-xs rounded border px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                            />
                         </div>
                     </div>
 
