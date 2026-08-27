@@ -18,6 +18,7 @@ use App\Models\Report;
 use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Models\Task;
+use App\Services\JobcardNoteNotificationService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
@@ -189,6 +190,11 @@ class NotesController extends Controller
         $note->noteable()->associate($related);
         $note->save();
         $note->load('user:id,name');
+
+        if ($related instanceof Jobcard && auth()->user()) {
+            app(JobcardNoteNotificationService::class)
+                ->notifyForNote($related, $note, auth()->user());
+        }
 
         return response()->json([
             'message' => 'Note created successfully.',

@@ -19,6 +19,7 @@ use App\Services\CustomerStatementService;
 use App\Services\CustomerUpsertService;
 use App\Support\CompanyMailer;
 use App\Support\CompanyScopedRules;
+use App\Support\CsvExport;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -26,6 +27,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class CustomersController extends Controller
 {
@@ -84,6 +86,89 @@ class CustomersController extends Controller
             ],
             'currentCompany' => $currentCompany,
         ]);
+    }
+
+    public function export(Request $request): StreamedResponse
+    {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        $sortBy = $request->input('sort_by', 'name');
+        $sortDir = $request->input('sort_dir', 'asc') === 'desc' ? 'desc' : 'asc';
+        $sortableFields = ['name', 'email', 'phone', 'account_code', 'is_default_sales', 'created_at', 'account_balance'];
+        if (! in_array($sortBy, $sortableFields, true)) {
+            $sortBy = 'name';
+        }
+
+        $customersQuery = Customer::where('company_id', $currentCompany->id)
+            ->when($request->string('search'), function ($query, $search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('phone', 'like', "%{$search}%")
+                        ->orWhere('account_code', 'like', "%{$search}%");
+                });
+            });
+
+        if ($sortBy === 'account_balance') {
+            CustomerAccountBalanceCalculator::applyAccountBalanceSort($customersQuery, $currentCompany->id, $sortDir);
+        } else {
+            $customersQuery->orderBy($sortBy, $sortDir);
+        }
+
+        $customers = $customersQuery->get();
+        $balanceMap = CustomerAccountBalanceCalculator::balancesKeyedByCustomerId(
+            $customers->pluck('id'),
+            $currentCompany->id
+        );
+
+        $rows = $customers->map(function (Customer $customer) use ($balanceMap) {
+            return [
+                $customer->id,
+                $customer->account_code,
+                $customer->name,
+                $customer->registration_number,
+                $customer->email,
+                $customer->phone,
+                $customer->company_cell,
+                $customer->company_tel,
+                $customer->contact_first_name,
+                $customer->contact_last_name,
+                $customer->contact_cell,
+                $customer->contact_email,
+                $customer->address,
+                $customer->city,
+                $customer->country,
+                $customer->vat_number,
+                $customer->terms,
+                $customer->is_default_sales,
+                $balanceMap[$customer->id]['account_balance'] ?? 0.0,
+                $customer->notes,
+                optional($customer->created_at)?->format('Y-m-d H:i:s'),
+            ];
+        });
+
+        return CsvExport::download('customers_'.date('Y-m-d_His').'.csv', [
+            'ID',
+            'Account Code',
+            'Account Name',
+            'Registration Number',
+            'Email',
+            'Phone',
+            'Company Cell',
+            'Company Tel',
+            'Contact First Name',
+            'Contact Last Name',
+            'Contact Cell',
+            'Contact Email',
+            'Address',
+            'City',
+            'Country',
+            'VAT Number',
+            'Terms',
+            'Default Sales',
+            'Account Balance',
+            'Notes',
+            'Created At',
+        ], $rows);
     }
 
     public function create(): Response

@@ -180,6 +180,8 @@ export type AppPageProps<
         info?: string | null;
         status?: string | null;
     };
+    /** Company brand theme (HSL) shared for Inertia navigations without full reload. */
+    theme?: Record<string, number | string>;
     sidebarOpen: boolean;
     isLicensingInstance?: boolean;
     /** Client license expiry warning; null when no expiry date is set or on licensing instances. */

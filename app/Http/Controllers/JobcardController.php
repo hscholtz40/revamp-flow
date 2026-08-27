@@ -9,6 +9,7 @@ use App\Models\Customer;
 use App\Models\DeliveryNote;
 use App\Models\EmailActivity;
 use App\Models\Jobcard;
+use App\Models\JobcardAttachment;
 use App\Models\JobcardLineItem;
 use App\Models\Note;
 use App\Models\Product;
@@ -26,6 +27,7 @@ use App\Support\CompanyMailer;
 use App\Support\ColumnFilters;
 use App\Support\SafeLog;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -500,6 +502,7 @@ class JobcardController extends Controller
             'timeEntries.user',
             'statusTransitions.user',
             'signatures.user',
+            'attachments',
         ]);
 
         $currentCompany = auth()->user()->getCurrentCompany();
@@ -591,8 +594,93 @@ class JobcardController extends Controller
             'statusDurations' => $statusDurations,
             'statusTransitions' => $statusTransitions,
             'signatures' => $signatures,
+            'attachments' => $jobcard->attachments->map(fn (JobcardAttachment $attachment) => [
+                'id' => $attachment->id,
+                'url' => '/storage/'.ltrim((string) $attachment->path, '/'),
+                'type' => $attachment->type,
+                'original_name' => $attachment->original_name,
+                'created_at' => $attachment->created_at?->toIso8601String(),
+            ])->values()->all(),
             'documentSigningEnabled' => (bool) ($currentCompany->enable_document_signing ?? false),
         ]);
+    }
+
+    public function storeAttachments(Request $request, Jobcard $jobcard): RedirectResponse|JsonResponse
+    {
+        $this->authorize('update', $jobcard);
+
+        if ($jobcard->status === 'completed' && ! auth()->user()->canEditCompletedJobcards()) {
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'You do not have permission to update completed jobcards.'], 403);
+            }
+
+            return redirect()->back()->with('error', 'You do not have permission to update completed jobcards.');
+        }
+
+        $validated = $request->validate([
+            'attachments' => ['required', 'array', 'max:10'],
+            'attachments.*' => ['file', 'max:51200', 'mimes:jpg,jpeg,png,gif,webp,mp4,mov,avi,webm'],
+        ], [
+            'attachments.max' => 'You can upload a maximum of 10 files at a time.',
+            'attachments.*.max' => 'Each file may not be larger than 50MB.',
+            'attachments.*.mimes' => 'Each file must be an image or video.',
+        ]);
+
+        $created = [];
+        foreach ((array) ($validated['attachments'] ?? $request->file('attachments', [])) as $file) {
+            if (! $file) {
+                continue;
+            }
+
+            $attachment = $jobcard->attachments()->create([
+                'path' => $file->store("jobcard-attachments/{$jobcard->company_id}", 'public'),
+                'type' => str_starts_with((string) $file->getMimeType(), 'video/') ? 'video' : 'image',
+                'original_name' => $file->getClientOriginalName(),
+                'uploaded_by' => auth()->id(),
+            ]);
+
+            $created[] = [
+                'id' => $attachment->id,
+                'url' => '/storage/'.ltrim((string) $attachment->path, '/'),
+                'type' => $attachment->type,
+                'original_name' => $attachment->original_name,
+            ];
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'Attachments uploaded successfully.',
+                'attachments' => $created,
+            ], 201);
+        }
+
+        return redirect()->back()->with('success', count($created).' attachment(s) uploaded.');
+    }
+
+    public function destroyAttachment(Jobcard $jobcard, JobcardAttachment $attachment): RedirectResponse|JsonResponse
+    {
+        $this->authorize('update', $jobcard);
+        abort_unless((int) $attachment->jobcard_id === (int) $jobcard->id, 404);
+
+        if ($jobcard->status === 'completed' && ! auth()->user()->canEditCompletedJobcards()) {
+            if (request()->expectsJson()) {
+                return response()->json(['message' => 'You do not have permission to update completed jobcards.'], 403);
+            }
+
+            return redirect()->back()->with('error', 'You do not have permission to update completed jobcards.');
+        }
+
+        if ($attachment->path && Storage::disk('public')->exists($attachment->path)) {
+            Storage::disk('public')->delete($attachment->path);
+        }
+
+        $attachment->delete();
+
+        if (request()->expectsJson()) {
+            return response()->json(['message' => 'Attachment deleted.']);
+        }
+
+        return redirect()->back()->with('success', 'Attachment deleted.');
     }
 
     private function syncJobcardStockAdjustments(

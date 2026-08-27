@@ -59,7 +59,7 @@ function hrefFor(n: NotificationRow): string | null {
     if (id == null) {
         return null;
     }
-    if (t === 'jobcard') {
+    if (t === 'jobcard' || t === 'jobcard_note') {
         return `/jobcards/${id}`;
     }
     if (t === 'task') {

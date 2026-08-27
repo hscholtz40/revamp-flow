@@ -243,4 +243,49 @@ class AiController extends Controller
             'results' => $results,
         ]);
     }
+
+    public function transcribe(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless($user, 401);
+        $this->access->ensureFeatureAllowed($user, 'assistant');
+
+        $validated = $request->validate([
+            'audio' => ['required', 'file', 'max:25600', 'mimetypes:audio/webm,audio/wav,audio/mpeg,audio/mp4,audio/ogg,audio/x-wav,video/webm'],
+        ]);
+
+        $file = $validated['audio'];
+        $traceId = (string) Str::uuid();
+        $start = microtime(true);
+        $statusCode = 200;
+        $text = '';
+
+        try {
+            $text = $this->openAi->transcribe(
+                $file->getRealPath(),
+                $file->getClientOriginalName() ?: ('voice-note.'.$file->getClientOriginalExtension())
+            );
+        } catch (\Throwable $e) {
+            $statusCode = 422;
+            $latency = (int) round((microtime(true) - $start) * 1000);
+            if (GoogleIntegrationSettings::record()->ai_prompt_logging_enabled) {
+                $this->audit->record($user, 'transcribe', ['model' => 'whisper-1'], $latency, $statusCode, $traceId, '[voice-note]', $e->getMessage());
+            }
+
+            return response()->json([
+                'trace_id' => $traceId,
+                'message' => $e->getMessage() ?: 'Could not transcribe the voice note.',
+            ], 422);
+        }
+
+        $latency = (int) round((microtime(true) - $start) * 1000);
+        if (GoogleIntegrationSettings::record()->ai_prompt_logging_enabled) {
+            $this->audit->record($user, 'transcribe', ['model' => 'whisper-1'], $latency, $statusCode, $traceId, '[voice-note]', $text);
+        }
+
+        return response()->json([
+            'trace_id' => $traceId,
+            'text' => $text,
+        ]);
+    }
 }

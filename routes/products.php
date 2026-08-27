@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/products', [ProductController::class, 'index'])->middleware('module.permission:products,list')->name('products.index');
+    Route::get('/products/export', [ProductController::class, 'export'])->middleware('module.permission:products,list')->name('products.export');
     Route::get('/products/create', [ProductController::class, 'create'])->middleware('module.permission:products,create')->name('products.create');
     Route::post('/products', [ProductController::class, 'store'])->middleware('module.permission:products,create')->name('products.store');
     Route::get('/products/search-by-barcode', [ProductController::class, 'searchByBarcode'])->middleware('module.permission:products,view')->name('products.search-by-barcode');

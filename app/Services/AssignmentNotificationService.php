@@ -99,7 +99,10 @@ class AssignmentNotificationService
             ->each(fn (User $user) => $user->notify($notification));
     }
 
-    private function resolveAssignmentTargets(int $companyId, int $assignedUserId, int $assignedTeamId): Collection
+    /**
+     * @return Collection<int, User>
+     */
+    public function resolveAssignmentTargets(int $companyId, int $assignedUserId, int $assignedTeamId): Collection
     {
         $notifiableUsers = collect();
 

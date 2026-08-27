@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\Supplier;
+use App\Support\CsvExport;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SuppliersController extends Controller
 {
@@ -93,6 +95,65 @@ class SuppliersController extends Controller
                 'sort_dir' => $sortDir,
             ],
         ]);
+    }
+
+    public function export(Request $request): StreamedResponse
+    {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        abort_unless($currentCompany, 403);
+
+        $sortBy = $request->input('sort_by', 'name');
+        $sortDir = $request->input('sort_dir', 'asc') === 'desc' ? 'desc' : 'asc';
+        $sortableFields = ['name', 'email', 'phone', 'city', 'country', 'vat_number', 'is_active', 'created_at'];
+        if (! in_array($sortBy, $sortableFields, true)) {
+            $sortBy = 'name';
+        }
+
+        $suppliers = Supplier::where('company_id', $currentCompany->id)
+            ->when($request->string('search'), function ($query, $search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('phone', 'like', "%{$search}%");
+                });
+            })
+            ->when($request->boolean('active_only'), function ($query) {
+                $query->where('is_active', true);
+            })
+            ->orderBy($sortBy, $sortDir)
+            ->get();
+
+        $rows = $suppliers->map(fn (Supplier $supplier) => [
+            $supplier->id,
+            $supplier->name,
+            $supplier->email,
+            $supplier->phone,
+            $supplier->address,
+            $supplier->city,
+            $supplier->state,
+            $supplier->postal_code,
+            $supplier->country,
+            $supplier->vat_number,
+            $supplier->is_active,
+            $supplier->notes,
+            optional($supplier->created_at)?->format('Y-m-d H:i:s'),
+        ]);
+
+        return CsvExport::download('suppliers_'.date('Y-m-d_His').'.csv', [
+            'ID',
+            'Name',
+            'Email',
+            'Phone',
+            'Address',
+            'City',
+            'State',
+            'Postal Code',
+            'Country',
+            'VAT Number',
+            'Active',
+            'Notes',
+            'Created At',
+        ], $rows);
     }
 
     /**

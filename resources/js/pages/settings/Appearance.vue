@@ -7,6 +7,7 @@ import HeadingSmall from '@/components/HeadingSmall.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { applyCompanyTheme } from '@/composables/useCompanyTheme';
 import AppLayout from '@/layouts/AppLayout.vue';
 import SettingsLayout from '@/layouts/settings/Layout.vue';
 import { type BreadcrumbItem } from '@/types';
@@ -226,69 +227,9 @@ const updateAccentColor = (hex: string) => {
     form.theme_accent_lightness = hsl.l;
 };
 
-// Function to update CSS variables dynamically
+// Live-preview CSS variables while editing (same rules as post-login apply).
 const updateCssVariables = () => {
-    const root = document.documentElement;
-    
-    // Primary colors
-    root.style.setProperty('--theme-primary-hue', form.theme_primary_hue.toString());
-    root.style.setProperty('--theme-primary-saturation', `${form.theme_primary_saturation}%`);
-    root.style.setProperty('--theme-primary-lightness', `${form.theme_primary_lightness}%`);
-    root.style.setProperty('--theme-primary-dark-mode-lightness', form.theme_primary_dark_mode_lightness.toString());
-    
-    // Secondary colors
-    root.style.setProperty('--theme-secondary-hue', form.theme_secondary_hue.toString());
-    root.style.setProperty('--theme-secondary-saturation', `${form.theme_secondary_saturation}%`);
-    root.style.setProperty('--theme-secondary-lightness', `${form.theme_secondary_lightness}%`);
-    root.style.setProperty('--theme-secondary-dark-mode-lightness', form.theme_secondary_dark_mode_lightness.toString());
-    
-    // Accent colors
-    root.style.setProperty('--theme-accent-hue', form.theme_accent_hue.toString());
-    root.style.setProperty('--theme-accent-saturation', `${form.theme_accent_saturation}%`);
-    root.style.setProperty('--theme-accent-lightness', `${form.theme_accent_lightness}%`);
-    root.style.setProperty('--theme-accent-dark-mode-lightness', form.theme_accent_dark_mode_lightness.toString());
-    
-    // Chart colors
-    root.style.setProperty('--theme-chart-1-hue', form.theme_chart_1_hue.toString());
-    root.style.setProperty('--theme-chart-1-saturation', `${form.theme_chart_1_saturation}%`);
-    root.style.setProperty('--theme-chart-1-lightness', form.theme_chart_1_lightness.toString());
-    
-    root.style.setProperty('--theme-chart-2-hue', form.theme_chart_2_hue.toString());
-    root.style.setProperty('--theme-chart-2-saturation', `${form.theme_chart_2_saturation}%`);
-    root.style.setProperty('--theme-chart-2-lightness', form.theme_chart_2_lightness.toString());
-    
-    root.style.setProperty('--theme-chart-3-hue', form.theme_chart_3_hue.toString());
-    root.style.setProperty('--theme-chart-3-saturation', `${form.theme_chart_3_saturation}%`);
-    root.style.setProperty('--theme-chart-3-lightness', form.theme_chart_3_lightness.toString());
-    
-    root.style.setProperty('--theme-chart-4-hue', form.theme_chart_4_hue.toString());
-    root.style.setProperty('--theme-chart-4-saturation', `${form.theme_chart_4_saturation}%`);
-    root.style.setProperty('--theme-chart-4-lightness', form.theme_chart_4_lightness.toString());
-    
-    root.style.setProperty('--theme-chart-5-hue', form.theme_chart_5_hue.toString());
-    root.style.setProperty('--theme-chart-5-saturation', `${form.theme_chart_5_saturation}%`);
-    root.style.setProperty('--theme-chart-5-lightness', form.theme_chart_5_lightness.toString());
-    
-    // Sidebar colors
-    root.style.setProperty('--theme-sidebar-primary-hue', form.theme_sidebar_primary_hue.toString());
-    root.style.setProperty('--theme-sidebar-primary-saturation', `${form.theme_sidebar_primary_saturation}%`);
-    root.style.setProperty('--theme-sidebar-primary-lightness', `${form.theme_sidebar_primary_lightness}%`);
-    root.style.setProperty('--theme-sidebar-primary-dark-mode-lightness', form.theme_sidebar_primary_dark_mode_lightness.toString());
-    
-    root.style.setProperty('--theme-sidebar-accent-hue', form.theme_sidebar_accent_hue.toString());
-    root.style.setProperty('--theme-sidebar-accent-saturation', `${form.theme_sidebar_accent_saturation}%`);
-    root.style.setProperty('--theme-sidebar-accent-lightness', `${form.theme_sidebar_accent_lightness}%`);
-    
-    // Background colors
-    root.style.setProperty('--theme-background-light-mode-lightness', `${form.theme_background_light_mode_lightness}%`);
-    root.style.setProperty('--theme-background-dark-mode-lightness', `${form.theme_background_dark_mode_lightness}%`);
-    
-    // Layout variables
-    root.style.setProperty('--theme-layout-sidebar-width', form.theme_layout_sidebar_width);
-    root.style.setProperty('--theme-layout-sidebar-collapsed-width', form.theme_layout_sidebar_collapsed_width);
-    root.style.setProperty('--theme-layout-header-height', form.theme_layout_header_height);
-    root.style.setProperty('--theme-layout-border-radius', form.theme_layout_border_radius);
-    root.style.setProperty('--theme-layout-spacing-unit', form.theme_layout_spacing_unit);
+    applyCompanyTheme(form);
 };
 
 const submit = () => {

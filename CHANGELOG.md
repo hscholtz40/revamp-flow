@@ -1,11 +1,19 @@
 # Changelog
 
+## 2026-08-27
+
+- **Appearance after login:** Company theme colours now apply immediately on Inertia navigations (including login and company switch) without requiring a manual refresh.
+
 ## 2026-08-24
 
 - **Public enquiry/contractor form branding:** Submit button and selected package highlight now use the company’s Appearance primary colour (the same settings admins configure for the app).
 - **Jobcard cost, supplier, and profit:** Jobcard line items store cost and supplier like quotes. Create/Edit/Show show supplier, cost, per-line profit, and total profit. Values copy from quotes and through to invoices. Jobcard PDFs still omit cost/supplier/profit.
 - **Invoice ghost costing:** Invoice line items have an internal `cost` (Ghost) field for staff costing and profit. It is not rendered on printed invoices or proforma PDFs.
 - **Contractor licensing + automated invoicing:** Accepting contractor queries now provisions a Not Deployed instance license from the selected licensing package, allocates monthly credits, schedules the first invoice 60 days after signup (then monthly), and emails the admin when license invoices are overdue. Administration → License now displays monthly credits and customer name.
+- **Jobcard photos/videos:** Jobcards can store image and video attachments (upload/remove on Show). Files are kept on the public disk and cascade-cleaned when a jobcard is deleted.
+- **Jobcard note notifications:** When the assigned user adds a note, company admins are notified. When another (web/office) user adds a note, the assigned user is notified.
+- **AI Assistant voice notes:** AI Assistant can capture a microphone voice note, transcribe it via OpenAI Whisper, fill the query, and run the search.
+- **CSV export:** Customers, Contacts, Suppliers, and Products index pages can export the current filtered list to CSV.
 
 ## 2026-08-06
 

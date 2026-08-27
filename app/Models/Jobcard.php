@@ -39,6 +39,14 @@ class Jobcard extends Model
                 ]);
             }
         });
+
+        static::deleting(function (Jobcard $jobcard) {
+            foreach ($jobcard->attachments as $attachment) {
+                if ($attachment->path && \Illuminate\Support\Facades\Storage::disk('public')->exists($attachment->path)) {
+                    \Illuminate\Support\Facades\Storage::disk('public')->delete($attachment->path);
+                }
+            }
+        });
     }
 
     protected $fillable = [
@@ -160,6 +168,11 @@ class Jobcard extends Model
     public function deliveryNotes(): HasMany
     {
         return $this->hasMany(DeliveryNote::class);
+    }
+
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(JobcardAttachment::class)->orderByDesc('created_at');
     }
 
     public function statusTransitions(): HasMany

@@ -10,4 +10,5 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/ai/suggest-technician', [AiController::class, 'suggestTechnician'])->name('ai.suggest-technician');
     Route::post('/ai/suggest-document', [AiController::class, 'suggestDocument'])->name('ai.suggest-document');
     Route::post('/ai/assistant', [AiController::class, 'assistant'])->name('ai.assistant');
+    Route::post('/ai/transcribe', [AiController::class, 'transcribe'])->name('ai.transcribe');
 });

@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/contacts', [ContactController::class, 'index'])->middleware('module.permission:contacts,list')->name('contacts.index');
+    Route::get('/contacts/export', [ContactController::class, 'export'])->middleware('module.permission:contacts,list')->name('contacts.export');
     Route::get('/api/contacts/search', [ContactController::class, 'search'])->middleware('module.permission:contacts,list')->name('contacts.search');
     Route::post('/api/contacts/quick-create', [ContactController::class, 'quickCreate'])->middleware('module.permission:contacts,create')->name('contacts.quick-create');
     Route::get('/contacts/create', [ContactController::class, 'create'])->middleware('module.permission:contacts,create')->name('contacts.create');

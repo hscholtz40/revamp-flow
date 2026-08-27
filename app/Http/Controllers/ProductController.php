@@ -10,11 +10,13 @@ use App\Models\Product;
 use App\Models\PurchaseOrderItem;
 use App\Models\Supplier;
 use App\Support\CompanyScopedRules;
+use App\Support\CsvExport;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ProductController extends Controller
 {
@@ -114,6 +116,85 @@ class ProductController extends Controller
             'currentCompany' => $currentCompany,
             'totals' => $totals,
         ]);
+    }
+
+    public function export(Request $request): StreamedResponse
+    {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        $sortBy = $request->input('sort_by', 'name');
+        $sortDir = $request->input('sort_dir', 'asc') === 'desc' ? 'desc' : 'asc';
+        $sortableFields = ['name', 'type', 'sku', 'category', 'price', 'stock_quantity', 'is_active', 'created_at'];
+        if (! in_array($sortBy, $sortableFields, true)) {
+            $sortBy = 'name';
+        }
+
+        $query = Product::where('company_id', $currentCompany->id);
+
+        if ($request->filled('type')) {
+            $query->where('type', $request->type);
+        }
+
+        if ($request->filled('category')) {
+            $query->where('category', $request->category);
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%")
+                    ->orWhere('sku', 'like', "%{$search}%")
+                    ->orWhere('barcode', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('active_only') && $request->boolean('active_only')) {
+            $query->where('is_active', true);
+        }
+
+        $rows = $query->orderBy($sortBy, $sortDir)->get()->map(function (Product $product) {
+            $tags = is_array($product->tags) ? implode('; ', $product->tags) : (string) ($product->tags ?? '');
+
+            return [
+                $product->id,
+                $product->name,
+                $product->type,
+                $product->sku,
+                $product->barcode,
+                $product->category,
+                $product->description,
+                $product->unit,
+                $product->price,
+                $product->cost,
+                $product->track_stock,
+                $product->stock_quantity,
+                $product->min_stock_level,
+                $product->is_active,
+                $tags,
+                $product->notes,
+                optional($product->created_at)?->format('Y-m-d H:i:s'),
+            ];
+        });
+
+        return CsvExport::download('products_'.date('Y-m-d_His').'.csv', [
+            'ID',
+            'Name',
+            'Type',
+            'SKU',
+            'Barcode',
+            'Category',
+            'Description',
+            'Unit',
+            'Price',
+            'Cost',
+            'Track Stock',
+            'Stock Quantity',
+            'Min Stock Level',
+            'Active',
+            'Tags',
+            'Notes',
+            'Created At',
+        ], $rows);
     }
 
     /**

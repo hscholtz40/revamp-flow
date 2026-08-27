@@ -10,12 +10,14 @@ use App\Models\SMSSettings;
 use App\Services\BulkSMSService;
 use App\Support\CompanyMailer;
 use App\Support\CompanyScopedRules;
+use App\Support\CsvExport;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ContactController extends Controller
 {
@@ -105,6 +107,64 @@ class ContactController extends Controller
             ],
             'currentCompany' => $currentCompany,
         ]);
+    }
+
+    public function export(Request $request): StreamedResponse
+    {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        $sortBy = $request->input('sort_by', 'name');
+        $sortDir = $request->input('sort_dir', 'asc') === 'desc' ? 'desc' : 'asc';
+        $sortableFields = ['name', 'customer_name', 'email', 'phone', 'position', 'is_primary', 'created_at'];
+        if (! in_array($sortBy, $sortableFields, true)) {
+            $sortBy = 'name';
+        }
+
+        $contactsQuery = Contact::with('customer:id,name')
+            ->where('company_id', $currentCompany->id)
+            ->whereNotNull('customer_id')
+            ->when($request->string('search'), function ($query, $search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('phone', 'like', "%{$search}%")
+                        ->orWhereHas('customer', function ($customerQuery) use ($search) {
+                            $customerQuery->where('name', 'like', "%{$search}%");
+                        });
+                });
+            });
+
+        if ($sortBy === 'customer_name') {
+            $contactsQuery->orderBy(
+                Customer::select('name')->whereColumn('customers.id', 'contacts.customer_id')->limit(1),
+                $sortDir
+            );
+        } else {
+            $contactsQuery->orderBy($sortBy, $sortDir);
+        }
+
+        $rows = $contactsQuery->get()->map(fn (Contact $contact) => [
+            $contact->id,
+            $contact->customer?->name,
+            $contact->name,
+            $contact->email,
+            $contact->phone,
+            $contact->position,
+            $contact->is_primary,
+            $contact->notes,
+            optional($contact->created_at)?->format('Y-m-d H:i:s'),
+        ]);
+
+        return CsvExport::download('contacts_'.date('Y-m-d_His').'.csv', [
+            'ID',
+            'Customer',
+            'Name',
+            'Email',
+            'Phone',
+            'Position',
+            'Primary',
+            'Notes',
+            'Created At',
+        ], $rows);
     }
 
     /**

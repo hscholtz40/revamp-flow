@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\GoogleIntegrationSettings;
 use App\Services\AI\AiAccessService;
 use App\Services\InstanceLicenseService;
+use App\Support\CompanyTheme;
 use DateTimeZone;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
@@ -90,6 +91,7 @@ class HandleInertiaRequests extends Middleware
                     'date_format' => 'dd/mm/yyyy',
                     'time_format' => '24h',
                 ],
+                'theme' => CompanyTheme::resolved(null),
                 'flash' => $sharedFlash,
                 'auth' => [
                     'user' => null,
@@ -265,6 +267,8 @@ class HandleInertiaRequests extends Middleware
                 'date_format' => 'dd/mm/yyyy',
                 'time_format' => '24h',
             ],
+            // Brand colours for Inertia navigations (login / company switch) without full reload.
+            'theme' => CompanyTheme::resolved($currentCompany),
             'companies' => $companies,
             'flash' => $sharedFlash,
             'auth' => [

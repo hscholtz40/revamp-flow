@@ -4,7 +4,7 @@ import { useAuthAbility } from '@/composables/useAuthAbilities';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
-import { Plus, Search, Building2, Edit, Trash2, Phone, Mail } from 'lucide-vue-next';
+import { Plus, Search, Building2, Edit, Trash2, Phone, Mail, Download } from 'lucide-vue-next';
 import suppliers from '@/routes/suppliers';
 
 interface Supplier {
@@ -119,6 +119,19 @@ function deleteSupplier(supplier: Supplier) {
         router.delete(suppliers.destroy(supplier.id).url);
     }
 }
+
+function exportCsv() {
+    const params = new URLSearchParams();
+    if (search.value && search.value.trim()) {
+        params.set('search', search.value.trim());
+    }
+    if (activeOnly.value) {
+        params.set('active_only', '1');
+    }
+    params.set('sort_by', sortBy.value);
+    params.set('sort_dir', sortDir.value);
+    window.location.href = `/suppliers/export?${params.toString()}`;
+}
 </script>
 
 <template>
@@ -130,14 +143,24 @@ function deleteSupplier(supplier: Supplier) {
                     <h1 class="text-2xl font-bold text-gray-900">Suppliers</h1>
                     <p class="text-gray-600">Manage your suppliers and vendors</p>
                 </div>
-                <Link
-                    v-if="canSuppliersCreate"
-                    :href="suppliers.create().url"
-                    class="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-                >
-                    <Plus class="h-4 w-4" />
-                    Add Supplier
-                </Link>
+                <div class="flex items-center gap-2">
+                    <button
+                        type="button"
+                        class="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                        @click="exportCsv"
+                    >
+                        <Download class="h-4 w-4" />
+                        Export CSV
+                    </button>
+                    <Link
+                        v-if="canSuppliersCreate"
+                        :href="suppliers.create().url"
+                        class="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                    >
+                        <Plus class="h-4 w-4" />
+                        Add Supplier
+                    </Link>
+                </div>
             </div>
 
             <!-- Filters -->

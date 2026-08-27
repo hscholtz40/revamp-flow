@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, usePage } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, ref } from 'vue';
 import { getCsrfToken } from '@/lib/csrf';
+import { Mic, Square } from 'lucide-vue-next';
+import { toast } from 'vue-sonner';
 
 const page = usePage();
 const aiAllowed = computed(() => !!(page.props as { ai?: { allowed?: boolean } }).ai?.allowed);
@@ -10,6 +12,14 @@ const query = ref('');
 const loading = ref(false);
 const summary = ref('');
 const results = ref<Record<string, Array<Record<string, unknown>>>>({});
+const recording = ref(false);
+const transcribing = ref(false);
+const voiceSupported = computed(() => typeof window !== 'undefined' && !!(navigator.mediaDevices && window.MediaRecorder));
+
+let mediaRecorder: MediaRecorder | null = null;
+let mediaStream: MediaStream | null = null;
+const recordedChunks: BlobPart[] = [];
+
 const groupLabel: Record<string, string> = {
     jobcards: 'Jobcards',
     quotes: 'Quotes',
@@ -69,6 +79,99 @@ const search = async () => {
     summary.value = data.summary || '';
     results.value = data.results || {};
 };
+
+function stopMediaTracks() {
+    mediaStream?.getTracks().forEach((track) => track.stop());
+    mediaStream = null;
+}
+
+async function startVoiceNote() {
+    if (!voiceSupported.value || recording.value || transcribing.value || !aiAllowed.value) return;
+
+    try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        recordedChunks.length = 0;
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+        mediaRecorder = mimeType ? new MediaRecorder(mediaStream, { mimeType }) : new MediaRecorder(mediaStream);
+        mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+                recordedChunks.push(event.data);
+            }
+        };
+        mediaRecorder.onstop = () => {
+            void handleRecordedVoice();
+        };
+        mediaRecorder.start();
+        recording.value = true;
+    } catch {
+        stopMediaTracks();
+        toast.error('Microphone access is required for voice notes.');
+    }
+}
+
+function stopVoiceNote() {
+    if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+        recording.value = false;
+        stopMediaTracks();
+        return;
+    }
+    mediaRecorder.stop();
+    recording.value = false;
+}
+
+async function handleRecordedVoice() {
+    const blob = new Blob(recordedChunks, { type: mediaRecorder?.mimeType || 'audio/webm' });
+    stopMediaTracks();
+    mediaRecorder = null;
+    recordedChunks.length = 0;
+
+    if (blob.size < 500) {
+        toast.error('Voice note was too short. Please try again.');
+        return;
+    }
+
+    transcribing.value = true;
+    try {
+        const formData = new FormData();
+        formData.append('audio', blob, 'voice-note.webm');
+
+        const response = await fetch('/ai/transcribe', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': getCsrfToken(),
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: formData,
+        });
+
+        const data = (await response.json().catch(() => ({}))) as { text?: string; message?: string };
+        if (!response.ok) {
+            throw new Error(data.message || 'Could not transcribe the voice note.');
+        }
+
+        query.value = (data.text || '').trim();
+        if (!query.value) {
+            toast.error('No speech was detected.');
+            return;
+        }
+
+        toast.success('Voice note transcribed');
+        await search();
+    } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Could not transcribe the voice note.');
+    } finally {
+        transcribing.value = false;
+    }
+}
+
+onBeforeUnmount(() => {
+    if (recording.value) {
+        stopVoiceNote();
+    }
+    stopMediaTracks();
+});
 </script>
 
 <template>
@@ -83,12 +186,39 @@ const search = async () => {
             </div>
 
             <div v-else class="rounded-lg border bg-white p-4">
-                <div class="flex gap-2">
-                    <input v-model="query" type="text" class="flex-1 rounded border px-3 py-2 text-sm" placeholder="Ask about records, references, statuses, customers..." />
-                    <button type="button" class="rounded bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60" :disabled="loading || !query.trim()" @click="search">
+                <div class="flex flex-wrap gap-2">
+                    <input
+                        v-model="query"
+                        type="text"
+                        class="min-w-[16rem] flex-1 rounded border px-3 py-2 text-sm"
+                        placeholder="Ask about records, references, statuses, customers..."
+                        :disabled="recording || transcribing"
+                        @keydown.enter.prevent="search"
+                    />
+                    <button
+                        v-if="voiceSupported"
+                        type="button"
+                        class="inline-flex items-center gap-1.5 rounded border px-3 py-2 text-sm font-medium disabled:opacity-60"
+                        :class="recording ? 'border-red-300 bg-red-50 text-red-700' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'"
+                        :disabled="loading || transcribing"
+                        :title="recording ? 'Stop voice note' : 'Ask with a voice note'"
+                        @click="recording ? stopVoiceNote() : startVoiceNote()"
+                    >
+                        <Square v-if="recording" class="h-4 w-4" />
+                        <Mic v-else class="h-4 w-4" />
+                        {{ recording ? 'Stop' : transcribing ? 'Transcribing…' : 'Voice note' }}
+                    </button>
+                    <button
+                        type="button"
+                        class="rounded bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
+                        :disabled="loading || recording || transcribing || !query.trim()"
+                        @click="search"
+                    >
                         {{ loading ? 'Searching…' : 'Search' }}
                     </button>
                 </div>
+                <p v-if="recording" class="mt-2 text-xs text-red-600">Recording… click Stop when finished.</p>
+                <p v-else-if="!voiceSupported" class="mt-2 text-xs text-gray-500">Voice notes require a browser with microphone support.</p>
                 <p v-if="summary" class="mt-3 text-sm text-gray-700">{{ summary }}</p>
 
                 <div v-if="Object.keys(results).length" class="mt-4 grid gap-3 md:grid-cols-2">

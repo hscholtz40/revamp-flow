@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/suppliers', [SuppliersController::class, 'index'])->middleware('module.permission:suppliers,list')->name('suppliers.index');
+    Route::get('/suppliers/export', [SuppliersController::class, 'export'])->middleware('module.permission:suppliers,list')->name('suppliers.export');
     Route::get('/suppliers/search', [SuppliersController::class, 'search'])->name('suppliers.search');
     Route::get('/suppliers/create', [SuppliersController::class, 'create'])->middleware('module.permission:suppliers,create')->name('suppliers.create');
     Route::post('/suppliers', [SuppliersController::class, 'store'])->middleware('module.permission:suppliers,create')->name('suppliers.store');

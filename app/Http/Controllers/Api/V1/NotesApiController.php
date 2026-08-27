@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\Jobcard;
 use App\Models\Note;
+use App\Services\JobcardNoteNotificationService;
 use Illuminate\Http\Request;
 
 class NotesApiController extends Controller
@@ -34,7 +36,11 @@ class NotesApiController extends Controller
             'user_id' => $request->user()->id,
         ]);
 
-        return response()->json($note->load('user:id,name'), 201);
+        $note->load('user:id,name');
+
+        $this->notifyIfJobcardNote($note, $request->user());
+
+        return response()->json($note, 201);
     }
 
     public function destroy(Request $request, Note $note)
@@ -44,5 +50,19 @@ class NotesApiController extends Controller
         $note->delete();
 
         return response()->json(['message' => 'Note deleted']);
+    }
+
+    private function notifyIfJobcardNote(Note $note, $author): void
+    {
+        if (! $author) {
+            return;
+        }
+
+        $note->loadMissing('noteable');
+        $noteable = $note->noteable;
+
+        if ($noteable instanceof Jobcard) {
+            app(JobcardNoteNotificationService::class)->notifyForNote($noteable, $note, $author);
+        }
     }
 }

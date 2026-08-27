@@ -6,7 +6,7 @@ import EmailComposerModal from '@/components/EmailComposerModal.vue';
 import ListTableActionLabel from '@/components/ListTableActionLabel.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import customers from '@/routes/customers';
-import { Edit, Mail, MessageSquare, Star, Trash2 } from 'lucide-vue-next';
+import { Download, Edit, Mail, MessageSquare, Star, Trash2 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
 interface Customer {
@@ -156,6 +156,16 @@ const deleteCustomer = (customer: Customer) => {
     }
     router.delete(customers.destroy(customer.id).url);
 };
+
+const exportCsv = () => {
+    const params = new URLSearchParams();
+    if (search.value && search.value.trim()) {
+        params.set('search', search.value.trim());
+    }
+    params.set('sort_by', sortBy.value);
+    params.set('sort_dir', sortDir.value);
+    window.location.href = `/customers/export?${params.toString()}`;
+};
 </script>
 
 <template>
@@ -174,13 +184,23 @@ const deleteCustomer = (customer: Customer) => {
             <!-- Header -->
             <div class="flex items-center justify-between gap-3 mb-6">
                 <h1 class="text-2xl font-bold text-gray-900">Customers</h1>
-                <Link
-                    v-if="canCustomersCreate"
-                    :href="customers.create().url"
-                    class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                >
-                    New Customer
-                </Link>
+                <div class="flex items-center gap-2">
+                    <button
+                        type="button"
+                        class="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                        @click="exportCsv"
+                    >
+                        <Download class="h-4 w-4" />
+                        Export CSV
+                    </button>
+                    <Link
+                        v-if="canCustomersCreate"
+                        :href="customers.create().url"
+                        class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    >
+                        New Customer
+                    </Link>
+                </div>
             </div>
 
             <!-- Filters -->

@@ -4,7 +4,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import EmailComposerModal from '@/components/EmailComposerModal.vue';
 import ListTableActionLabel from '@/components/ListTableActionLabel.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { Edit, Mail, MessageSquare, Trash2 } from 'lucide-vue-next';
+import { Edit, Mail, MessageSquare, Trash2, Download } from 'lucide-vue-next';
 import contacts from '@/routes/contacts';
 import { computed, ref, watch } from 'vue';
 
@@ -91,6 +91,16 @@ const deleteContact = (contact: Contact) => {
     router.delete(contacts.destroy(contact.id).url);
 };
 
+const exportCsv = () => {
+    const params = new URLSearchParams();
+    if (search.value && search.value.trim()) {
+        params.set('search', search.value.trim());
+    }
+    params.set('sort_by', sortBy.value);
+    params.set('sort_dir', sortDir.value);
+    window.location.href = `/contacts/export?${params.toString()}`;
+};
+
 // SMS functionality
 const showSMSModal = ref(false);
 const showSMSResultModal = ref(false);
@@ -165,13 +175,23 @@ const emailModalTitle = computed(() => `Send Email to ${selectedContact.value?.n
             <!-- Header -->
             <div class="flex items-center justify-between gap-3 mb-6">
                 <h1 class="text-2xl font-bold text-gray-900">Contacts</h1>
-                <Link
-                    v-if="canContactsCreate"
-                    :href="contacts.create().url"
-                    class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                >
-                    New Contact
-                </Link>
+                <div class="flex items-center gap-2">
+                    <button
+                        type="button"
+                        class="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                        @click="exportCsv"
+                    >
+                        <Download class="h-4 w-4" />
+                        Export CSV
+                    </button>
+                    <Link
+                        v-if="canContactsCreate"
+                        :href="contacts.create().url"
+                        class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    >
+                        New Contact
+                    </Link>
+                </div>
             </div>
 
             <!-- Filters -->

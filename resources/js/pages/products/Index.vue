@@ -3,7 +3,7 @@ import ListTableActionLabel from '@/components/ListTableActionLabel.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, ref, onMounted, watch } from 'vue';
-import { Plus, Search, Filter, Package, Wrench, Edit, Trash2, Grid3x3, List } from 'lucide-vue-next';
+import { Plus, Search, Filter, Package, Wrench, Edit, Trash2, Grid3x3, List, Download } from 'lucide-vue-next';
 import products from '@/routes/products';
 
 interface Product {
@@ -136,6 +136,25 @@ function deleteProduct(product: Product) {
     }
 }
 
+function exportCsv() {
+    const params = new URLSearchParams();
+    if (search.value && search.value.trim()) {
+        params.set('search', search.value.trim());
+    }
+    if (typeFilter.value && typeFilter.value.trim()) {
+        params.set('type', typeFilter.value.trim());
+    }
+    if (categoryFilter.value && categoryFilter.value.trim()) {
+        params.set('category', categoryFilter.value.trim());
+    }
+    if (activeOnly.value) {
+        params.set('active_only', '1');
+    }
+    params.set('sort_by', sortBy.value);
+    params.set('sort_dir', sortDir.value);
+    window.location.href = `/products/export?${params.toString()}`;
+}
+
 function getTypeIcon(type: string) {
     return type === 'product' ? Package : Wrench;
 }
@@ -202,6 +221,14 @@ function getStockStatus(product: Product) {
                             List
                         </button>
                     </div>
+                    <button
+                        type="button"
+                        class="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                        @click="exportCsv"
+                    >
+                        <Download class="h-4 w-4" />
+                        Export CSV
+                    </button>
                     <Link
                         v-if="$page.props.auth?.abilities?.products?.create"
                         :href="products.create().url"

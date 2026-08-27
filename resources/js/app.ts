@@ -11,6 +11,7 @@ import type { DefineComponent } from 'vue';
 import { Fragment, createApp, h } from 'vue';
 import flatpickr from 'flatpickr';
 import { initializeTheme } from './composables/useAppearance';
+import { applyCompanyTheme, type CompanyThemeValues } from './composables/useCompanyTheme';
 import { buildDateTimeOptions, type DateTimeFormatProps } from './composables/useDateTimeFormat';
 
 const appName = import.meta.env.VITE_APP_NAME || 'JobCardOnline';
@@ -151,10 +152,14 @@ createInertiaApp({
             import.meta.glob<DefineComponent>('./pages/**/*.vue'),
         ),
     setup({ el, App, props, plugin }) {
-        const initialProps = (props?.initialPage?.props ?? {}) as { dateTimeFormat?: DateTimeFormatProps };
+        const initialProps = (props?.initialPage?.props ?? {}) as {
+            dateTimeFormat?: DateTimeFormatProps;
+            theme?: CompanyThemeValues;
+        };
         activeDateTimeFormat = initialProps.dateTimeFormat;
         patchDateLocalization(initialProps.dateTimeFormat);
         refreshLocalizedDateInputs(initialProps.dateTimeFormat);
+        applyCompanyTheme(initialProps.theme);
 
         document.addEventListener('focusin', (event) => {
             const target = event.target as HTMLElement | null;
@@ -179,10 +184,15 @@ createInertiaApp({
         });
 
         router.on('navigate', (event) => {
-            const nextProps = (event.detail.page.props ?? {}) as { dateTimeFormat?: DateTimeFormatProps; csrf_token?: string };
+            const nextProps = (event.detail.page.props ?? {}) as {
+                dateTimeFormat?: DateTimeFormatProps;
+                csrf_token?: string;
+                theme?: CompanyThemeValues;
+            };
             activeDateTimeFormat = nextProps.dateTimeFormat;
             patchDateLocalization(nextProps.dateTimeFormat);
             refreshLocalizedDateInputs(nextProps.dateTimeFormat);
+            applyCompanyTheme(nextProps.theme);
 
             // Keep the CSRF meta tag in sync after each Inertia navigation.
             // Laravel regenerates the session token on POST requests, so the
