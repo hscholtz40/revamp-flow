@@ -3,6 +3,7 @@
 ## 2026-08-27
 
 - **Appearance after login:** Company theme colours now apply immediately on Inertia navigations (including login and company switch) without requiring a manual refresh.
+- **Jobcard Edit TypeScript:** Fixed line-item `cost` typing so the rounding adjustment line assigns cleanly (`number`, not `number | null`).
 
 ## 2026-08-24
 

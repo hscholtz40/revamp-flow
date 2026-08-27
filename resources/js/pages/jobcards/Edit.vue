@@ -752,7 +752,7 @@ interface LineItem {
     description: string;
     quantity: number;
     unit_price: number;
-    cost?: number | null;
+    cost?: number;
     discount_amount?: number;
     discount_percentage?: number;
     tax_rate_id?: number | null;
@@ -1435,11 +1435,11 @@ const ensureRoundingAdjustmentLine = () => {
         return;
     }
 
-    const roundingLine: LineItem = {
+    const roundingLine = {
         id: form.line_items[roundingIndex]?.id,
         _uid: form.line_items[roundingIndex]?._uid || createLineItemUid(),
-        product_id: null,
-        supplier_id: null,
+        product_id: null as number | null,
+        supplier_id: null as number | null,
         line_group_id: getGroupValueByIndex(0),
         description: ROUNDING_LINE_DESCRIPTION,
         quantity: 1,
@@ -1447,8 +1447,8 @@ const ensureRoundingAdjustmentLine = () => {
         cost: 0,
         discount_amount: 0,
         discount_percentage: 0,
-        tax_rate_id: null,
-        account_id: roundingAccountId,
+        tax_rate_id: null as number | null,
+        account_id: roundingAccountId as number | null,
     };
 
     if (roundingIndex >= 0) {
@@ -1457,9 +1457,10 @@ const ensureRoundingAdjustmentLine = () => {
             ...form.line_items[roundingIndex],
             ...roundingLine,
             line_group_id: gid,
+            cost: 0,
         };
     } else {
-        form.line_items.push(roundingLine as (typeof form.line_items)[number]);
+        form.line_items.push(roundingLine);
     }
 };
 
