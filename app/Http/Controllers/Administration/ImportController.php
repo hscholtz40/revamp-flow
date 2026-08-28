@@ -336,6 +336,12 @@ class ImportController extends Controller
         $this->assignBooleanIfProvided($payload, 'is_active', $mapped, true);
         $this->assignNullableStringIfProvided($payload, 'category', $mapped);
         $this->assignNullableStringIfProvided($payload, 'notes', $mapped);
+        $this->assignNullableFloatIfProvided($payload, 'weight', $mapped);
+        $this->assignNullableFloatIfProvided($payload, 'length', $mapped);
+        $this->assignNullableFloatIfProvided($payload, 'width', $mapped);
+        $this->assignNullableFloatIfProvided($payload, 'height', $mapped);
+        $this->assignNullableStringIfProvided($payload, 'color', $mapped);
+        $this->assignNullableStringIfProvided($payload, 'size', $mapped);
 
         if ($payload['type'] === 'service') {
             $payload['track_stock'] = false;
@@ -417,6 +423,12 @@ class ImportController extends Controller
                     ['key' => 'valuation_method', 'label' => 'Valuation Method', 'required' => false],
                     ['key' => 'is_active', 'label' => 'Is Active', 'required' => false, 'default_type' => 'select', 'default_options' => ['true' => 'True', 'false' => 'False']],
                     ['key' => 'category', 'label' => 'Category', 'required' => false],
+                    ['key' => 'weight', 'label' => 'Weight (kg)', 'required' => false],
+                    ['key' => 'length', 'label' => 'Length (cm)', 'required' => false],
+                    ['key' => 'width', 'label' => 'Width (cm)', 'required' => false],
+                    ['key' => 'height', 'label' => 'Height (cm)', 'required' => false],
+                    ['key' => 'color', 'label' => 'Color', 'required' => false],
+                    ['key' => 'size', 'label' => 'Size', 'required' => false],
                     ['key' => 'notes', 'label' => 'Notes', 'required' => false],
                 ],
             ],

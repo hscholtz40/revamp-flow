@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
 use App\Models\Backup;
+use App\Models\Company;
 use App\Models\Contact;
 use App\Models\Group;
 use App\Models\Product;
@@ -305,20 +306,10 @@ class AdministrationController extends Controller
             abort(404, 'No active company selected.');
         }
 
-        $validated = $request->validate([
-            'jobcard_status_labels' => ['required', 'array'],
-            'jobcard_status_labels.draft' => ['required', 'string', 'max:50'],
-            'jobcard_status_labels.pending' => ['required', 'string', 'max:50'],
-            'jobcard_status_labels.in_progress' => ['required', 'string', 'max:50'],
-            'jobcard_status_labels.completed' => ['required', 'string', 'max:50'],
-            'jobcard_status_labels.cancelled' => ['required', 'string', 'max:50'],
-            'quote_status_labels' => ['required', 'array'],
-            'quote_status_labels.draft' => ['required', 'string', 'max:50'],
-            'quote_status_labels.sent' => ['required', 'string', 'max:50'],
-            'quote_status_labels.accepted' => ['required', 'string', 'max:50'],
-            'quote_status_labels.rejected' => ['required', 'string', 'max:50'],
-            'quote_status_labels.expired' => ['required', 'string', 'max:50'],
-        ]);
+        $validated = $request->validate(array_merge(
+            $this->jobcardStatusLabelRules(),
+            $this->quoteStatusLabelRules(),
+        ));
 
         $currentCompany->update([
             'jobcard_status_labels' => $this->sanitizeStatusLabelMap($validated['jobcard_status_labels']),
@@ -336,6 +327,32 @@ class AdministrationController extends Controller
 
         $trimmed = trim($value);
         return $trimmed === '' ? null : $trimmed;
+    }
+
+    /**
+     * @return array<string, array<int, string>>
+     */
+    private function jobcardStatusLabelRules(): array
+    {
+        $rules = ['jobcard_status_labels' => ['required', 'array']];
+        foreach (array_keys(Company::DEFAULT_JOBCARD_STATUS_LABELS) as $status) {
+            $rules["jobcard_status_labels.{$status}"] = ['required', 'string', 'max:50'];
+        }
+
+        return $rules;
+    }
+
+    /**
+     * @return array<string, array<int, string>>
+     */
+    private function quoteStatusLabelRules(): array
+    {
+        $rules = ['quote_status_labels' => ['required', 'array']];
+        foreach (array_keys(Company::DEFAULT_QUOTE_STATUS_LABELS) as $status) {
+            $rules["quote_status_labels.{$status}"] = ['required', 'string', 'max:50'];
+        }
+
+        return $rules;
     }
 
     /**

@@ -695,6 +695,9 @@
 
                 <!-- Actions -->
                 <div class="flex items-center justify-end gap-3">
+                    <div class="mr-auto text-xs text-gray-500" aria-live="polite">
+                        {{ autosaveLabel }}
+                    </div>
                     <Link
                         :href="jobcards.index().url"
                         class="rounded bg-gray-500 px-4 py-2 text-white hover:bg-gray-600"
@@ -725,7 +728,8 @@ import { createQuickCreateCustomerDefaults } from '@/types/customers';
 import { getCsrfToken } from '@/lib/csrf';
 import { matchesProductSearch } from '@/composables/productSearch';
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { toast } from 'vue-sonner';
 import jobcards from '@/routes/jobcards';
 
 interface Customer {
@@ -848,6 +852,11 @@ const draggedItemIndex = ref<number | null>(null);
 const dragOverItemIndex = ref<number | null>(null);
 const dragOverGroupId = ref<number | null>(null);
 const activeDragIndex = ref<number | null>(null);
+const autosavedJobcardId = ref<number | null>(null);
+const autosaveStatus = ref<'idle' | 'saving' | 'saved' | 'error'>('idle');
+const autosaveTimer = ref<number | null>(null);
+const lastAutosaveSnapshot = ref<string | null>(null);
+const autosaveInFlightSnapshot = ref<string | null>(null);
 
 const assignmentType = ref<'none' | 'user' | 'team'>('none');
 const customerServiceAddress = (customer: Customer | null) => {
@@ -1541,7 +1550,130 @@ watch(
     { immediate: true },
 );
 
+const autosaveLabel = computed(() => {
+    if (!form.customer_id) return 'Select a customer to autosave a draft';
+    if (form.status !== 'new') return 'Draft autosave runs when status is New';
+    if (autosaveStatus.value === 'saving') return 'Saving draft...';
+    if (autosaveStatus.value === 'saved') return 'Draft saved';
+    if (autosaveStatus.value === 'error') return 'Draft autosave failed';
+    return 'Draft autosaves after changes';
+});
+
+const buildJobcardAutosavePayload = () => ({
+    customer_id: form.customer_id,
+    contact_id: form.contact_id ?? null,
+    email: form.email,
+    phone: form.phone,
+    service_address: form.service_address,
+    source_type: form.source_type ?? null,
+    source_id: form.source_id ?? null,
+    assigned_to_user_id: form.assigned_to_user_id ?? null,
+    assigned_to_team_id: form.assigned_to_team_id ?? null,
+    order_number: form.order_number,
+    title: form.title,
+    description: form.description,
+    status: 'new',
+    priority: form.priority,
+    start_date: form.start_date || null,
+    due_date: form.due_date || null,
+    tax_rate: form.tax_rate,
+    discount_amount: form.discount_amount,
+    discount_percentage: form.discount_percentage,
+    notes: form.notes,
+    terms_conditions: form.terms_conditions,
+    line_groups: form.line_groups.map((group, index) => ({
+        id: group.id,
+        name: group.name,
+        sort_order: index,
+    })),
+    line_items: form.line_items.map((item) => {
+        const { _uid, ...rest } = item as LineItem;
+        void _uid;
+        return {
+            ...rest,
+            line_group_id: item.line_group_id ?? 1,
+        };
+    }),
+});
+
+const canAutosaveDraft = () => Boolean(form.customer_id) && form.status === 'new';
+
+const scheduleAutosave = () => {
+    if (autosaveTimer.value !== null) {
+        window.clearTimeout(autosaveTimer.value);
+    }
+
+    autosaveTimer.value = window.setTimeout(() => {
+        autosaveTimer.value = null;
+        void runAutosave();
+    }, 1000);
+};
+
+const runAutosave = async () => {
+    if (!canAutosaveDraft() || form.processing) {
+        return;
+    }
+
+    const payload = buildJobcardAutosavePayload();
+    const snapshot = JSON.stringify(payload);
+    if (snapshot === lastAutosaveSnapshot.value || snapshot === autosaveInFlightSnapshot.value) {
+        return;
+    }
+
+    autosaveInFlightSnapshot.value = snapshot;
+    autosaveStatus.value = 'saving';
+
+    try {
+        const jobcardId = autosavedJobcardId.value;
+        const response = await fetch(jobcardId ? `/jobcards/${jobcardId}/autosave` : '/jobcards/autosave', {
+            method: jobcardId ? 'PUT' : 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': getCsrfToken(),
+            },
+            body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+            throw new Error('Jobcard draft autosave failed');
+        }
+
+        const data = await response.json() as { jobcard?: { id?: number } };
+        if (data.jobcard?.id) {
+            autosavedJobcardId.value = data.jobcard.id;
+        }
+
+        lastAutosaveSnapshot.value = snapshot;
+        autosaveStatus.value = 'saved';
+        toast.success('Jobcard draft autosaved.');
+    } catch {
+        autosaveStatus.value = 'error';
+        toast.error('Jobcard draft autosave failed.');
+    } finally {
+        autosaveInFlightSnapshot.value = null;
+        if (autosaveStatus.value !== 'error' && JSON.stringify(buildJobcardAutosavePayload()) !== lastAutosaveSnapshot.value) {
+            scheduleAutosave();
+        }
+    }
+};
+
+watch(() => buildJobcardAutosavePayload(), () => {
+    scheduleAutosave();
+}, { deep: true });
+
+onBeforeUnmount(() => {
+    if (autosaveTimer.value !== null) {
+        window.clearTimeout(autosaveTimer.value);
+    }
+});
+
 const submit = () => {
+    if (autosaveTimer.value !== null) {
+        window.clearTimeout(autosaveTimer.value);
+    }
+
     const nonRoundingItems = form.line_items.filter((item) => !isRoundingAdjustmentLine(item));
     if (nonRoundingItems.length === 0) {
         form.setError('line_items', 'At least one non-rounding line item is required.');
@@ -1564,7 +1696,13 @@ const submit = () => {
                 line_group_id: item.line_group_id ?? 1,
             };
         }),
-    }))
-        .post(jobcards.store().url);
+    }));
+
+    if (autosavedJobcardId.value) {
+        form.put(jobcards.update(autosavedJobcardId.value).url);
+        return;
+    }
+
+    form.post(jobcards.store().url);
 };
 </script>

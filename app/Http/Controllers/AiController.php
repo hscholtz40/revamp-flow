@@ -269,7 +269,7 @@ class AiController extends Controller
             $statusCode = 422;
             $latency = (int) round((microtime(true) - $start) * 1000);
             if (GoogleIntegrationSettings::record()->ai_prompt_logging_enabled) {
-                $this->audit->record($user, 'transcribe', ['model' => 'whisper-1'], $latency, $statusCode, $traceId, '[voice-note]', $e->getMessage());
+                $this->audit->record($user, 'transcribe', ['model' => config('services.openai.transcription_model', 'gpt-4o-mini-transcribe')], $latency, $statusCode, $traceId, '[voice-note]', $e->getMessage());
             }
 
             return response()->json([
@@ -280,7 +280,7 @@ class AiController extends Controller
 
         $latency = (int) round((microtime(true) - $start) * 1000);
         if (GoogleIntegrationSettings::record()->ai_prompt_logging_enabled) {
-            $this->audit->record($user, 'transcribe', ['model' => 'whisper-1'], $latency, $statusCode, $traceId, '[voice-note]', $text);
+            $this->audit->record($user, 'transcribe', ['model' => config('services.openai.transcription_model', 'gpt-4o-mini-transcribe')], $latency, $statusCode, $traceId, '[voice-note]', $text);
         }
 
         return response()->json([

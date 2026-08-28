@@ -3,7 +3,8 @@ import { useAuthAbility } from '@/composables/useAuthAbilities';
 import { useNumberFormat } from '@/composables/useNumberFormat';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
-import { Building2, Mail, Phone, MapPin, Edit, ArrowLeft, Package, FileText } from 'lucide-vue-next';
+import { computed } from 'vue';
+import { Building2, Mail, Phone, MapPin, Edit, ArrowLeft, Package, FileText, Landmark } from 'lucide-vue-next';
 import suppliers from '@/routes/suppliers';
 
 interface Supplier {
@@ -17,6 +18,10 @@ interface Supplier {
     postal_code: string | null;
     country: string | null;
     vat_number: string | null;
+    bank_name: string | null;
+    bank_account_name: string | null;
+    bank_account_number: string | null;
+    bank_sort_code: string | null;
     notes: string | null;
     is_active: boolean;
     products?: Array<{ id: number; name: string; sku: string | null }>;
@@ -41,6 +46,15 @@ const props = defineProps<Props>();
 const canSuppliersEdit = useAuthAbility('suppliers', 'edit');
 const canPurchaseOrdersList = useAuthAbility('purchase-orders', 'list');
 const { formatCurrency } = useNumberFormat();
+
+const hasBankDetails = computed(() =>
+    Boolean(
+        props.supplier.bank_name
+        || props.supplier.bank_account_name
+        || props.supplier.bank_account_number
+        || props.supplier.bank_sort_code,
+    ),
+);
 </script>
 
 <template>
@@ -109,6 +123,34 @@ const { formatCurrency } = useNumberFormat();
                                         </div>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div
+                        v-if="hasBankDetails"
+                        class="rounded-lg border border-gray-200 bg-white p-6"
+                    >
+                        <h2 class="mb-4 text-lg font-semibold text-gray-900">Bank Details for Payments</h2>
+                        <div class="space-y-4">
+                            <div v-if="props.supplier.bank_name" class="flex items-center gap-3">
+                                <Landmark class="h-5 w-5 text-gray-400" />
+                                <div>
+                                    <div class="text-sm text-gray-500">Bank Name</div>
+                                    <div class="font-medium text-gray-900">{{ props.supplier.bank_name }}</div>
+                                </div>
+                            </div>
+                            <div v-if="props.supplier.bank_account_name">
+                                <div class="text-sm text-gray-500">Account Name</div>
+                                <div class="font-medium text-gray-900">{{ props.supplier.bank_account_name }}</div>
+                            </div>
+                            <div v-if="props.supplier.bank_account_number">
+                                <div class="text-sm text-gray-500">Account Number</div>
+                                <div class="font-medium text-gray-900">{{ props.supplier.bank_account_number }}</div>
+                            </div>
+                            <div v-if="props.supplier.bank_sort_code">
+                                <div class="text-sm text-gray-500">Branch Code</div>
+                                <div class="font-medium text-gray-900">{{ props.supplier.bank_sort_code }}</div>
                             </div>
                         </div>
                     </div>

@@ -298,7 +298,7 @@
             @if($customMessage)
                 <div class="message">
                     <strong>Message:</strong><br>
-                    {{ $customMessage }}
+                    @include('emails.partials.multiline-text', ['text' => $customMessage])
                 </div>
             @endif
 
@@ -321,7 +321,7 @@
             @if($quote->description)
                 <div class="customer-section">
                     <div class="section-title">Description</div>
-                    <div>{{ $quote->description }}</div>
+                    <div>@include('emails.partials.multiline-text', ['text' => $quote->description])</div>
                 </div>
             @endif
 
@@ -339,7 +339,7 @@
                     <tbody>
                         @foreach($quote->lineItems as $item)
                             <tr>
-                                <td>{{ $item->description }}</td>
+                                <td>@include('emails.partials.multiline-text', ['text' => $item->description])</td>
                                 <td class="text-right">{{ $item->quantity }}</td>
                                 <td class="text-right">{{ $quote->company->formatCurrencyZar($item->unit_price) }}</td>
                                 <td class="text-right">{{ $quote->company->formatCurrencyZar($item->total) }}</td>
@@ -409,14 +409,14 @@
             @if($quote->notes)
                 <div class="customer-section">
                     <div class="section-title">Notes</div>
-                    <div>{{ $quote->notes }}</div>
+                    <div>@include('emails.partials.multiline-text', ['text' => $quote->notes])</div>
                 </div>
             @endif
 
             @if($quote->terms_conditions)
                 <div class="customer-section">
                     <div class="section-title">Terms & Conditions</div>
-                    <div>{{ $quote->terms_conditions }}</div>
+                    <div>@include('emails.partials.multiline-text', ['text' => $quote->terms_conditions])</div>
                 </div>
             @endif
         </div>

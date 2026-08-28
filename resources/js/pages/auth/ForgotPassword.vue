@@ -24,48 +24,56 @@ defineProps<{
 
         <div
             v-if="status"
-            class="mb-4 text-center text-sm font-medium text-green-600"
+            class="mb-6 rounded-lg border border-green-200 bg-green-50 p-4 text-center text-sm font-medium text-green-700"
         >
             {{ status }}
         </div>
 
-        <div class="space-y-6">
-            <Form
-                v-bind="PasswordResetLinkController.store.form()"
-                v-slot="{ errors, processing }"
-            >
-                <div class="grid gap-2">
-                    <Label for="email">Email address</Label>
+        <Form
+            v-bind="PasswordResetLinkController.store.form()"
+            v-slot="{ errors, processing }"
+            class="space-y-6"
+        >
+            <div class="space-y-5">
+                <div class="space-y-2">
+                    <Label for="email" class="text-sm font-medium text-gray-700">Email address</Label>
                     <Input
                         id="email"
                         type="email"
                         name="email"
-                        autocomplete="off"
+                        autocomplete="email"
                         autofocus
-                        placeholder="email@example.com"
+                        placeholder="Enter your email"
+                        class="h-12 border-gray-300 px-4 text-base focus:border-[#f7941d] focus:ring-[#f7941d]"
                     />
                     <InputError :message="errors.email" />
                 </div>
 
-                <div class="my-6 flex items-center justify-start">
-                    <Button
-                        class="w-full"
-                        :disabled="processing"
-                        data-test="email-password-reset-link-button"
-                    >
-                        <LoaderCircle
-                            v-if="processing"
-                            class="h-4 w-4 animate-spin"
-                        />
-                        Email password reset link
-                    </Button>
-                </div>
-            </Form>
-
-            <div class="space-x-1 text-center text-sm text-muted-foreground">
-                <span>Or, return to</span>
-                <TextLink :href="login()">log in</TextLink>
+                <Button
+                    type="submit"
+                    class="h-12 w-full rounded-lg bg-[#f7941d] text-base font-medium text-white transition-colors duration-200 hover:bg-[#d97800] focus:ring-2 focus:ring-[#f7941d] focus:ring-offset-2"
+                    :disabled="processing"
+                    data-test="email-password-reset-link-button"
+                >
+                    <LoaderCircle
+                        v-if="processing"
+                        class="mr-2 h-5 w-5 animate-spin"
+                    />
+                    {{ processing ? 'Sending reset link...' : 'Email password reset link' }}
+                </Button>
             </div>
-        </div>
+
+            <div class="text-center">
+                <p class="text-sm text-gray-600">
+                    Or, return to
+                    <TextLink
+                        :href="login()"
+                        class="ml-1 font-medium text-[#f7941d] hover:text-[#d97800]"
+                    >
+                        log in
+                    </TextLink>
+                </p>
+            </div>
+        </Form>
     </AuthLayout>
 </template>

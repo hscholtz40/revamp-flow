@@ -6,12 +6,14 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/jobcards', [JobcardController::class, 'index'])->middleware('module.permission:jobcards,list')->name('jobcards.index');
     Route::get('/jobcards/create', [JobcardController::class, 'create'])->middleware('module.permission:jobcards,create')->name('jobcards.create');
+    Route::post('/jobcards/autosave', [JobcardController::class, 'autosaveStore'])->middleware('module.permission:jobcards,create')->name('jobcards.autosave.store');
     Route::post('/jobcards', [JobcardController::class, 'store'])->middleware('module.permission:jobcards,create')->name('jobcards.store');
     Route::post('/jobcards/recurring', [JobcardController::class, 'storeRecurring'])->middleware('module.permission:jobcards,create')->name('jobcards.recurring.store');
     Route::delete('/jobcards/recurring/{recurringDocument}', [JobcardController::class, 'destroyRecurring'])->middleware('module.permission:jobcards,delete')->name('jobcards.recurring.destroy');
     Route::get('/jobcards/{jobcard}', [JobcardController::class, 'show'])->middleware('module.permission:jobcards,view')->name('jobcards.show');
     Route::get('/jobcards/{jobcard}/edit', [JobcardController::class, 'edit'])->middleware('module.permission:jobcards,edit')->name('jobcards.edit');
     Route::put('/jobcards/{jobcard}', [JobcardController::class, 'update'])->middleware('module.permission:jobcards,edit')->name('jobcards.update');
+    Route::put('/jobcards/{jobcard}/autosave', [JobcardController::class, 'autosaveUpdate'])->middleware('module.permission:jobcards,edit')->name('jobcards.autosave.update');
     Route::patch('/jobcards/{jobcard}/status', [JobcardController::class, 'updateStatus'])->middleware('module.permission:jobcards,edit')->name('jobcards.update-status');
     Route::get('/jobcards/{jobcard}/print', [JobcardController::class, 'print'])->middleware('module.permission:jobcards,view')->name('jobcards.print');
     Route::post('/jobcards/{jobcard}/email', [JobcardController::class, 'email'])->middleware('module.permission:jobcards,view')->name('jobcards.email');

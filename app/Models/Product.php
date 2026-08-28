@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\ProductImageStorage;
 use App\Traits\Auditable;
 use App\Traits\ScopedToCurrentCompanyRouteBinding;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -22,6 +23,12 @@ class Product extends Model
         'price',
         'cost',
         'unit',
+        'weight',
+        'length',
+        'width',
+        'height',
+        'color',
+        'size',
         'stock_quantity',
         'min_stock_level',
         'track_stock',
@@ -52,9 +59,17 @@ class Product extends Model
         'xero_created_at',
     ];
 
+    protected $appends = [
+        'image_url',
+    ];
+
     protected $casts = [
         'price' => 'float',
         'cost' => 'float',
+        'weight' => 'float',
+        'length' => 'float',
+        'width' => 'float',
+        'height' => 'float',
         'stock_quantity' => 'integer',
         'min_stock_level' => 'integer',
         'track_stock' => 'boolean',
@@ -69,6 +84,11 @@ class Product extends Model
         'xero_updated_at' => 'datetime',
         'xero_created_at' => 'datetime',
     ];
+
+    public function getImageUrlAttribute(): ?string
+    {
+        return ProductImageStorage::url($this->image_path);
+    }
 
     /**
      * Scope to filter by type (product or service)

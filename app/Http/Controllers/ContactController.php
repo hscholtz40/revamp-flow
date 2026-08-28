@@ -8,6 +8,7 @@ use App\Models\EmailActivity;
 use App\Models\SMSActivity;
 use App\Models\SMSSettings;
 use App\Services\BulkSMSService;
+use App\Services\SystemNotificationService;
 use App\Support\CompanyMailer;
 use App\Support\CompanyScopedRules;
 use App\Support\CsvExport;
@@ -325,7 +326,18 @@ class ContactController extends Controller
                 ->update(['is_primary' => false]);
         }
 
+        $before = $contact->only(array_keys($validated));
+
         $contact->update($validated);
+
+        $currentCompany = auth()->user()->getCurrentCompany();
+        app(SystemNotificationService::class)->notifyContactUpdated(
+            $currentCompany,
+            $contact->name,
+            $contact->email,
+            $before,
+            $contact->only(array_keys($validated))
+        );
 
         return redirect()->route('customers.show', $validated['customer_id'])
             ->with('success', 'Contact updated successfully');

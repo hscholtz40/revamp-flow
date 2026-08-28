@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Support\DashboardQuickActionCatalog;
 use App\Services\InstanceLicenseService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -47,6 +48,7 @@ class UsersController extends Controller
         return Inertia::render('users/Create', [
             'groups' => Group::query()->orderBy('name')->get(['id','name']),
             'companies' => Company::query()->orderBy('name')->get(['id','name']),
+            'dashboardQuickActionOptions' => DashboardQuickActionCatalog::optionsForUi(),
         ]);
     }
 
@@ -64,6 +66,7 @@ class UsersController extends Controller
             'groups.*' => ['integer', 'exists:groups,id'],
             'companies' => ['array'],
             'companies.*' => ['integer', 'exists:companies,id'],
+            ...DashboardQuickActionCatalog::validationRules(),
         ]);
 
         $this->assertUserTypeWithinLicenseLimit($validated['user_type']);
@@ -76,6 +79,9 @@ class UsersController extends Controller
         if (!empty($validated['password'])) {
             $user->password = Hash::make($validated['password']);
         }
+        $user->dashboard_quick_actions = DashboardQuickActionCatalog::normalizeForStorage(
+            $validated['dashboard_quick_actions'] ?? null,
+        );
         $user->save();
         if ($request->filled('groups')) {
             $user->groups()->sync($validated['groups']);
@@ -109,9 +115,12 @@ class UsersController extends Controller
         }
         
         return Inertia::render('users/Edit', [
-            'user' => $user,
+            'user' => array_merge($user->toArray(), [
+                'dashboard_quick_actions' => $user->getResolvedDashboardQuickActions(),
+            ]),
             'groups' => Group::query()->orderBy('name')->get(['id','name']),
             'companies' => Company::query()->orderBy('name')->get(['id','name']),
+            'dashboardQuickActionOptions' => DashboardQuickActionCatalog::optionsForUi(),
         ]);
     }
 
@@ -127,6 +136,7 @@ class UsersController extends Controller
             'groups.*' => ['integer', 'exists:groups,id'],
             'companies' => ['sometimes','array'],
             'companies.*' => ['integer', 'exists:companies,id'],
+            ...DashboardQuickActionCatalog::validationRules(),
         ]);
 
         $this->assertUserTypeWithinLicenseLimit($validated['user_type'], $user->id);
@@ -137,6 +147,11 @@ class UsersController extends Controller
         $user->hourly_rate = $validated['hourly_rate'] ?? null;
         if (!empty($validated['password'])) {
             $user->password = Hash::make($validated['password']);
+        }
+        if ($request->has('dashboard_quick_actions')) {
+            $user->dashboard_quick_actions = DashboardQuickActionCatalog::normalizeForStorage(
+                $validated['dashboard_quick_actions'] ?? null,
+            );
         }
         $user->save();
         if ($request->has('groups')) {

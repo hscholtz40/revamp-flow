@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Category;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -47,6 +48,35 @@ class CategoryController extends Controller
 
         return redirect()->route('administration.categories.index')
             ->with('success', 'Category created successfully');
+    }
+
+    /**
+     * Quick create category from dashboard (administrators only).
+     */
+    public function quickCreate(Request $request): JsonResponse
+    {
+        abort_unless($request->user()?->isAdministrator(), 403);
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255', 'unique:categories,name'],
+            'color' => ['required', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'is_active' => ['boolean'],
+            'sort_order' => ['integer', 'min:0'],
+        ]);
+
+        $category = Category::create([
+            'name' => $validated['name'],
+            'description' => null,
+            'color' => $validated['color'],
+            'is_active' => $request->boolean('is_active', true),
+            'sort_order' => $validated['sort_order'] ?? 0,
+        ]);
+
+        return response()->json([
+            'id' => $category->id,
+            'name' => $category->name,
+            'color' => $category->color,
+        ], 201);
     }
 
     /**

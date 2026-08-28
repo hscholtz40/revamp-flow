@@ -6,6 +6,8 @@ import { attachPlacesAutocomplete } from '@/lib/placesAutocomplete';
 const props = defineProps<{
     modelValue: string;
     city?: string;
+    state?: string;
+    postalCode?: string;
     country?: string;
     placeholder?: string;
     /** Merged onto the input (e.g. border, padding). */
@@ -20,6 +22,8 @@ const props = defineProps<{
 const emit = defineEmits<{
     'update:modelValue': [string];
     'update:city': [string];
+    'update:state': [string];
+    'update:postalCode': [string];
     'update:country': [string];
 }>();
 
@@ -43,6 +47,12 @@ async function bindAutocomplete() {
             emit('update:modelValue', parsed.streetAddress);
             if (props.city !== undefined) {
                 emit('update:city', parsed.city);
+            }
+            if (props.state !== undefined) {
+                emit('update:state', parsed.province);
+            }
+            if (props.postalCode !== undefined) {
+                emit('update:postalCode', parsed.postalCode);
             }
             if (props.country !== undefined) {
                 emit('update:country', parsed.country);

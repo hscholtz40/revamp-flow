@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { useNumberFormat } from '@/composables/useNumberFormat';
 import { useAuthAbility } from '@/composables/useAuthAbilities';
+import { useDashboardQuickActions } from '@/composables/useDashboardQuickActions';
 import AppLayout from '@/layouts/AppLayout.vue';
+import DashboardQuickCreate from '@/components/dashboard/DashboardQuickCreate.vue';
 import { dashboard } from '@/routes';
-import customers from '@/routes/customers';
 import quotes from '@/routes/quotes';
 import invoices from '@/routes/invoices';
 import jobcards from '@/routes/jobcards';
@@ -18,7 +19,6 @@ import {
     FileText, 
     Receipt, 
     Wrench, 
-    UserPlus,
     TrendingUp,
     CheckCircle2,
     Package,
@@ -66,6 +66,7 @@ interface Props {
     currentCompany: any;
     canCreateInvoices: boolean;
     isPosEnabled: boolean;
+    categoryOptions?: Array<{ id: number; name: string; color: string }>;
 }
 
 const props = defineProps<Props>();
@@ -81,15 +82,28 @@ const canInvoicesView = useAuthAbility('invoices', 'view');
 const canJobcardsCreate = useAuthAbility('jobcards', 'create');
 const canJobcardsList = useAuthAbility('jobcards', 'list');
 const canCustomersCreate = useAuthAbility('customers', 'create');
+const canSuppliersCreate = useAuthAbility('suppliers', 'create');
+const canProductsCreate = useAuthAbility('products', 'create');
+const isAdministrator = computed(() => !!(page.props.auth as { user?: { is_administrator?: boolean } } | undefined)?.user?.is_administrator);
+const { isEnabled: isQuickActionEnabled } = useDashboardQuickActions();
 
 const showDocumentQuickActions = computed(
     () =>
-        canQuotesCreate.value ||
-        canInvoicesCreateAbility.value ||
-        (props.canCreateInvoices && props.isPosEnabled) ||
-        canJobcardsCreate.value ||
-        canCustomersCreate.value,
+        (canQuotesCreate.value && isQuickActionEnabled('quote')) ||
+        (canInvoicesCreateAbility.value && isQuickActionEnabled('invoice')) ||
+        (props.canCreateInvoices && props.isPosEnabled && isQuickActionEnabled('pos')) ||
+        (canJobcardsCreate.value && isQuickActionEnabled('jobcard')),
 );
+
+const showCatalogQuickCreate = computed(
+    () =>
+        (canCustomersCreate.value && isQuickActionEnabled('customer')) ||
+        (canSuppliersCreate.value && isQuickActionEnabled('supplier')) ||
+        (canProductsCreate.value && isQuickActionEnabled('product')) ||
+        (isAdministrator.value && isQuickActionEnabled('category')),
+);
+
+const showQuickActions = computed(() => showDocumentQuickActions.value || showCatalogQuickCreate.value);
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -212,7 +226,7 @@ const getStatusColor = (status: string) => {
                         Welcome back! Here's what's happening with your business.
                     </p>
                 </div>
-                <Button v-if="props.canCreateInvoices && props.isPosEnabled" as-child>
+                <Button v-if="props.canCreateInvoices && props.isPosEnabled && isQuickActionEnabled('pos')" as-child>
                     <Link href="/invoices/pos">
                         POS
                     </Link>
@@ -220,43 +234,44 @@ const getStatusColor = (status: string) => {
             </div>
 
             <!-- Quick Actions -->
-            <Card v-if="!isLimitedUser && showDocumentQuickActions">
+            <Card v-if="!isLimitedUser && showQuickActions">
                 <CardHeader>
                     <CardTitle>Quick Actions</CardTitle>
                     <CardDescription>Create new items quickly</CardDescription>
                 </CardHeader>
-                <CardContent>
-                    <div class="grid gap-2 md:grid-cols-4">
-                        <Button v-if="canQuotesCreate" as-child class="w-full justify-start">
+                <CardContent class="space-y-4">
+                    <div v-if="showDocumentQuickActions" class="grid gap-2 md:grid-cols-4">
+                        <Button v-if="canQuotesCreate && isQuickActionEnabled('quote')" as-child class="w-full justify-start">
                             <Link :href="quotes.create().url">
                                 <FileText class="mr-2 h-4 w-4" />
                                 New Quote
                             </Link>
                         </Button>
-                        <Button v-if="canInvoicesCreateAbility" as-child class="w-full justify-start" variant="outline">
+                        <Button v-if="canInvoicesCreateAbility && isQuickActionEnabled('invoice')" as-child class="w-full justify-start" variant="outline">
                             <Link :href="invoices.create().url">
                                 <Receipt class="mr-2 h-4 w-4" />
                                 New Invoice
                             </Link>
                         </Button>
-                        <Button v-if="props.canCreateInvoices && props.isPosEnabled" as-child class="w-full justify-start" variant="outline">
+                        <Button v-if="props.canCreateInvoices && props.isPosEnabled && isQuickActionEnabled('pos')" as-child class="w-full justify-start" variant="outline">
                             <Link href="/invoices/pos">
                                 <Receipt class="mr-2 h-4 w-4" />
                                 POS
                             </Link>
                         </Button>
-                        <Button v-if="canJobcardsCreate" as-child class="w-full justify-start" variant="outline">
+                        <Button v-if="canJobcardsCreate && isQuickActionEnabled('jobcard')" as-child class="w-full justify-start" variant="outline">
                             <Link :href="jobcards.create().url">
                                 <Wrench class="mr-2 h-4 w-4" />
                                 New Jobcard
                             </Link>
                         </Button>
-                        <Button v-if="canCustomersCreate" as-child class="w-full justify-start" variant="outline">
-                            <Link :href="customers.create().url">
-                                <UserPlus class="mr-2 h-4 w-4" />
-                                New Customer
-                            </Link>
-                        </Button>
+                    </div>
+
+                    <div v-if="showCatalogQuickCreate">
+                        <p v-if="showDocumentQuickActions" class="mb-2 text-sm font-medium text-muted-foreground">
+                            Customers &amp; catalog
+                        </p>
+                        <DashboardQuickCreate :category-options="props.categoryOptions ?? []" />
                     </div>
                 </CardContent>
             </Card>

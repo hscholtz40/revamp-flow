@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Jobcard;
+use App\Support\JobcardStatuses;
 use App\Models\TimeEntry;
 use App\Services\AssignmentNotificationService;
 use Illuminate\Http\Request;
@@ -63,7 +64,7 @@ class JobcardController extends Controller
             'assigned_to_team_id' => ['nullable', 'integer', 'exists:teams,id'],
             'start_date' => ['nullable', 'date'],
             'due_date' => ['nullable', 'date'],
-            'status' => ['nullable', 'in:new,needs_scheduling,scheduled,dispatched,accepted,en_route,on_site,paused,waiting_for_parts,needs_follow_up,emergency,completed,cancelled'],
+            'status' => ['nullable', JobcardStatuses::validationRule()],
             'priority' => ['nullable', 'in:low,normal,high,urgent'],
             'estimated_duration_minutes' => ['nullable', 'integer', 'min:5', 'max:1440'],
         ]);
@@ -131,7 +132,7 @@ class JobcardController extends Controller
     {
         $this->assertCompanyScope($jobcard);
         $payload = $request->validate([
-            'status' => ['required', 'in:new,needs_scheduling,scheduled,dispatched,accepted,en_route,on_site,paused,waiting_for_parts,needs_follow_up,emergency,completed,cancelled'],
+            'status' => ['required', JobcardStatuses::validationRule()],
         ]);
 
         $jobcard->update($payload);

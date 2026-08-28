@@ -136,8 +136,8 @@
     --accent-foreground: hsl(0 0% 5%);
     --destructive: hsl(0 84.2% 60.2%);
     --destructive-foreground: hsl(0 0% 98%);
-    --border: hsl(0 0% calc(var(--theme-background-light-mode-lightness) + 20%));
-    --input: hsl(0 0% calc(var(--theme-background-light-mode-lightness) + 25%));
+    --border: hsl(0 0% clamp(72%, calc(var(--theme-background-light-mode-lightness) - 14%), 90%));
+    --input: hsl(0 0% clamp(70%, calc(var(--theme-background-light-mode-lightness) - 16%), 88%));
     /* Ring: Primary color for focus states */
     --ring: hsl(var(--theme-primary-hue) var(--theme-primary-saturation) var(--theme-primary-lightness));
     /* Chart colors using brand colors (configurable via env) */
@@ -154,7 +154,7 @@
     --sidebar-primary-foreground: hsl(0 0% 5%);
     --sidebar-accent: hsl(var(--theme-sidebar-accent-hue) var(--theme-sidebar-accent-saturation) var(--theme-sidebar-accent-lightness));
     --sidebar-accent-foreground: hsl(var(--theme-sidebar-primary-hue) var(--theme-sidebar-primary-saturation) var(--theme-sidebar-primary-lightness));
-    --sidebar-border: hsl(0 0% calc(var(--theme-background-light-mode-lightness) + 15%));
+    --sidebar-border: hsl(0 0% clamp(70%, calc(var(--theme-background-light-mode-lightness) - 18%), 88%));
     --sidebar-ring: hsl(var(--theme-sidebar-primary-hue) var(--theme-sidebar-primary-saturation) var(--theme-sidebar-primary-lightness));
     --sidebar: hsl(0 0% calc(var(--theme-background-light-mode-lightness) + 10%));
 }
@@ -180,8 +180,8 @@
     --accent-foreground: hsl(0 0% 5%);
     --destructive: hsl(0 84% 60%);
     --destructive-foreground: hsl(0 0% 98%);
-    --border: hsl(0 0% calc(var(--theme-background-dark-mode-lightness) + 15%));
-    --input: hsl(0 0% calc(var(--theme-background-dark-mode-lightness) + 15%));
+    --border: hsl(0 0% calc(var(--theme-background-dark-mode-lightness) + 20%));
+    --input: hsl(0 0% calc(var(--theme-background-dark-mode-lightness) + 22%));
     /* Ring: Lighter primary for dark mode */
     --ring: hsl(var(--theme-primary-hue) var(--theme-primary-saturation) var(--theme-primary-dark-mode-lightness));
     /* Chart colors using brand colors (lighter for dark mode) */
@@ -418,9 +418,15 @@
     .dark input,
     .dark select,
     .dark textarea {
-        background-color: hsl(0 0% 10%);
+        background-color: hsl(0 0% calc(var(--theme-background-dark-mode-lightness) + 6%));
         color: hsl(0 0% 95%);
-        border-color: hsl(0 0% 26%);
+        border-color: hsl(0 0% calc(var(--theme-background-dark-mode-lightness) + 22%));
+    }
+
+    input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='hidden']):not([type='color']),
+    select,
+    textarea {
+        border-color: var(--border);
     }
 
     .dark input::placeholder,

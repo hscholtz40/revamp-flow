@@ -18,6 +18,11 @@ class Company extends Model
         'needs_scheduling' => 'Needs scheduling',
         'scheduled' => 'Scheduled',
         'dispatched' => 'Dispatched',
+        'purchase_order_sent_on_dispatch' => 'Purchase order sent on dispatch',
+        'order_received' => 'Order received',
+        'stock_checked' => 'Stock checked',
+        'delivery_scheduled' => 'Delivery scheduled',
+        'delivered' => 'Delivered',
         'accepted' => 'Accepted',
         'en_route' => 'En route',
         'on_site' => 'On site',
@@ -504,6 +509,16 @@ class Company extends Model
     public function getReminderSettings(): ReminderSettings
     {
         return ReminderSettings::getForCompany($this->id);
+    }
+
+    public function notificationSettings(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(NotificationSettings::class);
+    }
+
+    public function getNotificationSettings(): NotificationSettings
+    {
+        return NotificationSettings::getForCompany($this->id);
     }
 
     /**

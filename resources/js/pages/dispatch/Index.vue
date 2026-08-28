@@ -25,6 +25,12 @@ import {
 } from '@/composables/useDateTimeFormat';
 import { formatDispatchScheduleInstant, parseScheduleInstant } from '@/lib/dispatchScheduleFormat';
 import { loadGoogleMapsJavaScriptApi } from '@/lib/googleMapsLoader';
+import {
+    JOBCARD_STATUS_KEYS,
+    JOBCARD_STATUS_DEFAULT_LABELS,
+    isJobcardStatusKey,
+    type JobcardStatusKey,
+} from '@/lib/jobcardStatuses';
 
 interface LookupItem {
     id: number;
@@ -55,20 +61,7 @@ interface ScheduledItem {
     scheduled_end_at?: string | null;
 }
 
-type BoardStatus =
-    | 'new'
-    | 'needs_scheduling'
-    | 'scheduled'
-    | 'dispatched'
-    | 'accepted'
-    | 'en_route'
-    | 'on_site'
-    | 'paused'
-    | 'waiting_for_parts'
-    | 'needs_follow_up'
-    | 'emergency'
-    | 'completed'
-    | 'cancelled';
+type BoardStatus = JobcardStatusKey;
 type TaskStatus = 'new' | 'scheduled' | 'accepted' | 'completed' | 'cancelled';
 type BoardEntityType = 'jobcard' | 'task';
 
@@ -184,36 +177,13 @@ const selectedDrawerJobAddress = computed(() => {
         .filter((x) => x.length > 0)
         .join(', ');
 });
-const boardStatuses: Array<{ value: BoardStatus; label: string }> = [
-    { value: 'new', label: 'New' },
-    { value: 'needs_scheduling', label: 'Needs scheduling' },
-    { value: 'scheduled', label: 'Scheduled' },
-    { value: 'dispatched', label: 'Dispatched' },
-    { value: 'accepted', label: 'Accepted' },
-    { value: 'en_route', label: 'En route' },
-    { value: 'on_site', label: 'On site' },
-    { value: 'paused', label: 'Paused' },
-    { value: 'waiting_for_parts', label: 'Waiting for parts' },
-    { value: 'needs_follow_up', label: 'Needs follow-up' },
-    { value: 'emergency', label: 'Emergency' },
-    { value: 'completed', label: 'Completed' },
-    { value: 'cancelled', label: 'Cancelled' },
-];
-const laneVisibleCount = reactive<Record<BoardStatus, number>>({
-    new: 20,
-    needs_scheduling: 20,
-    scheduled: 20,
-    dispatched: 20,
-    accepted: 20,
-    en_route: 20,
-    on_site: 20,
-    paused: 20,
-    waiting_for_parts: 20,
-    needs_follow_up: 20,
-    emergency: 20,
-    completed: 20,
-    cancelled: 20,
-});
+const boardStatuses = JOBCARD_STATUS_KEYS.map((value) => ({
+    value,
+    label: JOBCARD_STATUS_DEFAULT_LABELS[value],
+}));
+const laneVisibleCount = reactive(
+    Object.fromEntries(JOBCARD_STATUS_KEYS.map((status) => [status, 20])) as Record<BoardStatus, number>,
+);
 const draggedCard = ref<BoardCard | null>(null);
 const kanbanScrollRef = ref<HTMLElement | null>(null);
 const KANBAN_AUTOSCROLL_EDGE_PX = 64;
@@ -245,24 +215,7 @@ const laneHoverStatus = ref<BoardStatus | null>(null);
 const normalizedStatus = (card: BoardCard): BoardStatus => {
     if (card.entityType === 'jobcard') {
         const value = card.status ?? 'new';
-        if (
-            value === 'new' ||
-            value === 'needs_scheduling' ||
-            value === 'scheduled' ||
-            value === 'dispatched' ||
-            value === 'accepted' ||
-            value === 'en_route' ||
-            value === 'on_site' ||
-            value === 'paused' ||
-            value === 'waiting_for_parts' ||
-            value === 'needs_follow_up' ||
-            value === 'emergency' ||
-            value === 'completed' ||
-            value === 'cancelled'
-        ) {
-            return value;
-        }
-        return 'new';
+        return isJobcardStatusKey(value) ? value : 'new';
     }
 
     if (card.status === 'accepted') return 'accepted';
@@ -1193,19 +1146,9 @@ const loadBoard = async () => {
         scheduled_jobcards: data.scheduled_jobcards ?? [],
         unscheduled_jobcards: data.unscheduled_jobcards ?? [],
     };
-    laneVisibleCount.new = 20;
-    laneVisibleCount.needs_scheduling = 20;
-    laneVisibleCount.scheduled = 20;
-    laneVisibleCount.dispatched = 20;
-    laneVisibleCount.accepted = 20;
-    laneVisibleCount.en_route = 20;
-    laneVisibleCount.on_site = 20;
-    laneVisibleCount.paused = 20;
-    laneVisibleCount.waiting_for_parts = 20;
-    laneVisibleCount.needs_follow_up = 20;
-    laneVisibleCount.emergency = 20;
-    laneVisibleCount.completed = 20;
-    laneVisibleCount.cancelled = 20;
+    for (const status of JOBCARD_STATUS_KEYS) {
+        laneVisibleCount[status] = 20;
+    }
 
     syncSelectedDispatchJobcardFromBoard();
 };

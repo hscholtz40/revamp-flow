@@ -146,7 +146,8 @@ return [
 
     'openai' => [
         'model' => env('OPENAI_MODEL', 'gpt-4o-mini'),
-        'transcription_model' => env('OPENAI_TRANSCRIPTION_MODEL', 'whisper-1'),
+        'transcription_model' => env('OPENAI_TRANSCRIPTION_MODEL', 'gpt-4o-mini-transcribe'),
+        'transcription_language' => env('OPENAI_TRANSCRIPTION_LANGUAGE'),
     ],
 
     'quickbooks' => [

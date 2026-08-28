@@ -122,4 +122,48 @@ class PdfGenerationServiceHandlebarsTest extends TestCase
 
         $this->assertSame($html, $out);
     }
+
+    public function test_inject_company_footer_matches_footer_left_with_multiple_classes(): void
+    {
+        $service = new class extends PdfGenerationService
+        {
+            public function expose(string $html, string $module, \App\Models\Company $company): string
+            {
+                return $this->injectCompanyFooter($html, $module, $company);
+            }
+        };
+
+        $company = new \App\Models\Company(['quote_footer' => 'Valid for 30 days.']);
+        $html = '<div class="footer"><div class="footer footer-left text-muted">Default footer</div></div>';
+        $out = $service->expose($html, 'quote', $company);
+
+        $this->assertStringContainsString('Valid for 30 days.', $out);
+        $this->assertStringNotContainsString('Default footer', $out);
+    }
+
+    public function test_company_footer_placeholders_are_available_in_handlebars_data(): void
+    {
+        $service = new class extends PdfGenerationService
+        {
+            public function expose(string $html, array $data): string
+            {
+                return $this->processHandlebarsTemplate($html, $data);
+            }
+        };
+
+        $out = $service->expose(
+            '<footer>{{company.invoice_footer}}|{{{company.pdf_footer_html}}}|{{company.pdf_footer}}</footer>',
+            [
+                'company' => [
+                    'invoice_footer' => "Thank you.\nCall again.",
+                    'pdf_footer' => "Thank you.\nCall again.",
+                    'pdf_footer_html' => 'Thank you.<br>Call again.',
+                ],
+            ]
+        );
+
+        $this->assertStringContainsString('Thank you.', $out);
+        $this->assertStringContainsString('Thank you.<br>Call again.', $out);
+        $this->assertStringContainsString('Call again.', $out);
+    }
 }

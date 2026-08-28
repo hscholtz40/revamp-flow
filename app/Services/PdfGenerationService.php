@@ -16,6 +16,9 @@ class PdfGenerationService
      */
     public function generatePdf(string $module, array $data, Company $company, ?int $templateId = null): \Barryvdh\DomPDF\PDF
     {
+        $data = $this->enrichPdfGenerationData($data, $company, $module);
+        $company = $data['company'];
+
         $template = null;
 
         // If template ID is provided, try to load it
@@ -200,9 +203,45 @@ class PdfGenerationService
     }
 
     /**
-     * Inject company-configured PDF footer text when set in company settings.
+     * Ensure PDF template data includes company footer fields and common aliases.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
      */
-    protected function injectCompanyFooter(string $html, string $module, Company $company): string
+    protected function enrichPdfGenerationData(array $data, Company $company, string $module): array
+    {
+        $company = $this->prepareCompanyModelForPdf($company, $module);
+        $data['company'] = $company;
+
+        if (! isset($data['date'])) {
+            $data['date'] = $company->formatLocalizedDateTime(now());
+        }
+
+        $data['company_footer'] = (string) $company->getAttribute('pdf_footer');
+        $data['company_footer_html'] = (string) $company->getAttribute('pdf_footer_html');
+
+        return $data;
+    }
+
+    protected function prepareCompanyModelForPdf(Company $company, string $module): Company
+    {
+        if ($company->exists) {
+            $company = $company->fresh() ?? $company;
+        }
+
+        $footerText = $this->resolveCompanyFooterText($module, $company);
+        $company->setAttribute('pdf_footer', $footerText);
+        $company->setAttribute(
+            'pdf_footer_html',
+            $footerText !== ''
+                ? nl2br(e($footerText), false)
+                : 'JobCard Online (Registered to '.e($company->name ?? 'Company').')'
+        );
+
+        return $company;
+    }
+
+    protected function resolveCompanyFooterText(string $module, Company $company): string
     {
         $footerText = match ($module) {
             'invoice' => $company->invoice_footer,
@@ -211,17 +250,26 @@ class PdfGenerationService
             default => null,
         };
 
-        $footerText = trim((string) $footerText);
+        return trim((string) $footerText);
+    }
+
+    /**
+     * Inject company-configured PDF footer text when set in company settings.
+     */
+    protected function injectCompanyFooter(string $html, string $module, Company $company): string
+    {
+        $footerText = $this->resolveCompanyFooterText($module, $company);
         if ($footerText === '') {
             return $html;
         }
 
         $formattedFooter = nl2br(e($footerText), false);
+        $footerLeftPattern = '/(<div\s+class=(["\'])[^"\']*\bfooter-left\b[^"\']*\2[^>]*>)([\s\S]*?)(<\/div>)/i';
 
-        if (preg_match('/(<div\s+class="footer-left"[^>]*>)([\s\S]*?)(<\/div>)/i', $html)) {
+        if (preg_match($footerLeftPattern, $html)) {
             return preg_replace(
-                '/(<div\s+class="footer-left"[^>]*>)([\s\S]*?)(<\/div>)/i',
-                '$1'.$formattedFooter.'$3',
+                $footerLeftPattern,
+                '$1'.$formattedFooter.'$4',
                 $html,
                 1
             ) ?? $html;
@@ -430,6 +478,15 @@ class PdfGenerationService
                         if ($logoPath) {
                             $prepared[$key]['logo_path_for_pdf'] = $logoPath;
                             $prepared[$key]['getLogoPathForPdf'] = $logoPath;
+                        }
+                    }
+
+                    if ($key === 'company') {
+                        foreach (['invoice_footer', 'quote_footer', 'jobcard_footer', 'pdf_footer', 'pdf_footer_html'] as $footerField) {
+                            $footerValue = $value->getAttribute($footerField);
+                            if ($footerValue !== null) {
+                                $prepared[$key][$footerField] = $footerValue;
+                            }
                         }
                     }
 

@@ -6,6 +6,7 @@ use App\Http\Requests\Quotes\AutosaveQuoteRequest;
 use App\Http\Requests\Quotes\StoreQuoteRequest;
 use App\Http\Requests\Quotes\UpdateQuoteRequest;
 use App\Models\ChartOfAccount;
+use App\Models\Category;
 use App\Models\Customer;
 use App\Models\EmailActivity;
 use App\Models\Jobcard;
@@ -176,6 +177,7 @@ class QuotesController extends Controller
         $suppliers = Supplier::where('company_id', $currentCompany->id)
             ->orderBy('name')
             ->get(['id', 'name']);
+        $productCategories = Category::active()->ordered()->get(['id', 'name']);
 
         $taxRates = TaxRate::where('company_id', $currentCompany->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'rate', 'is_default_sales']);
         $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
@@ -276,6 +278,7 @@ class QuotesController extends Controller
         return Inertia::render('quotes/Create', [
             'customers' => $customers,
             'products' => $products,
+            'productCategories' => $productCategories,
             'suppliers' => $suppliers,
             'currentCompany' => $currentCompany,
             'defaultTerms' => $currentCompany->default_quote_terms,
@@ -356,10 +359,8 @@ class QuotesController extends Controller
         // Get default template IDs for both modules
         $defaultQuoteTemplateId = $pdfTemplates->where('module', 'quote')->where('is_default', true)->first()?->id ?? null;
         $defaultProformaTemplateId = $pdfTemplates->where('module', 'proforma-invoice')->where('is_default', true)->first()?->id ?? null;
-        $convertedJobcardId = Jobcard::where('company_id', $currentCompany->id)
-            ->where('source_type', 'quote')
-            ->where('source_id', $quote->id)
-            ->value('id');
+        $linkedJobcard = $quote->linkedJobcardPayload($currentCompany->id);
+        $convertedJobcardId = $linkedJobcard['id'] ?? null;
         $relatedPurchaseOrders = PurchaseOrder::where('company_id', $currentCompany->id)
             ->where('source_type', 'quote')
             ->where('source_id', $quote->id)
@@ -375,6 +376,7 @@ class QuotesController extends Controller
 
         return Inertia::render('quotes/Show', [
             'quote' => $quote,
+            'linkedJobcard' => $linkedJobcard,
             'canEditCompleted' => auth()->user()->hasModulePermission('quotes', 'edit_completed'),
             'statusOptions' => $currentCompany->getQuoteStatusOptions(),
             'pdfTemplates' => $pdfTemplates,
@@ -402,7 +404,15 @@ class QuotesController extends Controller
         $this->authorize('update', $quote);
 
         $currentCompany = auth()->user()->getCurrentCompany();
-        $quote->load(['customer', 'contact', 'lineItems.product', 'lineItems.supplier', 'lineItems.lineGroup', 'lineGroups']);
+        $quote->load([
+            'customer',
+            'contact',
+            'lineItems.product',
+            'lineItems.supplier',
+            'lineItems.lineGroup',
+            'lineGroups',
+            'convertedJobcard:id,job_number,title,company_id',
+        ]);
         $customers = Customer::where('company_id', $currentCompany->id)->orderBy('name')->get(['id', 'name', 'email', 'phone', 'account_code']);
         $products = Product::where('company_id', $currentCompany->id)
             ->where('is_active', true)
@@ -411,6 +421,7 @@ class QuotesController extends Controller
         $suppliers = Supplier::where('company_id', $currentCompany->id)
             ->orderBy('name')
             ->get(['id', 'name']);
+        $productCategories = Category::active()->ordered()->get(['id', 'name']);
 
         $taxRates = TaxRate::where('company_id', $currentCompany->id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'rate', 'is_default_sales']);
         $defaultSalesTaxRate = TaxRate::getDefaultSalesForCompany($currentCompany->id);
@@ -420,11 +431,14 @@ class QuotesController extends Controller
 
         // Pass quote as array to ensure line_items include tax_rate_id and account_id
         $quoteData = $quote->toArray();
+        $linkedJobcard = $quote->linkedJobcardPayload($currentCompany->id);
 
         return Inertia::render('quotes/Edit', [
             'quote' => $quoteData,
+            'linkedJobcard' => $linkedJobcard,
             'customers' => $customers,
             'products' => $products,
+            'productCategories' => $productCategories,
             'suppliers' => $suppliers,
             'currentCompany' => $currentCompany,
             'statusOptions' => $currentCompany->getQuoteStatusOptions(),
@@ -539,12 +553,12 @@ class QuotesController extends Controller
     private function autosaveQuoteResponse(Quote $quote): array
     {
         $quote->refresh();
-
         return [
             'id' => $quote->id,
             'quote_number' => $quote->quote_number,
             'status' => $quote->status,
             'updated_at' => $quote->updated_at?->toIso8601String(),
+            'linkedJobcard' => $quote->linkedJobcardPayload((int) $quote->company_id),
         ];
     }
 
@@ -557,10 +571,7 @@ class QuotesController extends Controller
 
         $currentCompany = auth()->user()->getCurrentCompany();
 
-        $existingJobcardId = Jobcard::where('company_id', $currentCompany->id)
-            ->where('source_type', 'quote')
-            ->where('source_id', $quote->id)
-            ->value('id');
+        $existingJobcardId = $quote->findLinkedJobcard($currentCompany->id)?->id;
 
         if ($existingJobcardId) {
             return redirect()->route('jobcards.show', $existingJobcardId)

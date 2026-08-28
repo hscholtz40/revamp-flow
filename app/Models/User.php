@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\DashboardQuickActionCatalog;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -43,6 +44,7 @@ class User extends Authenticatable
         'approved_at',
         'approved_by',
         'must_reset_password',
+        'dashboard_quick_actions',
     ];
 
     /**
@@ -70,7 +72,21 @@ class User extends Authenticatable
             'smtp_password' => 'encrypted',
             'approved_at' => 'datetime',
             'must_reset_password' => 'boolean',
+            'dashboard_quick_actions' => 'array',
         ];
+    }
+
+    /**
+     * @return array<string, bool>
+     */
+    public function getResolvedDashboardQuickActions(): array
+    {
+        return DashboardQuickActionCatalog::resolve($this->dashboard_quick_actions);
+    }
+
+    public function isDashboardQuickActionEnabled(string $key): bool
+    {
+        return $this->getResolvedDashboardQuickActions()[$key] ?? true;
     }
 
     public function groups(): BelongsToMany

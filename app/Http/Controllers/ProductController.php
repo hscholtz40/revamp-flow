@@ -9,8 +9,10 @@ use App\Models\InvoiceLineItem;
 use App\Models\Product;
 use App\Models\PurchaseOrderItem;
 use App\Models\Supplier;
+use App\Services\SystemNotificationService;
 use App\Support\CompanyScopedRules;
 use App\Support\CsvExport;
+use App\Support\ProductImageStorage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -164,6 +166,12 @@ class ProductController extends Controller
                 $product->category,
                 $product->description,
                 $product->unit,
+                $product->weight,
+                $product->length,
+                $product->width,
+                $product->height,
+                $product->color,
+                $product->size,
                 $product->price,
                 $product->cost,
                 $product->track_stock,
@@ -185,6 +193,12 @@ class ProductController extends Controller
             'Category',
             'Description',
             'Unit',
+            'Weight (kg)',
+            'Length (cm)',
+            'Width (cm)',
+            'Height (cm)',
+            'Color',
+            'Size',
             'Price',
             'Cost',
             'Track Stock',
@@ -223,7 +237,7 @@ class ProductController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request): RedirectResponse|\Illuminate\Http\JsonResponse
     {
         $currentCompany = auth()->user()->getCurrentCompany();
         
@@ -246,6 +260,7 @@ class ProductController extends Controller
             'price' => ['required', 'numeric', 'min:0'],
             'cost' => ['nullable', 'numeric', 'min:0'],
             'unit' => ['required', 'string', 'max:50'],
+            ...$this->physicalAttributeRules(),
             'stock_quantity' => ['nullable', 'integer', 'min:0'],
             'min_stock_level' => ['nullable', 'integer', 'min:0'],
             'track_stock' => ['boolean'],
@@ -256,7 +271,8 @@ class ProductController extends Controller
             'category' => ['nullable', 'string', 'max:100'],
             'tags' => ['nullable', 'array'],
             'tags.*' => ['string', 'max:50'],
-            'image_path' => ['nullable', 'string', 'max:500'],
+            'image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:2048'],
+            'remove_image' => ['sometimes', 'boolean'],
             'notes' => ['nullable', 'string'],
             'is_licensing_package' => ['sometimes', 'boolean'],
             'package_code' => ['nullable', 'string', 'max:50'],
@@ -274,7 +290,22 @@ class ProductController extends Controller
 
         $validated['company_id'] = $currentCompany->id;
         $validated['is_licensing_package'] = $request->boolean('is_licensing_package');
-        Product::create($validated);
+        $validated['image_path'] = ProductImageStorage::resolvePath($request, $currentCompany->id);
+        unset($validated['image'], $validated['remove_image']);
+        $product = Product::create($validated);
+
+        if (($request->expectsJson() || $request->ajax()) && ! $request->header('X-Inertia')) {
+            return response()->json([
+                'id' => $product->id,
+                'name' => $product->name,
+                'type' => $product->type,
+                'price' => $product->price,
+                'cost' => $product->cost,
+                'sku' => $product->sku,
+                'supplier_id' => $product->supplier_id,
+                'category' => $product->category,
+            ], 201);
+        }
 
         return redirect()->route('products.index')
             ->with('success', 'Product created successfully');
@@ -394,6 +425,7 @@ class ProductController extends Controller
             'price' => ['required', 'numeric', 'min:0'],
             'cost' => ['nullable', 'numeric', 'min:0'],
             'unit' => ['required', 'string', 'max:50'],
+            ...$this->physicalAttributeRules(),
             'stock_quantity' => ['nullable', 'integer', 'min:0'],
             'min_stock_level' => ['nullable', 'integer', 'min:0'],
             'track_stock' => ['boolean'],
@@ -404,7 +436,8 @@ class ProductController extends Controller
             'category' => ['nullable', 'string', 'max:100'],
             'tags' => ['nullable', 'array'],
             'tags.*' => ['string', 'max:50'],
-            'image_path' => ['nullable', 'string', 'max:500'],
+            'image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:2048'],
+            'remove_image' => ['sometimes', 'boolean'],
             'notes' => ['nullable', 'string'],
             'purchase_account_code' => ['nullable', 'string', 'max:50'],
             'sales_account_code' => ['nullable', 'string', 'max:50'],
@@ -422,8 +455,24 @@ class ProductController extends Controller
             $validated['stock_quantity'] = 0;
         }
 
+        $before = $product->only(array_keys($validated));
+
         $validated['is_licensing_package'] = $request->boolean('is_licensing_package');
+        $validated['image_path'] = ProductImageStorage::resolvePath(
+            $request,
+            $currentCompany->id,
+            $product->image_path,
+        );
+        unset($validated['image'], $validated['remove_image']);
         $product->update($validated);
+
+        app(SystemNotificationService::class)->notifyCatalogItemUpdated(
+            $currentCompany,
+            $product->name,
+            (string) $product->type,
+            $before,
+            $product->only(array_keys($validated))
+        );
 
         return redirect()->route('products.show', $product)
             ->with('success', 'Product updated successfully');
@@ -443,6 +492,7 @@ class ProductController extends Controller
         }
 
         try {
+            ProductImageStorage::delete($product->image_path);
             $product->delete();
 
             return redirect()->route('products.index')
@@ -481,5 +531,20 @@ class ProductController extends Controller
         return response()->json([
             'product' => $product->load('supplier', 'batches', 'serialNumbers'),
         ]);
+    }
+
+    /**
+     * @return array<string, array<int, string>>
+     */
+    private function physicalAttributeRules(): array
+    {
+        return [
+            'weight' => ['nullable', 'numeric', 'min:0'],
+            'length' => ['nullable', 'numeric', 'min:0'],
+            'width' => ['nullable', 'numeric', 'min:0'],
+            'height' => ['nullable', 'numeric', 'min:0'],
+            'color' => ['nullable', 'string', 'max:100'],
+            'size' => ['nullable', 'string', 'max:100'],
+        ];
     }
 }

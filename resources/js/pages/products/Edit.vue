@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
+import ProductImageField from '@/components/products/ProductImageField.vue';
+import ProductPhysicalAttributesFields from '@/components/products/ProductPhysicalAttributesFields.vue';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import { ArrowLeft, Package, Wrench } from 'lucide-vue-next';
@@ -14,6 +16,12 @@ interface Product {
     price: number;
     cost: number | null;
     unit: string;
+    weight?: number | null;
+    length?: number | null;
+    width?: number | null;
+    height?: number | null;
+    color?: string | null;
+    size?: string | null;
     stock_quantity: number;
     min_stock_level: number;
     track_stock: boolean;
@@ -26,6 +34,7 @@ interface Product {
     category: string | null;
     tags: string[] | null;
     image_path: string | null;
+    image_url?: string | null;
     notes: string | null;
     created_at: string;
     updated_at: string;
@@ -73,6 +82,12 @@ const form = useForm({
     price: props.product.price,
     cost: props.product.cost || null,
     unit: props.product.unit,
+    weight: props.product.weight ?? null,
+    length: props.product.length ?? null,
+    width: props.product.width ?? null,
+    height: props.product.height ?? null,
+    color: props.product.color || '',
+    size: props.product.size || '',
     stock_quantity: props.product.stock_quantity,
     min_stock_level: props.product.min_stock_level,
     track_stock: props.product.track_stock,
@@ -85,7 +100,8 @@ const form = useForm({
         ?? (props.product as { supplier?: { id: number } | null }).supplier?.id
         ?? null,
     tags: Array.isArray(props.product.tags) ? [...props.product.tags] : [],
-    image_path: props.product.image_path || '',
+    image: null as File | null,
+    remove_image: false,
     notes: props.product.notes || '',
     purchase_account_code: (props.product as any).purchase_account_code || '',
     sales_account_code: (props.product as any).sales_account_code || '',
@@ -106,6 +122,14 @@ const commonUnits = [
 ];
 
 function submit() {
+    if (form.image || form.remove_image) {
+        form.post(products.update(props.product.id).url, {
+            forceFormData: true,
+            method: 'put',
+        });
+        return;
+    }
+
     form.put(products.update(props.product.id).url);
 }
 
@@ -504,6 +528,8 @@ function getTypeColor(type: string) {
                         </div>
                     </div>
 
+                    <ProductPhysicalAttributesFields v-if="!isService" :form="form" />
+
                     <!-- Inventory (Products Only) -->
                     <div v-if="!isService" class="rounded-lg border bg-white p-6">
                         <h2 class="mb-4 text-lg font-semibold text-gray-900">Inventory Management</h2>
@@ -649,21 +675,13 @@ function getTypeColor(type: string) {
                         <h2 class="mb-4 text-lg font-semibold text-gray-900">Additional Information</h2>
                         
                         <div class="space-y-6">
-                            <!-- Image Path -->
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">
-                                    Image Path
-                                </label>
-                                <input
-                                    v-model="form.image_path"
-                                    type="text"
-                                    placeholder="/images/products/example.jpg"
-                                    class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                />
-                                <div v-if="form.errors.image_path" class="mt-1 text-sm text-red-600">
-                                    {{ form.errors.image_path }}
-                                </div>
-                            </div>
+                            <!-- Product Image -->
+                            <ProductImageField
+                                v-model="form.image"
+                                v-model:remove-image="form.remove_image"
+                                :current-image-url="props.product.image_url ?? null"
+                                :error="form.errors.image"
+                            />
 
                             <!-- Notes -->
                             <div>

@@ -5,12 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\Customer;
 use App\Models\CustomerUpdateRequest;
 use App\Models\User;
-use App\Support\CompanyMailer;
+use App\Services\SystemNotificationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -237,6 +235,8 @@ class RegisteredUsersController extends Controller
             'approved_by' => auth()->id(),
         ]);
 
+        app(SystemNotificationService::class)->notifyClientApproval($user->fresh());
+
         return redirect()
             ->route('registered-users.registered.show', $user)
             ->with('success', 'Client user approved successfully.');
@@ -255,6 +255,11 @@ class RegisteredUsersController extends Controller
             'approved_by' => auth()->id(),
             'approved_at' => null,
         ]);
+
+        app(SystemNotificationService::class)->notifyClientRejection(
+            $user->fresh(),
+            $request->string('reason')->toString() ?: null
+        );
 
         return redirect()
             ->route('registered-users.pending.index')
@@ -296,6 +301,7 @@ class RegisteredUsersController extends Controller
         $customer = $updateRequest->customer;
         $clientUser = $updateRequest->user;
         $requestedChanges = $updateRequest->requested_changes ?? [];
+        $beforeChanges = $customer->only(array_keys($requestedChanges));
         $requestedEmail = isset($requestedChanges['email']) ? strtolower(trim((string) $requestedChanges['email'])) : null;
         $customerEmailIsChanging = $requestedEmail !== null
             && $requestedEmail !== ''
@@ -338,7 +344,8 @@ class RegisteredUsersController extends Controller
             $clientUser->refresh();
         }
 
-        $this->notifyCustomerOfInformationUpdateDecision($customer, 'approved', null);
+        $changes = app(SystemNotificationService::class)->diffAttributes($beforeChanges, $requestedChanges);
+        app(SystemNotificationService::class)->notifyClientInfoUpdateApplied($customer, $changes);
 
         return redirect()
             ->route('registered-users.update-requests.show', $updateRequest)
@@ -363,77 +370,10 @@ class RegisteredUsersController extends Controller
             'rejection_reason' => $reason,
         ]);
 
-        $this->notifyCustomerOfInformationUpdateDecision($updateRequest->customer, 'rejected', $reason);
+        app(SystemNotificationService::class)->notifyClientInfoUpdateRejected($updateRequest->customer, $reason);
 
         return redirect()
             ->route('registered-users.update-requests.show', $updateRequest)
             ->with('success', 'Customer update request rejected.');
-    }
-
-    /**
-     * Email the customer when their Client Zone information update request is approved or rejected.
-     */
-    private function notifyCustomerOfInformationUpdateDecision(Customer $customer, string $outcome, ?string $rejectionReason): void
-    {
-        if ($outcome !== 'approved' && $outcome !== 'rejected') {
-            return;
-        }
-
-        try {
-            $customer->loadMissing('company');
-            $company = $customer->company;
-            $to = trim((string) $customer->email);
-
-            if ($to === '' || ! filter_var($to, FILTER_VALIDATE_EMAIL)) {
-                Log::warning('Information update decision: customer has no valid email for notification', [
-                    'customer_id' => $customer->id,
-                    'outcome' => $outcome,
-                ]);
-
-                return;
-            }
-
-            $customerName = e($customer->name);
-            $companyDisplay = e($company?->name ?? config('app.name', 'the business'));
-            if ($outcome === 'approved') {
-                $subject = 'Your information update was approved';
-                $body = <<<HTML
-<p>Hello {$customerName},</p>
-<p>Your request to update your details in Client Zone has been <strong>approved</strong> and your customer record at {$companyDisplay} has been updated.</p>
-<p>If anything looks wrong, please contact {$companyDisplay}.</p>
-HTML;
-            } else {
-                $subject = 'Your information update was not approved';
-                $reasonHtml = '';
-                if ($rejectionReason !== null && $rejectionReason !== '') {
-                    $escapedReason = e($rejectionReason);
-                    $reasonHtml = '<p><strong>Reason:</strong></p><p>'.nl2br($escapedReason, false).'</p>';
-                }
-                $body = <<<HTML
-<p>Hello {$customerName},</p>
-<p>Your request to update your details in Client Zone was <strong>not approved</strong>.</p>
-{$reasonHtml}
-<p>If you have questions, please contact {$companyDisplay}.</p>
-HTML;
-            }
-
-            $mailConfig = CompanyMailer::resolve($company);
-            Mail::mailer($mailConfig['mailer'])->send([], [], function ($message) use ($to, $customer, $subject, $body, $company, $mailConfig) {
-                $message->to($to, $customer->name)
-                    ->subject($subject)
-                    ->from($mailConfig['from_address'], $mailConfig['from_name'])
-                    ->html($body);
-
-                if ($company !== null && ! empty($company->email) && filter_var((string) $company->email, FILTER_VALIDATE_EMAIL)) {
-                    $message->replyTo($company->email, $company->name ?? null);
-                }
-            });
-        } catch (\Throwable $e) {
-            Log::error('Information update decision: failed to send customer notification', [
-                'customer_id' => $customer->id,
-                'outcome' => $outcome,
-                'message' => $e->getMessage(),
-            ]);
-        }
     }
 }

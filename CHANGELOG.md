@@ -1,5 +1,34 @@
 # Changelog
 
+## 2026-08-28
+
+- **Supplier create (Inertia):** Fixed supplier and product create forms returning plain JSON to Inertia (causing “valid Inertia response” errors) by not treating Inertia requests as AJAX JSON endpoints.
+- **System email notifications:** Added admin-controlled system notification settings (Company Settings → System Notifications) for client/contractor/staff update emails, including contact information changes, approvals, catalog updates, and assignments. Each email includes basic change details where applicable.
+- **System notifications UI:** Fixed the System Notifications tab rendering blank because event form state was only initialized after mount.
+- **System notification email branding:** System notification emails now use the company logo and Appearance theme colours (primary, secondary, accent), matching other branded document emails.
+- **Supplier address autocomplete:** Supplier Create and Edit now use Google Places address search with autofill for street, city, state/province, postal code, and country (same pattern as customers).
+- **Jobcard autosave:** Jobcard Create and Edit now autosave drafts (status New) after changes, matching quote draft autosave. Autosave skips stock adjustments, assignment notifications, and reminder emails until the jobcard is saved normally.
+- **Dashboard quick create:** Added permission-aware quick create modals on the dashboard for customers, suppliers, categories (administrators), and products.
+- **Dashboard quick action preferences:** Each user can enable or disable individual dashboard quick action buttons (documents and catalog). Admins configure this on user create/edit; users can also adjust their own choices in Profile settings.
+- **AI Assistant microphone policy:** Fixed site `Permissions-Policy` blocking the microphone even when the browser permission was already allowed (voice notes now work after a refresh).
+- **AI Assistant voice notes (plain speech-to-text):** Voice notes now transcribe exactly what was said into the search box (no keyword rewriting, domain prompt, or auto-search). Review the text and click Search when ready.
+- **PDF company footers (templates):** Company Settings footer text now reliably appears on quote/invoice PDFs, including custom PDF templates edited in GrapeJS. Templates expose `{{{company.pdf_footer_html}}}` and footer injection matches `.footer-left` even when additional CSS classes are present.
+- **Quote and invoice group totals:** Each line group now shows its own subtotal on quote/invoice create, edit, show, and PDF views, with the document total labelled as Grand Total when multiple groups are present.
+- **Input field borders:** Fixed unfocused inputs appearing borderless in light mode by correcting theme border/input colour tokens (they were lighter than the page background on white themes).
+- **Product images:** Product create and edit now support uploading an image file (stored on the public disk) instead of entering an image URL/path manually. Product show displays the uploaded image.
+- **Supplier bank details:** Supplier create, edit, and show pages now include optional bank details for payments (bank name, account name, account number, and branch code). CSV export includes the new fields.
+- **Dashboard quick action preferences (profile):** Fixed profile settings not saving dashboard quick actions because the quick-actions form did not send name/email while the profile update request required them.
+- **Product physical attributes:** Products now support optional weight (kg), dimensions (length/width/height in cm), colour, and size on create, edit, show, CSV export, and import.
+- **Quote line item quick add product:** When a quote line description does not match an existing product, users with product create permission can quick add it from the product search dropdown and link it to the line.
+- **Quote line item quick add supplier:** Quote create and edit line items now include a quick add supplier button beside the supplier dropdown. Users with supplier create permission can add a supplier in a popup and assign it to that line.
+- **Jobcard fulfillment statuses:** Added jobcard statuses for purchase order sent on dispatch, order received, stock checked, delivery scheduled, and delivered. Available on jobcard create/edit/show, dispatch board, reports, and the status label editor.
+- **Document email line breaks:** Quote, invoice, jobcard, purchase order, and query notification emails now preserve line breaks in descriptions, notes, terms, custom messages, and line item text.
+- **Quote response page branding:** The public “Quote Response Recorded” page now shows the company logo when one is configured.
+- **Sidebar active state:** Sidebar navigation now stays highlighted on record pages (for example `/invoices/123`) instead of only on list pages.
+- **Forgot password page styling:** Forgot password now uses the same orange button, input focus, and link styling as the login page.
+- **Quote edit linked jobcard warning:** Editing a quote linked to a jobcard shows a warning banner with a link to the jobcard, a save confirmation, and a note that quote changes will not sync automatically. Quote-to-jobcard conversions store both the jobcard source link and a `converted_jobcard_id` marker on the quote; missing links are repaired automatically when the quote is viewed or edited.
+- **Save and email prompt:** Saving a quote or invoice (create or edit) now asks whether to email the customer. Choosing “Save and email” opens the email dialog on the saved document.
+
 ## 2026-08-27
 
 - **Appearance after login:** Company theme colours now apply immediately on Inertia navigations (including login and company switch) without requiring a manual refresh.

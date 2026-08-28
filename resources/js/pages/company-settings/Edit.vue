@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
+import NotificationSettingsPanel from '@/components/company-settings/NotificationSettingsPanel.vue';
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import { ArrowLeft } from 'lucide-vue-next';
 import companySettings from '@/routes/company-settings';
@@ -114,9 +115,23 @@ interface ReminderSettings {
     jobcard_status_updated_whatsapp_template_variables: string[] | null;
 }
 
+interface NotificationEventConfig {
+    enabled: boolean;
+    notify_admin: boolean;
+    notify_client: boolean;
+    notify_staff: boolean;
+}
+
+interface NotificationSettings {
+    automation_enabled: boolean;
+    events: Record<string, NotificationEventConfig>;
+}
+
 interface Props {
     company: Company;
     reminderSettings?: ReminderSettings;
+    notificationSettings?: NotificationSettings;
+    notificationEventCatalog?: Record<string, { label: string; description: string; default: NotificationEventConfig }>;
 }
 
 const props = defineProps<Props>();
@@ -458,6 +473,17 @@ function submitReminderSettings() {
                             ]"
                         >
                             Automated Reminders
+                        </button>
+                        <button
+                            @click="activeTab = 'notifications'"
+                            :class="[
+                                'whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium',
+                                activeTab === 'notifications'
+                                    ? 'border-blue-500 text-blue-600'
+                                    : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                            ]"
+                        >
+                            System Notifications
                         </button>
                     </nav>
                 </div>
@@ -1637,6 +1663,18 @@ function submitReminderSettings() {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+
+                <div v-if="activeTab === 'notifications'">
+                    <NotificationSettingsPanel
+                        v-if="notificationSettings && notificationEventCatalog && Object.keys(notificationEventCatalog).length > 0"
+                        :company-id="props.company.id"
+                        :notification-settings="notificationSettings"
+                        :notification-event-catalog="notificationEventCatalog"
+                    />
+                    <div v-else class="rounded-lg border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
+                        System notification settings could not be loaded. Run database migrations and refresh this page.
                     </div>
                 </div>
             </div>

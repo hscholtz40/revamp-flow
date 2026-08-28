@@ -17,6 +17,7 @@ use App\Services\BulkSMSService;
 use App\Services\CustomerAccountBalanceCalculator;
 use App\Services\CustomerStatementService;
 use App\Services\CustomerUpsertService;
+use App\Services\SystemNotificationService;
 use App\Support\CompanyMailer;
 use App\Support\CompanyScopedRules;
 use App\Support\CsvExport;
@@ -400,7 +401,17 @@ class CustomersController extends Controller
 
     public function update(UpdateCustomerRequest $request, Customer $customer, CustomerUpsertService $customerUpsertService): RedirectResponse
     {
+        $watchedFields = array_keys($request->validated());
+        $before = $customer->only($watchedFields);
+
         $customerUpsertService->update($customer, $request->validated());
+
+        $customer->refresh();
+        app(SystemNotificationService::class)->notifyCustomerUpdated(
+            $customer,
+            $before,
+            $customer->only($watchedFields)
+        );
 
         return redirect()->route('customers.index')->with('success', 'Customer updated');
     }

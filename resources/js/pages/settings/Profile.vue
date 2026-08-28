@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
+import DashboardQuickActionsFields from '@/components/dashboard/DashboardQuickActionsFields.vue';
+import { createDefaultDashboardQuickActions } from '@/composables/useDashboardQuickActions';
 import { edit } from '@/routes/profile';
 import { send } from '@/routes/verification';
-import { Form, Head, Link, usePage } from '@inertiajs/vue3';
+import { Form, Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
 
 import DeleteUser from '@/components/DeleteUser.vue';
@@ -18,9 +20,10 @@ import { type BreadcrumbItem } from '@/types';
 interface Props {
     mustVerifyEmail: boolean;
     status?: string;
+    dashboardQuickActionOptions: Array<{ key: string; label: string; group: string }>;
 }
 
-defineProps<Props>();
+const props = defineProps<Props>();
 
 const breadcrumbItems: BreadcrumbItem[] = [
     {
@@ -31,6 +34,17 @@ const breadcrumbItems: BreadcrumbItem[] = [
 
 const page = usePage();
 const user = computed(() => page.props.auth.user);
+
+const quickActionsForm = useForm({
+    dashboard_quick_actions: {
+        ...createDefaultDashboardQuickActions(),
+        ...((user.value as { dashboard_quick_actions?: Record<string, boolean> } | undefined)?.dashboard_quick_actions ?? {}),
+    },
+});
+
+function submitQuickActions() {
+    quickActionsForm.patch(ProfileController.update.url());
+}
 </script>
 
 <template>
@@ -121,6 +135,41 @@ const user = computed(() => page.props.auth.user);
                         </Transition>
                     </div>
                 </Form>
+
+                <div class="flex flex-col space-y-6 border-t pt-6">
+                    <HeadingSmall
+                        title="Dashboard quick actions"
+                        description="Choose which quick action buttons appear on your dashboard"
+                    />
+
+                    <form class="space-y-6" @submit.prevent="submitQuickActions">
+                        <DashboardQuickActionsFields
+                            v-model="quickActionsForm.dashboard_quick_actions"
+                            :options="props.dashboardQuickActionOptions"
+                        />
+                        <InputError class="mt-2" :message="quickActionsForm.errors.dashboard_quick_actions" />
+
+                        <div class="flex items-center gap-4">
+                            <Button :disabled="quickActionsForm.processing" type="submit">
+                                Save quick actions
+                            </Button>
+
+                            <Transition
+                                enter-active-class="transition ease-in-out"
+                                enter-from-class="opacity-0"
+                                leave-active-class="transition ease-in-out"
+                                leave-to-class="opacity-0"
+                            >
+                                <p
+                                    v-show="quickActionsForm.recentlySuccessful"
+                                    class="text-sm text-neutral-600"
+                                >
+                                    Saved.
+                                </p>
+                            </Transition>
+                        </div>
+                    </form>
+                </div>
             </div>
 
             <DeleteUser />

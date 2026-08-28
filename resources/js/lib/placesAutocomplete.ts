@@ -4,6 +4,7 @@ export interface ParsedPlaceAddress {
     streetAddress: string;
     city: string;
     province: string;
+    postalCode: string;
     country: string;
     formattedAddress: string;
 }
@@ -40,6 +41,8 @@ export function parseAddressComponents(
 
     const province = componentValue(components, 'administrative_area_level_1');
 
+    const postalCode = componentValue(components, 'postal_code');
+
     const country = componentValue(components, 'country');
 
     return {
@@ -50,6 +53,7 @@ export function parseAddressComponents(
             formattedAddress,
         city,
         province,
+        postalCode,
         country,
         formattedAddress,
     };

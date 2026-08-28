@@ -20,6 +20,16 @@
             border-radius: 10px;
             padding: 24px;
         }
+        .brand {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        .company-logo {
+            max-width: 180px;
+            max-height: 90px;
+            object-fit: contain;
+        }
         .status {
             display: inline-block;
             padding: 4px 10px;
@@ -35,6 +45,12 @@
 </head>
 <body>
 <div class="card">
+    @if ($quote->company?->logo)
+        <div class="brand">
+            <img src="{{ $quote->company->logo }}" alt="{{ $quote->company->name }} logo" class="company-logo">
+        </div>
+    @endif
+
     <h1 style="margin-top: 0;">Quote Response Recorded</h1>
     <p>
         Quote <strong>{{ $quote->quote_number }}</strong> for

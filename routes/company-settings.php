@@ -18,4 +18,5 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::delete('/company-settings/{company}', [CompanySettingsController::class, 'destroy'])->name('company-settings.destroy');
     Route::post('/company-settings/{company}/set-default', [CompanySettingsController::class, 'setDefault'])->name('company-settings.set-default');
     Route::put('/company-settings/{company}/reminder-settings', [CompanySettingsController::class, 'updateReminderSettings'])->name('company-settings.update-reminder-settings');
+    Route::put('/company-settings/{company}/notification-settings', [CompanySettingsController::class, 'updateNotificationSettings'])->name('company-settings.update-notification-settings');
 });

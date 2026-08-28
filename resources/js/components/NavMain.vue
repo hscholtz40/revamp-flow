@@ -9,21 +9,25 @@ import {
     SidebarMenuSubButton,
     SidebarMenuSubItem,
 } from '@/components/ui/sidebar';
-import { urlIsActive } from '@/lib/utils';
+import { collectNavHrefs, urlIsActive } from '@/lib/utils';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
 
-defineProps<{
+const props = defineProps<{
     items: NavItem[];
 }>();
 
 const page = usePage();
+const navHrefs = computed(() => collectNavHrefs(props.items));
+
+const isNavActive = (href: NavItem['href']) => urlIsActive(href, page.url, navHrefs.value);
 
 const isParentOrChildActive = (item: NavItem): boolean => {
-    if (urlIsActive(item.href, page.url)) {
+    if (isNavActive(item.href)) {
         return true;
     }
-    return item.children?.some((c) => urlIsActive(c.href, page.url)) ?? false;
+    return item.children?.some((c) => isNavActive(c.href)) ?? false;
 };
 </script>
 
@@ -51,7 +55,7 @@ const isParentOrChildActive = (item: NavItem): boolean => {
                             <SidebarMenuSubButton
                                 as-child
                                 size="sm"
-                                :is-active="urlIsActive(sub.href, page.url)"
+                                :is-active="isNavActive(sub.href)"
                                 class="data-[active=true]:bg-primary/10 data-[active=true]:text-primary"
                             >
                                 <Link :href="sub.href" class="flex items-center gap-2">
@@ -65,7 +69,7 @@ const isParentOrChildActive = (item: NavItem): boolean => {
                 <SidebarMenuItem v-else>
                     <SidebarMenuButton
                         as-child
-                        :is-active="urlIsActive(item.href, page.url)"
+                        :is-active="isNavActive(item.href)"
                         :tooltip="item.title"
                         class="rounded-xl border border-transparent px-2.5 text-sidebar-foreground/80 transition-all duration-200 hover:border-sidebar-border/70 hover:bg-sidebar-accent/80 hover:text-sidebar-foreground data-[active=true]:border-primary/25 data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:shadow-sm dark:data-[active=true]:border-primary/35 dark:data-[active=true]:bg-primary/20"
                     >

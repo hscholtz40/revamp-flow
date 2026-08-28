@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Category;
 use App\Models\Company;
 use App\Models\Contact;
 use App\Models\Customer;
@@ -141,6 +142,7 @@ class DashboardController extends Controller
                 'currentCompany' => null,
                 'canCreateInvoices' => false,
                 'isPosEnabled' => false,
+                'categoryOptions' => [],
                 'warning' => 'No active company access is configured for your user. Please contact an administrator.',
             ]);
         }
@@ -368,6 +370,9 @@ class DashboardController extends Controller
             'currentCompany' => $currentCompany,
             'canCreateInvoices' => auth()->user()->hasModulePermission('invoices', 'create'),
             'isPosEnabled' => (bool) ($currentCompany->enable_pos ?? false),
+            'categoryOptions' => auth()->user()->hasModulePermission('products', 'create')
+                ? Category::active()->ordered()->get(['id', 'name', 'color'])
+                : [],
         ]);
     }
 }

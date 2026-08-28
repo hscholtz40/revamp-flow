@@ -275,7 +275,7 @@
             @if($customMessage)
                 <div class="message">
                     <strong>Message:</strong><br>
-                    {{ $customMessage }}
+                    @include('emails.partials.multiline-text', ['text' => $customMessage])
                 </div>
             @endif
 
@@ -298,7 +298,7 @@
             @if($jobcard->description)
                 <div class="customer-section">
                     <div class="section-title">Description</div>
-                    <div>{{ $jobcard->description }}</div>
+                    <div>@include('emails.partials.multiline-text', ['text' => $jobcard->description])</div>
                 </div>
             @endif
 
@@ -316,7 +316,7 @@
                     <tbody>
                         @foreach($jobcard->lineItems as $item)
                             <tr>
-                                <td>{{ $item->description }}</td>
+                                <td>@include('emails.partials.multiline-text', ['text' => $item->description])</td>
                                 <td class="text-right">{{ $item->quantity }}</td>
                                 <td class="text-right">{{ $jobcard->company->formatCurrencyZar($item->unit_price) }}</td>
                                 <td class="text-right">{{ $jobcard->company->formatCurrencyZar($item->total) }}</td>
@@ -366,14 +366,14 @@
             @if($jobcard->notes)
                 <div class="customer-section">
                     <div class="section-title">Notes</div>
-                    <div>{{ $jobcard->notes }}</div>
+                    <div>@include('emails.partials.multiline-text', ['text' => $jobcard->notes])</div>
                 </div>
             @endif
 
             @if($jobcard->terms_conditions)
                 <div class="customer-section">
                     <div class="section-title">Terms & Conditions</div>
-                    <div>{{ $jobcard->terms_conditions }}</div>
+                    <div>@include('emails.partials.multiline-text', ['text' => $jobcard->terms_conditions])</div>
                 </div>
             @endif
         </div>

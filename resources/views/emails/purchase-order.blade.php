@@ -160,7 +160,7 @@
             @if($customMessage)
             <div class="message-box">
                 <strong>Message:</strong><br>
-                {{ $customMessage }}
+                @include('emails.partials.multiline-text', ['text' => $customMessage])
             </div>
             @endif
             

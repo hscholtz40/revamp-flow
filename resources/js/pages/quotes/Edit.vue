@@ -21,6 +21,30 @@
                 <h1 class="text-2xl font-bold text-gray-900">Edit Quote {{ props.quote.quote_number }}</h1>
             </div>
 
+            <!-- Warning for linked jobcard -->
+            <div v-if="linkedJobcard" class="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
+                <div class="flex items-start">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-amber-500" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-amber-900">Linked jobcard</h3>
+                        <p class="mt-1 text-sm text-amber-800">
+                            This quote is linked to jobcard
+                            <Link
+                                :href="jobcards.show(linkedJobcard.id).url"
+                                class="font-medium text-amber-900 underline hover:text-amber-950"
+                            >
+                                {{ linkedJobcard.job_number }}
+                            </Link>.
+                            Changes saved here will not automatically update the jobcard. You will be asked to confirm before saving.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
             <!-- Warning for completed quotes -->
             <div v-if="isCompleted && !canEditCompleted" class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
                 <div class="flex items-center">
@@ -345,17 +369,26 @@
                             </div>
 
                             <!-- Supplier -->
-                            <div class="min-w-0">
+                            <div class="min-w-0 flex items-center gap-1">
                                 <select
                                     v-model="groupedItem.item.supplier_id"
-                                    class="w-full rounded border border-gray-300 px-1 py-1 text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500 truncate"
+                                    class="min-w-0 flex-1 rounded border border-gray-300 px-1 py-1 text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500 truncate"
                                     :disabled="!canEdit"
                                 >
                                     <option :value="null">—</option>
-                                    <option v-for="supplier in props.suppliers" :key="supplier.id" :value="supplier.id">
+                                    <option v-for="supplier in availableSuppliers" :key="supplier.id" :value="supplier.id">
                                         {{ supplier.name }}
                                     </option>
                                 </select>
+                                <button
+                                    v-if="canEdit && canSuppliersCreate"
+                                    type="button"
+                                    class="flex-shrink-0 rounded border border-gray-300 px-1.5 py-0.5 text-xs text-blue-700 hover:bg-blue-50"
+                                    title="Quick add supplier"
+                                    @click="openQuickCreateSupplier(groupedItem.itemIndex)"
+                                >
+                                    +
+                                </button>
                             </div>
 
                             <!-- Cost -->
@@ -472,6 +505,10 @@
                             </div>
                             </template>
                         </div>
+                            <div class="flex justify-end border-t border-gray-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-gray-800">
+                                Group Total ({{ groupBlock.group.name || `Group ${groupBlock.groupIndex + 1}` }}):
+                                <span class="ml-2">R{{ formatCurrency(calculateGroupSubtotal(groupBlock)) }}</span>
+                            </div>
                     </div>
                     </div>
                     </div>
@@ -506,7 +543,7 @@
                                     <span class="text-sm font-medium">R{{ formatCurrency(roundingAdjustment) }}</span>
                                 </div>
                                 <div class="flex justify-between border-t pt-2">
-                                    <span class="text-base font-semibold">Total:</span>
+                                    <span class="text-base font-semibold">{{ hasMultipleLineGroups ? 'Grand Total:' : 'Total:' }}</span>
                                     <span class="text-base font-semibold">R{{ formatCurrency(total) }}</span>
                                 </div>
                                 <div class="flex justify-between">
@@ -588,7 +625,7 @@
 
         <Teleport to="body">
             <div
-                v-if="activeSuggestionIndex !== null && showProductSuggestions[activeSuggestionIndex] && productSuggestions(activeSuggestionIndex).length > 0 && dropdownStyle"
+                v-if="activeSuggestionIndex !== null && showProductSuggestions[activeSuggestionIndex] && dropdownStyle && (productSuggestions(activeSuggestionIndex).length > 0 || canQuickAddProduct(activeSuggestionIndex))"
                 class="fixed z-[200] bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-auto"
                 :style="dropdownStyle"
             >
@@ -606,16 +643,52 @@
                         <span class="text-gray-500 text-xs ml-2">R{{ Number(product.price || 0).toFixed(2) }}</span>
                     </div>
                 </div>
+                <button
+                    v-if="canQuickAddProduct(activeSuggestionIndex)"
+                    type="button"
+                    class="flex w-full items-center gap-2 border-t border-gray-100 px-3 py-2 text-left text-sm text-blue-700 hover:bg-blue-50"
+                    @mousedown.prevent="openQuickCreateProduct(activeSuggestionIndex)"
+                >
+                    <span class="font-medium">+ Quick add</span>
+                    <span class="truncate text-gray-600">"{{ quickAddProductLabel(activeSuggestionIndex) }}"</span>
+                </button>
             </div>
         </Teleport>
+
+        <QuickCreateProductModal
+            v-model="showQuickCreateProductModal"
+            :form="productQuickCreateForm"
+            :category-options="props.productCategories"
+            @submit="submitQuickCreateProduct"
+        />
+
+        <QuickCreateSupplierModal
+            v-model="showQuickCreateSupplierModal"
+            :form="supplierQuickCreateForm"
+            @submit="submitQuickCreateSupplier"
+        />
+
+        <SaveEmailPromptModal
+            v-model="showSaveEmailPrompt"
+            document-label="quote"
+            @choose="confirmSaveEmailChoice"
+            @cancel="cancelSaveEmailPrompt"
+        />
     </AppLayout>
 </template>
 
 <script setup lang="ts">
 import QuickCreateCustomerModal from '@/components/QuickCreateCustomerModal.vue';
+import QuickCreateProductModal from '@/components/QuickCreateProductModal.vue';
+import QuickCreateSupplierModal from '@/components/QuickCreateSupplierModal.vue';
+import SaveEmailPromptModal from '@/components/SaveEmailPromptModal.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { matchesProductSearch } from '@/composables/productSearch';
 import { useProductSuggestionDropdown } from '@/composables/useProductSuggestionDropdown';
+import { useQuoteProductQuickAdd } from '@/composables/useQuoteProductQuickAdd';
+import { useQuoteSupplierQuickAdd } from '@/composables/useQuoteSupplierQuickAdd';
+import { useQuoteLinkedJobcard } from '@/composables/useQuoteLinkedJobcard';
+import { markOpenEmailModalAfterRedirect, useSaveEmailPrompt } from '@/composables/useSaveEmailPrompt';
 import { useCustomerLookup } from '@/composables/useCustomerLookup';
 import ContactSelector from '@/components/ContactSelector.vue';
 import { getCsrfToken } from '@/lib/csrf';
@@ -623,6 +696,7 @@ import type { CustomerLookupCustomer } from '@/types/customers';
 import type { DocumentLineGroup, DocumentLineItem } from '@/types/documents';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import quotes from '@/routes/quotes';
+import jobcards from '@/routes/jobcards';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
 
@@ -687,9 +761,11 @@ const props = defineProps<{
     quote: QuoteDocument;
     customers: CustomerLookupCustomer[];
     products: Product[];
+    productCategories: Array<{ id: number; name: string }>;
     suppliers: SupplierOption[];
     currentCompany: Company;
     canEditCompleted: boolean;
+    linkedJobcard?: { id: number; job_number: string; title: string } | null;
     statusOptions?: Array<{ value: string; label: string }>;
     taxRates: { id: number; name: string; rate: number; is_default_sales: boolean }[];
     defaultSalesTaxRateId: number | null;
@@ -697,6 +773,11 @@ const props = defineProps<{
     defaultSalesAccountId: number | null;
     defaultRoundingAccountId?: number | null;
 }>();
+
+const linkedJobcard = useQuoteLinkedJobcard(
+    computed(() => props.quote),
+    computed(() => props.linkedJobcard),
+);
 
 const statusOptions = computed(() => props.statusOptions ?? []);
 
@@ -727,6 +808,7 @@ const dragOverItemIndex = ref<number | null>(null);
 const dragOverGroupId = ref<number | null>(null);
 const activeDragIndex = ref<number | null>(null);
 const autosaveStatus = ref<'idle' | 'saving' | 'saved' | 'error'>('idle');
+const { cancelSaveEmailPrompt, confirmSaveEmailChoice, promptBeforeSave, showSaveEmailPrompt } = useSaveEmailPrompt();
 const autosaveTimer = ref<number | null>(null);
 const lastAutosaveSnapshot = ref<string | null>(null);
 const autosaveInFlightSnapshot = ref<string | null>(null);
@@ -767,6 +849,59 @@ const form = useForm({
         account_id: item.account_id != null ? Number(item.account_id) : (props.defaultSalesAccountId ?? null),
         total: item.total,
     })) as LineItem[],
+});
+
+const lineChangedNotifier = { notify: () => {} };
+
+const {
+    availableProducts,
+    canQuickAddProduct,
+    openQuickCreateProduct,
+    productQuickCreateForm,
+    quickAddProductLabel,
+    showQuickCreateProductModal,
+    submitQuickCreateProduct,
+} = useQuoteProductQuickAdd({
+    initialProducts: props.products,
+    getLineDescription: (index) => form.line_items[index]?.description ?? '',
+    getLineUnitPrice: (index) => Number(form.line_items[index]?.unit_price ?? 0),
+    getLineCost: (index) => Number(form.line_items[index]?.cost ?? 0),
+    closeSuggestions: closeProductSuggestions,
+    applyProductToLine: (index, product) => {
+        const item = form.line_items[index];
+        if (!item) {
+            return;
+        }
+
+        item.product_id = product.id.toString();
+        item.description = product.name;
+        item.unit_price = product.price;
+        item.cost = Number(product.cost ?? 0) || 0;
+        if (product.supplier_id) {
+            item.supplier_id = product.supplier_id;
+        }
+        closeProductSuggestions(index);
+    },
+    onProductApplied: () => lineChangedNotifier.notify(),
+});
+
+const {
+    availableSuppliers,
+    canSuppliersCreate,
+    openQuickCreateSupplier,
+    showQuickCreateSupplierModal,
+    submitQuickCreateSupplier,
+    supplierQuickCreateForm,
+} = useQuoteSupplierQuickAdd({
+    initialSuppliers: props.suppliers,
+    getSuggestedName: (index) => form.line_items[index]?.description ?? '',
+    applySupplierToLine: (index, supplierId) => {
+        const item = form.line_items[index];
+        if (item) {
+            item.supplier_id = supplierId;
+        }
+    },
+    onSupplierApplied: () => lineChangedNotifier.notify(),
 });
 
 const quoteContactInitial = computed(() => {
@@ -1043,7 +1178,7 @@ const onDropInGroup = (groupId: number) => {
 // Product suggestions based on description text
 const productSuggestions = (index: number) => {
     const query = form.line_items[index]?.description || '';
-    return props.products.filter(product => matchesProductSearch(product, query)).slice(0, 8);
+    return availableProducts.value.filter(product => matchesProductSearch(product, query)).slice(0, 8);
 };
 
 const selectProductSuggestion = (index: number, product: Product) => {
@@ -1062,7 +1197,7 @@ const selectProductSuggestion = (index: number, product: Product) => {
 
 const getProductName = (productId: string | number | null | undefined) => {
     if (!productId) return '';
-    const product = props.products.find(p => p.id === parseInt(productId.toString()));
+    const product = availableProducts.value.find(p => p.id === parseInt(productId.toString()));
     return product ? product.name : '';
 };
 
@@ -1122,6 +1257,11 @@ const calculateLineTotalValue = (item: LineItem) => {
     
     return subtotal - finalDiscount;
 };
+
+const calculateGroupSubtotal = (groupBlock: { items: Array<{ item: LineItem }> }) =>
+    groupBlock.items.reduce((sum, { item }) => sum + calculateLineTotalValue(item), 0);
+
+const hasMultipleLineGroups = computed(() => visibleGroupedLineItems.value.length > 1);
 
 const calculateLineProfitValue = (item: LineItem) => {
     const lineTotal = calculateLineTotalValue(item);
@@ -1358,6 +1498,8 @@ const scheduleAutosave = () => {
     }, 1000);
 };
 
+lineChangedNotifier.notify = scheduleAutosave;
+
 const runAutosave = async () => {
     if (!canAutosaveDraft() || form.processing) {
         return;
@@ -1423,6 +1565,29 @@ const submit = () => {
         return;
     }
 
+    if (linkedJobcard.value) {
+        const jobLabel = linkedJobcard.value.job_number || `Jobcard #${linkedJobcard.value.id}`;
+        const proceed = window.confirm(
+            `This quote is linked to jobcard ${jobLabel}. Changes saved here will not update the jobcard. Continue saving?`,
+        );
+        if (!proceed) {
+            return;
+        }
+    }
+
+    if (!form.customer_id) {
+        executeSave(false);
+        return;
+    }
+
+    promptBeforeSave(executeSave);
+};
+
+const executeSave = (emailNow: boolean) => {
+    const saveOptions = emailNow
+        ? { onSuccess: () => markOpenEmailModalAfterRedirect() }
+        : {};
+
     form.transform((data) => ({
         ...data,
         contact_id: form.contact_id ?? null,
@@ -1440,6 +1605,6 @@ const submit = () => {
             };
         }),
     }))
-        .put(quotes.update(props.quote.id).url);
+        .put(quotes.update(props.quote.id).url, saveOptions);
 };
 </script>

@@ -103,6 +103,8 @@ const moduleVariables: Record<string, Array<{ label: string; value: string; cate
         { label: 'Invoice Footer', value: '{{company.invoice_footer}}', category: 'Company' },
         { label: 'Jobcard Footer', value: '{{company.jobcard_footer}}', category: 'Company' },
         { label: 'Quote Footer', value: '{{company.quote_footer}}', category: 'Company' },
+        { label: 'PDF Footer (HTML)', value: '{{{company.pdf_footer_html}}}', category: 'Company' },
+        { label: 'PDF Footer (plain text)', value: '{{company.pdf_footer}}', category: 'Company' },
         { label: 'Default Invoice Terms', value: '{{company.default_invoice_terms}}', category: 'Company' },
         { label: 'Default Quote Terms', value: '{{company.default_quote_terms}}', category: 'Company' },
         { label: 'Default Jobcard Terms', value: '{{company.default_jobcard_terms}}', category: 'Company' },
@@ -142,6 +144,11 @@ const moduleVariables: Record<string, Array<{ label: string; value: string; cate
         { label: 'Company Email', value: '{{company.email}}', category: 'Company' },
         { label: 'Company VAT Number', value: '{{company.vat_number}}', category: 'Company' },
         { label: 'Company Logo', value: '{{company.getLogoPathForPdf()}}', category: 'Company' },
+        { label: 'Invoice Footer', value: '{{company.invoice_footer}}', category: 'Company' },
+        { label: 'Jobcard Footer', value: '{{company.jobcard_footer}}', category: 'Company' },
+        { label: 'Quote Footer', value: '{{company.quote_footer}}', category: 'Company' },
+        { label: 'PDF Footer (HTML)', value: '{{{company.pdf_footer_html}}}', category: 'Company' },
+        { label: 'PDF Footer (plain text)', value: '{{company.pdf_footer}}', category: 'Company' },
         // Quote variables
         { label: 'Quote Number', value: '{{quote.quote_number}}', category: 'Quote' },
         { label: 'Quote Title', value: '{{quote.title}}', category: 'Quote' },
@@ -184,6 +191,8 @@ const moduleVariables: Record<string, Array<{ label: string; value: string; cate
         { label: 'Invoice Footer', value: '{{company.invoice_footer}}', category: 'Company' },
         { label: 'Jobcard Footer', value: '{{company.jobcard_footer}}', category: 'Company' },
         { label: 'Quote Footer', value: '{{company.quote_footer}}', category: 'Company' },
+        { label: 'PDF Footer (HTML)', value: '{{{company.pdf_footer_html}}}', category: 'Company' },
+        { label: 'PDF Footer (plain text)', value: '{{company.pdf_footer}}', category: 'Company' },
         { label: 'Default Invoice Terms', value: '{{company.default_invoice_terms}}', category: 'Company' },
         { label: 'Default Quote Terms', value: '{{company.default_quote_terms}}', category: 'Company' },
         { label: 'Default Jobcard Terms', value: '{{company.default_jobcard_terms}}', category: 'Company' },
@@ -221,6 +230,11 @@ const moduleVariables: Record<string, Array<{ label: string; value: string; cate
         { label: 'Company Email', value: '{{company.email}}', category: 'Company' },
         { label: 'Company VAT Number', value: '{{company.vat_number}}', category: 'Company' },
         { label: 'Company Logo', value: '{{company.getLogoPathForPdf()}}', category: 'Company' },
+        { label: 'Invoice Footer', value: '{{company.invoice_footer}}', category: 'Company' },
+        { label: 'Jobcard Footer', value: '{{company.jobcard_footer}}', category: 'Company' },
+        { label: 'Quote Footer', value: '{{company.quote_footer}}', category: 'Company' },
+        { label: 'PDF Footer (HTML)', value: '{{{company.pdf_footer_html}}}', category: 'Company' },
+        { label: 'PDF Footer (plain text)', value: '{{company.pdf_footer}}', category: 'Company' },
         // Quote variables (proforma uses quote data)
         { label: 'Quote Number', value: '{{quote.quote_number}}', category: 'Quote' },
         { label: 'Quote Title', value: '{{quote.title}}', category: 'Quote' },
@@ -713,7 +727,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
 </div>
 <div class="footer">
     <div class="footer-left">
-        JobCard Online (Registered to {{company.name}})
+        {{{company.pdf_footer_html}}}
     </div>
     <div class="footer-right">
         {{date}}
@@ -1106,7 +1120,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
 </div>
 <div class="footer">
     <div class="footer-left">
-        JobCard Online (Registered to {{company.name}})
+        {{{company.pdf_footer_html}}}
     </div>
     <div class="footer-right">
         {{date}}
@@ -1499,7 +1513,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
 </div>
 <div class="footer">
     <div class="footer-left">
-        JobCard Online (Registered to {{company.name}})
+        {{{company.pdf_footer_html}}}
     </div>
     <div class="footer-right">
         {{date}}
@@ -1891,7 +1905,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
 </div>
 <div class="footer">
     <div class="footer-left">
-        JobCard Online (Registered to {{company.name}})
+        {{{company.pdf_footer_html}}}
     </div>
     <div class="footer-right">
         {{date}}

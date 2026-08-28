@@ -11,6 +11,7 @@ use App\Models\Team;
 use App\Models\User;
 use App\Services\Dispatch\UserLocationProvider;
 use App\Support\DispatchCompanyResolver;
+use App\Support\JobcardStatuses;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Collection;
 use Inertia\Inertia;
@@ -70,7 +71,7 @@ class DispatchBoardController extends Controller
         return Inertia::render('dispatch/Index', [
             'jobcards' => Jobcard::query()
                 ->where('company_id', $companyId)
-                ->whereIn('status', ['new', 'needs_scheduling', 'scheduled', 'dispatched', 'accepted', 'en_route', 'on_site', 'paused', 'waiting_for_parts', 'needs_follow_up', 'emergency', 'completed', 'cancelled'])
+                ->whereIn('status', JobcardStatuses::ALL)
                 ->with(['assignedUser:id,name', 'assignedTeam:id,name', 'customer:id,name,address,city,country', 'contact:id,name,phone,email'])
                 ->orderBy('scheduled_start_at')
                 ->limit(200)

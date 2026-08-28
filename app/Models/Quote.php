@@ -24,6 +24,7 @@ class Quote extends Model
         'email',
         'phone',
         'invoice_id',
+        'converted_jobcard_id',
         'source_type',
         'source_id',
         'quote_number',
@@ -102,6 +103,11 @@ class Quote extends Model
         return $this->belongsTo(Invoice::class);
     }
 
+    public function convertedJobcard(): BelongsTo
+    {
+        return $this->belongsTo(Jobcard::class, 'converted_jobcard_id');
+    }
+
     public function source(): MorphTo
     {
         return $this->morphTo('source', 'source_type', 'source_id');
@@ -110,6 +116,104 @@ class Quote extends Model
     public function purchaseOrders(): HasMany
     {
         return $this->hasMany(PurchaseOrder::class, 'source_id')->where('source_type', 'quote');
+    }
+
+    public function jobcards(): HasMany
+    {
+        return $this->hasMany(Jobcard::class, 'source_id')
+            ->whereIn('source_type', ['quote', self::class]);
+    }
+
+    /**
+     * Resolve the jobcard linked to this quote, including quote-to-jobcard conversions.
+     */
+    public function findLinkedJobcard(?int $companyId = null, bool $repairLink = false): ?Jobcard
+    {
+        $companyId ??= (int) $this->company_id;
+
+        if ($this->converted_jobcard_id) {
+            $convertedJobcard = Jobcard::query()
+                ->where('company_id', $companyId)
+                ->find($this->converted_jobcard_id);
+
+            if ($convertedJobcard !== null) {
+                return $convertedJobcard;
+            }
+        }
+
+        $jobcard = $this->jobcards()
+            ->where('company_id', $companyId)
+            ->orderByDesc('id')
+            ->first();
+
+        if ($jobcard !== null) {
+            if ($repairLink) {
+                $this->markConvertedToJobcard($jobcard);
+            }
+
+            return $jobcard->fresh();
+        }
+
+        $jobcard = Jobcard::query()
+            ->where('company_id', $companyId)
+            ->where('source_id', $this->id)
+            ->orderByDesc('id')
+            ->first();
+
+        if ($jobcard !== null) {
+            if ($repairLink) {
+                $this->markConvertedToJobcard($jobcard);
+            }
+
+            return $jobcard->fresh();
+        }
+
+        if ($this->source_type === 'jobcard' && $this->source_id) {
+            return Jobcard::query()
+                ->where('company_id', $companyId)
+                ->find($this->source_id);
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array{id: int, job_number: string, title: string}|null
+     */
+    public function linkedJobcardPayload(?int $companyId = null, bool $repairLink = true): ?array
+    {
+        $jobcard = $this->findLinkedJobcard($companyId, $repairLink);
+
+        if ($jobcard === null) {
+            return null;
+        }
+
+        return [
+            'id' => $jobcard->id,
+            'job_number' => $jobcard->job_number,
+            'title' => $jobcard->title,
+        ];
+    }
+
+    public function markConvertedToJobcard(Jobcard $jobcard): void
+    {
+        if ((int) $jobcard->company_id !== (int) $this->company_id) {
+            return;
+        }
+
+        if (
+            $jobcard->source_type !== 'quote'
+            || (int) $jobcard->source_id !== (int) $this->id
+        ) {
+            $jobcard->update([
+                'source_type' => 'quote',
+                'source_id' => $this->id,
+            ]);
+        }
+
+        if ((int) $this->converted_jobcard_id !== (int) $jobcard->id) {
+            $this->update(['converted_jobcard_id' => $jobcard->id]);
+        }
     }
 
     /**
@@ -238,6 +342,8 @@ class Quote extends Model
             'contact_id' => $this->contact_id,
             'email' => $this->email,
             'phone' => $this->phone,
+            'source_type' => 'quote',
+            'source_id' => $this->id,
             'job_number' => Jobcard::generateJobNumber($this->company_id),
             'order_number' => $this->order_number,
             'title' => $this->title,
@@ -292,6 +398,7 @@ class Quote extends Model
             ]);
         }
 
+        $this->markConvertedToJobcard($jobcard);
         $this->update(['status' => 'accepted']);
 
         return $jobcard;

@@ -404,6 +404,7 @@ import { Edit, Trash2 } from 'lucide-vue-next';
 import { ref, computed, watch, nextTick } from 'vue';
 import jobcardsRoute from '@/routes/jobcards';
 import invoicesRoute from '@/routes/invoices';
+import { jobcardStatusBadgeClass } from '@/lib/jobcardStatuses';
 
 const page = usePage();
 const isLimitedUser = computed(() => (page.props.auth as any)?.user?.user_type === 'limited');
@@ -607,25 +608,7 @@ const deleteJobcard = (jobcard: Jobcard) => {
     }
 };
 
-const getStatusBadgeClass = (status: string) => {
-    if (!status) return 'bg-gray-100 text-gray-800';
-    const classes = {
-        new: 'bg-slate-100 text-slate-800',
-        needs_scheduling: 'bg-amber-100 text-amber-800',
-        scheduled: 'bg-blue-100 text-blue-800',
-        dispatched: 'bg-indigo-100 text-indigo-800',
-        accepted: 'bg-cyan-100 text-cyan-800',
-        en_route: 'bg-sky-100 text-sky-800',
-        on_site: 'bg-violet-100 text-violet-800',
-        paused: 'bg-orange-100 text-orange-800',
-        waiting_for_parts: 'bg-yellow-100 text-yellow-800',
-        needs_follow_up: 'bg-fuchsia-100 text-fuchsia-800',
-        emergency: 'bg-red-100 text-red-800',
-        completed: 'bg-green-100 text-green-800',
-        cancelled: 'bg-red-100 text-red-800',
-    };
-    return classes[status as keyof typeof classes] || classes.new;
-};
+const getStatusBadgeClass = (status: string) => jobcardStatusBadgeClass(status || 'new');
 
 const formatStatus = (code: string) => {
     if (!code) return '';

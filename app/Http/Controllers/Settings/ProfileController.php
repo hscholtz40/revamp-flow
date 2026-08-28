@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\ProfileUpdateRequest;
+use App\Support\DashboardQuickActionCatalog;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -21,6 +22,7 @@ class ProfileController extends Controller
         return Inertia::render('settings/Profile', [
             'mustVerifyEmail' => $request->user() instanceof MustVerifyEmail,
             'status' => $request->session()->get('status'),
+            'dashboardQuickActionOptions' => DashboardQuickActionCatalog::optionsForUi(),
         ]);
     }
 
@@ -33,6 +35,12 @@ class ProfileController extends Controller
 
         if ($request->user()->isClientUser()) {
             $validated['email'] = $request->user()->email;
+        }
+
+        if (array_key_exists('dashboard_quick_actions', $validated)) {
+            $validated['dashboard_quick_actions'] = DashboardQuickActionCatalog::normalizeForStorage(
+                $validated['dashboard_quick_actions'],
+            );
         }
 
         $request->user()->fill($validated);

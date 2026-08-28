@@ -6,6 +6,7 @@ use App\Models\Customer;
 use App\Models\Jobcard;
 use App\Models\Team;
 use App\Models\User;
+use App\Support\JobcardStatuses;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -17,21 +18,7 @@ class JobcardReportController extends Controller
      */
     private function jobcardStatusOrder(): array
     {
-        return [
-            'new',
-            'needs_scheduling',
-            'scheduled',
-            'dispatched',
-            'accepted',
-            'en_route',
-            'on_site',
-            'paused',
-            'waiting_for_parts',
-            'needs_follow_up',
-            'emergency',
-            'completed',
-            'cancelled',
-        ];
+        return JobcardStatuses::ALL;
     }
 
     /**

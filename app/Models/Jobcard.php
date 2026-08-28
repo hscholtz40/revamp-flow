@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use App\Support\JobcardStatuses;
 use Illuminate\Support\Facades\DB;
 
 class Jobcard extends Model
@@ -321,22 +322,7 @@ class Jobcard extends Model
      */
     public function getStatusColorAttribute(): string
     {
-        return match ($this->status) {
-            'new' => 'gray',
-            'needs_scheduling' => 'yellow',
-            'scheduled' => 'blue',
-            'dispatched' => 'indigo',
-            'accepted' => 'blue',
-            'en_route' => 'indigo',
-            'on_site' => 'blue',
-            'paused' => 'orange',
-            'waiting_for_parts' => 'orange',
-            'needs_follow_up' => 'yellow',
-            'emergency' => 'red',
-            'completed' => 'green',
-            'cancelled' => 'red',
-            default => 'gray',
-        };
+        return JobcardStatuses::badgeColors()[$this->status] ?? 'gray';
     }
 
     public function getRecipientEmailAttribute(): ?string

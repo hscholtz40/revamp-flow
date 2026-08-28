@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Supplier;
 use App\Support\CsvExport;
+use App\Services\SystemNotificationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -134,6 +135,10 @@ class SuppliersController extends Controller
             $supplier->postal_code,
             $supplier->country,
             $supplier->vat_number,
+            $supplier->bank_name,
+            $supplier->bank_account_name,
+            $supplier->bank_account_number,
+            $supplier->bank_sort_code,
             $supplier->is_active,
             $supplier->notes,
             optional($supplier->created_at)?->format('Y-m-d H:i:s'),
@@ -150,6 +155,10 @@ class SuppliersController extends Controller
             'Postal Code',
             'Country',
             'VAT Number',
+            'Bank Name',
+            'Account Name',
+            'Account Number',
+            'Branch Code',
             'Active',
             'Notes',
             'Created At',
@@ -186,6 +195,10 @@ class SuppliersController extends Controller
             'postal_code' => ['nullable', 'string', 'max:20'],
             'country' => ['nullable', 'string', 'max:100'],
             'vat_number' => ['nullable', 'string', 'max:50'],
+            'bank_name' => ['nullable', 'string', 'max:255'],
+            'bank_account_name' => ['nullable', 'string', 'max:255'],
+            'bank_account_number' => ['nullable', 'string', 'max:50'],
+            'bank_sort_code' => ['nullable', 'string', 'max:50'],
             'notes' => ['nullable', 'string'],
             'is_active' => ['boolean'],
         ]);
@@ -199,7 +212,7 @@ class SuppliersController extends Controller
             'company_id' => $supplier->company_id,
         ]);
 
-        if ($request->expectsJson() || $request->ajax()) {
+        if (($request->expectsJson() || $request->ajax()) && ! $request->header('X-Inertia')) {
             return response()->json([
                 'id' => $supplier->id,
                 'name' => $supplier->name,
@@ -275,11 +288,24 @@ class SuppliersController extends Controller
             'postal_code' => ['nullable', 'string', 'max:20'],
             'country' => ['nullable', 'string', 'max:100'],
             'vat_number' => ['nullable', 'string', 'max:50'],
+            'bank_name' => ['nullable', 'string', 'max:255'],
+            'bank_account_name' => ['nullable', 'string', 'max:255'],
+            'bank_account_number' => ['nullable', 'string', 'max:50'],
+            'bank_sort_code' => ['nullable', 'string', 'max:50'],
             'notes' => ['nullable', 'string'],
             'is_active' => ['boolean'],
         ]);
 
+        $before = $supplier->only(array_keys($validated));
+
         $supplier->update($validated);
+
+        app(SystemNotificationService::class)->notifySupplierUpdated(
+            $currentCompany,
+            $supplier->name,
+            $before,
+            $supplier->only(array_keys($validated))
+        );
 
         return redirect()->route('suppliers.index')->with('success', 'Supplier updated successfully');
     }

@@ -15,7 +15,7 @@ use App\Notifications\SystemEventNotification;
 use App\Services\CustomerAccountBalanceCalculator;
 use App\Services\CustomerStatementService;
 use App\Services\PdfGenerationService;
-use App\Support\CompanyMailer;
+use App\Services\SystemNotificationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
@@ -823,44 +823,7 @@ HTML;
             ))
         );
 
-        try {
-            $customer->loadMissing('company');
-            $company = $customer->company;
-            if ($company === null || empty($company->email) || ! filter_var((string) $company->email, FILTER_VALIDATE_EMAIL)) {
-                Log::warning('Client Zone information update: company has no valid email for notification', [
-                    'customer_id' => $customer->id,
-                    'company_id' => $customer->company_id,
-                    'update_request_id' => $updateRequest->id,
-                ]);
-
-                return;
-            }
-
-            $customerLabel = e($customer->name);
-            $clientLabel = e($clientUser->name);
-            $reviewUrl = e($reviewUrl);
-
-            $subject = 'Client Zone: information update request';
-            $body = <<<HTML
-<p>A client submitted a request to update their information.</p>
-<p><strong>Customer:</strong> {$customerLabel}<br>
-<strong>Client account:</strong> {$clientLabel}</p>
-<p><a href="{$reviewUrl}">Review request</a></p>
-HTML;
-
-            $mailConfig = CompanyMailer::resolve($company);
-            Mail::mailer($mailConfig['mailer'])->send([], [], function ($message) use ($company, $subject, $body, $mailConfig) {
-                $message->to($company->email, $company->name)
-                    ->subject($subject)
-                    ->from($mailConfig['from_address'], $mailConfig['from_name'])
-                    ->html($body);
-            });
-        } catch (\Throwable $e) {
-            Log::error('Client Zone information update: failed to send company notification', [
-                'update_request_id' => $updateRequest->id,
-                'message' => $e->getMessage(),
-            ]);
-        }
+        app(SystemNotificationService::class)->notifyClientInfoUpdateRequest($customer, $updateRequest, $clientUser);
     }
 
     private function notifyCompanyApproversOfClientRegistration(Customer $customer, string $clientName): void
@@ -870,6 +833,11 @@ HTML;
         $this->companyApprovalUsers((int) $customer->company_id)->each(
             fn (User $approver) => $approver->notify(new SystemEventNotification($title, $pendingUsersUrl, 'client_registration'))
         );
+
+        $customer->loadMissing('company');
+        if ($customer->company) {
+            app(SystemNotificationService::class)->notifyClientRegistration($customer->company, $customer, $clientName);
+        }
     }
 
     private function companyApprovalUsers(int $companyId)

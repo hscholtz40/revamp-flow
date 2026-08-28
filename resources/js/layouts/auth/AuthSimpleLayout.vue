@@ -47,7 +47,7 @@ defineProps<{
                     <!-- Footer info -->
                     <div class="mt-8 text-center">
                         <p class="text-xs text-neutral-500">
-                            © {{ new Date().getFullYear() }} Revamp. All rights reserved.
+                            © {{ new Date().getFullYear() }} Revamp© Flow. All rights reserved.
                         </p>
                     </div>
                 </div>

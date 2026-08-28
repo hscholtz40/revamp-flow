@@ -101,6 +101,7 @@ class CompanySettingsController extends Controller
 
         // Create default reminder settings for the new company
         $company->getReminderSettings();
+        $company->getNotificationSettings();
 
         // Create default purchase order PDF template
         $this->createDefaultPurchaseOrderTemplate($company);
@@ -133,6 +134,7 @@ class CompanySettingsController extends Controller
         }
 
         $reminderSettings = $company->getReminderSettings();
+        $notificationSettings = $company->getNotificationSettings();
 
         // Never send the decrypted SMTP password to the browser. The form uses an
         // empty password field + "leave blank to keep" semantics, with a flag so
@@ -144,6 +146,11 @@ class CompanySettingsController extends Controller
         return Inertia::render('company-settings/Edit', [
             'company' => $companyPayload,
             'reminderSettings' => $reminderSettings,
+            'notificationSettings' => [
+                'automation_enabled' => (bool) $notificationSettings->automation_enabled,
+                'events' => $notificationSettings->events ?? \App\Support\NotificationEventCatalog::defaultEvents(),
+            ],
+            'notificationEventCatalog' => \App\Support\NotificationEventCatalog::events(),
         ]);
     }
 
@@ -420,9 +427,46 @@ class CompanySettingsController extends Controller
         ]);
 
         $reminderSettings = $company->getReminderSettings();
+        $notificationSettings = $company->getNotificationSettings();
         $reminderSettings->update($validated);
 
         return redirect()->back()->with('success', 'Reminder settings updated successfully.');
+    }
+
+    public function updateNotificationSettings(Request $request, Company $company): RedirectResponse
+    {
+        if (! auth()->user()->hasAccessToCompany($company->id)) {
+            abort(403, 'You do not have access to this company.');
+        }
+
+        $eventKeys = array_keys(\App\Support\NotificationEventCatalog::events());
+
+        $validated = $request->validate([
+            'automation_enabled' => ['boolean'],
+            'events' => ['required', 'array'],
+            'events.*.enabled' => ['boolean'],
+            'events.*.notify_admin' => ['boolean'],
+            'events.*.notify_client' => ['boolean'],
+            'events.*.notify_staff' => ['boolean'],
+        ]);
+
+        $events = [];
+        foreach ($eventKeys as $eventKey) {
+            $events[$eventKey] = [
+                'enabled' => (bool) data_get($validated, "events.{$eventKey}.enabled", false),
+                'notify_admin' => (bool) data_get($validated, "events.{$eventKey}.notify_admin", false),
+                'notify_client' => (bool) data_get($validated, "events.{$eventKey}.notify_client", false),
+                'notify_staff' => (bool) data_get($validated, "events.{$eventKey}.notify_staff", false),
+            ];
+        }
+
+        $notificationSettings = $company->getNotificationSettings();
+        $notificationSettings->update([
+            'automation_enabled' => (bool) ($validated['automation_enabled'] ?? false),
+            'events' => $events,
+        ]);
+
+        return redirect()->back()->with('success', 'System notification settings updated successfully.');
     }
 
     /**

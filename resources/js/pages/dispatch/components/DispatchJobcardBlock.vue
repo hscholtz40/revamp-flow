@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { DispatchConflict, DispatchJobcard } from '@/types/dispatch-board';
+import { jobcardStatusBadgeClass } from '@/lib/jobcardStatuses';
 import { computed } from 'vue';
 
 const props = defineProps<{
@@ -14,25 +15,7 @@ const customerShort = computed(() => {
     if (!c) return '';
     return c.city || (c.address ? String(c.address).split(',')[0]?.trim() : '') || c.name;
 });
-const statusBadge = computed(() => {
-    const s = props.job.status ?? 'new';
-    const map: Record<string, string> = {
-        new: 'bg-slate-100 text-slate-800',
-        needs_scheduling: 'bg-amber-100 text-amber-900',
-        scheduled: 'bg-blue-100 text-blue-900',
-        dispatched: 'bg-indigo-100 text-indigo-900',
-        accepted: 'bg-cyan-100 text-cyan-900',
-        en_route: 'bg-sky-100 text-sky-900',
-        on_site: 'bg-violet-100 text-violet-900',
-        paused: 'bg-orange-100 text-orange-900',
-        waiting_for_parts: 'bg-yellow-100 text-yellow-900',
-        needs_follow_up: 'bg-fuchsia-100 text-fuchsia-900',
-        emergency: 'bg-red-100 text-red-900',
-        completed: 'bg-emerald-100 text-emerald-900',
-        cancelled: 'bg-rose-100 text-rose-900',
-    };
-    return map[s] ?? 'bg-gray-100 text-gray-800';
-});
+const statusBadge = computed(() => jobcardStatusBadgeClass(props.job.status ?? 'new'));
 const priorityBadge = computed(() => {
     const p = props.job.priority ?? 'normal';
     if (p === 'urgent') return 'border-red-300 bg-red-50 text-red-800';

@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Settings;
 
 use App\Models\User;
+use App\Support\DashboardQuickActionCatalog;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -16,26 +17,35 @@ class ProfileUpdateRequest extends FormRequest
     public function rules(): array
     {
         $user = $this->user();
+        $updatingQuickActionsOnly = $this->has('dashboard_quick_actions')
+            && ! $this->has('name')
+            && ! $this->has('email');
 
-        return [
-            'name' => ['required', 'string', 'max:255'],
-            'email' => [
-                'required',
-                'string',
-                'lowercase',
-                'email',
-                'max:255',
-                Rule::unique(User::class)->ignore($user?->id),
-                function (string $attribute, mixed $value, \Closure $fail) use ($user): void {
-                    if (! $user?->isClientUser()) {
-                        return;
-                    }
+        $rules = DashboardQuickActionCatalog::validationRules();
 
-                    if (strtolower((string) $value) !== strtolower((string) $user->email)) {
-                        $fail('Client accounts cannot change their sign-in email. Please submit an information update request instead.');
-                    }
-                },
-            ],
+        if ($updatingQuickActionsOnly) {
+            return $rules;
+        }
+
+        $rules['name'] = ['required', 'string', 'max:255'];
+        $rules['email'] = [
+            'required',
+            'string',
+            'lowercase',
+            'email',
+            'max:255',
+            Rule::unique(User::class)->ignore($user?->id),
+            function (string $attribute, mixed $value, \Closure $fail) use ($user): void {
+                if (! $user?->isClientUser()) {
+                    return;
+                }
+
+                if (strtolower((string) $value) !== strtolower((string) $user->email)) {
+                    $fail('Client accounts cannot change their sign-in email. Please submit an information update request instead.');
+                }
+            },
         ];
+
+        return $rules;
     }
 }

@@ -71,6 +71,11 @@ const assignTeam = computed({
 
 const statusButtons = [
     { status: 'dispatched', label: 'Dispatched' },
+    { status: 'purchase_order_sent_on_dispatch', label: 'PO sent on dispatch' },
+    { status: 'order_received', label: 'Order received' },
+    { status: 'stock_checked', label: 'Stock checked' },
+    { status: 'delivery_scheduled', label: 'Delivery scheduled' },
+    { status: 'delivered', label: 'Delivered' },
     { status: 'accepted', label: 'Accepted' },
     { status: 'en_route', label: 'En route' },
     { status: 'on_site', label: 'On site' },

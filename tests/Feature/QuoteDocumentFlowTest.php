@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Jobcard;
 use App\Models\Quote;
 use App\Services\QuoteUpsertService;
 
@@ -209,4 +210,234 @@ it('deletes a quote', function () {
         ->assertRedirect(route('quotes.index'));
 
     expect(Quote::find($quote->id))->toBeNull();
+});
+
+it('shows linked jobcard warning on quote edit when quote was converted to a jobcard', function () {
+    $company = coverageCreateCompany();
+    $user = coverageCreateUserWithPermissions($company, [
+        'quotes' => ['view', 'create', 'edit', 'delete'],
+        'jobcards' => ['view', 'create', 'edit', 'delete'],
+    ]);
+    $customer = coverageSeedCustomer($company);
+    coverageSeedChartOfAccount($company);
+
+    $quote = app(QuoteUpsertService::class)->createForCompany([
+        'customer_id' => $customer->id,
+        'title' => 'Converted quote',
+        'status' => 'draft',
+        'line_items' => [
+            [
+                'description' => 'Line item',
+                'quantity' => 1,
+                'unit_price' => 100,
+            ],
+        ],
+    ], $company->id, $user->id);
+
+    $jobcard = Jobcard::create([
+        'company_id' => $company->id,
+        'customer_id' => $customer->id,
+        'source_type' => 'quote',
+        'source_id' => $quote->id,
+        'job_number' => 'JC-LINK-'.uniqid(),
+        'title' => 'Linked jobcard',
+        'status' => 'new',
+        'subtotal' => 100,
+        'discount_amount' => 0,
+        'discount_percentage' => 0,
+        'tax_rate' => 0,
+        'tax_amount' => 0,
+        'total' => 100,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('quotes.edit', $quote))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('quotes/Edit')
+            ->where('linkedJobcard.id', $jobcard->id)
+            ->where('linkedJobcard.job_number', $jobcard->job_number));
+});
+
+test('quote converted to jobcard via model stores quote source link', function () {
+    $company = coverageCreateCompany();
+    $user = coverageCreateUserWithPermissions($company, [
+        'quotes' => ['list', 'view', 'create', 'edit'],
+        'jobcards' => ['list', 'view', 'create', 'edit'],
+    ], [
+        'email_verified_at' => now(),
+    ]);
+
+    $customer = coverageSeedCustomer($company);
+    coverageSeedChartOfAccount($company);
+
+    $quote = app(QuoteUpsertService::class)->createForCompany([
+        'customer_id' => $customer->id,
+        'title' => 'Model converted quote',
+        'status' => 'draft',
+        'line_items' => [
+            [
+                'description' => 'Line item',
+                'quantity' => 1,
+                'unit_price' => 100,
+            ],
+        ],
+    ], $company->id, $user->id);
+
+    $jobcard = $quote->convertToJobcard();
+
+    expect($jobcard->source_type)->toBe('quote')
+        ->and($jobcard->source_id)->toBe($quote->id)
+        ->and($quote->fresh()->status)->toBe('accepted')
+        ->and($quote->fresh()->converted_jobcard_id)->toBe($jobcard->id);
+});
+
+it('shows linked jobcard warning on quote edit when quote has converted_jobcard_id', function () {
+    $company = coverageCreateCompany();
+    $user = coverageCreateUserWithPermissions($company, [
+        'quotes' => ['view', 'create', 'edit', 'delete'],
+        'jobcards' => ['view', 'create', 'edit', 'delete'],
+    ]);
+    $customer = coverageSeedCustomer($company);
+    coverageSeedChartOfAccount($company);
+
+    $quote = app(QuoteUpsertService::class)->createForCompany([
+        'customer_id' => $customer->id,
+        'title' => 'Converted quote marker',
+        'status' => 'draft',
+        'line_items' => [
+            [
+                'description' => 'Line item',
+                'quantity' => 1,
+                'unit_price' => 100,
+            ],
+        ],
+    ], $company->id, $user->id);
+
+    $jobcard = Jobcard::create([
+        'company_id' => $company->id,
+        'customer_id' => $customer->id,
+        'job_number' => 'JC-MARK-'.uniqid(),
+        'title' => 'Converted jobcard',
+        'status' => 'new',
+        'subtotal' => 100,
+        'discount_amount' => 0,
+        'discount_percentage' => 0,
+        'tax_rate' => 0,
+        'tax_amount' => 0,
+        'total' => 100,
+    ]);
+
+    $quote->update(['converted_jobcard_id' => $jobcard->id]);
+
+    $this->actingAs($user)
+        ->get(route('quotes.edit', $quote))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('quotes/Edit')
+            ->where('linkedJobcard.id', $jobcard->id)
+            ->where('linkedJobcard.job_number', $jobcard->job_number));
+});
+
+it('shows linked jobcard warning on quote edit when jobcard only has source_id set', function () {
+    $company = coverageCreateCompany();
+    $user = coverageCreateUserWithPermissions($company, [
+        'quotes' => ['view', 'create', 'edit', 'delete'],
+        'jobcards' => ['view', 'create', 'edit', 'delete'],
+    ]);
+    $customer = coverageSeedCustomer($company);
+    coverageSeedChartOfAccount($company);
+
+    $quote = app(QuoteUpsertService::class)->createForCompany([
+        'customer_id' => $customer->id,
+        'title' => 'Loose link quote',
+        'status' => 'draft',
+        'line_items' => [
+            [
+                'description' => 'Line item',
+                'quantity' => 1,
+                'unit_price' => 100,
+            ],
+        ],
+    ], $company->id, $user->id);
+
+    $jobcard = Jobcard::create([
+        'company_id' => $company->id,
+        'customer_id' => $customer->id,
+        'source_id' => $quote->id,
+        'job_number' => 'JC-LOOSE-'.uniqid(),
+        'title' => 'Loose linked jobcard',
+        'status' => 'new',
+        'subtotal' => 100,
+        'discount_amount' => 0,
+        'discount_percentage' => 0,
+        'tax_rate' => 0,
+        'tax_amount' => 0,
+        'total' => 100,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('quotes.edit', $quote))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('quotes/Edit')
+            ->where('linkedJobcard.id', $jobcard->id));
+
+    $quote->refresh();
+    expect($quote->converted_jobcard_id)->toBe($jobcard->id)
+        ->and($jobcard->fresh()->source_type)->toBe('quote');
+});
+
+it('links quote to jobcard when jobcard is stored from quote conversion', function () {
+    $company = coverageCreateCompany();
+    $user = coverageCreateUserWithPermissions($company, [
+        'quotes' => ['view', 'create', 'edit', 'delete'],
+        'jobcards' => ['view', 'create', 'edit', 'delete'],
+    ]);
+    $customer = coverageSeedCustomer($company);
+    coverageSeedChartOfAccount($company);
+
+    $quote = app(QuoteUpsertService::class)->createForCompany([
+        'customer_id' => $customer->id,
+        'title' => 'Convert via store',
+        'status' => 'draft',
+        'line_items' => [
+            [
+                'description' => 'Line item',
+                'quantity' => 1,
+                'unit_price' => 100,
+            ],
+        ],
+    ], $company->id, $user->id);
+
+    $this->actingAs($user)->post(route('jobcards.store'), [
+        'customer_id' => $customer->id,
+        'source_type' => 'quote',
+        'source_id' => $quote->id,
+        'title' => 'Converted jobcard',
+        'status' => 'new',
+        'line_groups' => [
+            ['name' => 'Items'],
+        ],
+        'line_items' => [
+            [
+                'product_id' => null,
+                'description' => 'Line item',
+                'quantity' => 1,
+                'unit_price' => 100,
+                'line_group_id' => 1,
+            ],
+        ],
+    ])->assertRedirect();
+
+    $quote->refresh();
+
+    expect($quote->converted_jobcard_id)->not->toBeNull();
+
+    $this->actingAs($user)
+        ->get(route('quotes.edit', $quote))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('quotes/Edit')
+            ->where('linkedJobcard.id', $quote->converted_jobcard_id));
 });

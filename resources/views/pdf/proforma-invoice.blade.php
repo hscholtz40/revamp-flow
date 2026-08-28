@@ -479,39 +479,10 @@
         </thead>
         <tbody>
             @php
-                $lineGroups = $quote->lineGroups ?? collect();
-                $items = ($quote->lineItems ?? collect())->filter(function ($item) {
-                    return strtolower(trim((string) ($item->description ?? ''))) !== 'rounding adjustment';
-                });
-                $resolvedGroups = collect();
-                $renderedItemIds = collect();
-
-                foreach ($lineGroups->sortBy('sort_order') as $group) {
-                    $groupItems = $items->where('line_group_id', $group->id);
-                    if ($groupItems->isNotEmpty()) {
-                        $resolvedGroups->push((object) [
-                            'name' => $group->name,
-                            'items' => $groupItems,
-                        ]);
-                        $renderedItemIds = $renderedItemIds->merge($groupItems->pluck('id'));
-                    }
-                }
-
-                $ungroupedItems = $items->filter(function ($item) use ($renderedItemIds) {
-                    return !$renderedItemIds->contains($item->id);
-                });
-
-                if ($resolvedGroups->isEmpty() && $items->isNotEmpty()) {
-                    $resolvedGroups->push((object) [
-                        'name' => 'Items',
-                        'items' => $items,
-                    ]);
-                } elseif ($ungroupedItems->isNotEmpty()) {
-                    $resolvedGroups->push((object) [
-                        'name' => 'Items',
-                        'items' => $ungroupedItems,
-                    ]);
-                }
+                $resolvedGroups = \App\Support\DocumentLineGroupResolver::resolve(
+                    $quote->lineGroups ?? collect(),
+                    $quote->lineItems ?? collect()
+                );
             @endphp
             @foreach($resolvedGroups as $group)
                     @if($group->name)
@@ -541,6 +512,10 @@
                     <td class="text-right">{{ $company->formatCurrencyZar($item->total ?? 0) }}</td>
                 </tr>
                     @endforeach
+                <tr class="group-subtotal">
+                    <td colspan="5" class="text-right" style="font-weight: bold; background: #f9fafb; padding: 4px 2px;">Group Total ({{ $group->name }}):</td>
+                    <td class="text-right" style="font-weight: bold; background: #f9fafb; padding: 4px 2px;">{{ $company->formatCurrencyZar($group->subtotal ?? 0) }}</td>
+                </tr>
             @endforeach
         </tbody>
     </table>
@@ -579,7 +554,7 @@
         </div>
         @endif
         <div class="total-row final">
-            <span>Total:</span>
+            <span>{{ ($resolvedGroups->count() ?? 0) > 1 ? 'Grand Total:' : 'Total:' }}</span>
             <span>{{ $company->formatCurrencyZar($quote->total ?? 0) }}</span>
         </div>
     </div>

@@ -43,14 +43,22 @@ class OpenAiClient
             throw new RuntimeException('Could not read the voice note file.');
         }
 
+        $payload = [
+            'model' => (string) config('services.openai.transcription_model', 'gpt-4o-mini-transcribe'),
+            'response_format' => 'json',
+            'temperature' => 0,
+        ];
+
+        $language = config('services.openai.transcription_language');
+        if (is_string($language) && $language !== '') {
+            $payload['language'] = $language;
+        }
+
         try {
             $response = Http::timeout(90)
                 ->withToken($apiKey)
                 ->attach('file', $handle, $filename)
-                ->post('https://api.openai.com/v1/audio/transcriptions', [
-                    'model' => (string) config('services.openai.transcription_model', 'whisper-1'),
-                    'response_format' => 'json',
-                ]);
+                ->post('https://api.openai.com/v1/audio/transcriptions', $payload);
         } finally {
             if (is_resource($handle)) {
                 fclose($handle);
@@ -58,7 +66,12 @@ class OpenAiClient
         }
 
         if (! $response->successful()) {
-            throw new RuntimeException('OpenAI transcription failed: '.$response->status());
+            $message = (string) data_get($response->json(), 'error.message', '');
+            throw new RuntimeException(
+                $message !== ''
+                    ? 'OpenAI transcription failed: '.$message
+                    : 'OpenAI transcription failed: '.$response->status()
+            );
         }
 
         $text = trim((string) data_get($response->json(), 'text', ''));

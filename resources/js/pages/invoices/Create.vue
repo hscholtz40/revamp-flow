@@ -515,6 +515,10 @@
                                 </p>
                             </div>
                         </div>
+                            <div class="flex justify-end border-t border-gray-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-gray-800">
+                                Group Total ({{ groupBlock.group.name || `Group ${groupBlock.groupIndex + 1}` }}):
+                                <span class="ml-2">{{ formatCurrency(calculateGroupSubtotal(groupBlock)) }}</span>
+                            </div>
                     </div>
                     </div>
 
@@ -549,7 +553,7 @@
                             <span class="font-medium">{{ formatCurrency(roundingAdjustment) }}</span>
                         </div>
                         <div class="flex justify-between text-lg font-semibold border-t pt-2">
-                            <span>Total:</span>
+                            <span>{{ hasMultipleLineGroups ? 'Grand Total:' : 'Total:' }}</span>
                             <span>{{ formatCurrency(total) }}</span>
                         </div>
                         <div class="flex justify-between">
@@ -648,15 +652,23 @@
                 </div>
             </form>
         </div>
+        <SaveEmailPromptModal
+            v-model="showSaveEmailPrompt"
+            document-label="invoice"
+            @choose="confirmSaveEmailChoice"
+            @cancel="cancelSaveEmailPrompt"
+        />
     </AppLayout>
 </template>
 
 <script setup lang="ts">
 import QuickCreateCustomerModal from '@/components/QuickCreateCustomerModal.vue';
+import SaveEmailPromptModal from '@/components/SaveEmailPromptModal.vue';
 import AiDocumentSuggestionPanel from '@/components/AiDocumentSuggestionPanel.vue';
 import AiDraftHelper from '@/components/AiDraftHelper.vue';
 import ContactSelector from '@/components/ContactSelector.vue';
 import { useCustomerLookup } from '@/composables/useCustomerLookup';
+import { markOpenEmailModalAfterRedirect, useSaveEmailPrompt } from '@/composables/useSaveEmailPrompt';
 import { useNumberFormat } from '@/composables/useNumberFormat';
 import { matchesProductSearch } from '@/composables/productSearch';
 import type { CustomerLookupCustomer } from '@/types/customers';
@@ -767,6 +779,8 @@ const draggedItemIndex = ref<number | null>(null);
 const dragOverItemIndex = ref<number | null>(null);
 const dragOverGroupId = ref<number | null>(null);
 const activeDragIndex = ref<number | null>(null);
+
+const { cancelSaveEmailPrompt, confirmSaveEmailChoice, promptBeforeSave, showSaveEmailPrompt } = useSaveEmailPrompt();
 
 const form = useForm({
     title: '',
@@ -1204,6 +1218,11 @@ const calculateLineTotalValue = (item: LineItem) => {
     return subtotal - finalDiscount;
 };
 
+const calculateGroupSubtotal = (groupBlock: { items: Array<{ item: LineItem }> }) =>
+    groupBlock.items.reduce((sum, { item }) => sum + calculateLineTotalValue(item), 0);
+
+const hasMultipleLineGroups = computed(() => visibleGroupedLineItems.value.length > 1);
+
 const calculateLineProfitValue = (item: LineItem) => {
     const lineTotal = calculateLineTotalValue(item);
     const quantity = Number(item.quantity) || 0;
@@ -1454,6 +1473,19 @@ const submit = () => {
         return;
     }
 
+    if (!form.customer_id) {
+        executeSave(false);
+        return;
+    }
+
+    promptBeforeSave(executeSave);
+};
+
+const executeSave = (emailNow: boolean) => {
+    const saveOptions = emailNow
+        ? { onSuccess: () => markOpenEmailModalAfterRedirect() }
+        : {};
+
     form.transform((data) => ({
         ...data,
         contact_id: form.contact_id ?? null,
@@ -1481,6 +1513,6 @@ const submit = () => {
             };
         }),
     }))
-        .post(invoices.store().url);
+        .post(invoices.store().url, saveOptions);
 };
 </script>

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
+import ProductImageField from '@/components/products/ProductImageField.vue';
+import ProductPhysicalAttributesFields from '@/components/products/ProductPhysicalAttributesFields.vue';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import { ArrowLeft, Package, Wrench } from 'lucide-vue-next';
@@ -44,6 +46,12 @@ const form = useForm({
     price: 0,
     cost: null as number | null,
     unit: 'piece',
+    weight: null as number | null,
+    length: null as number | null,
+    width: null as number | null,
+    height: null as number | null,
+    color: '',
+    size: '',
     stock_quantity: 0,
     min_stock_level: 0,
     track_stock: true,
@@ -54,7 +62,8 @@ const form = useForm({
     category: '',
     supplier_id: null as number | null,
     tags: [] as string[],
-    image_path: '',
+    image: null as File | null,
+    remove_image: false,
     notes: '',
     purchase_account_code: '',
     sales_account_code: '',
@@ -75,7 +84,7 @@ const commonUnits = [
 ];
 
 function submit() {
-    form.post(products.store().url);
+    form.post(products.store().url, form.image ? { forceFormData: true } : undefined);
 }
 
 function addTag() {
@@ -472,6 +481,8 @@ function getTypeColor(type: string) {
                         </div>
                     </div>
 
+                    <ProductPhysicalAttributesFields v-if="!isService" :form="form" />
+
                     <!-- Inventory (Products Only) -->
                     <div v-if="!isService" class="rounded-lg border bg-white p-6">
                         <h2 class="mb-4 text-lg font-semibold text-gray-900">Inventory Management</h2>
@@ -617,21 +628,11 @@ function getTypeColor(type: string) {
                         <h2 class="mb-4 text-lg font-semibold text-gray-900">Additional Information</h2>
                         
                         <div class="space-y-6">
-                            <!-- Image Path -->
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">
-                                    Image Path
-                                </label>
-                                <input
-                                    v-model="form.image_path"
-                                    type="text"
-                                    placeholder="/images/products/example.jpg"
-                                    class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                />
-                                <div v-if="form.errors.image_path" class="mt-1 text-sm text-red-600">
-                                    {{ form.errors.image_path }}
-                                </div>
-                            </div>
+                            <!-- Product Image -->
+                            <ProductImageField
+                                v-model="form.image"
+                                :error="form.errors.image"
+                            />
 
                             <!-- Notes -->
                             <div>

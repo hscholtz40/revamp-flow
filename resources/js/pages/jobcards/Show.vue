@@ -899,6 +899,11 @@ import TimeTracking from '@/components/TimeTracking.vue';
 import { useDateTimeFormat } from '@/composables/useDateTimeFormat';
 import { getCsrfToken } from '@/lib/csrf';
 import { toast } from 'vue-sonner';
+import {
+    JOBCARD_STATUS_KEYS,
+    jobcardStatusBadgeClass,
+    jobcardStatusBarColor,
+} from '@/lib/jobcardStatuses';
 
 const page = usePage();
 const { formatDate: formatLocalizedDate, formatDateTime: formatLocalizedDateTime } = useDateTimeFormat();
@@ -1188,43 +1193,12 @@ const roundingAdjustment = computed(() => {
 });
 
 const statusOptions = computed(() => props.statusOptions || []);
-const statusDurationOrder = [
-    'new',
-    'needs_scheduling',
-    'scheduled',
-    'dispatched',
-    'accepted',
-    'en_route',
-    'on_site',
-    'paused',
-    'waiting_for_parts',
-    'needs_follow_up',
-    'emergency',
-    'completed',
-    'cancelled',
-];
+const statusDurationOrder = [...JOBCARD_STATUS_KEYS];
 const showStatusTimers = ref(false);
 const totalStatusDurationMinutes = computed(() =>
     Object.values(props.statusDurations || {}).reduce((sum, duration) => sum + (duration.minutes || 0), 0)
 );
-const statusBarColor = (status: string) => {
-    const map: Record<string, string> = {
-        new: '#64748b',
-        needs_scheduling: '#f59e0b',
-        scheduled: '#3b82f6',
-        dispatched: '#4f46e5',
-        accepted: '#06b6d4',
-        en_route: '#0ea5e9',
-        on_site: '#8b5cf6',
-        paused: '#f97316',
-        waiting_for_parts: '#eab308',
-        needs_follow_up: '#d946ef',
-        emergency: '#dc2626',
-        completed: '#10b981',
-        cancelled: '#ef4444',
-    };
-    return map[status] ?? '#64748b';
-};
+const statusBarColor = jobcardStatusBarColor;
 
 // Computed property to check if user can edit the jobcard
 const canEditJobcard = computed(() => {
@@ -1314,25 +1288,7 @@ const formatPriorityLabel = (priority: string | null | undefined) => {
     return labels[p] ?? p;
 };
 
-const getStatusBadgeClass = (status: string) => {
-    if (!status) return 'bg-gray-100 text-gray-800';
-    const classes = {
-        new: 'bg-slate-100 text-slate-800',
-        needs_scheduling: 'bg-amber-100 text-amber-800',
-        scheduled: 'bg-blue-100 text-blue-800',
-        dispatched: 'bg-indigo-100 text-indigo-800',
-        accepted: 'bg-cyan-100 text-cyan-800',
-        en_route: 'bg-sky-100 text-sky-800',
-        on_site: 'bg-violet-100 text-violet-800',
-        paused: 'bg-orange-100 text-orange-800',
-        waiting_for_parts: 'bg-yellow-100 text-yellow-800',
-        needs_follow_up: 'bg-fuchsia-100 text-fuchsia-800',
-        emergency: 'bg-red-100 text-red-800',
-        completed: 'bg-green-100 text-green-800',
-        cancelled: 'bg-red-100 text-red-800',
-    };
-    return classes[status as keyof typeof classes] || classes.new;
-};
+const getStatusBadgeClass = (status: string) => jobcardStatusBadgeClass(status || 'new');
 
 const formatStatus = (code: string) => {
     if (!code) return '';

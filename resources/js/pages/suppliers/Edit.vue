@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import AddressAutocompleteInput from '@/components/AddressAutocompleteInput.vue';
+import SupplierBankDetailsFields from '@/components/suppliers/SupplierBankDetailsFields.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ArrowLeft } from 'lucide-vue-next';
@@ -16,6 +18,10 @@ interface Supplier {
     postal_code: string | null;
     country: string | null;
     vat_number: string | null;
+    bank_name: string | null;
+    bank_account_name: string | null;
+    bank_account_number: string | null;
+    bank_sort_code: string | null;
     notes: string | null;
     is_active: boolean;
 }
@@ -36,6 +42,10 @@ const form = useForm({
     postal_code: '',
     country: '',
     vat_number: '',
+    bank_name: '',
+    bank_account_name: '',
+    bank_account_number: '',
+    bank_sort_code: '',
     notes: '',
     is_active: true,
 });
@@ -50,6 +60,10 @@ onMounted(() => {
     form.postal_code = props.supplier.postal_code || '';
     form.country = props.supplier.country || '';
     form.vat_number = props.supplier.vat_number || '';
+    form.bank_name = props.supplier.bank_name || '';
+    form.bank_account_name = props.supplier.bank_account_name || '';
+    form.bank_account_number = props.supplier.bank_account_number || '';
+    form.bank_sort_code = props.supplier.bank_sort_code || '';
     form.notes = props.supplier.notes || '';
     form.is_active = props.supplier.is_active ?? true;
 });
@@ -147,11 +161,17 @@ function submit() {
                         <div class="grid gap-6 md:grid-cols-2">
                             <div class="md:col-span-2">
                                 <label class="mb-1 block text-sm font-medium text-gray-700">Address</label>
-                                <textarea
+                                <AddressAutocompleteInput
                                     v-model="form.address"
-                                    rows="2"
+                                    v-model:city="form.city"
+                                    v-model:state="form.state"
+                                    v-model:postal-code="form.postal_code"
+                                    v-model:country="form.country"
                                     class="w-full rounded border px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
-                                ></textarea>
+                                />
+                                <div v-if="form.errors.address" class="mt-1 text-sm text-red-600">
+                                    {{ form.errors.address }}
+                                </div>
                             </div>
 
                             <div>
@@ -191,6 +211,8 @@ function submit() {
                             </div>
                         </div>
                     </div>
+
+                    <SupplierBankDetailsFields :form="form" />
 
                     <!-- Additional Information -->
                     <div>

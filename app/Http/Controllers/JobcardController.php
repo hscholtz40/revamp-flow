@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Jobcards\AutosaveJobcardRequest;
 use App\Http\Requests\Jobcards\StoreJobcardRequest;
 use App\Http\Requests\Jobcards\UpdateJobcardRequest;
 use App\Models\ChartOfAccount;
@@ -21,10 +22,12 @@ use App\Models\TaxRate;
 use App\Models\Team;
 use App\Models\User;
 use App\Services\AssignmentNotificationService;
+use App\Services\JobcardUpsertService;
 use App\Services\ReminderService;
 use App\Services\StockService;
 use App\Support\CompanyMailer;
 use App\Support\ColumnFilters;
+use App\Support\JobcardStatuses;
 use App\Support\SafeLog;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
@@ -457,6 +460,13 @@ class JobcardController extends Controller
             return $jobcard->fresh();
         });
 
+        if (($validated['source_type'] ?? null) === 'quote' && ! empty($validated['source_id'])) {
+            $sourceQuote = Quote::where('company_id', $currentCompany->id)->find($validated['source_id']);
+            if ($sourceQuote) {
+                $sourceQuote->markConvertedToJobcard($jobcard);
+            }
+        }
+
         app(AssignmentNotificationService::class)->notifyJobcardAssignmentIfChanged(
             $currentCompany->id,
             $jobcard,
@@ -478,6 +488,49 @@ class JobcardController extends Controller
 
         return redirect()->route('jobcards.show', $jobcard)
             ->with('success', 'Jobcard created successfully');
+    }
+
+    public function autosaveStore(AutosaveJobcardRequest $request, JobcardUpsertService $jobcardUpsertService): JsonResponse
+    {
+        $currentCompany = auth()->user()->getCurrentCompany();
+        $jobcard = $jobcardUpsertService->createForCompany(
+            $this->normalizeAutosavePayload($request->validated(), $currentCompany->id),
+            $currentCompany->id
+        );
+
+        if (($request->input('source_type') === 'quote') && $request->filled('source_id')) {
+            $sourceQuote = Quote::where('company_id', $currentCompany->id)->find($request->integer('source_id'));
+            if ($sourceQuote) {
+                $sourceQuote->markConvertedToJobcard($jobcard);
+            }
+        }
+
+        return response()->json([
+            'jobcard' => $this->autosaveJobcardResponse($jobcard),
+        ]);
+    }
+
+    public function autosaveUpdate(AutosaveJobcardRequest $request, Jobcard $jobcard, JobcardUpsertService $jobcardUpsertService): JsonResponse
+    {
+        if ($jobcard->status !== 'new') {
+            return response()->json(['message' => 'Only new jobcards can be autosaved.'], 422);
+        }
+
+        $updatedJobcard = $jobcardUpsertService->update(
+            $jobcard,
+            $this->normalizeAutosavePayload($request->validated(), $jobcard->company_id)
+        );
+
+        if (($request->input('source_type') === 'quote') && $request->filled('source_id')) {
+            $sourceQuote = Quote::where('company_id', $jobcard->company_id)->find($request->integer('source_id'));
+            if ($sourceQuote) {
+                $sourceQuote->markConvertedToJobcard($updatedJobcard);
+            }
+        }
+
+        return response()->json([
+            'jobcard' => $this->autosaveJobcardResponse($updatedJobcard),
+        ]);
     }
 
     /**
@@ -937,6 +990,13 @@ class JobcardController extends Controller
             $previousAssignedTeamId
         );
 
+        if (($validated['source_type'] ?? null) === 'quote' && ! empty($validated['source_id'])) {
+            $sourceQuote = Quote::where('company_id', $jobcard->company_id)->find($validated['source_id']);
+            if ($sourceQuote) {
+                $sourceQuote->markConvertedToJobcard($jobcard->fresh());
+            }
+        }
+
         return redirect()->route('jobcards.show', $jobcard)
             ->with('success', 'Jobcard updated successfully');
     }
@@ -949,7 +1009,7 @@ class JobcardController extends Controller
         $this->authorize('updateStatus', $jobcard);
 
         $request->validate([
-            'status' => 'required|in:new,needs_scheduling,scheduled,dispatched,accepted,en_route,on_site,paused,waiting_for_parts,needs_follow_up,emergency,completed,cancelled',
+            'status' => 'required|'.JobcardStatuses::validationRule(),
         ]);
 
         $newStatus = $request->status;
@@ -1346,5 +1406,85 @@ class JobcardController extends Controller
         ]));
 
         return $parts === [] ? null : implode(', ', $parts);
+    }
+
+    private function normalizeAutosavePayload(array $payload, int $companyId): array
+    {
+        $payload['status'] = 'new';
+        $payload['title'] = trim((string) ($payload['title'] ?? '')) ?: 'Untitled jobcard';
+        $payload['service_address'] = trim((string) ($payload['service_address'] ?? '')) ?: $this->resolveCustomerAddress((int) $payload['customer_id'], $companyId);
+        $payload['tax_rate'] = $this->numericAutosaveValue($payload['tax_rate'] ?? 0);
+        $payload['discount_amount'] = $this->numericAutosaveValue($payload['discount_amount'] ?? 0);
+        $payload['discount_percentage'] = $this->numericAutosaveValue($payload['discount_percentage'] ?? 0);
+        $payload['priority'] = $payload['priority'] ?? 'normal';
+
+        $lineGroups = array_values($payload['line_groups'] ?? []);
+        if (empty($lineGroups)) {
+            $lineGroups = [['id' => 1, 'name' => 'Items', 'sort_order' => 0]];
+        }
+
+        $payload['line_groups'] = collect($lineGroups)
+            ->map(fn (array $group, int $index) => [
+                'id' => $group['id'] ?? ($index + 1),
+                'name' => trim((string) ($group['name'] ?? '')) ?: 'Items',
+                'sort_order' => $index,
+            ])
+            ->values()
+            ->all();
+
+        $defaultGroupId = $payload['line_groups'][0]['id'] ?? 1;
+        $payload['line_items'] = collect($payload['line_items'] ?? [])
+            ->map(fn (array $item, int $index) => [
+                'product_id' => $item['product_id'] ?? null,
+                'supplier_id' => $item['supplier_id'] ?? null,
+                'line_group_id' => $item['line_group_id'] ?? $defaultGroupId,
+                'description' => trim((string) ($item['description'] ?? '')),
+                'quantity' => max(1, (int) ($item['quantity'] ?? 1)),
+                'unit_price' => $this->numericAutosaveValue($item['unit_price'] ?? 0),
+                'cost' => $this->numericAutosaveValue($item['cost'] ?? 0),
+                'discount_amount' => $this->numericAutosaveValue($item['discount_amount'] ?? 0),
+                'discount_percentage' => $this->numericAutosaveValue($item['discount_percentage'] ?? 0),
+                'tax_rate_id' => $item['tax_rate_id'] ?? null,
+                'account_id' => $item['account_id'] ?? null,
+                'sort_order' => $index,
+            ])
+            ->values()
+            ->all();
+
+        if ($payload['line_items'] === []) {
+            $payload['line_items'] = [[
+                'product_id' => null,
+                'supplier_id' => null,
+                'line_group_id' => $defaultGroupId,
+                'description' => '',
+                'quantity' => 1,
+                'unit_price' => 0,
+                'cost' => 0,
+                'discount_amount' => 0,
+                'discount_percentage' => 0,
+                'tax_rate_id' => null,
+                'account_id' => null,
+                'sort_order' => 0,
+            ]];
+        }
+
+        return $payload;
+    }
+
+    private function numericAutosaveValue(mixed $value): float
+    {
+        return is_numeric($value) ? (float) $value : 0.0;
+    }
+
+    private function autosaveJobcardResponse(Jobcard $jobcard): array
+    {
+        $jobcard->refresh();
+
+        return [
+            'id' => $jobcard->id,
+            'job_number' => $jobcard->job_number,
+            'status' => $jobcard->status,
+            'updated_at' => $jobcard->updated_at?->toIso8601String(),
+        ];
     }
 }

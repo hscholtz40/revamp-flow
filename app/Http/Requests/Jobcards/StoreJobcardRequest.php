@@ -4,6 +4,7 @@ namespace App\Http\Requests\Jobcards;
 
 use App\Models\Jobcard;
 use App\Support\CompanyScopedRules;
+use App\Support\JobcardStatuses;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreJobcardRequest extends FormRequest
@@ -30,7 +31,7 @@ class StoreJobcardRequest extends FormRequest
             'order_number' => ['nullable', 'string', 'max:255'],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'status' => ['required', 'in:new,needs_scheduling,scheduled,dispatched,accepted,en_route,on_site,paused,waiting_for_parts,needs_follow_up,emergency,completed,cancelled'],
+            'status' => ['required', JobcardStatuses::validationRule()],
             'priority' => ['nullable', 'in:low,normal,high,urgent'],
             'estimated_duration_minutes' => ['nullable', 'integer', 'min:5', 'max:1440'],
             'start_date' => ['nullable', 'date'],

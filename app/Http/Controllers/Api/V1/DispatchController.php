@@ -14,6 +14,7 @@ use App\Services\AssignmentNotificationService;
 use App\Services\Routing\GoogleRouteProvider;
 use App\Services\Routing\HeuristicRouteProvider;
 use App\Support\CompanyScopedRules;
+use App\Support\JobcardStatuses;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -22,12 +23,6 @@ use Illuminate\Validation\Rule;
 
 class DispatchController extends Controller
 {
-    /** @var list<string> */
-    private const JOBCARD_BOARD_STATUSES = [
-        'new', 'needs_scheduling', 'scheduled', 'dispatched', 'accepted', 'en_route', 'on_site',
-        'paused', 'waiting_for_parts', 'needs_follow_up', 'emergency', 'completed', 'cancelled',
-    ];
-
     public function __construct(
         private readonly HeuristicRouteProvider $heuristicRouteProvider,
         private readonly GoogleRouteProvider $googleRouteProvider
@@ -57,7 +52,7 @@ class DispatchController extends Controller
             'assigned_to_team_id' => ['nullable', 'integer', CompanyScopedRules::team($companyId)],
             'search' => ['nullable', 'string', 'max:255'],
             'status' => ['nullable', 'array'],
-            'status.*' => ['string', Rule::in(self::JOBCARD_BOARD_STATUSES)],
+            'status.*' => ['string', Rule::in(JobcardStatuses::ALL)],
             'priority' => ['nullable', 'string', Rule::in(['low', 'normal', 'high', 'urgent'])],
             'tab' => ['nullable', 'string', Rule::in(['unscheduled', 'needs_follow_up', 'waiting_for_parts', 'emergency', 'all'])],
         ]);
@@ -117,7 +112,7 @@ class DispatchController extends Controller
         if ($day) {
             $scheduledQuery = Jobcard::query()
                 ->where('company_id', $companyId)
-                ->whereIn('status', self::JOBCARD_BOARD_STATUSES)
+                ->whereIn('status', JobcardStatuses::ALL)
                 ->whereDate('scheduled_start_at', $day)
                 ->whereNotNull('scheduled_start_at');
             $applyJobcardFilters($scheduledQuery);
@@ -128,7 +123,7 @@ class DispatchController extends Controller
 
             $queueQuery = Jobcard::query()
                 ->where('company_id', $companyId)
-                ->whereIn('status', self::JOBCARD_BOARD_STATUSES);
+                ->whereIn('status', JobcardStatuses::ALL);
             $applyJobcardFilters($queueQuery);
 
             if ($tab === 'unscheduled' || $tab === 'all') {
@@ -191,7 +186,7 @@ class DispatchController extends Controller
 
         $legacyJobcardsQuery = Jobcard::query()
             ->where('company_id', $companyId)
-            ->whereIn('status', self::JOBCARD_BOARD_STATUSES)
+            ->whereIn('status', JobcardStatuses::ALL)
             ->when($from && $to, fn (Builder $query) => $query->whereBetween('scheduled_start_at', [$from, $to]));
         $applyJobcardFilters($legacyJobcardsQuery);
         $jobcards = $legacyJobcardsQuery
@@ -279,7 +274,7 @@ class DispatchController extends Controller
             'scheduled_start_at' => ['nullable', 'date'],
             'scheduled_end_at' => ['nullable', 'date', 'after_or_equal:scheduled_start_at'],
             'dispatch_order' => ['nullable', 'integer', 'min:0'],
-            'status' => ['nullable', 'string', Rule::in(self::JOBCARD_BOARD_STATUSES)],
+            'status' => ['nullable', 'string', Rule::in(JobcardStatuses::ALL)],
             'estimated_duration_minutes' => ['nullable', 'integer', 'min:5', 'max:1440'],
             'priority' => ['nullable', 'string', Rule::in(['low', 'normal', 'high', 'urgent'])],
         ]);
@@ -413,7 +408,7 @@ class DispatchController extends Controller
         ]);
 
         if ($type === 'jobcard') {
-            abort_unless(in_array($payload['status'], ['new', 'needs_scheduling', 'scheduled', 'dispatched', 'accepted', 'en_route', 'on_site', 'paused', 'waiting_for_parts', 'needs_follow_up', 'emergency', 'completed', 'cancelled'], true), 422);
+            abort_unless(in_array($payload['status'], JobcardStatuses::ALL, true), 422);
             $jobcard = Jobcard::query()
                 ->where('company_id', $companyId)
                 ->whereKey($id)

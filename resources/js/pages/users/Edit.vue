@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
+import DashboardQuickActionsFields from '@/components/dashboard/DashboardQuickActionsFields.vue';
+import { createDefaultDashboardQuickActions } from '@/composables/useDashboardQuickActions';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import users from '@/routes/users';
 
@@ -7,6 +9,7 @@ const props = defineProps<{
     user: any; 
     groups: { id: number; name: string }[];
     companies: { id: number; name: string }[];
+    dashboardQuickActionOptions: Array<{ key: string; label: string; group: string }>;
 }>();
 
 const form = useForm({
@@ -17,6 +20,10 @@ const form = useForm({
     password: '',
     groups: (props.user.groups ?? []).map((g: any) => g.id) as number[],
     companies: (props.user.companies ?? []).map((c: any) => c.id) as number[],
+    dashboard_quick_actions: {
+        ...createDefaultDashboardQuickActions(),
+        ...(props.user.dashboard_quick_actions ?? {}),
+    },
 });
 
 function submit() { form.put(users.update(props.user.id).url); }
@@ -80,6 +87,16 @@ function submit() { form.put(users.update(props.user.id).url); }
                     </label>
                 </div>
                 <div v-if="form.errors.companies" class="text-sm text-red-600 mt-2">{{ form.errors.companies }}</div>
+            </div>
+
+            <div class="rounded border p-4">
+                <div class="mb-2 font-medium">Dashboard Quick Actions</div>
+                <p class="mb-3 text-sm text-gray-600">Choose which quick action buttons appear on this user's dashboard.</p>
+                <DashboardQuickActionsFields
+                    v-model="form.dashboard_quick_actions"
+                    :options="props.dashboardQuickActionOptions"
+                />
+                <div v-if="form.errors.dashboard_quick_actions" class="mt-2 text-sm text-red-600">{{ form.errors.dashboard_quick_actions }}</div>
             </div>
 
             <div class="flex items-center gap-3">

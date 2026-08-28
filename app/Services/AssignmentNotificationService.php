@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Company;
 use App\Models\Jobcard;
 use App\Models\Task;
 use App\Models\Team;
@@ -63,15 +64,16 @@ class AssignmentNotificationService
             return;
         }
 
+        $title = $jobcard->title ?: ('Jobcard #'.$jobcard->job_number);
+        $notification = new AssignmentNotification('jobcard', $jobcard->id, $title);
+
         $this->notifyUsers(
             $companyId,
             (int) ($jobcard->assigned_to_user_id ?? 0),
             (int) ($jobcard->assigned_to_team_id ?? 0),
-            new AssignmentNotification(
-                'jobcard',
-                $jobcard->id,
-                $jobcard->title ?: ('Jobcard #'.$jobcard->job_number)
-            )
+            $notification,
+            $title,
+            route('jobcards.show', $jobcard)
         );
     }
 
@@ -81,22 +83,44 @@ class AssignmentNotificationService
             return;
         }
 
+        $title = $task->title ?: ('Task #'.$task->id);
+        $notification = new AssignmentNotification('task', $task->id, $title);
+
         $this->notifyUsers(
             $companyId,
             (int) ($task->assigned_to_user_id ?? 0),
             (int) ($task->assigned_to_team_id ?? 0),
-            new AssignmentNotification(
-                'task',
-                $task->id,
-                $task->title ?: ('Task #'.$task->id)
-            )
+            $notification,
+            $title,
+            route('tasks.show', $task)
         );
     }
 
-    private function notifyUsers(int $companyId, int $assignedUserId, int $assignedTeamId, AssignmentNotification $notification): void
-    {
+    private function notifyUsers(
+        int $companyId,
+        int $assignedUserId,
+        int $assignedTeamId,
+        AssignmentNotification $notification,
+        string $title,
+        string $actionUrl,
+    ): void {
+        $company = Company::query()->find($companyId);
+        $systemNotifications = app(SystemNotificationService::class);
+
         $this->resolveAssignmentTargets($companyId, $assignedUserId, $assignedTeamId)
-            ->each(fn (User $user) => $user->notify($notification));
+            ->each(function (User $user) use ($notification, $company, $systemNotifications, $title, $actionUrl) {
+                $user->notify($notification);
+
+                if ($company) {
+                    $systemNotifications->notifyStaffAssignment(
+                        $company,
+                        $user,
+                        'Assignment: '.$title,
+                        '<p>You have been assigned: <strong>'.e($title).'</strong>.</p>',
+                        $actionUrl
+                    );
+                }
+            });
     }
 
     /**

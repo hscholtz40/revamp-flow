@@ -3,6 +3,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import { Save, X } from 'lucide-vue-next';
+import { JOBCARD_STATUS_KEYS } from '@/lib/jobcardStatuses';
 
 interface ReportTemplate {
     id: number;
@@ -294,7 +295,7 @@ const getStatusOptions = (type: string): string[] => {
         case 'quote':
             return ['draft', 'sent', 'accepted', 'rejected', 'expired'];
         case 'jobcard':
-            return ['new', 'needs_scheduling', 'scheduled', 'dispatched', 'accepted', 'en_route', 'on_site', 'paused', 'waiting_for_parts', 'needs_follow_up', 'emergency', 'completed', 'cancelled'];
+            return [...JOBCARD_STATUS_KEYS];
         default:
             return [];
     }

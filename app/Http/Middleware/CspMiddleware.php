@@ -26,7 +26,8 @@ class CspMiddleware
             $response->headers->set('X-Frame-Options', 'SAMEORIGIN');
         }
         $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
-        $response->headers->set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+        // Allow microphone on this origin for AI Assistant voice notes; camera/geolocation stay disabled.
+        $response->headers->set('Permissions-Policy', 'camera=(), microphone=(self), geolocation=()');
         if ($request->isSecure()) {
             $response->headers->set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
         }

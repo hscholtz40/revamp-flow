@@ -127,6 +127,29 @@
                 </div>
             </div>
 
+            <div v-if="linkedJobcard" class="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
+                <div class="flex items-start">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-amber-500" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-amber-900">Linked jobcard</h3>
+                        <p class="mt-1 text-sm text-amber-800">
+                            This quote has been converted to jobcard
+                            <Link
+                                :href="jobcards.show(linkedJobcard.id).url"
+                                class="font-medium text-amber-900 underline hover:text-amber-950"
+                            >
+                                {{ linkedJobcard.job_number }}
+                            </Link>.
+                            Changes to this quote will not automatically update the jobcard.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <!-- Main Content -->
                 <div class="lg:col-span-2 space-y-6">
@@ -267,6 +290,14 @@
                                             {{ item.formatted_total }}
                                         </td>
                                         </tr>
+                                        <tr class="bg-slate-50">
+                                            <td colspan="8" class="px-3 py-2 text-right text-sm font-semibold text-gray-700">
+                                                Group Total ({{ group.groupName }})
+                                            </td>
+                                            <td class="px-3 py-2 text-right text-sm font-semibold text-gray-900">
+                                                R{{ formatCurrency(group.subtotal) }}
+                                            </td>
+                                        </tr>
                                     </template>
                                 </tbody>
                             </table>
@@ -390,7 +421,7 @@
                             </div>
                             <div class="border-t border-gray-200 pt-3">
                                 <div class="flex justify-between">
-                                    <span class="text-base font-semibold text-gray-900">Total:</span>
+                                    <span class="text-base font-semibold text-gray-900">{{ hasMultipleLineGroups ? 'Grand Total:' : 'Total:' }}</span>
                                     <span class="text-base font-semibold text-gray-900">R{{ formatCurrency(props.quote.total) }}</span>
                                 </div>
                                 <div class="mt-2 flex justify-between">
@@ -620,6 +651,7 @@
 </template>
 
 <script setup lang="ts">
+import { useQuoteLinkedJobcard } from '@/composables/useQuoteLinkedJobcard';
 import { useAuthAbility } from '@/composables/useAuthAbilities';
 import AppLayout from '@/layouts/AppLayout.vue';
 import EmailRecipientsInput from '@/components/EmailRecipientsInput.vue';
@@ -630,8 +662,10 @@ import jobcards from '@/routes/jobcards';
 import purchaseOrders from '@/routes/purchase-orders';
 import products from '@/routes/products';
 import customers from '@/routes/customers';
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { useDateTimeFormat } from '@/composables/useDateTimeFormat';
+import { consumeOpenEmailModalFlag } from '@/composables/useSaveEmailPrompt';
+import { resolveLineGroupsWithTotals } from '@/composables/useLineGroupTotals';
 
 interface Customer {
     id: number;
@@ -707,6 +741,7 @@ interface Props {
     defaultQuoteTemplateId?: number | null;
     defaultProformaTemplateId?: number | null;
     convertedJobcardId?: number | null;
+    linkedJobcard?: { id: number; job_number: string; title: string } | null;
     relatedPurchaseOrders?: Array<{
         id: number;
         po_number: string;
@@ -727,6 +762,15 @@ interface Props {
 
 const props = defineProps<Props>();
 
+const linkedJobcard = useQuoteLinkedJobcard(
+    computed(() => props.quote),
+    computed(() => props.linkedJobcard ?? (props.convertedJobcardId ? {
+        id: props.convertedJobcardId,
+        job_number: `Jobcard #${props.convertedJobcardId}`,
+        title: '',
+    } : null)),
+);
+
 const hasQuotesEdit = useAuthAbility('quotes', 'edit');
 const hasPurchaseOrdersCreate = useAuthAbility('purchase-orders', 'create');
 const isRoundingAdjustmentLine = (item: LineItem) => {
@@ -737,35 +781,10 @@ const visibleQuoteLineItems = computed(() => {
     return (props.quote.line_items || []).filter((item) => !isRoundingAdjustmentLine(item));
 });
 
-const groupedVisibleQuoteLineItems = computed(() => {
-    const groups = [...(props.quote.line_groups || [])].sort((a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0));
-    const fallbackGroupId = groups[0]?.id ?? 1;
-    const baseItems = visibleQuoteLineItems.value;
-    const usedIds = new Set<number>();
-
-    const grouped = groups
-        .map((group) => {
-            const items = baseItems.filter((item) => (item.line_group_id ?? fallbackGroupId) === group.id);
-            items.forEach((item) => usedIds.add(item.id));
-            return { groupId: group.id, groupName: group.name || 'Items', items };
-        })
-        .filter((group) => group.items.length > 0);
-
-    const ungroupedItems = baseItems.filter((item) => !usedIds.has(item.id));
-    if (ungroupedItems.length > 0) {
-        grouped.push({
-            groupId: -1,
-            groupName: grouped.length === 0 ? 'Items' : 'Ungrouped',
-            items: ungroupedItems,
-        });
-    }
-
-    if (grouped.length === 0 && baseItems.length > 0) {
-        grouped.push({ groupId: -1, groupName: 'Items', items: baseItems });
-    }
-
-    return grouped;
-});
+const groupedVisibleQuoteLineItems = computed(() =>
+    resolveLineGroupsWithTotals(visibleQuoteLineItems.value, props.quote.line_groups || []),
+);
+const hasMultipleLineGroups = computed(() => groupedVisibleQuoteLineItems.value.length > 1);
 const roundingAdjustment = computed(() => {
     return (props.quote.line_items || []).reduce((sum, item) => {
         if (!isRoundingAdjustmentLine(item)) {
@@ -786,6 +805,12 @@ const totalProfit = computed(() => {
 });
 
 const showEmailModal = ref(false);
+
+onMounted(() => {
+    if (consumeOpenEmailModalFlag()) {
+        showEmailModal.value = true;
+    }
+});
 
 watch(showEmailModal, (open) => {
     if (open) {

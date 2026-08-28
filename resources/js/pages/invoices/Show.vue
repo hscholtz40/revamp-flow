@@ -266,6 +266,14 @@
                                                     {{ formatCurrency(item.total) }}
                                                 </td>
                                             </tr>
+                                            <tr class="bg-slate-50">
+                                                <td colspan="7" class="px-3 py-2 text-right text-sm font-semibold text-gray-700">
+                                                    Group Total ({{ group.groupName }})
+                                                </td>
+                                                <td class="px-3 py-2 text-right text-sm font-semibold text-gray-900">
+                                                    {{ formatCurrency(group.subtotal) }}
+                                                </td>
+                                            </tr>
                                         </template>
                                     </tbody>
                                 </table>
@@ -381,7 +389,7 @@
                                     <span class="font-medium">{{ formatCurrency(roundingAdjustment) }}</span>
                                 </div>
                                 <div class="flex justify-between text-lg font-semibold border-t pt-2">
-                                    <span>Total:</span>
+                                    <span>{{ hasMultipleLineGroups ? 'Grand Total:' : 'Total:' }}</span>
                                     <span>{{ formatCurrency(props.invoice.total) }}</span>
                                 </div>
                                 <div class="flex justify-between">
@@ -817,9 +825,10 @@
 
 <script setup lang="ts">
 import { Head, Link, useForm, router, usePage } from '@inertiajs/vue3';
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import EmailRecipientsInput from '@/components/EmailRecipientsInput.vue';
+import { consumeOpenEmailModalFlag } from '@/composables/useSaveEmailPrompt';
 import invoices from '@/routes/invoices';
 import quotes from '@/routes/quotes';
 import jobcards from '@/routes/jobcards';
@@ -828,6 +837,7 @@ import products from '@/routes/products';
 import customers from '@/routes/customers';
 import { useNumberFormat } from '@/composables/useNumberFormat';
 import { useDateTimeFormat } from '@/composables/useDateTimeFormat';
+import { resolveLineGroupsWithTotals } from '@/composables/useLineGroupTotals';
 
 const page = usePage();
 const { formatCurrency } = useNumberFormat();
@@ -970,6 +980,12 @@ const displayCreditNotes = computed<AppliedCreditNote[]>(() => {
 
 const showEmailModal = ref(false);
 
+onMounted(() => {
+    if (consumeOpenEmailModalFlag()) {
+        showEmailModal.value = true;
+    }
+});
+
 function parseInitialEmails(str: string | null | undefined): string[] {
     if (!str) return [];
     return str.split(',').map(s => s.trim()).filter(Boolean);
@@ -1061,43 +1077,10 @@ const totalProfit = computed(() => {
     return visibleInvoiceLineItems.value.reduce((sum, item) => sum + calculateLineProfit(item), 0);
 });
 
-const groupedVisibleInvoiceLineItems = computed(() => {
-    const groups = [...(props.invoice.line_groups || [])].sort((a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0));
-    const fallbackGroupId = groups[0]?.id ?? 1;
-    const baseItems = visibleInvoiceLineItems.value;
-    const usedIds = new Set<number>();
-
-    const grouped = groups
-        .map((group) => {
-            const items = baseItems.filter((item) => (item.line_group_id ?? fallbackGroupId) === group.id);
-            items.forEach((item) => usedIds.add(item.id));
-            return {
-                groupId: group.id,
-                groupName: group.name || 'Items',
-                items,
-            };
-        })
-        .filter((group) => group.items.length > 0);
-
-    const ungroupedItems = baseItems.filter((item) => !usedIds.has(item.id));
-    if (ungroupedItems.length > 0) {
-        grouped.push({
-            groupId: -1,
-            groupName: grouped.length === 0 ? 'Items' : 'Ungrouped',
-            items: ungroupedItems,
-        });
-    }
-
-    if (grouped.length === 0 && baseItems.length > 0) {
-        grouped.push({
-            groupId: -1,
-            groupName: 'Items',
-            items: baseItems,
-        });
-    }
-
-    return grouped;
-});
+const groupedVisibleInvoiceLineItems = computed(() =>
+    resolveLineGroupsWithTotals(visibleInvoiceLineItems.value, props.invoice.line_groups || []),
+);
+const hasMultipleLineGroups = computed(() => groupedVisibleInvoiceLineItems.value.length > 1);
 
 const roundingAdjustment = computed(() => {
     return (props.invoice.line_items || []).reduce((sum, item) => {

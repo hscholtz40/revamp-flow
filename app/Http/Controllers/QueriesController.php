@@ -15,6 +15,7 @@ use App\Models\Note;
 use App\Models\Product;
 use App\Models\Query;
 use App\Services\ContractorLicenseProvisioningService;
+use App\Services\SystemNotificationService;
 use App\Services\CustomerUpsertService;
 use App\Services\JobQueryService;
 use App\Services\RevampWebhookService;
@@ -680,6 +681,11 @@ JS;
             return [$customer, $contact, $license];
         });
 
+        $query->loadMissing('company');
+        if ($query->company) {
+            app(SystemNotificationService::class)->notifyContractorApproval($query->company, $query->fresh());
+        }
+
         $message = "Contractor accepted. {$customer->name} is ready under Licensing → Not Deployed. Monthly invoicing starts 60 days after signup.";
         if (auth()->user()?->can('viewAny', License::class)) {
             return redirect()->route('licenses.index', ['deployed' => 'not_deployed'])->with('success', $message);
@@ -859,6 +865,12 @@ JS;
 
     private function notifyCompanyOfNewQuery(Company $company, Query $query): void
     {
+        if ($query->kind === Query::KIND_CONTRACTOR) {
+            app(SystemNotificationService::class)->notifyContractorSignup($company, $query);
+
+            return;
+        }
+
         if (! is_string($company->email) || ! filter_var($company->email, FILTER_VALIDATE_EMAIL)) {
             return;
         }

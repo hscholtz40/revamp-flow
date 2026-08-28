@@ -17,6 +17,12 @@ interface Product {
     price: number;
     cost: number;
     unit: string;
+    weight?: number | null;
+    length?: number | null;
+    width?: number | null;
+    height?: number | null;
+    color?: string | null;
+    size?: string | null;
     stock_quantity: number;
     min_stock_level: number;
     track_stock: boolean;
@@ -27,6 +33,7 @@ interface Product {
     category: string;
     tags: string[];
     image_path: string;
+    image_url?: string | null;
     notes: string;
     supplier_id?: number | null;
     supplier?: { id: number; name: string } | null;
@@ -96,6 +103,27 @@ const profitMargin = computed(() => {
     const price = Number(props.product.price);
     if (!cost || cost === 0) return null;
     return ((price - cost) / cost) * 100;
+});
+
+const hasPhysicalAttributes = computed(() =>
+    props.product.type === 'product' && (
+        props.product.weight != null
+        || props.product.length != null
+        || props.product.width != null
+        || props.product.height != null
+        || props.product.color
+        || props.product.size
+    ),
+);
+
+const dimensionsLabel = computed(() => {
+    const parts = [
+        props.product.length != null ? `${Number(props.product.length)} cm L` : null,
+        props.product.width != null ? `${Number(props.product.width)} cm W` : null,
+        props.product.height != null ? `${Number(props.product.height)} cm H` : null,
+    ].filter(Boolean);
+
+    return parts.join(' × ');
 });
 
 function deleteProduct() {
@@ -168,9 +196,22 @@ function invoiceUsageSortIndicator(column: string) {
                 </div>
                 <div class="p-6">
                     <div class="flex items-start gap-6">
-                        <!-- Product Icon -->
+                        <!-- Product Icon / Image -->
                         <div class="flex-shrink-0">
-                            <div class="flex h-16 w-16 items-center justify-center rounded-lg bg-gray-100">
+                            <div
+                                v-if="props.product.image_url"
+                                class="h-24 w-24 overflow-hidden rounded-lg border bg-gray-100"
+                            >
+                                <img
+                                    :src="props.product.image_url"
+                                    :alt="props.product.name"
+                                    class="h-full w-full object-cover"
+                                />
+                            </div>
+                            <div
+                                v-else
+                                class="flex h-16 w-16 items-center justify-center rounded-lg bg-gray-100"
+                            >
                                 <component
                                     :is="getTypeIcon(props.product.type)"
                                     :class="['h-8 w-8', getTypeColor(props.product.type)]"
@@ -266,6 +307,36 @@ function invoiceUsageSortIndicator(column: string) {
                                         <div class="text-sm font-medium text-gray-500">Profit Margin</div>
                                         <div class="text-gray-900">{{ profitMargin.toFixed(1) }}%</div>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div
+                        v-if="hasPhysicalAttributes"
+                        class="rounded-lg bg-white border border-gray-200 shadow-sm"
+                    >
+                        <div class="border-b border-gray-200 bg-gray-50 px-6 py-4">
+                            <h2 class="text-lg font-semibold text-gray-900">Physical Attributes</h2>
+                            <p class="text-sm text-gray-600">Weight, dimensions, colour, and size</p>
+                        </div>
+                        <div class="p-6">
+                            <div class="grid gap-4 md:grid-cols-2">
+                                <div v-if="props.product.weight != null">
+                                    <div class="text-sm font-medium text-gray-500">Weight</div>
+                                    <div class="text-gray-900">{{ Number(props.product.weight).toFixed(3) }} kg</div>
+                                </div>
+                                <div v-if="props.product.color">
+                                    <div class="text-sm font-medium text-gray-500">Colour</div>
+                                    <div class="text-gray-900">{{ props.product.color }}</div>
+                                </div>
+                                <div v-if="props.product.size">
+                                    <div class="text-sm font-medium text-gray-500">Size</div>
+                                    <div class="text-gray-900">{{ props.product.size }}</div>
+                                </div>
+                                <div v-if="dimensionsLabel">
+                                    <div class="text-sm font-medium text-gray-500">Dimensions</div>
+                                    <div class="text-gray-900">{{ dimensionsLabel }}</div>
                                 </div>
                             </div>
                         </div>

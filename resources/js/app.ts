@@ -14,7 +14,7 @@ import { initializeTheme } from './composables/useAppearance';
 import { applyCompanyTheme, type CompanyThemeValues } from './composables/useCompanyTheme';
 import { buildDateTimeOptions, type DateTimeFormatProps } from './composables/useDateTimeFormat';
 
-const appName = import.meta.env.VITE_APP_NAME || 'JobCardOnline';
+const appName = import.meta.env.VITE_APP_NAME || 'Revamp© Flow';
 type DateMethod = 'toLocaleDateString' | 'toLocaleTimeString' | 'toLocaleString';
 const originalDateMethods: Partial<Record<DateMethod, Date[DateMethod]>> = {};
 let activeDateTimeFormat: DateTimeFormatProps | undefined;

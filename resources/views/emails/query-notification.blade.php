@@ -50,7 +50,7 @@
                 </tr>
                 <tr>
                     <td><strong>Description:</strong></td>
-                    <td>{{ $query->description ?? '' }}</td>
+                    <td>@include('emails.partials.multiline-text', ['text' => $query->description ?? ''])</td>
                 </tr>
                 @if(($query->kind ?? null) === 'contractor')
                     <tr>
