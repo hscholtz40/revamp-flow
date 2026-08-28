@@ -769,6 +769,7 @@ interface LineItem {
 }
 
 interface LineGroup {
+    id?: number;
     name: string;
     sort_order: number;
 }
