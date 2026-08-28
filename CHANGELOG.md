@@ -2,6 +2,7 @@
 
 ## 2026-08-28
 
+- **Sidebar navigation:** Temporarily removed Messages from the main sidebar menu (routes and permissions unchanged).
 - **Supplier create (Inertia):** Fixed supplier and product create forms returning plain JSON to Inertia (causing “valid Inertia response” errors) by not treating Inertia requests as AJAX JSON endpoints.
 - **System email notifications:** Added admin-controlled system notification settings (Company Settings → System Notifications) for client/contractor/staff update emails, including contact information changes, approvals, catalog updates, and assignments. Each email includes basic change details where applicable.
 - **System notifications UI:** Fixed the System Notifications tab rendering blank because event form state was only initialized after mount.

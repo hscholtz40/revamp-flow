@@ -27,7 +27,7 @@ import groups from '@/routes/groups';
 import administration from '@/routes/administration';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, Users, Settings, UserCheck, Package, Building2, ClipboardList, FileText, Receipt, Warehouse, ArrowUpDown, ShoppingCart, Clock, BarChart3, KeyRound, CreditCard, MessageSquare, CalendarDays, CheckSquare, Inbox } from 'lucide-vue-next';
+import { BookOpen, Folder, LayoutGrid, Users, Settings, UserCheck, Package, Building2, ClipboardList, FileText, Receipt, Warehouse, ArrowUpDown, ShoppingCart, Clock, BarChart3, KeyRound, CreditCard, CalendarDays, CheckSquare, Inbox } from 'lucide-vue-next';
 import licenses from '@/routes/licenses';
 import AppLogo from './AppLogo.vue';
 import { computed } from 'vue';
@@ -143,11 +143,6 @@ const mainNavItems: NavItem[] = [
         icon: Clock,
     },
     {
-        title: 'Messages',
-        href: '/messages',
-        icon: MessageSquare,
-    },
-    {
         title: 'Tasks',
         href: '/tasks',
         icon: CheckSquare,
@@ -194,7 +189,6 @@ const moduleKeyMap: Record<string, string> = {
     'Credit Notes': 'credit-notes',
     'Reports': 'reports',
     'Timesheet': 'timesheet',
-    'Messages': 'messages',
     'Tasks': 'tasks',
     'Queries': 'queries',
 };
@@ -316,9 +310,6 @@ const filteredNavItems = computed(() => {
         }
         if (item.title === 'Timesheet') {
             return !!page.props.auth?.abilities?.timesheet?.view;
-        }
-        if (item.title === 'Messages') {
-            return !!page.props.auth?.abilities?.messages?.list;
         }
         if (item.title === 'Queries') {
             return !!page.props.auth?.abilities?.queries?.list;
