@@ -27,7 +27,7 @@ import groups from '@/routes/groups';
 import administration from '@/routes/administration';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, Users, Settings, UserCheck, Package, Building2, ClipboardList, FileText, Receipt, Warehouse, ArrowUpDown, ShoppingCart, Clock, BarChart3, KeyRound, CreditCard, CalendarDays, CheckSquare, Inbox } from 'lucide-vue-next';
+import { BookOpen, Folder, LayoutGrid, Users, Settings, UserCheck, Package, Building2, ClipboardList, FileText, Receipt, Warehouse, ArrowUpDown, ShoppingCart, Clock, BarChart3, KeyRound, CreditCard, MessageSquare, CalendarDays, CheckSquare, Inbox } from 'lucide-vue-next';
 import licenses from '@/routes/licenses';
 import AppLogo from './AppLogo.vue';
 import { computed } from 'vue';
