@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Quote #{{ $quote->quote_number ?? 'N/A' }}</title>
     <style>
+        @page {
+            margin-bottom: 70px;
+        }
+
         body {
             font-family: Arial, sans-serif;
             line-height: 1.4;
@@ -330,6 +334,7 @@
             right: 20px;
             font-size: 9px;
             color: #666;
+            background: #fff;
             display: table;
             width: 100%;
         }

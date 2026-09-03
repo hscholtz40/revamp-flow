@@ -2,10 +2,12 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import ProductImageField from '@/components/products/ProductImageField.vue';
 import ProductPhysicalAttributesFields from '@/components/products/ProductPhysicalAttributesFields.vue';
+import QuickCreateSupplierModal from '@/components/QuickCreateSupplierModal.vue';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import { ArrowLeft, Package, Wrench } from 'lucide-vue-next';
 import products from '@/routes/products';
+import { useSupplierQuickAdd } from '@/composables/useSupplierQuickAdd';
 
 interface Product {
     id: number;
@@ -151,6 +153,21 @@ function getTypeIcon(type: string) {
 function getTypeColor(type: string) {
     return type === 'product' ? 'text-blue-600' : 'text-green-600';
 }
+
+const {
+    availableSuppliers,
+    canSuppliersCreate,
+    openQuickCreateSupplier,
+    showQuickCreateSupplierModal,
+    submitQuickCreateSupplier,
+    supplierQuickCreateForm,
+} = useSupplierQuickAdd({
+    initialSuppliers: props.suppliers,
+    getSuggestedName: () => form.name,
+    onCreated: (supplier) => {
+        form.supplier_id = supplier.id;
+    },
+});
 </script>
 
 <template>
@@ -293,19 +310,30 @@ function getTypeColor(type: string) {
                                 <label class="block text-sm font-medium text-gray-700">
                                     Supplier
                                 </label>
-                                <select
-                                    v-model="form.supplier_id"
-                                    class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                >
-                                    <option :value="null">No supplier</option>
-                                    <option
-                                        v-for="supplier in props.suppliers"
-                                        :key="supplier.id"
-                                        :value="supplier.id"
+                                <div class="mt-1 flex items-center gap-2">
+                                    <select
+                                        v-model="form.supplier_id"
+                                        class="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                                     >
-                                        {{ supplier.name }}
-                                    </option>
-                                </select>
+                                        <option :value="null">No supplier</option>
+                                        <option
+                                            v-for="supplier in availableSuppliers"
+                                            :key="supplier.id"
+                                            :value="supplier.id"
+                                        >
+                                            {{ supplier.name }}
+                                        </option>
+                                    </select>
+                                    <button
+                                        v-if="canSuppliersCreate"
+                                        type="button"
+                                        class="flex-shrink-0 rounded-md border border-gray-300 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50"
+                                        title="Quick add supplier"
+                                        @click="openQuickCreateSupplier"
+                                    >
+                                        +
+                                    </button>
+                                </div>
                                 <div v-if="form.errors.supplier_id" class="mt-1 text-sm text-red-600">
                                     {{ form.errors.supplier_id }}
                                 </div>
@@ -729,6 +757,13 @@ function getTypeColor(type: string) {
                         </button>
                     </div>
                 </form>
+
+                <QuickCreateSupplierModal
+                    v-model="showQuickCreateSupplierModal"
+                    :form="supplierQuickCreateForm"
+                    description="Add a supplier and assign it to this product or service."
+                    @submit="submitQuickCreateSupplier"
+                />
             </div>
         </div>
     </AppLayout>

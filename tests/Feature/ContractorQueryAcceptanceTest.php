@@ -54,6 +54,8 @@ test('accepting contractor query creates customer and contact', function () {
         'response' => Query::RESPONSE_PENDING,
     ]);
 
+    Carbon::setTestNow($signupNow->copy()->addDays(10));
+
     $this->actingAs($user)
         ->post(route('queries.accept-contractor', $query))
         ->assertRedirect();
@@ -79,38 +81,57 @@ test('accepting contractor query creates customer and contact', function () {
     expect($license)->not->toBeNull()
         ->and($license->deployed_at)->toBeNull()
         ->and($license->product_id)->toBe($packageProduct->id)
-        ->and($license->monthly_credits)->toBe(8);
+        ->and($license->monthly_credits)->toBe(8)
+        ->and((float) $license->fixed_amount_monthly)->toBe(550.0);
 
-    $expectedFirstInvoiceDate = Carbon::parse($query->created_at)
-        ->startOfDay()
+    $expectedFirstPaidInvoiceDate = now()->startOfDay()
         ->addDays(ContractorLicenseProvisioningService::TRIAL_DAYS)
         ->toDateString();
 
-    // Ensure next_invoice_date uses "60 days after signup" and no invoice is created immediately.
-    expect($license->next_invoice_date?->toDateString())->toBe($expectedFirstInvoiceDate)
-        ->and(Invoice::query()->where('source_type', 'license')->where('source_id', $license->id)->count())->toBe(0);
+    $trialInvoice = Invoice::query()
+        ->where('source_type', 'license')
+        ->where('source_id', $license->id)
+        ->first();
 
-    // When billing generates due invoices, the first invoice should appear on the due date.
+    expect($license->next_invoice_date?->toDateString())->toBe($expectedFirstPaidInvoiceDate)
+        ->and($license->last_invoiced_at)->toBeNull()
+        ->and($trialInvoice)->not->toBeNull()
+        ->and($trialInvoice->status)->toBe('paid')
+        ->and((float) $trialInvoice->total)->toBe(0.0)
+        ->and($trialInvoice->title)->toContain('Trial license');
+
+    expect(\App\Services\CustomerAccountBalanceCalculator::forCustomersInCompany(
+        [$customer->id],
+        $company->id
+    )['account_balance'])->toBe(0.0);
+
     $license->update(['auto_email_invoice' => false]);
 
-    Carbon::setTestNow(Carbon::parse($expectedFirstInvoiceDate)->addHours(10));
+    Carbon::setTestNow(Carbon::parse($expectedFirstPaidInvoiceDate)->addHours(10));
     app(LicenseBillingService::class)->generateDueInvoices();
 
-    expect(Invoice::query()->where('source_type', 'license')->where('source_id', $license->id)->count())
-        ->toBe(1);
+    $licenseInvoices = Invoice::query()
+        ->where('source_type', 'license')
+        ->where('source_id', $license->id)
+        ->orderBy('id')
+        ->get();
+
+    expect($licenseInvoices)->toHaveCount(2)
+        ->and((float) $licenseInvoices->last()->total)->toBe(550.0)
+        ->and($licenseInvoices->last()->status)->not->toBe('paid');
 
     $license->refresh();
-    $expectedSecondInvoiceDate = Carbon::parse($expectedFirstInvoiceDate)
+    $expectedSecondPaidInvoiceDate = Carbon::parse($expectedFirstPaidInvoiceDate)
         ->addMonth()
         ->toDateString();
 
-    expect($license->next_invoice_date?->toDateString())->toBe($expectedSecondInvoiceDate);
+    expect($license->next_invoice_date?->toDateString())->toBe($expectedSecondPaidInvoiceDate);
 
-    Carbon::setTestNow(Carbon::parse($expectedSecondInvoiceDate)->addHours(10));
+    Carbon::setTestNow(Carbon::parse($expectedSecondPaidInvoiceDate)->addHours(10));
     app(LicenseBillingService::class)->generateDueInvoices();
 
     expect(Invoice::query()->where('source_type', 'license')->where('source_id', $license->id)->count())
-        ->toBe(2);
+        ->toBe(3);
 
     Carbon::setTestNow();
 });

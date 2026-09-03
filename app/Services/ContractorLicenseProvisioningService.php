@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\License;
 use App\Models\Product;
 use App\Models\Query;
-use Carbon\Carbon;
 
 class ContractorLicenseProvisioningService
 {
@@ -32,17 +31,17 @@ class ContractorLicenseProvisioningService
         $credits = (int) ($product?->monthly_credits ?: $defaults['credits']);
         $amount = (float) ($product?->price ?: $defaults['price']);
 
-        $signupDate = Carbon::parse($query->created_at)->startOfDay();
-        $firstInvoiceDate = $signupDate->copy()->addDays(self::TRIAL_DAYS);
+        $trialStart = now()->startOfDay();
+        $firstPaidInvoiceDate = $trialStart->copy()->addDays(self::TRIAL_DAYS);
         $isBillable = $amount > 0 && $code !== Query::PACKAGE_CUSTOM;
 
         $notes = trim(collect([
             'Created from contractor query #'.$query->id,
             $product ? 'Package product: '.$product->name : 'Package: '.($query->selectedPackageLabel() ?: $code),
-            'First invoice scheduled '.$firstInvoiceDate->toDateString().' (60 days after signup).',
+            '60-day trial invoice issued at R0. Paid invoicing starts '.$firstPaidInvoiceDate->toDateString().'.',
         ])->filter()->implode("\n"));
 
-        return License::create([
+        $license = License::create([
             'company_id' => $query->company_id,
             'customer_id' => $customerId,
             'product_id' => $product?->id,
@@ -57,8 +56,14 @@ class ContractorLicenseProvisioningService
             'pricing_model' => $isBillable ? License::PRICING_MODEL_FIXED : null,
             'fixed_amount_monthly' => $isBillable ? $amount : null,
             'auto_email_invoice' => $isBillable,
-            'next_invoice_date' => $isBillable ? $firstInvoiceDate->toDateString() : null,
+            'next_invoice_date' => $isBillable ? $firstPaidInvoiceDate->toDateString() : null,
         ]);
+
+        if ($isBillable) {
+            app(LicenseBillingService::class)->createTrialInvoice($license);
+        }
+
+        return $license;
     }
 
     public function resolvePackageProduct(Query $query): ?Product

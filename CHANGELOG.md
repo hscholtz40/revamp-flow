@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-09-03
+
+- **Product/service supplier quick add:** Product and service create/edit now include a + button beside the supplier dropdown. Users with supplier create permission can add a supplier in a popup and assign it immediately.
+- **PDF company footers:** Invoice, quote, and jobcard PDFs now keep a bottom page margin so Company Settings footer text is not covered by signatures or line items. Footer injection also matches GrapeJS markup (`id`/`data-gjs-type` before `class`) and preserves `$` amounts.
+- **Contractor license trial invoice:** Accepting a contractor query now issues a paid R0 trial invoice immediately. Paid monthly invoicing at the package amount starts 60 days after the license is created (not from the original query date).
+- **Auth orange styling:** Login orange button, input focus, and link colours now apply across all login-related pages (forgot/reset/confirm/required password, verify email, two-factor, client login, and client registration).
+
+## 2026-09-02
+
+- **Customer contact auto-create:** Creating or updating a customer with contact person details now automatically creates or syncs a primary `Contact` record, so document contact selectors and the contacts tab stay in sync with the customer form.
+
 ## 2026-08-28
 
 - **Sidebar navigation:** Temporarily removed Messages from the main sidebar menu (routes and permissions unchanged).

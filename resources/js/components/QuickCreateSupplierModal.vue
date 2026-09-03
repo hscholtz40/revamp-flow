@@ -10,10 +10,16 @@ export interface QuickCreateSupplierForm {
     errors: Record<string, string>;
 }
 
-const props = defineProps<{
-    modelValue: boolean;
-    form: QuickCreateSupplierForm;
-}>();
+const props = withDefaults(
+    defineProps<{
+        modelValue: boolean;
+        form: QuickCreateSupplierForm;
+        description?: string;
+    }>(),
+    {
+        description: 'Add a supplier and assign it to this quote line.',
+    },
+);
 
 const emit = defineEmits<{
     'update:modelValue': [boolean];
@@ -43,7 +49,7 @@ watch(
         <div class="w-full max-w-md rounded-lg bg-white p-6 shadow-xl" @click.stop>
             <h3 class="mb-1 text-lg font-semibold text-gray-900">Quick Add Supplier</h3>
             <p class="mb-4 text-sm text-gray-600">
-                Add a supplier and assign it to this quote line.
+                {{ description }}
             </p>
 
             <form class="space-y-4" @submit.prevent="emit('submit')">

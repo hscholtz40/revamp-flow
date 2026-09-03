@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AuthLayout from '@/layouts/AuthLayout.vue';
+import { authInputClass, authLabelClass, authLinkClass } from '@/lib/authStyles';
 import { login } from '@/routes';
 import { Form, Head } from '@inertiajs/vue3';
 import { LoaderCircle } from 'lucide-vue-next';
@@ -36,7 +37,7 @@ defineProps<{
         >
             <div class="space-y-5">
                 <div class="space-y-2">
-                    <Label for="email" class="text-sm font-medium text-gray-700">Email address</Label>
+                    <Label for="email" :class="authLabelClass">Email address</Label>
                     <Input
                         id="email"
                         type="email"
@@ -44,14 +45,15 @@ defineProps<{
                         autocomplete="email"
                         autofocus
                         placeholder="Enter your email"
-                        class="h-12 border-gray-300 px-4 text-base focus:border-[#f7941d] focus:ring-[#f7941d]"
+                        :class="authInputClass"
                     />
                     <InputError :message="errors.email" />
                 </div>
 
                 <Button
                     type="submit"
-                    class="h-12 w-full rounded-lg bg-[#f7941d] text-base font-medium text-white transition-colors duration-200 hover:bg-[#d97800] focus:ring-2 focus:ring-[#f7941d] focus:ring-offset-2"
+                    variant="auth"
+                    size="auth"
                     :disabled="processing"
                     data-test="email-password-reset-link-button"
                 >
@@ -68,7 +70,7 @@ defineProps<{
                     Or, return to
                     <TextLink
                         :href="login()"
-                        class="ml-1 font-medium text-[#f7941d] hover:text-[#d97800]"
+                        :class="['ml-1', authLinkClass]"
                     >
                         log in
                     </TextLink>

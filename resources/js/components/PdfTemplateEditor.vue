@@ -332,7 +332,10 @@ const groupedVariables = computed(() => {
 // Default templates for each module (converted from Blade to Handlebars)
 const defaultTemplates: Record<string, { html: string; css: string }> = {
     invoice: {
-        css: `body {
+        css: `@page {
+    margin-bottom: 70px;
+}
+body {
     font-family: Arial, sans-serif;
     line-height: 1.4;
     color: #000;
@@ -571,6 +574,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
     right: 20px;
     font-size: 9px;
     color: #666;
+    background: #fff;
     display: table;
     width: 100%;
 }
@@ -735,7 +739,10 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
 </div>`,
     },
     quote: {
-        css: `body {
+        css: `@page {
+    margin-bottom: 70px;
+}
+body {
     font-family: Arial, sans-serif;
     line-height: 1.4;
     color: #000;
@@ -967,6 +974,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
     right: 20px;
     font-size: 9px;
     color: #666;
+    background: #fff;
     display: table;
     width: 100%;
 }
@@ -1128,7 +1136,10 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
 </div>`,
     },
     jobcard: {
-        css: `body {
+        css: `@page {
+    margin-bottom: 70px;
+}
+body {
     font-family: Arial, sans-serif;
     line-height: 1.4;
     color: #000;
@@ -1359,6 +1370,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
     right: 20px;
     font-size: 9px;
     color: #666;
+    background: #fff;
     display: table;
     width: 100%;
 }
@@ -1521,7 +1533,10 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
 </div>`,
     },
     'proforma-invoice': {
-        css: `body {
+        css: `@page {
+    margin-bottom: 70px;
+}
+body {
     font-family: Arial, sans-serif;
     line-height: 1.4;
     color: #000;
@@ -1753,6 +1768,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
     right: 20px;
     font-size: 9px;
     color: #666;
+    background: #fff;
     display: table;
     width: 100%;
 }
@@ -1913,7 +1929,10 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
 </div>`,
     },
     'purchase-order': {
-        css: `body {
+        css: `@page {
+    margin-bottom: 70px;
+}
+body {
     font-family: Arial, sans-serif;
     line-height: 1.4;
     color: #000;
@@ -2094,6 +2113,7 @@ const defaultTemplates: Record<string, { html: string; css: string }> = {
     right: 20px;
     font-size: 9px;
     color: #666;
+    background: #fff;
     display: table;
     width: 100%;
 }

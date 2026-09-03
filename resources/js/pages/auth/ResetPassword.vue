@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AuthLayout from '@/layouts/AuthLayout.vue';
+import { authInputClass, authLabelClass } from '@/lib/authStyles';
 import { Form, Head } from '@inertiajs/vue3';
 import { LoaderCircle } from 'lucide-vue-next';
 import { ref } from 'vue';
@@ -29,38 +30,39 @@ const inputEmail = ref(props.email);
             :transform="(data) => ({ ...data, token, email })"
             :reset-on-success="['password', 'password_confirmation']"
             v-slot="{ errors, processing }"
+            class="space-y-6"
         >
-            <div class="grid gap-6">
-                <div class="grid gap-2">
-                    <Label for="email">Email</Label>
+            <div class="space-y-5">
+                <div class="space-y-2">
+                    <Label for="email" :class="authLabelClass">Email</Label>
                     <Input
                         id="email"
                         type="email"
                         name="email"
                         autocomplete="email"
                         v-model="inputEmail"
-                        class="mt-1 block w-full"
+                        :class="authInputClass"
                         readonly
                     />
-                    <InputError :message="errors.email" class="mt-2" />
+                    <InputError :message="errors.email" />
                 </div>
 
-                <div class="grid gap-2">
-                    <Label for="password">Password</Label>
+                <div class="space-y-2">
+                    <Label for="password" :class="authLabelClass">Password</Label>
                     <Input
                         id="password"
                         type="password"
                         name="password"
                         autocomplete="new-password"
-                        class="mt-1 block w-full"
+                        :class="authInputClass"
                         autofocus
                         placeholder="Password"
                     />
                     <InputError :message="errors.password" />
                 </div>
 
-                <div class="grid gap-2">
-                    <Label for="password_confirmation">
+                <div class="space-y-2">
+                    <Label for="password_confirmation" :class="authLabelClass">
                         Confirm Password
                     </Label>
                     <Input
@@ -68,7 +70,7 @@ const inputEmail = ref(props.email);
                         type="password"
                         name="password_confirmation"
                         autocomplete="new-password"
-                        class="mt-1 block w-full"
+                        :class="authInputClass"
                         placeholder="Confirm password"
                     />
                     <InputError :message="errors.password_confirmation" />
@@ -76,15 +78,16 @@ const inputEmail = ref(props.email);
 
                 <Button
                     type="submit"
-                    class="mt-4 w-full"
+                    variant="auth"
+                    size="auth"
                     :disabled="processing"
                     data-test="reset-password-button"
                 >
                     <LoaderCircle
                         v-if="processing"
-                        class="h-4 w-4 animate-spin"
+                        class="mr-2 h-5 w-5 animate-spin"
                     />
-                    Reset password
+                    {{ processing ? 'Resetting...' : 'Reset password' }}
                 </Button>
             </div>
         </Form>

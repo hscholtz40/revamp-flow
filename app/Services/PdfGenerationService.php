@@ -62,7 +62,7 @@ class PdfGenerationService
         $html = $this->processHandlebarsTemplate($template->html_template, $data);
         $html = $this->sanitizeRenderedTemplateHtml($html);
         $html = $this->injectCompanyFooter($html, $template->module, $company);
-        $css = $template->css_styles ?? '';
+        $css = $this->ensureFooterMarginCss($template->css_styles ?? '');
 
         // Convert relative image paths to absolute URLs for dompdf
         $html = $this->convertImagePathsToAbsolute($html);
@@ -198,6 +198,7 @@ class PdfGenerationService
         $html = View::make($view, $data)->render();
         $html = $this->convertImagePathsToAbsolute($html);
         $html = $this->injectCompanyFooter($html, $module, $company);
+        $html = $this->ensureFooterMarginInHtml($html);
 
         return Pdf::loadHTML($html);
     }
@@ -264,24 +265,53 @@ class PdfGenerationService
         }
 
         $formattedFooter = nl2br(e($footerText), false);
-        $footerLeftPattern = '/(<div\s+class=(["\'])[^"\']*\bfooter-left\b[^"\']*\2[^>]*>)([\s\S]*?)(<\/div>)/i';
+        $footerLeftPattern = '/(<div\b[^>]*\bclass=(["\'])[^"\']*\bfooter-left\b[^"\']*\2[^>]*>)([\s\S]*?)(<\/div>)/i';
 
         if (preg_match($footerLeftPattern, $html)) {
-            return preg_replace(
+            $html = preg_replace_callback(
                 $footerLeftPattern,
-                '$1'.$formattedFooter.'$4',
+                fn (array $matches) => $matches[1].$formattedFooter.$matches[4],
                 $html,
                 1
             ) ?? $html;
+        } else {
+            $footerBlock = '<div class="footer"><div class="footer-left">'.$formattedFooter.'</div></div>';
+
+            if (stripos($html, '</body>') !== false) {
+                $html = str_ireplace('</body>', $footerBlock.'</body>', $html);
+            } else {
+                $html .= $footerBlock;
+            }
         }
 
-        $footerBlock = '<div class="footer"><div class="footer-left">'.$formattedFooter.'</div></div>';
+        return $this->ensureFooterMarginInHtml($html);
+    }
 
-        if (stripos($html, '</body>') !== false) {
-            return str_ireplace('</body>', $footerBlock.'</body>', $html);
+    /**
+     * Keep document content out of the fixed footer band so company footer text stays visible.
+     */
+    protected function ensureFooterMarginCss(string $css): string
+    {
+        if (preg_match('/@page\s*\{[^}]*margin-bottom\s*:/i', $css)) {
+            return $css;
         }
 
-        return $html.$footerBlock;
+        return rtrim($css)."\n@page { margin-bottom: 70px; }\n";
+    }
+
+    protected function ensureFooterMarginInHtml(string $html): string
+    {
+        if (preg_match('/@page\s*\{[^}]*margin-bottom\s*:/i', $html)) {
+            return $html;
+        }
+
+        $rule = '@page { margin-bottom: 70px; }';
+
+        if (preg_match('/<style\b[^>]*>/i', $html)) {
+            return preg_replace('/<style\b[^>]*>/i', '$0'."\n".$rule, $html, 1) ?? $html;
+        }
+
+        return '<style>'.$rule.'</style>'.$html;
     }
 
     /**

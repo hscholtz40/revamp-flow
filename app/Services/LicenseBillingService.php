@@ -125,6 +125,38 @@ class LicenseBillingService
     }
 
     /**
+     * Issue a paid R0 trial invoice for contractor licenses. Does not advance the paid billing schedule.
+     */
+    public function createTrialInvoice(License $license): Invoice
+    {
+        $license->loadMissing(['customer', 'company', 'product']);
+
+        $productName = $license->product?->name;
+        $description = $productName
+            ? "{$productName} (60-day trial — no charge)"
+            : "60-day trial — no charge ({$license->license_key})";
+
+        $invoice = $this->createInvoice($license, [
+            [
+                'description' => $description,
+                'quantity' => 1,
+                'unit_price' => 0,
+                'total' => 0,
+                'product_id' => $license->product_id,
+                'skip_tax' => true,
+            ],
+        ]);
+
+        $invoice->update([
+            'title' => "Trial license — {$license->license_key}",
+            'description' => '60-day trial — no charge. Paid monthly invoicing starts after the trial.',
+            'status' => 'paid',
+        ]);
+
+        return $invoice->fresh();
+    }
+
+    /**
      * @return list<array{description: string, quantity: float, unit_price: float, total: float}>
      */
     public function buildLineItems(License $license): array

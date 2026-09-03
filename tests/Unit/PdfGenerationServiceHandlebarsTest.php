@@ -141,6 +141,41 @@ class PdfGenerationServiceHandlebarsTest extends TestCase
         $this->assertStringNotContainsString('Default footer', $out);
     }
 
+    public function test_inject_company_footer_matches_footer_left_when_class_is_not_first_attribute(): void
+    {
+        $service = new class extends PdfGenerationService
+        {
+            public function expose(string $html, string $module, \App\Models\Company $company): string
+            {
+                return $this->injectCompanyFooter($html, $module, $company);
+            }
+        };
+
+        $company = new \App\Models\Company(['jobcard_footer' => 'Warranty: 12 months.']);
+        $html = '<div id="ixx" class="footer"><div data-gjs-type="default" id="iyy" class="footer-left">JobCard Online</div></div>';
+        $out = $service->expose($html, 'jobcard', $company);
+
+        $this->assertStringContainsString('Warranty: 12 months.', $out);
+        $this->assertStringNotContainsString('JobCard Online', $out);
+    }
+
+    public function test_inject_company_footer_preserves_dollar_amounts(): void
+    {
+        $service = new class extends PdfGenerationService
+        {
+            public function expose(string $html, string $module, \App\Models\Company $company): string
+            {
+                return $this->injectCompanyFooter($html, $module, $company);
+            }
+        };
+
+        $company = new \App\Models\Company(['invoice_footer' => 'Pay $500 to account 123.']);
+        $html = '<div class="footer"><div class="footer-left">Default footer</div></div>';
+        $out = $service->expose($html, 'invoice', $company);
+
+        $this->assertStringContainsString('Pay $500 to account 123.', $out);
+    }
+
     public function test_company_footer_placeholders_are_available_in_handlebars_data(): void
     {
         $service = new class extends PdfGenerationService

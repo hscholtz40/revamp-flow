@@ -686,7 +686,7 @@ JS;
             app(SystemNotificationService::class)->notifyContractorApproval($query->company, $query->fresh());
         }
 
-        $message = "Contractor accepted. {$customer->name} is ready under Licensing → Not Deployed. Monthly invoicing starts 60 days after signup.";
+        $message = "Contractor accepted. {$customer->name} is ready under Licensing → Not Deployed. A R0 trial invoice was issued; paid monthly invoicing starts 60 days after the license is created.";
         if (auth()->user()?->can('viewAny', License::class)) {
             return redirect()->route('licenses.index', ['deployed' => 'not_deployed'])->with('success', $message);
         }

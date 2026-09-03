@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AuthLayout from '@/layouts/AuthLayout.vue';
+import { authInputClass, authLabelClass } from '@/lib/authStyles';
 import { Head, useForm } from '@inertiajs/vue3';
 import { LoaderCircle } from 'lucide-vue-next';
 
@@ -24,38 +25,40 @@ const submit = () => {
     >
         <Head title="Set a new password" />
 
-        <form @submit.prevent="submit" class="grid gap-6">
-            <div class="grid gap-2">
-                <Label for="password">New password</Label>
-                <Input
-                    id="password"
-                    v-model="form.password"
-                    type="password"
-                    autocomplete="new-password"
-                    class="mt-1 block w-full"
-                    autofocus
-                    placeholder="New password"
-                />
-                <InputError :message="form.errors.password" />
-            </div>
+        <form class="space-y-6" @submit.prevent="submit">
+            <div class="space-y-5">
+                <div class="space-y-2">
+                    <Label for="password" :class="authLabelClass">New password</Label>
+                    <Input
+                        id="password"
+                        v-model="form.password"
+                        type="password"
+                        autocomplete="new-password"
+                        :class="authInputClass"
+                        autofocus
+                        placeholder="New password"
+                    />
+                    <InputError :message="form.errors.password" />
+                </div>
 
-            <div class="grid gap-2">
-                <Label for="password_confirmation">Confirm password</Label>
-                <Input
-                    id="password_confirmation"
-                    v-model="form.password_confirmation"
-                    type="password"
-                    autocomplete="new-password"
-                    class="mt-1 block w-full"
-                    placeholder="Confirm password"
-                />
-                <InputError :message="form.errors.password_confirmation" />
-            </div>
+                <div class="space-y-2">
+                    <Label for="password_confirmation" :class="authLabelClass">Confirm password</Label>
+                    <Input
+                        id="password_confirmation"
+                        v-model="form.password_confirmation"
+                        type="password"
+                        autocomplete="new-password"
+                        :class="authInputClass"
+                        placeholder="Confirm password"
+                    />
+                    <InputError :message="form.errors.password_confirmation" />
+                </div>
 
-            <Button type="submit" class="mt-4 w-full" :disabled="form.processing">
-                <LoaderCircle v-if="form.processing" class="h-4 w-4 animate-spin" />
-                <span v-else>Save and continue</span>
-            </Button>
+                <Button type="submit" variant="auth" size="auth" :disabled="form.processing">
+                    <LoaderCircle v-if="form.processing" class="mr-2 h-5 w-5 animate-spin" />
+                    {{ form.processing ? 'Saving...' : 'Save and continue' }}
+                </Button>
+            </div>
         </form>
     </AuthLayout>
 </template>
