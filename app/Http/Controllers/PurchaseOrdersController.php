@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\Note;
 use App\Models\PurchaseOrder;
+use App\Models\PurchaseOrderAttachment;
 use App\Models\PurchaseOrderItem;
 use App\Models\Quote;
 use App\Models\Supplier;
@@ -14,6 +15,7 @@ use App\Services\StockService;
 use App\Support\ColumnFilters;
 use App\Support\CompanyMailer;
 use App\Support\CompanyScopedRules;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -543,6 +545,7 @@ class PurchaseOrdersController extends Controller
             'items.lineGroup',
             'lineGroups',
             'user',
+            'attachments',
         ]);
 
         // Manually ensure serial numbers are included in the response
@@ -570,7 +573,116 @@ class PurchaseOrdersController extends Controller
             ],
             'pdfTemplates' => $pdfTemplates,
             'defaultTemplateId' => $defaultTemplateId,
+            'attachments' => $purchaseOrder->attachments->map(fn (PurchaseOrderAttachment $attachment) => [
+                'id' => $attachment->id,
+                'url' => '/storage/'.ltrim((string) $attachment->path, '/'),
+                'type' => $attachment->type,
+                'original_name' => $attachment->original_name,
+                'description' => $attachment->description,
+                'created_at' => $attachment->created_at?->toIso8601String(),
+            ])->values()->all(),
         ]);
+    }
+
+    public function storeAttachments(Request $request, PurchaseOrder $purchaseOrder): RedirectResponse|JsonResponse
+    {
+        $this->authorize('update', $purchaseOrder);
+
+        $validated = $request->validate([
+            'attachments' => ['required', 'array', 'max:10'],
+            'attachments.*' => ['file', 'max:51200', 'mimes:jpg,jpeg,png,gif,webp,mp4,mov,avi,webm'],
+            'description' => ['nullable', 'string', 'max:1000'],
+        ], [
+            'attachments.max' => 'You can upload a maximum of 10 files at a time.',
+            'attachments.*.max' => 'Each file may not be larger than 50MB.',
+            'attachments.*.mimes' => 'Each file must be an image or video.',
+        ]);
+
+        $description = isset($validated['description']) ? trim((string) $validated['description']) : null;
+        if ($description === '') {
+            $description = null;
+        }
+
+        $created = [];
+        foreach ((array) ($validated['attachments'] ?? $request->file('attachments', [])) as $file) {
+            if (! $file) {
+                continue;
+            }
+
+            $attachment = $purchaseOrder->attachments()->create([
+                'path' => $file->store("purchase-order-attachments/{$purchaseOrder->company_id}", 'public'),
+                'type' => str_starts_with((string) $file->getMimeType(), 'video/') ? 'video' : 'image',
+                'original_name' => $file->getClientOriginalName(),
+                'description' => $description,
+                'uploaded_by' => auth()->id(),
+            ]);
+
+            $created[] = [
+                'id' => $attachment->id,
+                'url' => '/storage/'.ltrim((string) $attachment->path, '/'),
+                'type' => $attachment->type,
+                'original_name' => $attachment->original_name,
+                'description' => $attachment->description,
+            ];
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'Attachments uploaded successfully.',
+                'attachments' => $created,
+            ], 201);
+        }
+
+        return redirect()->back()->with('success', count($created).' attachment(s) uploaded.');
+    }
+
+    public function updateAttachment(Request $request, PurchaseOrder $purchaseOrder, PurchaseOrderAttachment $attachment): RedirectResponse|JsonResponse
+    {
+        $this->authorize('update', $purchaseOrder);
+        abort_unless((int) $attachment->purchase_order_id === (int) $purchaseOrder->id, 404);
+
+        $validated = $request->validate([
+            'description' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $description = array_key_exists('description', $validated)
+            ? trim((string) ($validated['description'] ?? ''))
+            : null;
+        if ($description === '') {
+            $description = null;
+        }
+
+        $attachment->update(['description' => $description]);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'Attachment updated.',
+                'attachment' => [
+                    'id' => $attachment->id,
+                    'description' => $attachment->description,
+                ],
+            ]);
+        }
+
+        return redirect()->back()->with('success', 'Attachment updated.');
+    }
+
+    public function destroyAttachment(PurchaseOrder $purchaseOrder, PurchaseOrderAttachment $attachment): RedirectResponse|JsonResponse
+    {
+        $this->authorize('update', $purchaseOrder);
+        abort_unless((int) $attachment->purchase_order_id === (int) $purchaseOrder->id, 404);
+
+        if ($attachment->path && Storage::disk('public')->exists($attachment->path)) {
+            Storage::disk('public')->delete($attachment->path);
+        }
+
+        $attachment->delete();
+
+        if (request()->expectsJson()) {
+            return response()->json(['message' => 'Attachment deleted.']);
+        }
+
+        return redirect()->back()->with('success', 'Attachment deleted.');
     }
 
     /**

@@ -317,69 +317,14 @@
                     </div>
 
                     <!-- Photos & Videos -->
-                    <div class="rounded-lg bg-white border border-gray-200 shadow-sm">
-                        <div class="border-b border-gray-200 bg-gray-50 px-6 py-4">
-                            <div class="flex flex-wrap items-center justify-between gap-3">
-                                <div>
-                                    <h2 class="text-lg font-semibold text-gray-900">Photos & Videos</h2>
-                                    <p class="text-sm text-gray-600">Site photos and video evidence for this jobcard</p>
-                                </div>
-                                <div v-if="canEditJobcard" class="flex items-center gap-2">
-                                    <input
-                                        ref="attachmentInput"
-                                        type="file"
-                                        class="hidden"
-                                        accept="image/*,video/mp4,video/quicktime,video/webm,video/x-msvideo,.jpg,.jpeg,.png,.gif,.webp,.mp4,.mov,.avi,.webm"
-                                        multiple
-                                        @change="onAttachmentFilesSelected"
-                                    />
-                                    <button
-                                        type="button"
-                                        class="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
-                                        :disabled="uploadingAttachments"
-                                        @click="attachmentInput?.click()"
-                                    >
-                                        {{ uploadingAttachments ? 'Uploading…' : 'Add photo/video' }}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="p-6">
-                            <p v-if="attachmentUploadError" class="mb-3 text-sm text-red-600">{{ attachmentUploadError }}</p>
-                            <div v-if="attachments.length === 0" class="rounded-md border border-dashed border-gray-300 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">
-                                No photos or videos attached yet.
-                            </div>
-                            <div v-else class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                <div v-for="attachment in attachments" :key="attachment.id" class="space-y-2 rounded-md border border-gray-200 p-3">
-                                    <video
-                                        v-if="attachmentKind(attachment.type) === 'video'"
-                                        :src="attachment.url"
-                                        controls
-                                        class="max-h-[280px] w-full rounded-md bg-black"
-                                    />
-                                    <img
-                                        v-else
-                                        :src="attachment.url"
-                                        :alt="attachment.original_name || 'Jobcard attachment'"
-                                        class="max-h-[280px] w-full rounded-md object-contain bg-gray-50"
-                                    />
-                                    <div class="flex items-center justify-between gap-2">
-                                        <a :href="attachment.url" target="_blank" class="truncate text-sm text-blue-600 hover:underline">
-                                            {{ attachment.original_name || 'Open' }}
-                                        </a>
-                                        <button
-                                            v-if="canEditJobcard"
-                                            type="button"
-                                            class="shrink-0 text-xs font-medium text-red-600 hover:text-red-800"
-                                            @click="deleteAttachment(attachment.id)"
-                                        >
-                                            Remove
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    <EvidenceAttachmentsPanel
+                        :attachments="attachments"
+                        :can-edit="canEditJobcard"
+                        :store-url="`/jobcards/${props.jobcard.id}/attachments`"
+                        :delete-url="(id) => `/jobcards/${props.jobcard.id}/attachments/${id}`"
+                        :update-url="(id) => `/jobcards/${props.jobcard.id}/attachments/${id}`"
+                        subtitle="Site photos and video evidence for this jobcard"
+                    />
 
                     <!-- Line Items -->
                     <div class="rounded-lg bg-white border border-gray-200 shadow-sm">
@@ -896,9 +841,8 @@ import deliveryNotes from '@/routes/delivery-notes';
 import products from '@/routes/products';
 import customers from '@/routes/customers';
 import TimeTracking from '@/components/TimeTracking.vue';
+import EvidenceAttachmentsPanel from '@/components/EvidenceAttachmentsPanel.vue';
 import { useDateTimeFormat } from '@/composables/useDateTimeFormat';
-import { getCsrfToken } from '@/lib/csrf';
-import { toast } from 'vue-sonner';
 import {
     JOBCARD_STATUS_KEYS,
     jobcardStatusBadgeClass,
@@ -921,6 +865,7 @@ interface JobcardAttachment {
     url: string;
     type: string | null;
     original_name: string | null;
+    description: string | null;
     created_at?: string | null;
 }
 interface Product {
@@ -1074,66 +1019,6 @@ interface Props {
 const props = defineProps<Props>();
 
 const attachments = computed(() => props.attachments ?? []);
-const attachmentInput = ref<HTMLInputElement | null>(null);
-const uploadingAttachments = ref(false);
-const attachmentUploadError = ref('');
-
-function attachmentKind(type: string | null): 'video' | 'image' {
-    if (!type) return 'image';
-    if (type === 'video' || type.endsWith(':video') || type.startsWith('video/')) return 'video';
-    return 'image';
-}
-
-async function onAttachmentFilesSelected(event: Event) {
-    const input = event.target as HTMLInputElement;
-    const files = Array.from(input.files || []);
-    input.value = '';
-    if (files.length === 0) return;
-
-    uploadingAttachments.value = true;
-    attachmentUploadError.value = '';
-    try {
-        const formData = new FormData();
-        files.forEach((file) => formData.append('attachments[]', file));
-
-        const response = await fetch(`/jobcards/${props.jobcard.id}/attachments`, {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: {
-                Accept: 'application/json',
-                'X-CSRF-TOKEN': getCsrfToken(),
-                'X-Requested-With': 'XMLHttpRequest',
-            },
-            body: formData,
-        });
-
-        if (!response.ok) {
-            const data = await response.json().catch(() => ({}));
-            const message = (data as { message?: string; errors?: Record<string, string[]> }).message
-                || Object.values((data as { errors?: Record<string, string[]> }).errors || {}).flat()[0]
-                || 'Upload failed.';
-            throw new Error(message);
-        }
-
-        toast.success('Attachments uploaded');
-        router.reload({ only: ['attachments'] });
-    } catch (error) {
-        attachmentUploadError.value = error instanceof Error ? error.message : 'Upload failed.';
-        toast.error(attachmentUploadError.value);
-    } finally {
-        uploadingAttachments.value = false;
-    }
-}
-
-function deleteAttachment(attachmentId: number) {
-    if (!confirm('Remove this attachment?')) return;
-
-    router.delete(`/jobcards/${props.jobcard.id}/attachments/${attachmentId}`, {
-        preserveScroll: true,
-        onSuccess: () => toast.success('Attachment removed'),
-        onError: () => toast.error('Could not remove attachment'),
-    });
-}
 
 const isRoundingAdjustmentLine = (item: LineItem) => {
     return (item.description || '').trim().toLowerCase() === 'rounding adjustment';

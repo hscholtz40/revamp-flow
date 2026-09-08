@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useAuthAbility } from '@/composables/useAuthAbilities';
+import EvidenceAttachmentsPanel from '@/components/EvidenceAttachmentsPanel.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { ArrowLeft, Package, Building2, Calendar, FileText, CheckCircle, XCircle, Download, Mail, Edit, Trash2 } from 'lucide-vue-next';
@@ -9,6 +10,15 @@ import products from '@/routes/products';
 import suppliers from '@/routes/suppliers';
 import quotes from '@/routes/quotes';
 import jobcards from '@/routes/jobcards';
+
+interface EvidenceAttachment {
+    id: number;
+    url: string;
+    type: string | null;
+    original_name: string | null;
+    description: string | null;
+    created_at?: string | null;
+}
 
 interface Product {
     id: number;
@@ -88,6 +98,7 @@ interface Props {
     purchaseOrder: PurchaseOrder;
     pdfTemplates?: PdfTemplate[];
     defaultTemplateId?: number | null;
+    attachments?: EvidenceAttachment[];
     sourceSummary?: {
         type?: 'quote' | 'jobcard' | null;
         id?: number | null;
@@ -96,6 +107,8 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+
+const attachments = computed(() => props.attachments ?? []);
 
 const canPurchaseOrdersEdit = useAuthAbility('purchase-orders', 'edit');
 const canPurchaseOrdersDelete = useAuthAbility('purchase-orders', 'delete');
@@ -422,6 +435,16 @@ const sendEmail = () => {
                             </div>
                         </div>
                     </div>
+
+                    <!-- Photos & Videos -->
+                    <EvidenceAttachmentsPanel
+                        :attachments="attachments"
+                        :can-edit="canPurchaseOrdersEdit"
+                        :store-url="`/purchase-orders/${props.purchaseOrder.id}/attachments`"
+                        :delete-url="(id) => `/purchase-orders/${props.purchaseOrder.id}/attachments/${id}`"
+                        :update-url="(id) => `/purchase-orders/${props.purchaseOrder.id}/attachments/${id}`"
+                        subtitle="Photo and video evidence for this purchase order"
+                    />
 
                     <!-- Items -->
                     <div class="rounded-lg border border-gray-200 bg-white p-6">

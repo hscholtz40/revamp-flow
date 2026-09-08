@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-09-07
+
+- **Timesheet location and recorded times:** Time entries store optional GPS location (`latitude`, `longitude`, `location_accuracy`) from the mobile API. Web timesheet capture leaves location empty. The timesheet list and jobcard recent entries now show recorded start–end times and location when present.
+- **Purchase order photo/video evidence:** Purchase order Show now supports uploading, describing, and removing photo/video evidence (same limits as jobcards: 10 files/request, 50MB, images + common video types).
+- **Evidence descriptions:** Jobcard and purchase order evidence uploads support an optional description on upload, and each attachment can have its description edited afterward.
+- **Evidence upload timestamps:** Jobcard and purchase order evidence cards show when each photo/video was uploaded.
+- **Mobile jobcard evidence:** The mobile jobcard show API now includes evidence attachments (`id`, `url`, `path`, `type`, `original_name`, `description`, `created_at`).
+- **Mobile jobcard evidence upload:** Mobile can upload, update description, and delete jobcard photo/video evidence via `/api/v1/jobcards/{id}/attachments` (multipart `attachments[]`, optional `description`).
+
 ## 2026-09-03
 
 - **Product/service supplier quick add:** Product and service create/edit now include a + button beside the supplier dropdown. Users with supplier create permission can add a supplier in a popup and assign it immediately.

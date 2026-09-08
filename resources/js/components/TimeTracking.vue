@@ -72,7 +72,16 @@
                     >
                         <div class="flex-1">
                             <p class="text-sm font-medium text-gray-900">{{ entry.user?.name }}</p>
-                            <p class="text-xs text-gray-600">{{ formatDate(entry.date) }} • {{ entry.formatted_duration }}</p>
+                            <p class="text-xs text-gray-600">
+                                {{ formatDate(entry.date) }}
+                                <span v-if="entry.formatted_time_range && entry.formatted_time_range !== '—'">
+                                    • {{ entry.formatted_time_range }}
+                                </span>
+                                • {{ entry.formatted_duration }}
+                            </p>
+                            <p v-if="entry.has_location" class="text-xs text-gray-500 mt-1">
+                                Location: {{ Number(entry.latitude).toFixed(5) }}, {{ Number(entry.longitude).toFixed(5) }}
+                            </p>
                             <p v-if="entry.description" class="text-xs text-gray-500 mt-1">{{ entry.description }}</p>
                         </div>
                         <div v-if="!isLimitedUser" class="text-right">

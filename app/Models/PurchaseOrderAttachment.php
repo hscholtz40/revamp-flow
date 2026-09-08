@@ -5,10 +5,10 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class JobcardAttachment extends Model
+class PurchaseOrderAttachment extends Model
 {
     protected $fillable = [
-        'jobcard_id',
+        'purchase_order_id',
         'path',
         'type',
         'original_name',
@@ -16,9 +16,9 @@ class JobcardAttachment extends Model
         'uploaded_by',
     ];
 
-    public function jobcard(): BelongsTo
+    public function purchaseOrder(): BelongsTo
     {
-        return $this->belongsTo(Jobcard::class);
+        return $this->belongsTo(PurchaseOrder::class);
     }
 
     public function uploader(): BelongsTo

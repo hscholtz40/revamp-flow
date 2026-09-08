@@ -89,6 +89,22 @@ class PurchaseOrder extends Model
         return $this->morphTo('source', 'source_type', 'source_id');
     }
 
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(PurchaseOrderAttachment::class)->orderByDesc('created_at');
+    }
+
+    protected static function booted(): void
+    {
+        static::deleting(function (PurchaseOrder $purchaseOrder) {
+            foreach ($purchaseOrder->attachments as $attachment) {
+                if ($attachment->path && \Illuminate\Support\Facades\Storage::disk('public')->exists($attachment->path)) {
+                    \Illuminate\Support\Facades\Storage::disk('public')->delete($attachment->path);
+                }
+            }
+        });
+    }
+
     /**
      * Generate a unique PO number.
      */

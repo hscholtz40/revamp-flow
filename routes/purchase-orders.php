@@ -14,5 +14,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/purchase-orders/{purchaseOrder}/receive-items', [PurchaseOrdersController::class, 'receiveItems'])->middleware('module.permission:purchase-orders,edit')->name('purchase-orders.receive-items');
     Route::get('/purchase-orders/{purchaseOrder}/download-pdf', [PurchaseOrdersController::class, 'downloadPdf'])->middleware('module.permission:purchase-orders,view')->name('purchase-orders.download-pdf');
     Route::post('/purchase-orders/{purchaseOrder}/email', [PurchaseOrdersController::class, 'email'])->middleware('module.permission:purchase-orders,view')->name('purchase-orders.email');
+    Route::post('/purchase-orders/{purchaseOrder}/attachments', [PurchaseOrdersController::class, 'storeAttachments'])->middleware('module.permission:purchase-orders,edit')->name('purchase-orders.attachments.store');
+    Route::patch('/purchase-orders/{purchaseOrder}/attachments/{attachment}', [PurchaseOrdersController::class, 'updateAttachment'])->middleware('module.permission:purchase-orders,edit')->name('purchase-orders.attachments.update');
+    Route::delete('/purchase-orders/{purchaseOrder}/attachments/{attachment}', [PurchaseOrdersController::class, 'destroyAttachment'])->middleware('module.permission:purchase-orders,edit')->name('purchase-orders.attachments.destroy');
     Route::delete('/purchase-orders/{purchaseOrder}', [PurchaseOrdersController::class, 'destroy'])->middleware('module.permission:purchase-orders,delete')->name('purchase-orders.destroy');
 });

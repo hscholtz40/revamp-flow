@@ -69,6 +69,9 @@ Route::prefix('/api/v1')->name('api.v1.')->group(function () {
         Route::delete('/jobcards/{jobcard}', [JobcardController::class, 'destroy'])->middleware('api.module.permission:jobcards,delete');
         Route::patch('/jobcards/{jobcard}/status', [JobcardController::class, 'updateStatus'])->middleware('api.module.permission:jobcards,edit');
         Route::post('/jobcards/{jobcard}/time-entries/convert', [JobcardController::class, 'convertTimeEntries'])->middleware('api.module.permission:jobcards,edit');
+        Route::post('/jobcards/{jobcard}/attachments', [JobcardController::class, 'storeAttachments'])->middleware('api.module.permission:jobcards,edit');
+        Route::patch('/jobcards/{jobcard}/attachments/{attachment}', [JobcardController::class, 'updateAttachment'])->middleware('api.module.permission:jobcards,edit');
+        Route::delete('/jobcards/{jobcard}/attachments/{attachment}', [JobcardController::class, 'destroyAttachment'])->middleware('api.module.permission:jobcards,edit');
 
         // Contractor job queries (mobile app): list and accept/decline dispatched jobs.
         Route::get('/job-queries', [JobQueryController::class, 'index'])->middleware('api.module.permission:queries,list');

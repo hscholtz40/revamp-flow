@@ -81,9 +81,11 @@
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Jobcard</th>
                                 <th v-if="!isLimitedUser" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Duration</th>
                                 <th v-if="!isLimitedUser" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rate</th>
                                 <th v-if="!isLimitedUser" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Location</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                                 <th v-if="showTimesheetActions" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                             </tr>
@@ -102,6 +104,9 @@
                                     {{ entry.user?.name }}
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    {{ entry.formatted_time_range || '—' }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     {{ entry.formatted_duration }}
                                 </td>
                                 <td v-if="!isLimitedUser" class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -112,6 +117,19 @@
                                         {{ entry.formatted_total_amount }}
                                     </span>
                                     <span v-else class="text-gray-500">Non-billable</span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    <a
+                                        v-if="entry.has_location"
+                                        :href="mapsUrl(entry)"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        class="text-blue-600 hover:text-blue-800"
+                                        :title="locationLabel(entry)"
+                                    >
+                                        {{ locationLabel(entry) }}
+                                    </a>
+                                    <span v-else class="text-gray-400">—</span>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <span
@@ -214,11 +232,29 @@ const canTimesheetDelete = useAuthAbility('timesheet', 'delete');
 const { formatDate } = useDateTimeFormat();
 const showTimesheetActions = computed(() => !isLimitedUser.value && canTimesheetDelete.value);
 const timesheetTableColspan = computed(() => {
+    // Date, Jobcard, Time, Duration, Location, Status (+ User/Rate/Amount/Actions when shown)
     if (isLimitedUser.value) {
-        return 5;
+        return 6;
     }
-    return showTimesheetActions.value ? 8 : 7;
+    return showTimesheetActions.value ? 10 : 9;
 });
+
+const locationLabel = (entry: { latitude?: number | string | null; longitude?: number | string | null; location_accuracy?: number | string | null }) => {
+    if (entry.latitude == null || entry.longitude == null) {
+        return '—';
+    }
+
+    const coords = `${Number(entry.latitude).toFixed(5)}, ${Number(entry.longitude).toFixed(5)}`;
+    if (entry.location_accuracy != null && entry.location_accuracy !== '') {
+        return `${coords} (±${Number(entry.location_accuracy).toFixed(0)}m)`;
+    }
+
+    return coords;
+};
+
+const mapsUrl = (entry: { latitude?: number | string | null; longitude?: number | string | null }) => {
+    return `https://www.google.com/maps?q=${entry.latitude},${entry.longitude}`;
+};
 
 const filters = ref({
     jobcard_id: props.filters.jobcard_id || '',

@@ -24,6 +24,9 @@ class TimeEntry extends Model
         'description',
         'status',
         'started_at',
+        'latitude',
+        'longitude',
+        'location_accuracy',
     ];
 
     protected $casts = [
@@ -35,6 +38,9 @@ class TimeEntry extends Model
         'is_billable' => 'boolean',
         'status' => 'string',
         'started_at' => 'datetime',
+        'latitude' => 'decimal:7',
+        'longitude' => 'decimal:7',
+        'location_accuracy' => 'decimal:2',
     ];
 
     protected $appends = [
@@ -42,6 +48,8 @@ class TimeEntry extends Model
         'formatted_duration',
         'total_amount',
         'formatted_total_amount',
+        'formatted_time_range',
+        'has_location',
     ];
 
     public function company(): BelongsTo
@@ -103,6 +111,30 @@ class TimeEntry extends Model
     public function getFormattedTotalAmountAttribute(): string
     {
         return 'R'.number_format($this->total_amount, 2);
+    }
+
+    /**
+     * Get recorded start–end time range for display.
+     */
+    public function getFormattedTimeRangeAttribute(): string
+    {
+        $start = $this->start_time?->format('H:i');
+        $end = $this->end_time?->format('H:i');
+
+        if ($start && $end) {
+            return "{$start} – {$end}";
+        }
+
+        if ($start) {
+            return "{$start} –";
+        }
+
+        return '—';
+    }
+
+    public function getHasLocationAttribute(): bool
+    {
+        return $this->latitude !== null && $this->longitude !== null;
     }
 
     /**
