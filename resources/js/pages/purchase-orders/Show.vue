@@ -17,6 +17,10 @@ interface EvidenceAttachment {
     type: string | null;
     original_name: string | null;
     description: string | null;
+    latitude?: number | string | null;
+    longitude?: number | string | null;
+    location_accuracy?: number | string | null;
+    has_location?: boolean;
     created_at?: string | null;
 }
 

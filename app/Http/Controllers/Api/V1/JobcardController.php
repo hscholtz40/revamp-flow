@@ -79,6 +79,7 @@ class JobcardController extends Controller
             'attachments' => ['required', 'array', 'max:10'],
             'attachments.*' => ['file', 'max:51200', 'mimes:jpg,jpeg,png,gif,webp,mp4,mov,avi,webm'],
             'description' => ['nullable', 'string', 'max:1000'],
+            ...\App\Support\GeoLocation::validationRules(),
         ], [
             'attachments.max' => 'You can upload a maximum of 10 files at a time.',
             'attachments.*.max' => 'Each file may not be larger than 50MB.',
@@ -86,6 +87,7 @@ class JobcardController extends Controller
         ]);
 
         $description = $this->normalizeDescription($validated['description'] ?? null);
+        $location = \App\Support\GeoLocation::extract($validated);
 
         $created = [];
         foreach ((array) ($validated['attachments'] ?? $request->file('attachments', [])) as $file) {
@@ -98,6 +100,7 @@ class JobcardController extends Controller
                 'type' => str_starts_with((string) $file->getMimeType(), 'video/') ? 'video' : 'image',
                 'original_name' => $file->getClientOriginalName(),
                 'description' => $description,
+                ...$location,
                 'uploaded_by' => $request->user()?->id,
             ]);
 
@@ -284,7 +287,19 @@ class JobcardController extends Controller
     }
 
     /**
-     * @return array{id: int, url: string, path: string, type: string|null, original_name: string|null, description: string|null, created_at: string|null}
+     * @return array{
+     *     id: int,
+     *     url: string,
+     *     path: string,
+     *     type: string|null,
+     *     original_name: string|null,
+     *     description: string|null,
+     *     latitude: string|null,
+     *     longitude: string|null,
+     *     location_accuracy: string|null,
+     *     has_location: bool,
+     *     created_at: string|null
+     * }
      */
     private function formatAttachment(JobcardAttachment $attachment): array
     {
@@ -295,6 +310,10 @@ class JobcardController extends Controller
             'type' => $attachment->type,
             'original_name' => $attachment->original_name,
             'description' => $attachment->description,
+            'latitude' => $attachment->latitude,
+            'longitude' => $attachment->longitude,
+            'location_accuracy' => $attachment->location_accuracy,
+            'has_location' => $attachment->has_location,
             'created_at' => $attachment->created_at?->toIso8601String(),
         ];
     }

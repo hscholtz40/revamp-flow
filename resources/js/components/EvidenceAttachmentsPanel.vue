@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useDateTimeFormat } from '@/composables/useDateTimeFormat';
+import ResolvedLocationDisplay from '@/components/ResolvedLocationDisplay.vue';
 import { getCsrfToken } from '@/lib/csrf';
 import { router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
@@ -11,6 +12,10 @@ export interface EvidenceAttachment {
     type: string | null;
     original_name: string | null;
     description: string | null;
+    latitude?: number | string | null;
+    longitude?: number | string | null;
+    location_accuracy?: number | string | null;
+    has_location?: boolean;
     created_at?: string | null;
 }
 
@@ -57,6 +62,14 @@ function uploadedAtLabel(createdAt: string | null | undefined): string | null {
 
     const formatted = formatDateTime(createdAt);
     return formatted ? `Uploaded ${formatted}` : null;
+}
+
+function hasLocation(attachment: EvidenceAttachment): boolean {
+    if (attachment.has_location) {
+        return true;
+    }
+
+    return attachment.latitude != null && attachment.longitude != null;
 }
 
 function descriptionDraft(attachment: EvidenceAttachment): string {
@@ -241,6 +254,15 @@ async function saveDescription(attachment: EvidenceAttachment) {
                     </div>
                     <p v-if="uploadedAtLabel(attachment.created_at)" class="text-xs text-gray-500">
                         {{ uploadedAtLabel(attachment.created_at) }}
+                    </p>
+                    <p v-if="hasLocation(attachment)" class="text-xs text-gray-500">
+                        <ResolvedLocationDisplay
+                            prefix="Location: "
+                            :latitude="attachment.latitude"
+                            :longitude="attachment.longitude"
+                            :accuracy="attachment.location_accuracy"
+                            text-class="text-xs text-gray-500"
+                        />
                     </p>
                     <div v-if="canEdit" class="space-y-2">
                         <textarea

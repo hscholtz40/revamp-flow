@@ -80,7 +80,13 @@
                                 • {{ entry.formatted_duration }}
                             </p>
                             <p v-if="entry.has_location" class="text-xs text-gray-500 mt-1">
-                                Location: {{ Number(entry.latitude).toFixed(5) }}, {{ Number(entry.longitude).toFixed(5) }}
+                                <ResolvedLocationDisplay
+                                    prefix="Location: "
+                                    :latitude="entry.latitude"
+                                    :longitude="entry.longitude"
+                                    :accuracy="entry.location_accuracy"
+                                    text-class="text-xs text-gray-500"
+                                />
                             </p>
                             <p v-if="entry.description" class="text-xs text-gray-500 mt-1">{{ entry.description }}</p>
                         </div>
@@ -252,6 +258,7 @@
 </template>
 
 <script setup lang="ts">
+import ResolvedLocationDisplay from '@/components/ResolvedLocationDisplay.vue';
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { router, useForm, usePage } from '@inertiajs/vue3';
 import { Link } from '@inertiajs/vue3';

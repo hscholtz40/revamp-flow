@@ -118,17 +118,14 @@
                                     </span>
                                     <span v-else class="text-gray-500">Non-billable</span>
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    <a
+                                <td class="px-6 py-4 text-sm text-gray-900">
+                                    <ResolvedLocationDisplay
                                         v-if="entry.has_location"
-                                        :href="mapsUrl(entry)"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        class="text-blue-600 hover:text-blue-800"
-                                        :title="locationLabel(entry)"
-                                    >
-                                        {{ locationLabel(entry) }}
-                                    </a>
+                                        :latitude="entry.latitude"
+                                        :longitude="entry.longitude"
+                                        :accuracy="entry.location_accuracy"
+                                        text-class="text-sm text-gray-900"
+                                    />
                                     <span v-else class="text-gray-400">—</span>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
@@ -193,6 +190,7 @@
 
 <script setup lang="ts">
 import ListTableActionLabel from '@/components/ListTableActionLabel.vue';
+import ResolvedLocationDisplay from '@/components/ResolvedLocationDisplay.vue';
 import { useAuthAbility } from '@/composables/useAuthAbilities';
 import { useDateTimeFormat } from '@/composables/useDateTimeFormat';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -238,23 +236,6 @@ const timesheetTableColspan = computed(() => {
     }
     return showTimesheetActions.value ? 10 : 9;
 });
-
-const locationLabel = (entry: { latitude?: number | string | null; longitude?: number | string | null; location_accuracy?: number | string | null }) => {
-    if (entry.latitude == null || entry.longitude == null) {
-        return '—';
-    }
-
-    const coords = `${Number(entry.latitude).toFixed(5)}, ${Number(entry.longitude).toFixed(5)}`;
-    if (entry.location_accuracy != null && entry.location_accuracy !== '') {
-        return `${coords} (±${Number(entry.location_accuracy).toFixed(0)}m)`;
-    }
-
-    return coords;
-};
-
-const mapsUrl = (entry: { latitude?: number | string | null; longitude?: number | string | null }) => {
-    return `https://www.google.com/maps?q=${entry.latitude},${entry.longitude}`;
-};
 
 const filters = ref({
     jobcard_id: props.filters.jobcard_id || '',

@@ -226,15 +226,21 @@ test('mobile api can upload jobcard evidence with description', function () {
     $this->post("/api/v1/jobcards/{$jobcard->id}/attachments", [
         'attachments' => [$image, $video],
         'description' => 'Captured on site from mobile',
+        'latitude' => -26.2041,
+        'longitude' => 28.0473,
+        'location_accuracy' => 9.5,
     ], [
         'Accept' => 'application/json',
     ])->assertCreated()
         ->assertJsonPath('attachments.0.description', 'Captured on site from mobile')
         ->assertJsonPath('attachments.1.description', 'Captured on site from mobile')
+        ->assertJsonPath('attachments.0.has_location', true)
+        ->assertJsonPath('attachments.0.latitude', '-26.2041000')
+        ->assertJsonPath('attachments.0.longitude', '28.0473000')
         ->assertJsonStructure([
             'message',
             'attachments' => [
-                ['id', 'url', 'path', 'type', 'original_name', 'description', 'created_at'],
+                ['id', 'url', 'path', 'type', 'original_name', 'description', 'latitude', 'longitude', 'location_accuracy', 'has_location', 'created_at'],
             ],
         ]);
 
@@ -248,6 +254,28 @@ test('mobile api can upload jobcard evidence with description', function () {
         ->all();
 
     expect($types)->toBe(['image', 'video']);
+
+    $this->assertDatabaseHas('jobcard_attachments', [
+        'jobcard_id' => $jobcard->id,
+        'latitude' => -26.2041,
+        'longitude' => 28.0473,
+    ]);
+});
+
+test('mobile api rejects incomplete evidence location', function () {
+    Storage::fake('public');
+
+    ['user' => $user, 'jobcard' => $jobcard] = createEvidenceUploadContext();
+
+    \Laravel\Sanctum\Sanctum::actingAs($user, ['*']);
+
+    $this->post("/api/v1/jobcards/{$jobcard->id}/attachments", [
+        'attachments' => [UploadedFile::fake()->image('incomplete.jpg')],
+        'latitude' => -26.2041,
+    ], [
+        'Accept' => 'application/json',
+    ])->assertStatus(422)
+        ->assertJsonValidationErrors(['latitude', 'longitude']);
 });
 
 test('mobile api can update and delete jobcard evidence', function () {

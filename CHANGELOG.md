@@ -8,6 +8,8 @@
 - **Evidence upload timestamps:** Jobcard and purchase order evidence cards show when each photo/video was uploaded.
 - **Mobile jobcard evidence:** The mobile jobcard show API now includes evidence attachments (`id`, `url`, `path`, `type`, `original_name`, `description`, `created_at`).
 - **Mobile jobcard evidence upload:** Mobile can upload, update description, and delete jobcard photo/video evidence via `/api/v1/jobcards/{id}/attachments` (multipart `attachments[]`, optional `description`).
+- **Evidence upload location:** Mobile jobcard evidence uploads accept optional GPS location (`latitude`, `longitude`, `location_accuracy`). Location is shown on jobcard/PO evidence cards with a maps link when present.
+- **Location address display:** Web views reverse-geocode GPS coords (evidence and timesheets) via Google Maps and show nearest address with coordinates in brackets, e.g. `12 Main Rd, City (-26.20410, 28.04730)`.
 
 ## 2026-09-03
 

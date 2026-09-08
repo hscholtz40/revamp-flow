@@ -579,6 +579,10 @@ class PurchaseOrdersController extends Controller
                 'type' => $attachment->type,
                 'original_name' => $attachment->original_name,
                 'description' => $attachment->description,
+                'latitude' => $attachment->latitude,
+                'longitude' => $attachment->longitude,
+                'location_accuracy' => $attachment->location_accuracy,
+                'has_location' => $attachment->has_location,
                 'created_at' => $attachment->created_at?->toIso8601String(),
             ])->values()->all(),
         ]);
