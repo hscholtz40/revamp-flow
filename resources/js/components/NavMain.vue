@@ -8,7 +8,9 @@ import {
     SidebarMenuSub,
     SidebarMenuSubButton,
     SidebarMenuSubItem,
+    useSidebar,
 } from '@/components/ui/sidebar';
+import { captureSidebarScrollFromDom } from '@/lib/sidebarScroll';
 import { collectNavHrefs, urlIsActive } from '@/lib/utils';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
@@ -19,6 +21,7 @@ const props = defineProps<{
 }>();
 
 const page = usePage();
+const { isMobile, setOpenMobile } = useSidebar();
 const navHrefs = computed(() => collectNavHrefs(props.items));
 
 const isNavActive = (href: NavItem['href']) => urlIsActive(href, page.url, navHrefs.value);
@@ -29,6 +32,13 @@ const isParentOrChildActive = (item: NavItem): boolean => {
     }
     return item.children?.some((c) => isNavActive(c.href)) ?? false;
 };
+
+function onNavClick() {
+    captureSidebarScrollFromDom();
+    if (isMobile.value) {
+        setOpenMobile(false);
+    }
+}
 </script>
 
 <template>
@@ -45,7 +55,7 @@ const isParentOrChildActive = (item: NavItem): boolean => {
                         :tooltip="item.title"
                         class="rounded-xl border border-transparent px-2.5 text-sidebar-foreground/80 transition-all duration-200 hover:border-sidebar-border/70 hover:bg-sidebar-accent/80 hover:text-sidebar-foreground data-[active=true]:border-primary/25 data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:shadow-sm dark:data-[active=true]:border-primary/35 dark:data-[active=true]:bg-primary/20"
                     >
-                        <Link :href="item.href">
+                        <Link :href="item.href" @click="onNavClick">
                             <component :is="item.icon" />
                             <span>{{ item.title }}</span>
                         </Link>
@@ -58,7 +68,7 @@ const isParentOrChildActive = (item: NavItem): boolean => {
                                 :is-active="isNavActive(sub.href)"
                                 class="data-[active=true]:bg-primary/10 data-[active=true]:text-primary"
                             >
-                                <Link :href="sub.href" class="flex items-center gap-2">
+                                <Link :href="sub.href" class="flex items-center gap-2" @click="onNavClick">
                                     <component :is="sub.icon" v-if="sub.icon" class="size-4 shrink-0" />
                                     <span>{{ sub.title }}</span>
                                 </Link>
@@ -73,7 +83,7 @@ const isParentOrChildActive = (item: NavItem): boolean => {
                         :tooltip="item.title"
                         class="rounded-xl border border-transparent px-2.5 text-sidebar-foreground/80 transition-all duration-200 hover:border-sidebar-border/70 hover:bg-sidebar-accent/80 hover:text-sidebar-foreground data-[active=true]:border-primary/25 data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:shadow-sm dark:data-[active=true]:border-primary/35 dark:data-[active=true]:bg-primary/20"
                     >
-                        <Link :href="item.href">
+                        <Link :href="item.href" @click="onNavClick">
                             <component :is="item.icon" />
                             <span>{{ item.title }}</span>
                         </Link>

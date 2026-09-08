@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import type { HTMLAttributes } from 'vue'
 import { cn } from '@/lib/utils'
-import { router } from '@inertiajs/vue3'
+import {
+  applySidebarScrollToDom,
+  captureSidebarScrollFromDom,
+  ensureSidebarScrollPersistence,
+  setSidebarScrollTop,
+} from '@/lib/sidebarScroll'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 
 const props = defineProps<{
@@ -9,27 +14,20 @@ const props = defineProps<{
 }>()
 
 const contentRef = ref<HTMLElement | null>(null)
-let savedScrollTop = 0
+
+function onScroll() {
+  if (contentRef.value) {
+    setSidebarScrollTop(contentRef.value.scrollTop)
+  }
+}
 
 onMounted(() => {
-  const removeBefore = router.on('before', () => {
-    if (contentRef.value) {
-      savedScrollTop = contentRef.value.scrollTop
-    }
-  })
+  ensureSidebarScrollPersistence()
+  applySidebarScrollToDom()
+})
 
-  const removeFinish = router.on('finish', () => {
-    requestAnimationFrame(() => {
-      if (contentRef.value) {
-        contentRef.value.scrollTop = savedScrollTop
-      }
-    })
-  })
-
-  onBeforeUnmount(() => {
-    removeBefore()
-    removeFinish()
-  })
+onBeforeUnmount(() => {
+  captureSidebarScrollFromDom()
 })
 </script>
 
@@ -39,6 +37,7 @@ onMounted(() => {
     data-slot="sidebar-content"
     data-sidebar="content"
     :class="cn('flex min-h-0 flex-1 flex-col gap-2 overflow-auto overscroll-contain [overflow-anchor:none] group-data-[collapsible=icon]:overflow-hidden', props.class)"
+    @scroll.passive="onScroll"
   >
     <slot />
   </div>

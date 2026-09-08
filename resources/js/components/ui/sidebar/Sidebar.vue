@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import type { SidebarProps } from '.'
 import { cn } from '@/lib/utils'
+import { applySidebarScrollToDom, captureSidebarScrollFromDom } from '@/lib/sidebarScroll'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 import SheetDescription from '@/components/ui/sheet/SheetDescription.vue'
 import SheetHeader from '@/components/ui/sheet/SheetHeader.vue'
 import SheetTitle from '@/components/ui/sheet/SheetTitle.vue'
 import { SIDEBAR_WIDTH_MOBILE, useSidebar } from './utils'
+import { watch } from 'vue'
 
 defineOptions({
   inheritAttrs: false,
@@ -18,6 +20,15 @@ const props = withDefaults(defineProps<SidebarProps>(), {
 })
 
 const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
+
+watch(openMobile, (open) => {
+  if (open) {
+    // Sheet auto-focus can yank scroll to the top; restore after open.
+    applySidebarScrollToDom()
+  } else {
+    captureSidebarScrollFromDom()
+  }
+})
 </script>
 
 <template>
@@ -40,6 +51,8 @@ const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
       :style="{
         '--sidebar-width': SIDEBAR_WIDTH_MOBILE,
       }"
+      @open-auto-focus="(event: Event) => event.preventDefault()"
+      @close-auto-focus="(event: Event) => event.preventDefault()"
     >
       <SheetHeader class="sr-only">
         <SheetTitle>Sidebar</SheetTitle>
