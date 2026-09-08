@@ -3,7 +3,7 @@ import { usePage } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
 const addressCache = new Map<string, string>();
-const inflight = new Map<string, Promise<string>>();
+const inflight = new Map<string, Promise<string | null>>();
 
 function cacheKey(lat: number, lng: number): string {
     return `${lat.toFixed(6)},${lng.toFixed(6)}`;
