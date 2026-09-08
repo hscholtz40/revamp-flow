@@ -86,6 +86,34 @@ function setDescriptionDraft(attachmentId: number, value: string) {
     };
 }
 
+async function readBrowserLocation(): Promise<{
+    latitude: number;
+    longitude: number;
+    location_accuracy: number | null;
+} | null> {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+        return null;
+    }
+
+    try {
+        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+                enableHighAccuracy: true,
+                timeout: 8000,
+                maximumAge: 60000,
+            });
+        });
+
+        return {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            location_accuracy: Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null,
+        };
+    } catch {
+        return null;
+    }
+}
+
 async function onAttachmentFilesSelected(event: Event) {
     const input = event.target as HTMLInputElement;
     const files = Array.from(input.files || []);
@@ -99,6 +127,15 @@ async function onAttachmentFilesSelected(event: Event) {
         files.forEach((file) => formData.append('attachments[]', file));
         if (pendingDescription.value.trim() !== '') {
             formData.append('description', pendingDescription.value.trim());
+        }
+
+        const location = await readBrowserLocation();
+        if (location) {
+            formData.append('latitude', String(location.latitude));
+            formData.append('longitude', String(location.longitude));
+            if (location.location_accuracy != null) {
+                formData.append('location_accuracy', String(location.location_accuracy));
+            }
         }
 
         const response = await fetch(props.storeUrl, {
@@ -121,7 +158,7 @@ async function onAttachmentFilesSelected(event: Event) {
         }
 
         pendingDescription.value = '';
-        toast.success('Attachments uploaded');
+        toast.success(location ? 'Attachments uploaded with location' : 'Attachments uploaded');
         router.reload({ only: props.reloadOnly });
     } catch (error) {
         attachmentUploadError.value = error instanceof Error ? error.message : 'Upload failed.';
@@ -217,7 +254,7 @@ async function saveDescription(attachment: EvidenceAttachment) {
                     class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     placeholder="Describe the evidence you are about to upload"
                 />
-                <p class="mt-1 text-xs text-gray-500">Applied to each file in the next upload.</p>
+                <p class="mt-1 text-xs text-gray-500">Applied to each file in the next upload. Location is captured from this device when permission is granted.</p>
             </div>
 
             <p v-if="attachmentUploadError" class="mb-3 text-sm text-red-600">{{ attachmentUploadError }}</p>
@@ -255,14 +292,16 @@ async function saveDescription(attachment: EvidenceAttachment) {
                     <p v-if="uploadedAtLabel(attachment.created_at)" class="text-xs text-gray-500">
                         {{ uploadedAtLabel(attachment.created_at) }}
                     </p>
-                    <p v-if="hasLocation(attachment)" class="text-xs text-gray-500">
+                    <p class="text-xs text-gray-500">
                         <ResolvedLocationDisplay
+                            v-if="hasLocation(attachment)"
                             prefix="Location: "
                             :latitude="attachment.latitude"
                             :longitude="attachment.longitude"
                             :accuracy="attachment.location_accuracy"
                             text-class="text-xs text-gray-500"
                         />
+                        <span v-else>Location: Not recorded</span>
                     </p>
                     <div v-if="canEdit" class="space-y-2">
                         <textarea

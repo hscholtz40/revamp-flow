@@ -74,6 +74,7 @@ class JobcardController extends Controller
     {
         $this->assertCompanyScope($jobcard);
         $this->assertCanModifyAttachments($request, $jobcard);
+        \App\Support\GeoLocation::normalizeRequest($request);
 
         $validated = $request->validate([
             'attachments' => ['required', 'array', 'max:10'],

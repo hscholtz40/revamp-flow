@@ -262,6 +262,31 @@ test('mobile api can upload jobcard evidence with description', function () {
     ]);
 });
 
+test('web jobcard evidence upload stores browser location when provided', function () {
+    Storage::fake('public');
+
+    ['user' => $user, 'jobcard' => $jobcard] = createEvidenceUploadContext();
+
+    $image = UploadedFile::fake()->image('web-site.jpg');
+
+    $this->actingAs($user)
+        ->post(route('jobcards.attachments.store', $jobcard), [
+            'attachments' => [$image],
+            'description' => 'Web upload with location',
+            'latitude' => -26.2041,
+            'longitude' => 28.0473,
+            'location_accuracy' => 15,
+        ])
+        ->assertRedirect();
+
+    $attachment = JobcardAttachment::query()->where('jobcard_id', $jobcard->id)->first();
+
+    expect($attachment)->not->toBeNull()
+        ->and($attachment->has_location)->toBeTrue()
+        ->and((float) $attachment->latitude)->toBe(-26.2041)
+        ->and((float) $attachment->longitude)->toBe(28.0473);
+});
+
 test('mobile api rejects incomplete evidence location', function () {
     Storage::fake('public');
 
