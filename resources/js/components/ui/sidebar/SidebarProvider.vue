@@ -2,7 +2,8 @@
 import { cn } from '@/lib/utils'
 import { useEventListener, useMediaQuery, useVModel } from '@vueuse/core'
 import { TooltipProvider } from 'reka-ui'
-import { computed, type HTMLAttributes, type Ref, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, type HTMLAttributes, type Ref, ref } from 'vue'
+import { router } from '@inertiajs/vue3'
 import { provideSidebarContext, SIDEBAR_COOKIE_MAX_AGE, SIDEBAR_COOKIE_NAME, SIDEBAR_KEYBOARD_SHORTCUT, SIDEBAR_WIDTH, SIDEBAR_WIDTH_ICON } from './utils'
 
 const props = withDefaults(defineProps<{
@@ -47,6 +48,19 @@ useEventListener('keydown', (event: KeyboardEvent) => {
     event.preventDefault()
     toggleSidebar()
   }
+})
+
+// Close the mobile sheet on navigation so it does not remount mid-scroll and jump to top.
+onMounted(() => {
+  const removeNavigate = router.on('navigate', () => {
+    if (isMobile.value && openMobile.value) {
+      setOpenMobile(false)
+    }
+  })
+
+  onBeforeUnmount(() => {
+    removeNavigate()
+  })
 })
 
 // We add a state so that we can do data-state="expanded" or "collapsed".
