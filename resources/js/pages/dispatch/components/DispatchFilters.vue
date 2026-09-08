@@ -76,7 +76,7 @@ const tabs: { value: DispatchQueueTab; label: string }[] = [
                     :key="item.value"
                     type="button"
                     class="rounded-full border px-2 py-0.5 text-xs font-medium transition"
-                    :class="tab === item.value ? 'border-indigo-500 bg-indigo-600 text-white' : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'"
+                    :class="tab === item.value ? 'border-blue-500 bg-blue-600 text-white' : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'"
                     @click="tab = item.value"
                 >
                     {{ item.label }}

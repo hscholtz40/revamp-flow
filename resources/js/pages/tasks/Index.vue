@@ -148,7 +148,7 @@ watch(
                 </div>
                 <Link
                     href="/tasks/create"
-                    class="inline-flex items-center rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+                    class="inline-flex items-center rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
                 >
                     Create Task
                 </Link>
@@ -159,7 +159,7 @@ watch(
                     <button
                         type="button"
                         class="rounded px-3 py-1.5 text-sm font-medium transition"
-                        :class="filters.view === 'list' ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-100'"
+                        :class="filters.view === 'list' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'"
                         @click="filters.view = 'list'"
                     >
                         List
@@ -167,7 +167,7 @@ watch(
                     <button
                         type="button"
                         class="rounded px-3 py-1.5 text-sm font-medium transition"
-                        :class="filters.view === 'kanban' ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-100'"
+                        :class="filters.view === 'kanban' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'"
                         @click="filters.view = 'kanban'"
                     >
                         Kanban
@@ -287,7 +287,7 @@ watch(
                             :href="link.url || '#'"
                             :class="[
                                 'rounded border px-3 py-1 text-sm',
-                                link.active ? 'border-indigo-600 bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50',
+                                link.active ? 'border-blue-600 bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50',
                                 !link.url ? 'pointer-events-none opacity-50' : '',
                             ]"
                             v-html="link.label"
@@ -301,7 +301,7 @@ watch(
                     v-for="status in statusOptions"
                     :key="status.value"
                     class="rounded-lg border bg-white"
-                    :class="dropStatus === status.value ? 'ring-2 ring-indigo-400' : ''"
+                    :class="dropStatus === status.value ? 'ring-2 ring-blue-400' : ''"
                     @dragover="onColumnDragOver(status.value, $event)"
                     @dragleave="dropStatus = null"
                     @drop="onColumnDrop(status.value, $event)"
@@ -320,7 +320,7 @@ watch(
                             :key="task.id"
                             type="button"
                             :draggable="canDragTask(task)"
-                            class="w-full rounded border border-gray-200 bg-white p-3 text-left shadow-sm transition hover:border-indigo-300 hover:bg-indigo-50/30"
+                            class="w-full rounded border border-gray-200 bg-white p-3 text-left shadow-sm transition hover:border-blue-300 hover:bg-blue-50/30"
                             :class="canDragTask(task) ? 'cursor-move' : 'cursor-pointer'"
                             @dragstart="onTaskDragStart(task)"
                             @dragend="onTaskDragEnd"

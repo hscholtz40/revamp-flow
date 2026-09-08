@@ -81,7 +81,7 @@ const updateStatus = (value: string) => {
                     <p class="text-sm text-gray-600">Task details, assignment and timeline.</p>
                 </div>
                 <div class="flex items-center gap-2">
-                    <Link :href="`/tasks/${task.id}/edit`" class="rounded bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+                    <Link :href="`/tasks/${task.id}/edit`" class="rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">
                         Edit
                     </Link>
                     <button type="button" class="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100" @click="deleteTask">
@@ -109,7 +109,7 @@ const updateStatus = (value: string) => {
                         <div class="flex items-start justify-between gap-3">
                             <dt class="text-gray-500">Jobcard</dt>
                             <dd class="text-right">
-                                <Link v-if="task.jobcard?.id" :href="`/jobcards/${task.jobcard.id}`" class="text-indigo-600 hover:underline">
+                                <Link v-if="task.jobcard?.id" :href="`/jobcards/${task.jobcard.id}`" class="text-blue-600 hover:underline">
                                     {{ task.jobcard.job_number }}
                                 </Link>
                                 <span v-else class="text-gray-900">None</span>

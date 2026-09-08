@@ -95,7 +95,7 @@ const statusButtons = [
                 <p class="text-lg font-bold text-slate-900">{{ job.job_number || `Jobcard #${job.id}` }}</p>
                 <p v-if="job.title" class="text-sm text-slate-700">{{ job.title }}</p>
             </div>
-            <button type="button" class="shrink-0 text-sm font-medium text-indigo-600 hover:underline" @click="emit('open-full')">Open full</button>
+            <button type="button" class="shrink-0 text-sm font-medium text-blue-600 hover:underline" @click="emit('open-full')">Open full</button>
         </div>
         <div class="space-y-1 text-sm text-slate-700">
             <p>
@@ -154,21 +154,21 @@ const statusButtons = [
             <div class="mb-2 flex items-center justify-between">
                 <button
                     type="button"
-                    class="rounded border border-indigo-200 bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-800 hover:bg-indigo-100"
+                    class="rounded border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-800 hover:bg-blue-100"
                     :disabled="technicianSuggestionsLoading"
                     @click="emit('suggest-technicians')"
                 >
                     {{ technicianSuggestionsLoading ? 'Suggesting…' : 'AI Suggest Technician' }}
                 </button>
             </div>
-            <div v-if="technicianSuggestions?.length" class="mb-2 rounded border border-indigo-200 bg-indigo-50/60 p-2 text-xs">
-                <p class="mb-1 font-semibold text-indigo-900">Top suggestions</p>
+            <div v-if="technicianSuggestions?.length" class="mb-2 rounded border border-blue-200 bg-blue-50/60 p-2 text-xs">
+                <p class="mb-1 font-semibold text-blue-900">Top suggestions</p>
                 <ul class="space-y-1">
                     <li v-for="s in technicianSuggestions" :key="s.user_id" class="flex items-center justify-between gap-2">
-                        <span class="truncate text-indigo-900">{{ s.name }} ({{ s.score }})</span>
+                        <span class="truncate text-blue-900">{{ s.name }} ({{ s.score }})</span>
                         <button
                             type="button"
-                            class="rounded border border-indigo-300 bg-white px-1.5 py-0.5 text-[11px] font-medium text-indigo-800"
+                            class="rounded border border-blue-300 bg-white px-1.5 py-0.5 text-[11px] font-medium text-blue-800"
                             @click="emit('assign', { assigned_to_user_id: s.user_id, assigned_to_team_id: job?.assigned_to_team_id ?? null })"
                         >
                             Assign
@@ -195,7 +195,7 @@ const statusButtons = [
                     v-for="b in statusButtons"
                     :key="b.status"
                     type="button"
-                    class="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:border-indigo-300 hover:bg-indigo-50"
+                    class="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:border-blue-300 hover:bg-blue-50"
                     @click="emit('set-status', b.status)"
                 >
                     {{ b.label }}
@@ -218,7 +218,7 @@ const statusButtons = [
             <button
                 v-else
                 type="button"
-                class="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm hover:border-indigo-300 hover:bg-indigo-50"
+                class="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm hover:border-blue-300 hover:bg-blue-50"
                 @click="emit('view-map')"
             >
                 View map

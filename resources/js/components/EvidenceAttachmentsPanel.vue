@@ -3,7 +3,7 @@ import { useDateTimeFormat } from '@/composables/useDateTimeFormat';
 import ResolvedLocationDisplay from '@/components/ResolvedLocationDisplay.vue';
 import { getCsrfToken } from '@/lib/csrf';
 import { router } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
 
 export interface EvidenceAttachment {
@@ -46,8 +46,45 @@ const attachmentUploadError = ref('');
 const pendingDescription = ref('');
 const draftDescriptions = ref<Record<number, string>>({});
 const savingDescriptionId = ref<number | null>(null);
+const lightboxAttachment = ref<EvidenceAttachment | null>(null);
 
 const attachments = computed(() => props.attachments ?? []);
+
+function openLightbox(attachment: EvidenceAttachment) {
+    lightboxAttachment.value = attachment;
+}
+
+function closeLightbox() {
+    lightboxAttachment.value = null;
+}
+
+function onLightboxKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape') {
+        closeLightbox();
+    }
+}
+
+watch(lightboxAttachment, (attachment) => {
+    if (typeof window === 'undefined') {
+        return;
+    }
+
+    if (attachment) {
+        window.addEventListener('keydown', onLightboxKeydown);
+        document.body.classList.add('overflow-hidden');
+    } else {
+        window.removeEventListener('keydown', onLightboxKeydown);
+        document.body.classList.remove('overflow-hidden');
+    }
+});
+
+onBeforeUnmount(() => {
+    if (typeof window === 'undefined') {
+        return;
+    }
+    window.removeEventListener('keydown', onLightboxKeydown);
+    document.body.classList.remove('overflow-hidden');
+});
 
 function attachmentKind(type: string | null): 'video' | 'image' {
     if (!type) return 'image';
@@ -262,70 +299,163 @@ async function saveDescription(attachment: EvidenceAttachment) {
             <div v-if="attachments.length === 0" class="rounded-md border border-dashed border-gray-300 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">
                 {{ emptyMessage }}
             </div>
-            <div v-else class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div v-for="attachment in attachments" :key="attachment.id" class="space-y-2 rounded-md border border-gray-200 p-3">
-                    <video
-                        v-if="attachmentKind(attachment.type) === 'video'"
-                        :src="attachment.url"
-                        controls
-                        class="max-h-[280px] w-full rounded-md bg-black"
-                    />
-                    <img
-                        v-else
-                        :src="attachment.url"
-                        :alt="attachment.original_name || 'Evidence attachment'"
-                        class="max-h-[280px] w-full rounded-md object-contain bg-gray-50"
-                    />
-                    <div class="flex items-center justify-between gap-2">
-                        <a :href="attachment.url" target="_blank" class="truncate text-sm text-blue-600 hover:underline">
+            <div v-else class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                <div v-for="attachment in attachments" :key="attachment.id" class="space-y-2 rounded-md border border-gray-200 p-2">
+                    <button
+                        type="button"
+                        class="group relative block w-full overflow-hidden rounded-md bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        :title="attachment.original_name || 'Open evidence'"
+                        @click="openLightbox(attachment)"
+                    >
+                        <video
+                            v-if="attachmentKind(attachment.type) === 'video'"
+                            :src="attachment.url"
+                            muted
+                            preload="metadata"
+                            class="h-28 w-full object-cover"
+                        />
+                        <img
+                            v-else
+                            :src="attachment.url"
+                            :alt="attachment.original_name || 'Evidence attachment'"
+                            class="h-28 w-full object-cover"
+                        />
+                        <span
+                            class="absolute inset-0 flex items-center justify-center bg-black/0 text-xs font-medium text-white opacity-0 transition group-hover:bg-black/35 group-hover:opacity-100"
+                        >
+                            {{ attachmentKind(attachment.type) === 'video' ? 'Play' : 'Expand' }}
+                        </span>
+                        <span
+                            v-if="attachmentKind(attachment.type) === 'video'"
+                            class="absolute bottom-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white"
+                        >
+                            Video
+                        </span>
+                    </button>
+                    <div class="flex items-start justify-between gap-2 px-0.5">
+                        <button
+                            type="button"
+                            class="min-w-0 truncate text-left text-xs text-blue-600 hover:underline"
+                            @click="openLightbox(attachment)"
+                        >
                             {{ attachment.original_name || 'Open' }}
-                        </a>
+                        </button>
                         <button
                             v-if="canEdit"
                             type="button"
-                            class="shrink-0 text-xs font-medium text-red-600 hover:text-red-800"
+                            class="shrink-0 text-[11px] font-medium text-red-600 hover:text-red-800"
                             @click="deleteAttachment(attachment.id)"
                         >
                             Remove
                         </button>
                     </div>
-                    <p v-if="uploadedAtLabel(attachment.created_at)" class="text-xs text-gray-500">
+                    <p v-if="uploadedAtLabel(attachment.created_at)" class="px-0.5 text-[11px] text-gray-500">
                         {{ uploadedAtLabel(attachment.created_at) }}
                     </p>
-                    <p class="text-xs text-gray-500">
+                    <p class="px-0.5 text-[11px] text-gray-500">
                         <ResolvedLocationDisplay
                             v-if="hasLocation(attachment)"
                             prefix="Location: "
                             :latitude="attachment.latitude"
                             :longitude="attachment.longitude"
                             :accuracy="attachment.location_accuracy"
-                            text-class="text-xs text-gray-500"
+                            text-class="text-[11px] text-gray-500"
                         />
                         <span v-else>Location: Not recorded</span>
                     </p>
-                    <div v-if="canEdit" class="space-y-2">
+                    <div v-if="canEdit" class="space-y-1.5 px-0.5">
                         <textarea
                             :value="descriptionDraft(attachment)"
                             rows="2"
                             maxlength="1000"
-                            class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            class="w-full rounded-md border border-gray-300 px-2 py-1.5 text-xs shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                             placeholder="Add a description"
                             @input="setDescriptionDraft(attachment.id, ($event.target as HTMLTextAreaElement).value)"
                         />
                         <button
                             type="button"
-                            class="rounded-md border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                            class="rounded-md border border-gray-300 px-2 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
                             :disabled="savingDescriptionId === attachment.id || descriptionDraft(attachment).trim() === (attachment.description ?? '').trim()"
                             @click="saveDescription(attachment)"
                         >
                             {{ savingDescriptionId === attachment.id ? 'Saving…' : 'Save description' }}
                         </button>
                     </div>
-                    <p v-else-if="attachment.description" class="text-sm text-gray-600 whitespace-pre-wrap">
+                    <p v-else-if="attachment.description" class="px-0.5 text-xs text-gray-600 whitespace-pre-wrap">
                         {{ attachment.description }}
                     </p>
                 </div>
             </div>
         </div>
     </div>
+
+    <Teleport to="body">
+        <div
+            v-if="lightboxAttachment"
+            class="fixed inset-0 z-[80] flex items-center justify-center bg-black/75 p-4"
+            role="dialog"
+            aria-modal="true"
+            @click.self="closeLightbox"
+            @keydown.escape="closeLightbox"
+        >
+            <div class="relative flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg bg-white shadow-xl">
+                <div class="flex items-center justify-between gap-3 border-b border-gray-200 px-4 py-3">
+                    <div class="min-w-0">
+                        <p class="truncate text-sm font-medium text-gray-900">
+                            {{ lightboxAttachment.original_name || 'Evidence' }}
+                        </p>
+                        <p v-if="uploadedAtLabel(lightboxAttachment.created_at)" class="text-xs text-gray-500">
+                            {{ uploadedAtLabel(lightboxAttachment.created_at) }}
+                        </p>
+                    </div>
+                    <div class="flex shrink-0 items-center gap-2">
+                        <a
+                            :href="lightboxAttachment.url"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="rounded-md border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                        >
+                            Open original
+                        </a>
+                        <button
+                            type="button"
+                            class="rounded-md bg-gray-900 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-gray-800"
+                            @click="closeLightbox"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+                <div class="flex min-h-0 flex-1 items-center justify-center bg-gray-950 p-3">
+                    <video
+                        v-if="attachmentKind(lightboxAttachment.type) === 'video'"
+                        :src="lightboxAttachment.url"
+                        controls
+                        autoplay
+                        class="max-h-[75vh] w-full object-contain"
+                    />
+                    <img
+                        v-else
+                        :src="lightboxAttachment.url"
+                        :alt="lightboxAttachment.original_name || 'Evidence attachment'"
+                        class="max-h-[75vh] w-full object-contain"
+                    />
+                </div>
+                <div v-if="lightboxAttachment.description || hasLocation(lightboxAttachment)" class="space-y-1 border-t border-gray-200 px-4 py-3">
+                    <p v-if="lightboxAttachment.description" class="text-sm text-gray-700 whitespace-pre-wrap">
+                        {{ lightboxAttachment.description }}
+                    </p>
+                    <p v-if="hasLocation(lightboxAttachment)" class="text-xs text-gray-500">
+                        <ResolvedLocationDisplay
+                            prefix="Location: "
+                            :latitude="lightboxAttachment.latitude"
+                            :longitude="lightboxAttachment.longitude"
+                            :accuracy="lightboxAttachment.location_accuracy"
+                            text-class="text-xs text-gray-500"
+                        />
+                    </p>
+                </div>
+            </div>
+        </div>
+    </Teleport>
 </template>

@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-09-08
+
+- **Evidence thumbnails:** Jobcard and purchase order evidence now shows as a thumbnail grid; click a photo/video to open a full-size lightbox.
+- **Tasks/dispatch theme colours:** Tasks and dispatch UI accents now use theme-mapped `blue`/`teal` classes instead of hardcoded `indigo`/`violet`, so Appearance primary/secondary colours apply.
+
 ## 2026-09-07
 
 - **Timesheet location and recorded times:** Time entries store optional GPS location (`latitude`, `longitude`, `location_accuracy`) from the mobile API. Web timesheet capture leaves location empty. The timesheet list and jobcard recent entries now show recorded start–end times and location when present.

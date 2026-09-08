@@ -832,10 +832,10 @@ const renderBoardDrawerMarkers = async (maps: any) => {
                 ${jobAddr ? `<div data-iw-eta class="mt-1 text-xs text-slate-700">ETA to job: calculating…</div>` : ''}
                 ${
                     jobAddr
-                        ? `<div class="mt-2 rounded border border-indigo-200 bg-indigo-50 px-2 py-1.5">
-                    <p class="text-[11px] font-medium text-indigo-950">Driving directions</p>
+                        ? `<div class="mt-2 rounded border border-blue-200 bg-blue-50 px-2 py-1.5">
+                    <p class="text-[11px] font-medium text-blue-950">Driving directions</p>
                     <p class="mt-0.5 text-[11px] text-slate-600">From this technician to the open jobcard’s job address.</p>
-                    <a data-iw-dir class="mt-1 inline-block text-xs font-semibold text-indigo-800 underline decoration-indigo-400 underline-offset-2 hover:text-indigo-950" href="#" target="_blank" rel="noopener noreferrer">Open turn-by-turn in Google Maps</a>
+                    <a data-iw-dir class="mt-1 inline-block text-xs font-semibold text-blue-800 underline decoration-blue-400 underline-offset-2 hover:text-blue-950" href="#" target="_blank" rel="noopener noreferrer">Open turn-by-turn in Google Maps</a>
                 </div>`
                         : ''
                 }
@@ -1641,7 +1641,7 @@ watch(
                     <button
                         type="button"
                         class="rounded px-3 py-1 text-sm"
-                        :class="viewMode === 'board' ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-100'"
+                        :class="viewMode === 'board' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'"
                         @click="viewMode = 'board'"
                     >
                         Board
@@ -1649,7 +1649,7 @@ watch(
                     <button
                         type="button"
                         class="rounded px-3 py-1 text-sm"
-                        :class="viewMode === 'kanban' ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-100'"
+                        :class="viewMode === 'kanban' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'"
                         @click="viewMode = 'kanban'"
                     >
                         Kanban
@@ -1712,7 +1712,7 @@ watch(
                 <div class="mb-3 flex justify-end">
                     <button
                         type="button"
-                        class="rounded bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+                        class="rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
                         @click="openCreateTaskModal()"
                     >
                         + Add Task
@@ -1724,7 +1724,7 @@ watch(
                             v-for="status in boardStatuses"
                             :key="status.value"
                             class="relative flex w-72 shrink-0 flex-col rounded-lg border border-gray-200 bg-gray-100 p-3 shadow-sm transition-colors"
-                            :class="laneHoverStatus === status.value ? 'ring-2 ring-indigo-400 ring-offset-1' : ''"
+                            :class="laneHoverStatus === status.value ? 'ring-2 ring-blue-400 ring-offset-1' : ''"
                             @dragover="onLaneDragOver(status.value, $event)"
                             @drop="onLaneDrop(status.value, $event)"
                         >
@@ -1758,13 +1758,13 @@ watch(
                                 v-for="card in visibleLaneCards(status.value)"
                                 :key="`${card.entityType}-${card.id}`"
                                 draggable="true"
-                                class="cursor-move rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition hover:border-indigo-300 hover:shadow-md"
+                                class="cursor-move rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition hover:border-blue-300 hover:shadow-md"
                                 @dragstart="onDragStart(card)"
                                 @dragend="onDragEnd"
                                 @click="openCardRecord(card)"
                             >
                                 <div class="mb-1 flex items-center justify-between">
-                                    <span class="rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide" :class="card.entityType === 'jobcard' ? 'bg-indigo-100 text-indigo-700' : 'bg-violet-100 text-violet-700'">
+                                    <span class="rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide" :class="card.entityType === 'jobcard' ? 'bg-blue-100 text-blue-700' : 'bg-teal-100 text-teal-700'">
                                         {{ card.entityType }}
                                     </span>
                                     <span class="text-xs text-gray-500">{{ normalizedStatus(card).replace('_', ' ') }} · #{{ card.id }}</span>
@@ -1852,7 +1852,7 @@ watch(
                         <button type="button" class="rounded border px-3 py-2 text-sm text-gray-700 hover:bg-gray-50" @click="closeCreateTaskModal">Cancel</button>
                         <button
                             type="button"
-                            class="rounded bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
+                            class="rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
                             :disabled="creatingTask"
                             @click="submitCreateTask"
                         >

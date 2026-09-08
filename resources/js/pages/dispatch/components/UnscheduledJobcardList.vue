@@ -39,7 +39,7 @@ const onDragEnd = () => {
                 :key="job.id"
                 type="button"
                 draggable="true"
-                class="block w-full rounded-lg border border-slate-200 bg-white text-left transition hover:border-indigo-300 hover:shadow-sm"
+                class="block w-full rounded-lg border border-slate-200 bg-white text-left transition hover:border-blue-300 hover:shadow-sm"
                 @dragstart="onDragStart($event, job)"
                 @dragend="onDragEnd"
                 @click="emit('select', job)"

@@ -407,11 +407,11 @@ watch(
                         />
                         <div
                             v-if="dropPreview && dropPreview.rowId === row.id"
-                            class="pointer-events-none absolute z-[8] rounded-md border-2 border-dashed border-indigo-500 bg-indigo-400/20"
+                            class="pointer-events-none absolute z-[8] rounded-md border-2 border-dashed border-blue-500 bg-blue-400/20"
                             :style="{ left: dropPreview.left, width: dropPreview.width, top: '4px', bottom: '8px' }"
                         >
                             <div
-                                class="absolute left-1 top-1 max-w-[calc(100%-0.5rem)] truncate rounded bg-white/95 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-indigo-900 shadow-sm ring-1 ring-indigo-200/80"
+                                class="absolute left-1 top-1 max-w-[calc(100%-0.5rem)] truncate rounded bg-white/95 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-blue-900 shadow-sm ring-1 ring-blue-200/80"
                             >
                                 {{ dropPreview.label }}
                             </div>
@@ -444,7 +444,7 @@ watch(
                         >
                             <DispatchJobcardBlock :job="job" compact :conflict-ids="conflictIds" />
                             <div
-                                class="absolute top-0 right-0 bottom-0 z-[6] w-1.5 cursor-ew-resize rounded-r bg-slate-300/80 hover:bg-indigo-400"
+                                class="absolute top-0 right-0 bottom-0 z-[6] w-1.5 cursor-ew-resize rounded-r bg-slate-300/80 hover:bg-blue-400"
                                 title="Resize duration (drag sideways)"
                                 @mousedown.stop="onResizeMouseDown($event, job, row)"
                             />

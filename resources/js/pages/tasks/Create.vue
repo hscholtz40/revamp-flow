@@ -134,7 +134,7 @@ const submit = () => {
                 </div>
 
                 <div class="flex gap-3">
-                    <button type="submit" :disabled="form.processing" class="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50">
+                    <button type="submit" :disabled="form.processing" class="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
                         {{ form.processing ? 'Creating...' : 'Create Task' }}
                     </button>
                     <Link href="/tasks" class="rounded border px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
