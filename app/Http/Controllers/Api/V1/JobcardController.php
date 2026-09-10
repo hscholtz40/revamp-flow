@@ -29,14 +29,33 @@ class JobcardController extends Controller
                     $q->orWhereIn('assigned_to_team_id', $teamIds);
                 }
             })
-            ->whereNotIn('status', ['completed', 'cancelled'])
             ->orderByDesc('id');
 
+        $status = $request->input('status');
+        $showClosed = filter_var($request->input('show_closed', false), FILTER_VALIDATE_BOOLEAN)
+            || filter_var($request->input('include_completed', false), FILTER_VALIDATE_BOOLEAN);
+
         if ($request->filled('status')) {
-            $query->where('status', $request->string('status'));
+            $query->where('status', $status);
+        } elseif (! $showClosed) {
+            // Hide completed/cancelled unless the client asks to include them.
+            $query->whereNotIn('status', ['completed', 'cancelled']);
         }
 
-        return response()->json($query->paginate(25));
+        if ($request->filled('search')) {
+            $search = (string) $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('job_number', 'like', "%{$search}%")
+                    ->orWhere('title', 'like', "%{$search}%")
+                    ->orWhereHas('customer', function ($customerQuery) use ($search) {
+                        $customerQuery->where('name', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        $perPage = min(max((int) $request->input('per_page', 25), 1), 100);
+
+        return response()->json($query->paginate($perPage));
     }
 
     public function show(Request $request, $id)

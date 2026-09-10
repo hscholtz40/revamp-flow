@@ -107,7 +107,7 @@
                                 type="checkbox"
                                 class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                             />
-                            <span class="text-sm font-medium text-gray-700">Show closed</span>
+                            <span class="text-sm font-medium text-gray-700">Show completed</span>
                         </label>
                     </div>
                     <div class="flex items-end">
